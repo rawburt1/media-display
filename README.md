@@ -10,6 +10,8 @@ Currently implemented:
 
 - **Sources**: Kodi (movie/episode posters, music), Sonos (album art)
 - **Outputs**: Pixoo64 (local HTTP API), web page (`http://<host>:8090/`)
+- **Idle wallpapers**: Unsplash (shows wallpapers matching configured search
+  queries when nothing is playing)
 - Disk cache for downloaded artwork (each image is only fetched once)
 
 Planned (add as new `MediaSource` plugins, see "Extending" below):
@@ -44,19 +46,25 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page.
+- **`idle.unsplash`**: comma-separated `queries` to pull wallpapers from
+  (and how often to rotate them) while nothing is playing. Requires a free
+  `access_key` from https://unsplash.com/oauth/applications.
 - **`cache.dir`**: where downloaded artwork is stored.
 
 ## Extending with new sources/outputs
 
 1. Add a config dataclass in `pixoo_media/config.py` and register it in
-   `SOURCE_CONFIG_TYPES` (or `OUTPUT_CONFIG_TYPES`).
-2. Add a new module under `pixoo_media/sources/` (or `outputs/`) that
-   implements `MediaSource.get_now_playing()` (or `Output.update()` /
-   `on_idle()`), returning a `pixoo_media.models.NowPlaying`.
-3. Register the class in `SOURCE_CLASSES` (or `OUTPUT_CLASSES`) in
-   `pixoo_media/__main__.py`.
-4. Add it to `priority` (sources) or `outputs` (outputs) in your
-   `config.yaml`.
+   `SOURCE_CONFIG_TYPES` (or `OUTPUT_CONFIG_TYPES`, or `IDLE_CONFIG_TYPES`
+   for idle wallpaper sources).
+2. Add a new module under `pixoo_media/sources/` (or `outputs/`, or
+   `idle/`) that implements `MediaSource.get_now_playing()` (or
+   `Output.update()` / `on_idle()`, or
+   `IdleWallpaperSource.get_wallpaper()`), returning a
+   `pixoo_media.models.NowPlaying` (or `Artwork`).
+3. Register the class in `SOURCE_CLASSES` (or `OUTPUT_CLASSES`, or
+   `IDLE_CLASSES`) in `pixoo_media/__main__.py`.
+4. Add it to `priority` (sources), `outputs` (outputs), or `idle` (idle
+   wallpaper sources) in your `config.yaml`.
 
 Each source's `get_now_playing()` must catch its own connection errors and
 return `None` rather than raising, so one unreachable source never breaks

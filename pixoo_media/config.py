@@ -50,6 +50,18 @@ class FanartTvConfig:
 
 
 @dataclasses.dataclass
+class UnsplashWallpaperConfig:
+    enabled: bool = False
+    # Comma-separated list of search queries to pick wallpapers from while
+    # nothing is playing, e.g. "nature,architecture,space".
+    queries: str = ""
+    # How often (in seconds) to switch to a new wallpaper while idle.
+    rotation_interval_seconds: int = 300
+    # Access key from https://unsplash.com/oauth/applications
+    access_key: str = ""
+
+
+@dataclasses.dataclass
 class LoggingConfig:
     # Path to a log file. Empty (the default) means console-only logging.
     file: str = ""
@@ -75,6 +87,11 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "fanarttv": FanartTvConfig,
 }
 
+# Idle wallpaper sources: shown on outputs when nothing is playing.
+IDLE_CONFIG_TYPES: dict[str, type] = {
+    "unsplash": UnsplashWallpaperConfig,
+}
+
 
 @dataclasses.dataclass
 class Config:
@@ -88,6 +105,7 @@ class Config:
     sources: dict[str, Any]
     outputs: dict[str, Any]
     enrichers: dict[str, Any]
+    idle: dict[str, Any]
     cache: CacheConfig
     logging: LoggingConfig
 
@@ -118,6 +136,11 @@ class Config:
             for name, values in (raw.get("enrichers") or {}).items()
             if name in ENRICHER_CONFIG_TYPES
         }
+        idle = {
+            name: IDLE_CONFIG_TYPES[name](**values)
+            for name, values in (raw.get("idle") or {}).items()
+            if name in IDLE_CONFIG_TYPES
+        }
 
         return cls(
             poll_interval_seconds=raw.get("poll_interval_seconds", 5),
@@ -126,6 +149,7 @@ class Config:
             sources=sources,
             outputs=outputs,
             enrichers=enrichers,
+            idle=idle,
             cache=CacheConfig(**(raw.get("cache") or {})),
             logging=LoggingConfig(**(raw.get("logging") or {})),
         )

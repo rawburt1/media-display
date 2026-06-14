@@ -49,6 +49,19 @@ enrichers:
 cache:
   dir: ./cache
 
+# Optional: when nothing is playing, show wallpapers instead of a blank
+# screen/page.
+idle:
+  unsplash:
+    enabled: true
+    # Comma-separated list of search queries to pick wallpapers from.
+    queries: nature,architecture,space
+    # How often (in seconds) to switch to a new wallpaper while idle.
+    rotation_interval_seconds: 300
+    # Access key from https://unsplash.com/oauth/applications (create a
+    # free app -> "Demo" access key is enough).
+    access_key: YOUR_UNSPLASH_ACCESS_KEY
+
 # Optional: also write logs to a file (in addition to stdout), rotating it
 # once it reaches max_bytes and keeping backup_count old copies.
 logging:

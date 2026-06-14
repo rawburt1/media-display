@@ -10,6 +10,7 @@ from pathlib import Path
 from pixoo_media.cache import ImageCache
 from pixoo_media.config import Config
 from pixoo_media.enrichers.fanarttv import FanartTvEnricher
+from pixoo_media.idle.unsplash import UnsplashWallpaperSource
 from pixoo_media.orchestrator import Orchestrator
 from pixoo_media.outputs.pixoo import PixooOutput
 from pixoo_media.outputs.web import WebOutput
@@ -30,6 +31,10 @@ OUTPUT_CLASSES = {
 
 ENRICHER_CLASSES = {
     "fanarttv": FanartTvEnricher,
+}
+
+IDLE_CLASSES = {
+    "unsplash": UnsplashWallpaperSource,
 }
 
 
@@ -95,6 +100,17 @@ def main() -> None:
             continue
         enrichers.append(enricher_cls(enricher_config))
 
+    idle_source = None
+    for name, idle_config in config.idle.items():
+        if not idle_config.enabled:
+            continue
+        idle_cls = IDLE_CLASSES.get(name)
+        if idle_cls is None:
+            logging.warning("Unknown idle wallpaper source: %s", name)
+            continue
+        idle_source = idle_cls(idle_config)
+        break
+
     orchestrator = Orchestrator(
         sources=sources,
         enrichers=enrichers,
@@ -102,6 +118,7 @@ def main() -> None:
         cache=cache,
         poll_interval_seconds=config.poll_interval_seconds,
         rotation_interval_seconds=config.rotation_interval_seconds,
+        idle_source=idle_source,
     )
     orchestrator.start()
 

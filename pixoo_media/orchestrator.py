@@ -11,7 +11,8 @@ from typing import List, Optional
 
 from pixoo_media.cache import ImageCache
 from pixoo_media.enrichers.base import ArtworkEnricher
-from pixoo_media.models import NowPlaying
+from pixoo_media.idle.base import IdleWallpaperSource
+from pixoo_media.models import Artwork, NowPlaying
 from pixoo_media.outputs.base import Output
 from pixoo_media.sources.base import MediaSource
 
@@ -27,6 +28,7 @@ class Orchestrator:
         cache: ImageCache,
         poll_interval_seconds: float,
         rotation_interval_seconds: float,
+        idle_source: Optional[IdleWallpaperSource] = None,
     ):
         self.sources = sources
         self.enrichers = enrichers
@@ -34,9 +36,12 @@ class Orchestrator:
         self.cache = cache
         self.poll_interval_seconds = poll_interval_seconds
         self.rotation_interval_seconds = rotation_interval_seconds
+        self.idle_source = idle_source
         self._current: Optional[NowPlaying] = None
         self._image_index = 0
         self._last_rotation = 0.0
+        self._idle_artwork: Optional[Artwork] = None
+        self._last_idle_rotation = 0.0
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -63,10 +68,11 @@ class Orchestrator:
         if now_playing is None:
             if self._current is not None:
                 logger.info("Nothing playing; switching outputs to idle")
-                for output in self.outputs:
-                    self._safe_call(output.on_idle)
-            self._current = None
-            self._image_index = 0
+                self._current = None
+                self._image_index = 0
+                self._idle_artwork = None
+                self._last_idle_rotation = 0.0
+            self._show_idle_wallpaper()
             return
 
         if self._current is not None and now_playing.identity == self._current.identity:
@@ -119,6 +125,43 @@ class Orchestrator:
 
         for output in self.outputs:
             self._safe_call(output.update, self._current, artwork, image_path)
+
+    def _show_idle_wallpaper(self) -> None:
+        if self.idle_source is None:
+            for output in self.outputs:
+                self._safe_call(output.on_idle)
+            return
+
+        now = time.monotonic()
+        if (
+            self._idle_artwork is not None
+            and now - self._last_idle_rotation < self.idle_source.rotation_interval_seconds
+        ):
+            return
+
+        self._last_idle_rotation = now
+        artwork = self.idle_source.get_wallpaper()
+        if artwork is None:
+            if self._idle_artwork is None:
+                for output in self.outputs:
+                    self._safe_call(output.on_idle)
+            return
+
+        try:
+            image_path = self.cache.get_path(artwork)
+        except Exception:
+            logger.exception("Failed to fetch idle wallpaper %s", artwork.url)
+            return
+
+        if image_path is None:
+            return
+
+        self._idle_artwork = artwork
+        logger.info("Idle wallpaper: %s", artwork.label)
+
+        idle_now_playing = NowPlaying(source="idle", media_type="wallpaper", title="", subtitle="")
+        for output in self.outputs:
+            self._safe_call(output.update, idle_now_playing, artwork, image_path)
 
     def _poll_sources(self) -> Optional[NowPlaying]:
         for source in self.sources:
