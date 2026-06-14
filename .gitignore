@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Local configuration (contains credentials/IPs)
+config.yaml
+
+# Downloaded artwork cache
+cache/
+
+# Log files
+logs/
+
+# Local Claude Code settings
+.claude/settings.local.json

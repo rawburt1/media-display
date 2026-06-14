@@ -1,0 +1,10 @@
+services:
+  pixoo-media-display:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./cache:/app/cache
+      - ./logs:/app/logs

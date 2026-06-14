@@ -1,0 +1,57 @@
+# Copy this file to config.yaml and fill in your own values.
+
+# How often (in seconds) to poll each enabled source for "now playing" info.
+poll_interval_seconds: 5
+
+# How often (in seconds) to switch to the next image (e.g. cycling between
+# Kodi's local poster and fanart.tv's poster/fanart) while the same item
+# keeps playing. Rounded up to the nearest multiple of poll_interval_seconds.
+rotation_interval_seconds: 30
+
+# Source priority: when multiple sources are active at once, the first
+# active source in this list wins.
+priority:
+  - kodi
+  - sonos
+
+sources:
+  kodi:
+    enabled: true
+    host: 192.168.1.21
+    port: 8080
+    username: kodi
+    password: kodi
+
+  sonos:
+    enabled: true
+    # IP address of any Sonos speaker on your network.
+    speaker_ip: 192.168.1.80
+
+outputs:
+  pixoo:
+    enabled: true
+    # IP address of your Divoom Pixoo64.
+    ip: 192.168.1.32
+
+  web:
+    enabled: true
+    host: 0.0.0.0
+    port: 8090
+
+# Optional: enrich movies/TV shows with extra posters and fanart from
+# fanart.tv (matched via the tmdb/imdb/tvdb ids Kodi provides).
+enrichers:
+  fanarttv:
+    enabled: true
+    # Personal API key from https://fanart.tv/get-an-api-key/
+    api_key: YOUR_FANART_TV_API_KEY
+
+cache:
+  dir: ./cache
+
+# Optional: also write logs to a file (in addition to stdout), rotating it
+# once it reaches max_bytes and keeping backup_count old copies.
+logging:
+  file: ./logs/pixoo-media.log
+  max_bytes: 1048576
+  backup_count: 3
