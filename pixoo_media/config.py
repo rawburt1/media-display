@@ -22,6 +22,42 @@ class KodiConfig:
 class SonosConfig:
     enabled: bool = False
     speaker_ip: str = ""
+    # Speaker names or IP addresses to ignore (e.g. speakers in rooms where
+    # you don't want to trigger the display). Names match what's shown in
+    # the Sonos app.
+    blacklist: list = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
+class VinylConfig:
+    enabled: bool = False
+    # Host/port of the vinyl_recognizer service (runs on the machine the
+    # Behringer UCA202 is connected to).
+    host: str = ""
+    port: int = 8091
+
+
+@dataclasses.dataclass
+class ShieldConfig:
+    enabled: bool = False
+    # IP address of the Android TV device (e.g. Nvidia Shield).
+    host: str = ""
+    # ADB debugging port (Settings -> Device Preferences -> Developer
+    # options -> enable "USB debugging" and "Network debugging").
+    port: int = 5555
+    # Path to the ADB private key (a matching `.pub` file is used too).
+    # Generated automatically on first run if missing - accept the resulting
+    # authorization prompt on the device's screen.
+    adb_key_path: str = "./adb_keys/shield"
+
+
+@dataclasses.dataclass
+class PlexConfig:
+    enabled: bool = False
+    host: str = ""
+    port: int = 32400
+    # See https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
+    token: str = ""
 
 
 @dataclasses.dataclass
@@ -38,8 +74,62 @@ class WebConfig:
 
 
 @dataclasses.dataclass
+class FolderConfig:
+    enabled: bool = False
+    # Directory that mirrors the album art / fanart / posters for whatever
+    # is currently playing. Replaced whenever the item changes, and cleared
+    # while idle.
+    dir: str = "./artwork"
+
+
+@dataclasses.dataclass
+class NestHubConfig:
+    enabled: bool = False
+    # IP address of the Google Nest Hub (or other Cast-compatible display).
+    device_ip: str = ""
+    # This machine's LAN address, so the Nest Hub can fetch the image being
+    # cast (Cast devices load media via HTTP URL, not a direct push).
+    server_host: str = ""
+    # Port for the small built-in HTTP server that serves the current
+    # image to the Nest Hub. Must be reachable from the device.
+    server_port: int = 8092
+
+
+@dataclasses.dataclass
+class UlanziConfig:
+    enabled: bool = False
+    # IP address of the Ulanzi TC001 (or other AWTRIX3 device).
+    device_ip: str = ""
+    # Name of the AWTRIX3 "custom app" used to show now-playing text.
+    app_name: str = "now_playing"
+    # Optional HTTP basic auth, if configured in AWTRIX3's settings.
+    username: str = ""
+    password: str = ""
+
+
+@dataclasses.dataclass
+class VideoOutputConfig:
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8091
+    # Primary video source: "pexels" or "pixabay".
+    source: str = "pexels"
+    # Comma-separated search queries; one is chosen at random per refresh.
+    queries: str = "nature,ocean,mountains"
+    # How often (seconds) to fetch a fresh video batch while idle.
+    refresh_interval_seconds: int = 3600
+    # Number of videos to request per batch (Pixabay caps at 20).
+    batch_size: int = 15
+    # API key for https://www.pexels.com/api/
+    pexels_api_key: str = ""
+    # API key for https://pixabay.com/api/docs/ (used when source = "pixabay")
+    pixabay_api_key: str = ""
+
+
+@dataclasses.dataclass
 class CacheConfig:
     dir: str = "./cache"
+    max_age_days: int = 30
 
 
 @dataclasses.dataclass
@@ -50,13 +140,26 @@ class FanartTvConfig:
 
 
 @dataclasses.dataclass
+class TheTvDbConfig:
+    enabled: bool = False
+    # Project API key from https://thetvdb.com/dashboard/account/apikey
+    api_key: str = ""
+    # Only needed for "user-supported" API keys.
+    pin: str = ""
+
+
+@dataclasses.dataclass
 class UnsplashWallpaperConfig:
     enabled: bool = False
     # Comma-separated list of search queries to pick wallpapers from while
     # nothing is playing, e.g. "nature,architecture,space".
     queries: str = ""
-    # How often (in seconds) to switch to a new wallpaper while idle.
+    # How often (in seconds) to download a fresh batch of wallpapers while
+    # idle. Each output then independently rotates through that batch (in
+    # its own random order) using the top-level rotation_interval_seconds.
     rotation_interval_seconds: int = 300
+    # Number of wallpapers to download per batch.
+    batch_size: int = 10
     # Access key from https://unsplash.com/oauth/applications
     access_key: str = ""
 
@@ -76,15 +179,23 @@ class LoggingConfig:
 SOURCE_CONFIG_TYPES: dict[str, type] = {
     "kodi": KodiConfig,
     "sonos": SonosConfig,
+    "plex": PlexConfig,
+    "shield": ShieldConfig,
+    "vinyl": VinylConfig,
 }
 
 OUTPUT_CONFIG_TYPES: dict[str, type] = {
     "pixoo": PixooConfig,
     "web": WebConfig,
+    "folder": FolderConfig,
+    "nest_hub": NestHubConfig,
+    "ulanzi": UlanziConfig,
+    "video": VideoOutputConfig,
 }
 
 ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "fanarttv": FanartTvConfig,
+    "thetvdb": TheTvDbConfig,
 }
 
 # Idle wallpaper sources: shown on outputs when nothing is playing.
@@ -103,7 +214,10 @@ class Config:
     rotation_interval_seconds: int
     priority: list[str]
     sources: dict[str, Any]
-    outputs: dict[str, Any]
+    # Each output type maps to a list of configs, so the same output type
+    # (e.g. "web" or "ulanzi") can be configured multiple times to run
+    # several instances side by side.
+    outputs: dict[str, list[Any]]
     enrichers: dict[str, Any]
     idle: dict[str, Any]
     cache: CacheConfig
@@ -126,11 +240,13 @@ class Config:
             for name, values in (raw.get("sources") or {}).items()
             if name in SOURCE_CONFIG_TYPES
         }
-        outputs = {
-            name: OUTPUT_CONFIG_TYPES[name](**values)
-            for name, values in (raw.get("outputs") or {}).items()
-            if name in OUTPUT_CONFIG_TYPES
-        }
+        outputs: dict[str, list[Any]] = {}
+        for name, value in (raw.get("outputs") or {}).items():
+            if name not in OUTPUT_CONFIG_TYPES:
+                continue
+            config_cls = OUTPUT_CONFIG_TYPES[name]
+            entries = value if isinstance(value, list) else [value]
+            outputs[name] = [config_cls(**entry) for entry in entries]
         enrichers = {
             name: ENRICHER_CONFIG_TYPES[name](**values)
             for name, values in (raw.get("enrichers") or {}).items()

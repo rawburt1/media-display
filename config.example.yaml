@@ -12,7 +12,10 @@ rotation_interval_seconds: 30
 # active source in this list wins.
 priority:
   - kodi
+  - shield
+  - plex
   - sonos
+  - vinyl
 
 sources:
   kodi:
@@ -22,11 +25,52 @@ sources:
     username: kodi
     password: kodi
 
+  shield:
+    enabled: true
+    # IP address of the Android TV device (e.g. Nvidia Shield) - can be the
+    # same device as sources.kodi above, since this reads the Android-level
+    # "now playing" media session (Spotify, YouTube Music, SVT Play, etc.)
+    # rather than Kodi specifically.
+    host: 192.168.1.21
+    port: 5555
+    # Generated automatically on first run if missing - accept the resulting
+    # authorization prompt on the device's screen.
+    adb_key_path: ./adb_keys/shield
+
   sonos:
     enabled: true
     # IP address of any Sonos speaker on your network.
     speaker_ip: 192.168.1.80
+    # Optional: speaker names (as shown in the Sonos app) or IP addresses
+    # to ignore. Music on these speakers won't trigger the display.
+    blacklist:
+      - Kitchen
 
+  plex:
+    enabled: true
+    host: 192.168.1.22
+    port: 32400
+    # See https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
+    token: YOUR_PLEX_TOKEN
+
+  vinyl:
+    enabled: true
+    # Host/port of the vinyl_recognizer service (see vinyl_recognizer/),
+    # running on the machine the Behringer UCA202 is connected to.
+    host: 192.168.1.40
+    port: 8091
+
+# Each output type below is normally a single config, but can instead be a
+# list to run multiple instances of that output at once - e.g. several
+# Ulanzi displays, or web servers on different ports:
+#
+#   ulanzi:
+#     - enabled: true
+#       device_ip: 192.168.1.60
+#       app_name: now_playing
+#     - enabled: true
+#       device_ip: 192.168.1.61
+#       app_name: now_playing
 outputs:
   pixoo:
     enabled: true
@@ -38,16 +82,71 @@ outputs:
     host: 0.0.0.0
     port: 8090
 
+  folder:
+    enabled: true
+    # Directory that mirrors the album art / fanart / posters for whatever
+    # is currently playing (one file per image, replaced whenever the item
+    # changes, cleared while idle). Useful for e.g. a digital photo frame
+    # that displays whatever's in a folder.
+    dir: ./artwork
+
+  nest_hub:
+    enabled: true
+    # IP address of your Google Nest Hub (or other Cast-compatible display).
+    device_ip: 192.168.1.50
+    # This machine's LAN address - the Nest Hub fetches the image to show
+    # over HTTP from here.
+    server_host: 192.168.1.10
+    server_port: 8092
+
+  ulanzi:
+    enabled: true
+    # IP address of your Ulanzi TC001 (or other AWTRIX3 device).
+    device_ip: 192.168.1.60
+    # Name of the AWTRIX3 "custom app" used to show now-playing text.
+    app_name: now_playing
+    # Optional HTTP basic auth, if configured in AWTRIX3's settings.
+    username: ""
+    password: ""
+
+  video:
+    enabled: true
+    host: 0.0.0.0
+    port: 8091
+    # Primary video source: "pexels" or "pixabay".
+    source: pexels
+    # Comma-separated search queries; one is chosen at random per refresh.
+    queries: nature,ocean,mountains,forests
+    # How often (seconds) to fetch a fresh video batch while idle.
+    refresh_interval_seconds: 3600
+    # Number of videos to request per batch.
+    batch_size: 15
+    # API key from https://www.pexels.com/api/
+    pexels_api_key: YOUR_PEXELS_API_KEY
+    # API key from https://pixabay.com/api/docs/ (used when source = "pixabay")
+    pixabay_api_key: ""
+
 # Optional: enrich movies/TV shows with extra posters and fanart from
-# fanart.tv (matched via the tmdb/imdb/tvdb ids Kodi provides).
+# fanart.tv and thetvdb.com (matched via the tmdb/imdb/tvdb ids Kodi/Plex
+# provide).
 enrichers:
   fanarttv:
     enabled: true
     # Personal API key from https://fanart.tv/get-an-api-key/
     api_key: YOUR_FANART_TV_API_KEY
 
+  thetvdb:
+    enabled: true
+    # Project API key from https://thetvdb.com/dashboard/account/apikey
+    api_key: YOUR_THETVDB_API_KEY
+    # Only needed for "user-supported" API keys.
+    pin: ""
+
 cache:
   dir: ./cache
+  # Cached artwork files that haven't been re-downloaded in this many days
+  # are deleted (checked once a day).
+  max_age_days: 30
 
 # Optional: when nothing is playing, show wallpapers instead of a blank
 # screen/page.
@@ -56,8 +155,12 @@ idle:
     enabled: true
     # Comma-separated list of search queries to pick wallpapers from.
     queries: nature,architecture,space
-    # How often (in seconds) to switch to a new wallpaper while idle.
+    # How often (in seconds) to download a fresh batch of wallpapers while
+    # idle. Each output then independently rotates through that batch (in
+    # its own random order) at rotation_interval_seconds.
     rotation_interval_seconds: 300
+    # Number of wallpapers to download per batch.
+    batch_size: 10
     # Access key from https://unsplash.com/oauth/applications (create a
     # free app -> "Demo" access key is enough).
     access_key: YOUR_UNSPLASH_ACCESS_KEY

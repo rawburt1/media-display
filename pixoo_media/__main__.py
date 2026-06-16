@@ -10,27 +10,43 @@ from pathlib import Path
 from pixoo_media.cache import ImageCache
 from pixoo_media.config import Config
 from pixoo_media.enrichers.fanarttv import FanartTvEnricher
+from pixoo_media.enrichers.thetvdb import TheTvDbEnricher
 from pixoo_media.idle.unsplash import UnsplashWallpaperSource
 from pixoo_media.orchestrator import Orchestrator
+from pixoo_media.outputs.folder import FolderOutput
+from pixoo_media.outputs.nest_hub import NestHubOutput
 from pixoo_media.outputs.pixoo import PixooOutput
+from pixoo_media.outputs.ulanzi import UlanziOutput
+from pixoo_media.outputs.video import VideoOutput
 from pixoo_media.outputs.web import WebOutput
 from pixoo_media.sources.kodi import KodiSource
+from pixoo_media.sources.plex import PlexSource
+from pixoo_media.sources.shield import ShieldSource
 from pixoo_media.sources.sonos import SonosSource
+from pixoo_media.sources.vinyl import VinylSource
 
 # Registries mapping config names to plugin classes. Adding a new source,
 # output, or enricher starts here (and in pixoo_media/config.py).
 SOURCE_CLASSES = {
     "kodi": KodiSource,
     "sonos": SonosSource,
+    "plex": PlexSource,
+    "shield": ShieldSource,
+    "vinyl": VinylSource,
 }
 
 OUTPUT_CLASSES = {
     "pixoo": PixooOutput,
     "web": WebOutput,
+    "folder": FolderOutput,
+    "nest_hub": NestHubOutput,
+    "ulanzi": UlanziOutput,
+    "video": VideoOutput,
 }
 
 ENRICHER_CLASSES = {
     "fanarttv": FanartTvEnricher,
+    "thetvdb": TheTvDbEnricher,
 }
 
 IDLE_CLASSES = {
@@ -74,21 +90,18 @@ def main() -> None:
             continue
         sources.append(source_cls(source_config))
 
-    cache = ImageCache(config.cache.dir)
+    cache = ImageCache(config.cache.dir, max_age_days=config.cache.max_age_days)
 
     outputs = []
-    web_output = None
-    for name, output_config in config.outputs.items():
-        if not output_config.enabled:
-            continue
+    for name, output_configs in config.outputs.items():
         output_cls = OUTPUT_CLASSES.get(name)
         if output_cls is None:
             logging.warning("Unknown output: %s", name)
             continue
-        output = output_cls(output_config)
-        outputs.append(output)
-        if name == "web":
-            web_output = output
+        for output_config in output_configs:
+            if not output_config.enabled:
+                continue
+            outputs.append(output_cls(output_config))
 
     enrichers = []
     for name, enricher_config in config.enrichers.items():
@@ -121,14 +134,7 @@ def main() -> None:
         idle_source=idle_source,
     )
     orchestrator.start()
-
-    if web_output is not None:
-        logging.info(
-            "Starting web server on %s:%s", web_output.config.host, web_output.config.port
-        )
-        web_output.run()
-    else:
-        orchestrator.join()
+    orchestrator.join()
 
 
 if __name__ == "__main__":
