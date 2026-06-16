@@ -1,15 +1,27 @@
 # Copy this file to config.yaml and fill in your own values.
+# Lines starting with # are comments and are ignored.
+# Remove the leading # from any line to activate that setting.
 
-# How often (in seconds) to poll each enabled source for "now playing" info.
+
+# ---------------------------------------------------------------------------
+# Polling
+# ---------------------------------------------------------------------------
+
+# How often (in seconds) to check each source for "now playing" info.
 poll_interval_seconds: 5
 
-# How often (in seconds) to switch to the next image (e.g. cycling between
-# Kodi's local poster and fanart.tv's poster/fanart) while the same item
-# keeps playing. Rounded up to the nearest multiple of poll_interval_seconds.
+# When more than one image is available for the current item (e.g. Kodi's
+# local poster + fanart.tv backdrop), how long (in seconds) to show each one
+# before cycling to the next. Rounded up to the nearest poll_interval_seconds.
 rotation_interval_seconds: 30
 
-# Source priority: when multiple sources are active at once, the first
-# active source in this list wins.
+
+# ---------------------------------------------------------------------------
+# Source priority
+# ---------------------------------------------------------------------------
+# When several sources are active at the same time, the first one in this list
+# wins. Sources not listed here are ignored even if they are enabled below.
+
 priority:
   - kodi
   - shield
@@ -17,52 +29,77 @@ priority:
   - sonos
   - vinyl
 
+
+# ---------------------------------------------------------------------------
+# Sources  (what is currently playing)
+# ---------------------------------------------------------------------------
+
 sources:
+
+  # Kodi / XBMC media centre.
+  # Provides title, artwork, and metadata for movies, TV episodes, and music.
   kodi:
     enabled: true
-    host: 192.168.1.21
-    port: 8080
-    username: kodi
-    password: kodi
+    host: 192.168.1.21       # IP address of the machine running Kodi
+    port: 8080               # Kodi's HTTP API port (Settings → Services → Control)
+    username: kodi           # HTTP API username (leave blank if auth is off)
+    password: kodi           # HTTP API password
 
+  # Android TV "now playing" session (Nvidia Shield, Chromecast, etc.).
+  # Reads the system-level media session, so it catches Spotify, YouTube
+  # Music, SVT Play, Netflix, and anything else running on the device —
+  # not just Kodi.  Can point at the same device as `kodi` above.
   shield:
     enabled: true
-    # IP address of the Android TV device (e.g. Nvidia Shield) - can be the
-    # same device as sources.kodi above, since this reads the Android-level
-    # "now playing" media session (Spotify, YouTube Music, SVT Play, etc.)
-    # rather than Kodi specifically.
-    host: 192.168.1.21
-    port: 5555
-    # Generated automatically on first run if missing - accept the resulting
-    # authorization prompt on the device's screen.
+    host: 192.168.1.21       # IP address of the Android TV device
+    port: 5555               # ADB network port (enable in Developer options)
+    # Path to the ADB private key used to authenticate with the device.
+    # Generated automatically on first run; accept the on-screen prompt.
     adb_key_path: ./adb_keys/shield
 
+  # Sonos multi-room audio.
+  # Discovers all Sonos zones on your network automatically from a single
+  # seed speaker IP, so music playing in any room is detected.
   sonos:
     enabled: true
-    # IP address of any Sonos speaker on your network.
-    speaker_ip: 192.168.1.80
-    # Optional: speaker names (as shown in the Sonos app) or IP addresses
-    # to ignore. Music on these speakers won't trigger the display.
+    speaker_ip: 192.168.1.80   # IP of any one Sonos speaker on your network
+
+    # Optional: speakers to ignore. Use the name shown in the Sonos app,
+    # or the speaker's IP address. Music on these speakers won't trigger
+    # the display (useful for kitchen/bathroom radios etc.).
     blacklist:
       - Kitchen
+      # - 192.168.1.85
 
+  # Plex Media Server.
+  # See https://support.plex.tv/articles/204059436 to find your token.
   plex:
     enabled: true
     host: 192.168.1.22
     port: 32400
-    # See https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
     token: YOUR_PLEX_TOKEN
 
+  # Vinyl record recognition via a Behringer UCA202 USB audio interface.
+  # Requires the companion vinyl_recognizer service (see vinyl_recognizer/).
   vinyl:
     enabled: true
-    # Host/port of the vinyl_recognizer service (see vinyl_recognizer/),
-    # running on the machine the Behringer UCA202 is connected to.
-    host: 192.168.1.40
-    port: 8091
+    host: 192.168.1.40       # Machine the UCA202 is connected to
+    port: 8091               # Port the vinyl_recognizer service listens on
 
-# Each output type below is normally a single config, but can instead be a
-# list to run multiple instances of that output at once - e.g. several
-# Ulanzi displays, or web servers on different ports:
+
+# ---------------------------------------------------------------------------
+# Outputs  (where to display the artwork)
+# ---------------------------------------------------------------------------
+# Each output type accepts either a single block or a list of blocks, so you
+# can run multiple instances of the same type side by side.
+#
+# Single instance (the common case):
+#
+#   ulanzi:
+#     enabled: true
+#     device_ip: 192.168.1.60
+#
+# Multiple instances (e.g. two Ulanzi clocks, or two web servers):
 #
 #   ulanzi:
 #     - enabled: true
@@ -71,103 +108,131 @@ sources:
 #     - enabled: true
 #       device_ip: 192.168.1.61
 #       app_name: now_playing
+
 outputs:
+
+  # Divoom Pixoo64 — 64×64 LED pixel display.
   pixoo:
     enabled: true
-    # IP address of your Divoom Pixoo64.
     ip: 192.168.1.32
 
+  # Web output — serves a browser page with full-screen artwork.
+  # Open http://<this-machine>:8090 on any browser or smart TV.
   web:
     enabled: true
-    host: 0.0.0.0
+    host: 0.0.0.0            # Listen on all network interfaces
     port: 8090
 
+  # Folder output — writes the current artwork as image files in a directory.
+  # Each image is replaced whenever the playing item changes; the folder is
+  # cleared when nothing is playing. Useful for digital photo frames or any
+  # app that watches a folder.
   folder:
     enabled: true
-    # Directory that mirrors the album art / fanart / posters for whatever
-    # is currently playing (one file per image, replaced whenever the item
-    # changes, cleared while idle). Useful for e.g. a digital photo frame
-    # that displays whatever's in a folder.
     dir: ./artwork
 
+  # Google Nest Hub (or any Google Cast display).
+  # The Nest Hub fetches the image over HTTP, so this machine's LAN address
+  # must be reachable from the device.
   nest_hub:
     enabled: true
-    # IP address of your Google Nest Hub (or other Cast-compatible display).
-    device_ip: 192.168.1.50
-    # This machine's LAN address - the Nest Hub fetches the image to show
-    # over HTTP from here.
-    server_host: 192.168.1.10
-    server_port: 8092
+    device_ip: 192.168.1.50     # IP of the Nest Hub
+    server_host: 192.168.1.10   # LAN address of THIS machine
+    server_port: 8092            # Port for the built-in image server
 
+  # Ulanzi TC001 (or any AWTRIX3 device) — scrolling text clock.
+  # Displays artist and song title as scrolling text. Artwork is not shown
+  # (the display is text-only); it shows the clock face when nothing plays.
   ulanzi:
     enabled: true
-    # IP address of your Ulanzi TC001 (or other AWTRIX3 device).
     device_ip: 192.168.1.60
-    # Name of the AWTRIX3 "custom app" used to show now-playing text.
-    app_name: now_playing
-    # Optional HTTP basic auth, if configured in AWTRIX3's settings.
-    username: ""
+    app_name: now_playing        # AWTRIX3 custom app slot name
+    username: ""                 # HTTP basic auth (leave blank if not set)
     password: ""
 
+  # Video output — full-screen browser page with ambient video wallpapers.
+  # Shows artwork when something is playing; switches to looping video clips
+  # fetched from Pexels (or Pixabay) when idle.
+  # Open http://<this-machine>:8091 on any browser or smart TV.
   video:
     enabled: true
     host: 0.0.0.0
     port: 8091
-    # Primary video source: "pexels" or "pixabay".
-    source: pexels
-    # Comma-separated search queries; one is chosen at random per refresh.
+    source: pexels               # "pexels" or "pixabay"
+    # Comma-separated search terms; one is picked at random each refresh.
     queries: nature,ocean,mountains,forests
-    # How often (seconds) to fetch a fresh video batch while idle.
+    # How often (seconds) to fetch a new batch of videos while idle.
     refresh_interval_seconds: 3600
-    # Number of videos to request per batch.
-    batch_size: 15
-    # API key from https://www.pexels.com/api/
+    batch_size: 15               # Number of videos to fetch per batch
+    # API key from https://www.pexels.com/api/ (free, requires sign-up)
     pexels_api_key: YOUR_PEXELS_API_KEY
     # API key from https://pixabay.com/api/docs/ (used when source = "pixabay")
     pixabay_api_key: ""
 
-# Optional: enrich movies/TV shows with extra posters and fanart from
-# fanart.tv and thetvdb.com (matched via the tmdb/imdb/tvdb ids Kodi/Plex
-# provide).
+
+# ---------------------------------------------------------------------------
+# Enrichers  (extra artwork from online databases)
+# ---------------------------------------------------------------------------
+# Enrichers look up additional posters and fanart for movies and TV shows,
+# matched via the TMDb/IMDb/TVDB IDs that Kodi and Plex include in metadata.
+# The extra images are added to the rotation alongside the local artwork.
+
 enrichers:
+
+  # fanart.tv — high-quality posters, backgrounds, and disc art.
+  # Get a free personal API key at https://fanart.tv/get-an-api-key/
   fanarttv:
     enabled: true
-    # Personal API key from https://fanart.tv/get-an-api-key/
     api_key: YOUR_FANART_TV_API_KEY
 
+  # TheTVDB — TV episode artwork and banners.
+  # Get a free project API key at https://thetvdb.com/dashboard/account/apikey
   thetvdb:
     enabled: true
-    # Project API key from https://thetvdb.com/dashboard/account/apikey
     api_key: YOUR_THETVDB_API_KEY
-    # Only needed for "user-supported" API keys.
-    pin: ""
+    pin: ""                      # Only needed for "user-supported" API keys
+
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
 
 cache:
   dir: ./cache
-  # Cached artwork files that haven't been re-downloaded in this many days
-  # are deleted (checked once a day).
+  # Delete cached artwork files that haven't been used in this many days.
+  # The check runs once per day in the background.
   max_age_days: 30
 
-# Optional: when nothing is playing, show wallpapers instead of a blank
-# screen/page.
+
+# ---------------------------------------------------------------------------
+# Idle wallpapers  (shown when nothing is playing)
+# ---------------------------------------------------------------------------
+# When no source is active, image-capable outputs (web, pixoo, nest_hub, etc.)
+# show a rotating set of wallpapers downloaded from the configured source.
+# Each output independently rotates through the batch in a random order.
+
 idle:
+
+  # Unsplash — high-resolution photography.
+  # Create a free app at https://unsplash.com/oauth/applications and use the
+  # "Demo" access key (no approval required).
   unsplash:
     enabled: true
-    # Comma-separated list of search queries to pick wallpapers from.
+    # Comma-separated search terms; one batch is fetched per rotation cycle.
     queries: nature,architecture,space
-    # How often (in seconds) to download a fresh batch of wallpapers while
-    # idle. Each output then independently rotates through that batch (in
-    # its own random order) at rotation_interval_seconds.
+    # How often (seconds) to download a fresh batch of wallpapers.
     rotation_interval_seconds: 300
-    # Number of wallpapers to download per batch.
-    batch_size: 10
-    # Access key from https://unsplash.com/oauth/applications (create a
-    # free app -> "Demo" access key is enough).
+    batch_size: 10               # Images to download per batch
     access_key: YOUR_UNSPLASH_ACCESS_KEY
 
-# Optional: also write logs to a file (in addition to stdout), rotating it
-# once it reaches max_bytes and keeping backup_count old copies.
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+# Logs are always written to stdout (visible via `docker compose logs`).
+# To also write to a rotating file, fill in the path below.
+
 logging:
   file: ./logs/pixoo-media.log
-  max_bytes: 1048576
-  backup_count: 3
+  max_bytes: 1048576             # Rotate at 1 MB
+  backup_count: 3               # Keep 3 old log files
