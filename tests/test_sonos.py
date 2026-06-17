@@ -151,3 +151,19 @@ def test_returns_none_on_exception(MockSoCo):
     result = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
 
     assert result is None
+
+
+@patch("pixoo_media.sources.sonos.SoCo")
+def test_skips_unsupported_coordinator_and_checks_next(MockSoCo):
+    # e.g. a Sonos device that doesn't support GetTransportInfo
+    broken = MagicMock()
+    broken.ip_address = "192.168.1.82"
+    broken.get_current_transport_info.side_effect = RuntimeError("not supported")
+
+    playing = _make_device("192.168.1.80", title="Money", artist="Pink Floyd")
+    MockSoCo.return_value.all_groups = [_make_group(broken), _make_group(playing)]
+
+    result = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+
+    assert result is not None
+    assert result.title == "Money"

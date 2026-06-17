@@ -34,7 +34,11 @@ class SonosSource(MediaSource):
                 seen.add(coordinator.ip_address)
                 if self._is_blacklisted(coordinator):
                     continue
-                result = self._check(coordinator)
+                try:
+                    result = self._check(coordinator)
+                except Exception:
+                    logger.debug("Skipping %s: unsupported", coordinator.ip_address)
+                    continue
                 if result is not None:
                     return result
             return None
