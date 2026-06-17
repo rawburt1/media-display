@@ -3,3 +3,6 @@ Pillow
 PyYAML
 soco
 Flask
+adb-shell
+pychromecast
+spotipy

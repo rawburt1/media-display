@@ -1,15 +1,19 @@
-"""Entry point: python -m pixoo_media [--config config.yaml]"""
+"""Entry point: python -m pixoo_media [--config config.yaml]
+              python -m pixoo_media auth spotify [--config config.yaml]
+"""
 
 from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from pixoo_media.cache import ImageCache
 from pixoo_media.config import Config
 from pixoo_media.enrichers.fanarttv import FanartTvEnricher
+from pixoo_media.enrichers.musicbrainz import MusicBrainzEnricher
 from pixoo_media.enrichers.thetvdb import TheTvDbEnricher
 from pixoo_media.idle.unsplash import UnsplashWallpaperSource
 from pixoo_media.orchestrator import Orchestrator
@@ -23,15 +27,17 @@ from pixoo_media.sources.kodi import KodiSource
 from pixoo_media.sources.plex import PlexSource
 from pixoo_media.sources.shield import ShieldSource
 from pixoo_media.sources.sonos import SonosSource
+from pixoo_media.sources.spotify import SpotifySource
 from pixoo_media.sources.vinyl import VinylSource
 
 # Registries mapping config names to plugin classes. Adding a new source,
 # output, or enricher starts here (and in pixoo_media/config.py).
 SOURCE_CLASSES = {
     "kodi": KodiSource,
-    "sonos": SonosSource,
     "plex": PlexSource,
     "shield": ShieldSource,
+    "sonos": SonosSource,
+    "spotify": SpotifySource,
     "vinyl": VinylSource,
 }
 
@@ -46,6 +52,7 @@ OUTPUT_CLASSES = {
 
 ENRICHER_CLASSES = {
     "fanarttv": FanartTvEnricher,
+    "musicbrainz": MusicBrainzEnricher,
     "thetvdb": TheTvDbEnricher,
 }
 
@@ -55,6 +62,12 @@ IDLE_CLASSES = {
 
 
 def main() -> None:
+    # 'auth' is a special subcommand; check for it before the normal parser so
+    # the existing `--config` flag keeps working unchanged.
+    if len(sys.argv) >= 2 and sys.argv[1] == "auth":
+        _auth_main(sys.argv[2:])
+        return
+
     parser = argparse.ArgumentParser(description="Pixoo64 / web media art display")
     parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
     args = parser.parse_args()
@@ -135,6 +148,55 @@ def main() -> None:
     )
     orchestrator.start()
     orchestrator.join()
+
+
+def _auth_main(argv: list) -> None:
+    parser = argparse.ArgumentParser(
+        prog="python -m pixoo_media auth",
+        description="Authorize third-party services",
+    )
+    parser.add_argument("service", choices=["spotify"], help="Service to authorize")
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
+    args = parser.parse_args(argv)
+
+    if args.service == "spotify":
+        _auth_spotify(args.config)
+
+
+def _auth_spotify(config_path: str) -> None:
+    from pixoo_media.sources.spotify import SCOPE
+    from spotipy.oauth2 import SpotifyOAuth
+
+    config = Config.load(config_path)
+    spotify_cfg = config.sources.get("spotify")
+    if spotify_cfg is None or not spotify_cfg.enabled:
+        print(f"Error: Spotify source is not enabled in {config_path}")
+        sys.exit(1)
+
+    Path(spotify_cfg.cache_path).parent.mkdir(parents=True, exist_ok=True)
+
+    auth = SpotifyOAuth(
+        client_id=spotify_cfg.client_id,
+        client_secret=spotify_cfg.client_secret,
+        redirect_uri=spotify_cfg.redirect_uri,
+        scope=SCOPE,
+        cache_path=spotify_cfg.cache_path,
+        open_browser=False,
+    )
+
+    print("\nOpen this URL in your browser:\n")
+    print(" ", auth.get_authorize_url())
+    print("\nAfter authorizing, you will be redirected to a URL that looks like:")
+    print(f"  {spotify_cfg.redirect_uri}?code=...")
+    redirect_url = input("\nPaste the full redirect URL here: ").strip()
+    code = auth.parse_response_code(redirect_url)
+    token_info = auth.get_access_token(code, as_dict=True, check_cache=False)
+
+    if token_info:
+        print(f"\nAuthorization successful! Token cached at: {spotify_cfg.cache_path}")
+    else:
+        print("\nAuthorization failed — check your client_id, client_secret, and redirect_uri.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

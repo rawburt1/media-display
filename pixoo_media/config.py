@@ -29,6 +29,18 @@ class SonosConfig:
 
 
 @dataclasses.dataclass
+class SpotifyConfig:
+    enabled: bool = False
+    # From https://developer.spotify.com/dashboard — create a free app.
+    client_id: str = ""
+    client_secret: str = ""
+    # Must match the redirect URI registered in the Spotify dashboard.
+    redirect_uri: str = "http://localhost:8888/callback"
+    # Where to cache the OAuth token between restarts.
+    cache_path: str = "./spotify_cache/token.json"
+
+
+@dataclasses.dataclass
 class VinylConfig:
     enabled: bool = False
     # Host/port of the vinyl_recognizer service (runs on the machine the
@@ -140,6 +152,12 @@ class FanartTvConfig:
 
 
 @dataclasses.dataclass
+class MusicBrainzConfig:
+    enabled: bool = False
+    # No API key required; uses the free Cover Art Archive.
+
+
+@dataclasses.dataclass
 class TheTvDbConfig:
     enabled: bool = False
     # Project API key from https://thetvdb.com/dashboard/account/apikey
@@ -178,9 +196,10 @@ class LoggingConfig:
 # new source or output starts here.
 SOURCE_CONFIG_TYPES: dict[str, type] = {
     "kodi": KodiConfig,
-    "sonos": SonosConfig,
     "plex": PlexConfig,
     "shield": ShieldConfig,
+    "sonos": SonosConfig,
+    "spotify": SpotifyConfig,
     "vinyl": VinylConfig,
 }
 
@@ -195,6 +214,7 @@ OUTPUT_CONFIG_TYPES: dict[str, type] = {
 
 ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "fanarttv": FanartTvConfig,
+    "musicbrainz": MusicBrainzConfig,
     "thetvdb": TheTvDbConfig,
 }
 

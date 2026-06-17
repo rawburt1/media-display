@@ -12,3 +12,4 @@ services:
       - ./logs:/app/logs
       - ./adb_keys:/app/adb_keys
       - ./artwork:/app/artwork
+      - ./spotify_cache:/app/spotify_cache  # Spotify OAuth token; only needed if Spotify is enabled

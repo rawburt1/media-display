@@ -27,6 +27,7 @@ priority:
   - shield
   - plex
   - sonos
+  - spotify
   - vinyl
 
 
@@ -45,6 +46,14 @@ sources:
     username: kodi           # HTTP API username (leave blank if auth is off)
     password: kodi           # HTTP API password
 
+  # Plex Media Server.
+  # See https://support.plex.tv/articles/204059436 to find your token.
+  plex:
+    enabled: true
+    host: 192.168.1.22
+    port: 32400
+    token: YOUR_PLEX_TOKEN
+
   # Android TV "now playing" session (Nvidia Shield, Chromecast, etc.).
   # Reads the system-level media session, so it catches Spotify, YouTube
   # Music, SVT Play, Netflix, and anything else running on the device —
@@ -56,6 +65,18 @@ sources:
     # Path to the ADB private key used to authenticate with the device.
     # Generated automatically on first run; accept the on-screen prompt.
     adb_key_path: ./adb_keys/shield
+
+  # Spotify — current playback via the Spotify Web API.
+  # 1. Create a free app at https://developer.spotify.com/dashboard
+  # 2. Add http://localhost:8888/callback as a Redirect URI in the app settings.
+  # 3. Authorize once: docker compose run --rm pixoo-media-display python -m pixoo_media auth spotify
+  spotify:
+    enabled: true
+    client_id: YOUR_SPOTIFY_CLIENT_ID
+    client_secret: YOUR_SPOTIFY_CLIENT_SECRET
+    redirect_uri: http://localhost:8888/callback
+    # Token is cached here; mount this directory as a volume in docker-compose.
+    cache_path: ./spotify_cache/token.json
 
   # Sonos multi-room audio.
   # Discovers all Sonos zones on your network automatically from a single
@@ -71,14 +92,6 @@ sources:
       - Kitchen
       # - 192.168.1.85
 
-  # Plex Media Server.
-  # See https://support.plex.tv/articles/204059436 to find your token.
-  plex:
-    enabled: true
-    host: 192.168.1.22
-    port: 32400
-    token: YOUR_PLEX_TOKEN
-
   # Vinyl record recognition via a Behringer UCA202 USB audio interface.
   # Requires the companion vinyl_recognizer service (see vinyl_recognizer/).
   vinyl:
@@ -91,37 +104,23 @@ sources:
 # Outputs  (where to display the artwork)
 # ---------------------------------------------------------------------------
 # Each output type accepts either a single block or a list of blocks, so you
-# can run multiple instances of the same type side by side.
+# can drive multiple screens of the same type simultaneously.
 #
-# Single instance (the common case):
+# Single screen (the common case):
 #
-#   ulanzi:
+#   pixoo:
 #     enabled: true
-#     device_ip: 192.168.1.60
+#     ip: 192.168.1.32
 #
-# Multiple instances (e.g. two Ulanzi clocks, or two web servers):
+# Multiple screens of the same type — use a YAML list:
 #
-#   ulanzi:
+#   pixoo:
 #     - enabled: true
-#       device_ip: 192.168.1.60
-#       app_name: now_playing
+#       ip: 192.168.1.32
 #     - enabled: true
-#       device_ip: 192.168.1.61
-#       app_name: now_playing
+#       ip: 192.168.1.33
 
 outputs:
-
-  # Divoom Pixoo64 — 64×64 LED pixel display.
-  pixoo:
-    enabled: true
-    ip: 192.168.1.32
-
-  # Web output — serves a browser page with full-screen artwork.
-  # Open http://<this-machine>:8090 on any browser or smart TV.
-  web:
-    enabled: true
-    host: 0.0.0.0            # Listen on all network interfaces
-    port: 8090
 
   # Folder output — writes the current artwork as image files in a directory.
   # Each image is replaced whenever the playing item changes; the folder is
@@ -130,6 +129,13 @@ outputs:
   folder:
     enabled: true
     dir: ./artwork
+
+  # Multiple folder outputs — e.g. one local and one on a network share:
+  # folder:
+  #   - enabled: true
+  #     dir: ./artwork
+  #   - enabled: true
+  #     dir: /mnt/photoframe/artwork
 
   # Google Nest Hub (or any Google Cast display).
   # The Nest Hub fetches the image over HTTP, so this machine's LAN address
@@ -140,6 +146,29 @@ outputs:
     server_host: 192.168.1.10   # LAN address of THIS machine
     server_port: 8092            # Port for the built-in image server
 
+  # Multiple Nest Hubs — living room and bedroom, each on its own server port:
+  # nest_hub:
+  #   - enabled: true
+  #     device_ip: 192.168.1.50
+  #     server_host: 192.168.1.10
+  #     server_port: 8092
+  #   - enabled: true
+  #     device_ip: 192.168.1.51
+  #     server_host: 192.168.1.10
+  #     server_port: 8093
+
+  # Divoom Pixoo64 — 64×64 LED pixel display.
+  pixoo:
+    enabled: true
+    ip: 192.168.1.32
+
+  # Multiple Pixoo displays — one in the living room, one on the desk:
+  # pixoo:
+  #   - enabled: true
+  #     ip: 192.168.1.32
+  #   - enabled: true
+  #     ip: 192.168.1.33
+
   # Ulanzi TC001 (or any AWTRIX3 device) — scrolling text clock.
   # Displays artist and song title as scrolling text. Artwork is not shown
   # (the display is text-only); it shows the clock face when nothing plays.
@@ -149,6 +178,15 @@ outputs:
     app_name: now_playing        # AWTRIX3 custom app slot name
     username: ""                 # HTTP basic auth (leave blank if not set)
     password: ""
+
+  # Multiple Ulanzi clocks — kitchen and office:
+  # ulanzi:
+  #   - enabled: true
+  #     device_ip: 192.168.1.60
+  #     app_name: now_playing
+  #   - enabled: true
+  #     device_ip: 192.168.1.61
+  #     app_name: now_playing
 
   # Video output — full-screen browser page with ambient video wallpapers.
   # Shows artwork when something is playing; switches to looping video clips
@@ -169,6 +207,37 @@ outputs:
     # API key from https://pixabay.com/api/docs/ (used when source = "pixabay")
     pixabay_api_key: ""
 
+  # Multiple video outputs — living room TV on 8091, bedroom TV on 8093:
+  # video:
+  #   - enabled: true
+  #     host: 0.0.0.0
+  #     port: 8091
+  #     source: pexels
+  #     queries: nature,ocean,mountains
+  #     pexels_api_key: YOUR_PEXELS_API_KEY
+  #   - enabled: true
+  #     host: 0.0.0.0
+  #     port: 8093
+  #     source: pexels
+  #     queries: cityscapes,architecture
+  #     pexels_api_key: YOUR_PEXELS_API_KEY
+
+  # Web output — serves a browser page with full-screen artwork.
+  # Open http://<this-machine>:8090 on any browser or smart TV.
+  web:
+    enabled: true
+    host: 0.0.0.0            # Listen on all network interfaces
+    port: 8090
+
+  # Multiple web outputs — e.g. different ports for different rooms:
+  # web:
+  #   - enabled: true
+  #     host: 0.0.0.0
+  #     port: 8090
+  #   - enabled: true
+  #     host: 0.0.0.0
+  #     port: 8094
+
 
 # ---------------------------------------------------------------------------
 # Enrichers  (extra artwork from online databases)
@@ -184,6 +253,13 @@ enrichers:
   fanarttv:
     enabled: true
     api_key: YOUR_FANART_TV_API_KEY
+
+  # MusicBrainz Cover Art Archive — album cover scans for music.
+  # No API key required; uses the free Cover Art Archive (coverartarchive.org).
+  # Complements fanart.tv: fanart.tv provides promotional/poster art while CAA
+  # provides scanned physical album covers.
+  musicbrainz:
+    enabled: true
 
   # TheTVDB — TV episode artwork and banners.
   # Get a free project API key at https://thetvdb.com/dashboard/account/apikey
