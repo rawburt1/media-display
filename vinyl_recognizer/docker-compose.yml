@@ -1,0 +1,12 @@
+services:
+  vinyl-recognizer:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - audio

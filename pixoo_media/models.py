@@ -25,11 +25,16 @@ class NowPlaying:
     media_type: str  # "music" | "movie" | "episode"
     title: str
     subtitle: str = ""
+    # Album name, for music (used to look up artwork by name when no
+    # MusicBrainz id is available, e.g. for Sonos).
+    album: str = ""
     images: List[Artwork] = field(default_factory=list)
     # External ids for enrichers, e.g. {"tmdb": "603", "tvdb": "...", "imdb": "tt0133093"}
     ids: Dict[str, str] = field(default_factory=dict)
     # Season number, for episodes (used to match fanart.tv season posters).
     season: Optional[int] = None
+    # Release year, for movies (used by the Ulanzi text output).
+    year: Optional[int] = None
 
     @property
     def identity(self) -> tuple:

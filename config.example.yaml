@@ -24,6 +24,7 @@ rotation_interval_seconds: 30
 
 priority:
   - kodi
+  - appletv
   - shield
   - plex
   - sonos
@@ -36,6 +37,19 @@ priority:
 # ---------------------------------------------------------------------------
 
 sources:
+
+  # Apple TV — reports the currently-playing item from any app (TV+, Plex,
+  # Infuse, etc.) via the Companion or MRP protocol.  Pairing is required:
+  #   docker compose run --rm pixoo-media-display python -m pixoo_media auth appletv
+  # Follow the prompts; paste the printed credentials below.
+  appletv:
+    enabled: true
+    host: 192.168.1.90              # IP address of the Apple TV
+    # Credentials from pairing (tvOS 15+):
+    companion_credentials: ""
+    # For older hardware or tvOS < 15:
+    # mrp_credentials: ""
+    # airplay_credentials: ""       # Rarely needed for now-playing
 
   # Kodi / XBMC media centre.
   # Provides title, artwork, and metadata for movies, TV episodes, and music.
@@ -120,7 +134,40 @@ sources:
 #     - enabled: true
 #       ip: 192.168.1.33
 
+# Each image-capable output accepts an optional `transforms` list that is
+# applied to every image before it is sent to that output.  Steps run in
+# order.  Available transforms:
+#
+#   fit: [width, height]          — cover-crop (CSS object-fit: cover)
+#   pad: [width, height]          — letterbox / pillarbox (contain + fill)
+#   pad: {width: W, height: H, color: white}
+#   resize: [width, height]       — exact resize, ignores aspect ratio
+#   grayscale                     — convert to greyscale (output stays RGB)
+#   blur: {radius: 2}
+#   brightness: {factor: 1.2}     — >1 brighter, <1 darker
+#   contrast: {factor: 1.1}
+#   rotate: {degrees: 90}
+#   rotate: {degrees: 90, expand: true}  # grow canvas to avoid clipping
+#
+# Example — letterbox for a 1280×800 Nest Hub, then boost brightness:
+#   transforms:
+#     - pad: [1280, 800]
+#     - brightness: {factor: 1.15}
+
 outputs:
+
+  # RSS/Atom feed — "now playing" history as a machine-readable feed.
+  # Subscribe with any feed reader or home-automation tool (Home Assistant,
+  # Node-RED, etc.) to track what has been playing.
+  # Two formats are served from the same port:
+  #   /rss    — RSS 2.0  (application/rss+xml)
+  #   /atom   — Atom 1.0 (application/atom+xml)
+  feed:
+    enabled: true
+    host: 0.0.0.0
+    port: 8086
+    title: Now Playing               # Channel/feed title shown in feed readers
+    max_items: 50                    # Entries kept in memory (oldest discarded)
 
   # Folder output — writes the current artwork as image files in a directory.
   # Each image is replaced whenever the playing item changes; the folder is
@@ -136,6 +183,35 @@ outputs:
   #     dir: ./artwork
   #   - enabled: true
   #     dir: /mnt/photoframe/artwork
+
+  # MQTT publish — sends now-playing metadata to an MQTT broker.
+  # Useful for triggering home-automation flows (Home Assistant, Node-RED, …)
+  # or feeding data to other displays.
+  #
+  # Payload when playing:
+  #   {"state": "playing", "source": "kodi", "media_type": "music",
+  #    "title": "...", "subtitle": "...", "album": "..."}
+  # Payload when idle:
+  #   {"state": "idle"}
+  mqtt:
+    enabled: true
+    host: 192.168.1.10           # MQTT broker IP or hostname
+    port: 1883
+    topic: pixoo-media/now_playing
+    client_id: pixoo-media-display
+    username: ""                  # Leave blank if broker has no auth
+    password: ""
+    qos: 0                        # 0 = at most once, 1 = at least once
+    retain: true                  # New subscribers see the current state immediately
+
+  # Multiple MQTT outputs — e.g. one per room or automation system:
+  # mqtt:
+  #   - enabled: true
+  #     host: 192.168.1.10
+  #     topic: living_room/media
+  #   - enabled: true
+  #     host: 192.168.1.11
+  #     topic: bedroom/media
 
   # Google Nest Hub (or any Google Cast display).
   # The Nest Hub fetches the image over HTTP, so this machine's LAN address
@@ -253,6 +329,16 @@ enrichers:
   fanarttv:
     enabled: true
     api_key: YOUR_FANART_TV_API_KEY
+
+  # Last.fm — artist photos for music tracks.
+  # Get a free API key at https://www.last.fm/api/account/create
+  # Note: Last.fm removed most artist images from their API in 2019–2020.
+  # Photos are still available for many popular artists, but may be absent
+  # for less well-known ones.  When no photo is available this enricher is
+  # a no-op (the placeholder image is filtered out automatically).
+  lastfm:
+    enabled: true
+    api_key: YOUR_LASTFM_API_KEY
 
   # MusicBrainz Cover Art Archive — album cover scans for music.
   # No API key required; uses the free Cover Art Archive (coverartarchive.org).

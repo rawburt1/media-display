@@ -13,6 +13,12 @@ cache/
 # Log files
 logs/
 
+# Folder output: mirrored artwork for whatever's currently playing
+artwork/
+
+# ADB keys for the Shield source (private key material)
+adb_keys/
+
 # Local Claude Code settings
 .claude/settings.local.json
 

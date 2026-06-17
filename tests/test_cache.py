@@ -1,5 +1,7 @@
 """Tests for ImageCache."""
 
+import os
+import time
 from unittest.mock import MagicMock, patch
 
 from pixoo_media.cache import ImageCache
@@ -34,3 +36,20 @@ def test_get_path_downloads_and_caches(mock_get, tmp_path):
     path2 = cache.get_path(artwork)
     assert path2 == path
     assert mock_get.call_count == 1
+
+
+def test_purge_expired_removes_old_files_only(tmp_path):
+    cache = ImageCache(tmp_path, max_age_days=30)
+
+    old_file = tmp_path / "old.jpg"
+    recent_file = tmp_path / "recent.jpg"
+    old_file.write_bytes(b"old")
+    recent_file.write_bytes(b"recent")
+
+    old_time = time.time() - 31 * 86400
+    os.utime(old_file, (old_time, old_time))
+
+    cache.purge_expired()
+
+    assert not old_file.exists()
+    assert recent_file.exists()

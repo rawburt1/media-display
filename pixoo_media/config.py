@@ -10,6 +10,21 @@ import yaml
 
 
 @dataclasses.dataclass
+class AppleTvConfig:
+    enabled: bool = False
+    # IP address or hostname of the Apple TV.
+    host: str = ""
+    # Credentials obtained by running:
+    #   python -m pixoo_media auth appletv --config config.yaml
+    # Companion is the primary protocol for tvOS 15+.
+    companion_credentials: str = ""
+    # MRP is used for older Apple TV hardware or tvOS < 15.
+    mrp_credentials: str = ""
+    # AirPlay credentials (optional, rarely needed for now-playing).
+    airplay_credentials: str = ""
+
+
+@dataclasses.dataclass
 class KodiConfig:
     enabled: bool = False
     host: str = ""
@@ -76,6 +91,13 @@ class PlexConfig:
 class PixooConfig:
     enabled: bool = False
     ip: str = ""
+    # Optional image transforms applied before the image is sent to the
+    # display.  See config.example.yaml for the full list of available
+    # transforms and their parameters.
+    transforms: list = dataclasses.field(default_factory=list)
+    # When set, save a 512×512 nearest-neighbour preview of the final
+    # 64×64 image here after each update (useful for visual QA).
+    preview_path: str = ""
 
 
 @dataclasses.dataclass
@@ -83,6 +105,18 @@ class WebConfig:
     enabled: bool = False
     host: str = "0.0.0.0"
     port: int = 8090
+    transforms: list = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
+class FeedConfig:
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8086
+    # Feed channel title shown in podcast/RSS apps.
+    title: str = "Now Playing"
+    # Maximum number of entries to keep in memory (oldest are discarded).
+    max_items: int = 50
 
 
 @dataclasses.dataclass
@@ -92,6 +126,7 @@ class FolderConfig:
     # is currently playing. Replaced whenever the item changes, and cleared
     # while idle.
     dir: str = "./artwork"
+    transforms: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -105,6 +140,7 @@ class NestHubConfig:
     # Port for the small built-in HTTP server that serves the current
     # image to the Nest Hub. Must be reachable from the device.
     server_port: int = 8092
+    transforms: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -117,6 +153,26 @@ class UlanziConfig:
     # Optional HTTP basic auth, if configured in AWTRIX3's settings.
     username: str = ""
     password: str = ""
+
+
+@dataclasses.dataclass
+class MqttConfig:
+    enabled: bool = False
+    # Hostname or IP of the MQTT broker.
+    host: str = "localhost"
+    port: int = 1883
+    # Topic to publish now-playing events to.
+    topic: str = "pixoo-media/now_playing"
+    # MQTT client identifier (must be unique per broker connection).
+    client_id: str = "pixoo-media-display"
+    # Optional broker credentials (leave blank if auth is not configured).
+    username: str = ""
+    password: str = ""
+    # QoS level: 0 = at most once, 1 = at least once, 2 = exactly once.
+    qos: int = 0
+    # Retain the last published message so new subscribers immediately see
+    # the current state.
+    retain: bool = True
 
 
 @dataclasses.dataclass
@@ -148,6 +204,13 @@ class CacheConfig:
 class FanartTvConfig:
     enabled: bool = False
     # Personal API key from https://fanart.tv/get-an-api-key/
+    api_key: str = ""
+
+
+@dataclasses.dataclass
+class LastFmConfig:
+    enabled: bool = False
+    # API key from https://www.last.fm/api/account/create (free).
     api_key: str = ""
 
 
@@ -195,6 +258,7 @@ class LoggingConfig:
 # Registries mapping config section names to their dataclass types. Adding a
 # new source or output starts here.
 SOURCE_CONFIG_TYPES: dict[str, type] = {
+    "appletv": AppleTvConfig,
     "kodi": KodiConfig,
     "plex": PlexConfig,
     "shield": ShieldConfig,
@@ -204,16 +268,19 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
 }
 
 OUTPUT_CONFIG_TYPES: dict[str, type] = {
-    "pixoo": PixooConfig,
-    "web": WebConfig,
+    "feed": FeedConfig,
     "folder": FolderConfig,
+    "mqtt": MqttConfig,
     "nest_hub": NestHubConfig,
+    "pixoo": PixooConfig,
     "ulanzi": UlanziConfig,
     "video": VideoOutputConfig,
+    "web": WebConfig,
 }
 
 ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "fanarttv": FanartTvConfig,
+    "lastfm": LastFmConfig,
     "musicbrainz": MusicBrainzConfig,
     "thetvdb": TheTvDbConfig,
 }

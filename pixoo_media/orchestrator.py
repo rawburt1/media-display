@@ -173,11 +173,11 @@ class Orchestrator:
         artwork = self._current.images[state.order[state.position]]
         try:
             image_path = self.cache.get_path(artwork)
+            if image_path is None:
+                return
+            image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
         except Exception:
             logger.exception("Failed to fetch artwork %s", artwork.url)
-            return
-
-        if image_path is None:
             return
 
         self._safe_call(output.update, self._current, artwork, image_path)
@@ -248,11 +248,11 @@ class Orchestrator:
         artwork = self._idle_images[state.order[state.position]]
         try:
             image_path = self.cache.get_path(artwork)
+            if image_path is None:
+                return
+            image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
         except Exception:
             logger.exception("Failed to fetch idle wallpaper %s", artwork.url)
-            return
-
-        if image_path is None:
             return
 
         logger.info("Idle wallpaper: %s", artwork.label)

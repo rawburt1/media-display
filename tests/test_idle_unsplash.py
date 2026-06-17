@@ -11,6 +11,7 @@ def _source(**kwargs) -> UnsplashWallpaperSource:
         enabled=True,
         queries="nature, architecture",
         rotation_interval_seconds=300,
+        batch_size=10,
         access_key="test-key",
     )
     defaults.update(kwargs)
@@ -23,7 +24,40 @@ def test_parses_comma_separated_queries():
 
 
 @patch("pixoo_media.idle.unsplash.requests.get")
-def test_returns_artwork_from_response(mock_get):
+def test_returns_artworks_from_response(mock_get):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = [
+        {
+            "urls": {"regular": "https://images.unsplash.com/photo-123"},
+            "description": "A scenic mountain",
+        },
+        {
+            "urls": {"regular": "https://images.unsplash.com/photo-456"},
+            "description": None,
+            "alt_description": "a foggy forest",
+        },
+    ]
+    mock_get.return_value = mock_response
+
+    source = _source(queries="nature", batch_size=2)
+    artworks = source.get_wallpapers()
+
+    assert [a.url for a in artworks] == [
+        "https://images.unsplash.com/photo-123",
+        "https://images.unsplash.com/photo-456",
+    ]
+    assert artworks[0].label == "Unsplash: A scenic mountain"
+    assert artworks[1].label == "Unsplash: a foggy forest"
+
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://api.unsplash.com/photos/random"
+    assert kwargs["params"] == {"count": 2, "query": "nature"}
+    assert kwargs["headers"]["Authorization"] == "Client-ID test-key"
+
+
+@patch("pixoo_media.idle.unsplash.requests.get")
+def test_single_object_response_is_wrapped_in_a_list(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = {
@@ -32,61 +66,43 @@ def test_returns_artwork_from_response(mock_get):
     }
     mock_get.return_value = mock_response
 
-    source = _source(queries="nature")
-    artwork = source.get_wallpaper()
+    artworks = _source(queries="nature", batch_size=1).get_wallpapers()
 
-    assert artwork is not None
-    assert artwork.url == "https://images.unsplash.com/photo-123"
-    assert artwork.label == "Unsplash: A scenic mountain"
-
-    args, kwargs = mock_get.call_args
-    assert args[0] == "https://api.unsplash.com/photos/random"
-    assert kwargs["params"] == {"query": "nature"}
-    assert kwargs["headers"]["Authorization"] == "Client-ID test-key"
-
-
-@patch("pixoo_media.idle.unsplash.requests.get")
-def test_falls_back_to_alt_description(mock_get):
-    mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()
-    mock_response.json.return_value = {
-        "urls": {"regular": "https://images.unsplash.com/photo-123"},
-        "description": None,
-        "alt_description": "a foggy forest",
-    }
-    mock_get.return_value = mock_response
-
-    artwork = _source(queries="nature").get_wallpaper()
-
-    assert artwork.label == "Unsplash: a foggy forest"
+    assert len(artworks) == 1
+    assert artworks[0].url == "https://images.unsplash.com/photo-123"
 
 
 @patch("pixoo_media.idle.unsplash.requests.get")
 def test_no_queries_omits_query_param(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
-    mock_response.json.return_value = {"urls": {"regular": "https://images.unsplash.com/photo-123"}}
+    mock_response.json.return_value = []
     mock_get.return_value = mock_response
 
-    source = _source(queries="")
-    source.get_wallpaper()
+    source = _source(queries="", batch_size=5)
+    source.get_wallpapers()
 
     _, kwargs = mock_get.call_args
-    assert kwargs["params"] == {}
+    assert kwargs["params"] == {"count": 5}
 
 
 @patch("pixoo_media.idle.unsplash.requests.get")
-def test_missing_url_returns_none(mock_get):
+def test_photos_without_urls_are_skipped(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
-    mock_response.json.return_value = {"urls": {}}
+    mock_response.json.return_value = [
+        {"urls": {}},
+        {"urls": {"regular": "https://images.unsplash.com/photo-123"}},
+    ]
     mock_get.return_value = mock_response
 
-    assert _source(queries="nature").get_wallpaper() is None
+    artworks = _source(queries="nature").get_wallpapers()
+
+    assert [a.url for a in artworks] == ["https://images.unsplash.com/photo-123"]
 
 
 @patch("pixoo_media.idle.unsplash.requests.get")
-def test_request_error_returns_none(mock_get):
+def test_request_error_returns_empty_list(mock_get):
     mock_get.side_effect = Exception("boom")
 
-    assert _source(queries="nature").get_wallpaper() is None
+    assert _source(queries="nature").get_wallpapers() == []

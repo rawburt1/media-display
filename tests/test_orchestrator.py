@@ -80,6 +80,7 @@ def test_idle_source_shows_wallpaper():
     output = MagicMock()
     cache = MagicMock()
     cache.get_path.return_value = "/tmp/wallpaper.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
     artwork = Artwork(url="https://i.redd.it/abc.jpg", label="r/wallpapers: Test")
     idle_source = _FakeIdleSource([artwork])
 
@@ -189,6 +190,7 @@ def test_idle_batch_each_output_gets_independently_shuffled_order():
     output_b = MagicMock()
     cache = MagicMock()
     cache.get_path.side_effect = lambda artwork: f"/cache/{artwork.label}"
+    cache.get_transformed_path.side_effect = lambda path, _: path
 
     orchestrator = _orchestrator(outputs=[output_a, output_b], cache=cache, idle_source=idle_source)
 
@@ -341,6 +343,7 @@ def test_each_output_gets_independently_shuffled_order():
     output_b = MagicMock()
     cache = MagicMock()
     cache.get_path.side_effect = lambda artwork: f"/cache/{artwork.label}"
+    cache.get_transformed_path.side_effect = lambda path, _: path
 
     orchestrator = Orchestrator(
         sources=[_StaticSource(now_playing)],

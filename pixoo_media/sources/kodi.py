@@ -19,10 +19,15 @@ _ITEM_PROPERTIES = [
     "showtitle",
     "season",
     "episode",
+    "year",
     "artist",
     "art",
     "thumbnail",
     "uniqueid",
+    "tvshowid",
+    "musicbrainzalbumid",
+    "musicbrainzalbumartistid",
+    "musicbrainzartistid",
 ]
 
 
@@ -63,11 +68,15 @@ class KodiSource(MediaSource):
             )
             item = result.get("item", {})
 
+            art = item.get("art") or {}
+
             kodi_type = item.get("type")
             if kodi_type == "movie":
                 media_type = "movie"
                 title = item.get("title", "")
                 subtitle = ""
+                poster_path = art.get("poster") or art.get("thumb") or item.get("thumbnail")
+                fanart_path = art.get("fanart")
             elif kodi_type == "episode":
                 media_type = "episode"
                 title = item.get("showtitle", "")
@@ -78,18 +87,42 @@ class KodiSource(MediaSource):
                     subtitle = f"S{season:02d}E{episode:02d} - {ep_title}"
                 else:
                     subtitle = ep_title
+                # Prefer the series poster/fanart over the episode's own thumb/art.
+                poster_path = (
+                    art.get("tvshow.poster")
+                    or art.get("season.poster")
+                    or art.get("poster")
+                    or art.get("thumb")
+                    or item.get("thumbnail")
+                )
+                fanart_path = art.get("tvshow.fanart") or art.get("season.fanart") or art.get("fanart")
             else:
                 media_type = "music"
                 title = item.get("title", "")
                 artists = item.get("artist") or []
                 subtitle = artists[0] if artists else ""
+                poster_path = art.get("thumb") or item.get("thumbnail")
+                fanart_path = art.get("fanart")
 
-            art = item.get("art") or {}
-            art_path = art.get("poster") or art.get("thumb") or item.get("thumbnail")
             images = []
-            if art_path:
-                image_url = resolve_kodi_image_url(self.config.host, self.config.port, art_path)
-                images.append(Artwork(url=image_url, auth=self._auth, label="Poster (Kodi)"))
+            seen_paths = set()
+            for path, label in ((poster_path, "Poster (Kodi)"), (fanart_path, "Fanart (Kodi)")):
+                if not path or path in seen_paths:
+                    continue
+                seen_paths.add(path)
+                image_url = resolve_kodi_image_url(self.config.host, self.config.port, path)
+                images.append(Artwork(url=image_url, auth=self._auth, label=label))
+
+            # Episode "uniqueid" entries identify the episode itself, but
+            # enrichers (fanart.tv, thetvdb.com) need the series' ids.
+            ids = dict(item.get("uniqueid") or {})
+            if kodi_type == "episode":
+                ids = self._get_tvshow_ids(item.get("tvshowid")) or ids
+            elif media_type == "music":
+                artist_ids = item.get("musicbrainzalbumartistid") or item.get("musicbrainzartistid") or []
+                album_id = item.get("musicbrainzalbumid")
+                if artist_ids and album_id:
+                    ids = {"musicbrainzartist": artist_ids[0], "musicbrainzalbum": album_id}
 
             return NowPlaying(
                 source=self.name,
@@ -97,9 +130,23 @@ class KodiSource(MediaSource):
                 title=title,
                 subtitle=subtitle,
                 images=images,
-                ids=dict(item.get("uniqueid") or {}),
+                ids=ids,
                 season=item.get("season") if media_type == "episode" else None,
+                year=item.get("year") if media_type == "movie" else None,
             )
         except Exception:
             logger.exception("Kodi source error")
+            return None
+
+    def _get_tvshow_ids(self, tvshowid: Optional[int]) -> Optional[dict]:
+        if tvshowid is None:
+            return None
+        try:
+            result = self._rpc(
+                "VideoLibrary.GetTVShowDetails",
+                {"tvshowid": tvshowid, "properties": ["uniqueid"]},
+            )
+            return dict(result.get("tvshowdetails", {}).get("uniqueid") or {}) or None
+        except Exception:
+            logger.exception("Kodi tvshow lookup error")
             return None

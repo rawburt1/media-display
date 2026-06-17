@@ -1,15 +1,15 @@
 """Unsplash idle wallpaper source.
 
-Picks a random photo matching one of the configured search queries to show
-on outputs while nothing is playing. Requires a free Access Key from
-https://unsplash.com/oauth/applications.
+Downloads a batch of random photos matching one of the configured search
+queries to show on outputs while nothing is playing. Requires a free Access
+Key from https://unsplash.com/oauth/applications.
 """
 
 from __future__ import annotations
 
 import logging
 import random
-from typing import Optional
+from typing import List
 
 import requests
 
@@ -28,8 +28,8 @@ class UnsplashWallpaperSource(IdleWallpaperSource):
         self.rotation_interval_seconds = config.rotation_interval_seconds
         self.queries = [q.strip() for q in config.queries.split(",") if q.strip()]
 
-    def get_wallpaper(self) -> Optional[Artwork]:
-        params = {}
+    def get_wallpapers(self) -> List[Artwork]:
+        params = {"count": self.config.batch_size}
         if self.queries:
             params["query"] = random.choice(self.queries)
 
@@ -46,13 +46,20 @@ class UnsplashWallpaperSource(IdleWallpaperSource):
             response.raise_for_status()
             data = response.json()
         except Exception:
-            logger.exception("Failed to fetch wallpaper from Unsplash")
-            return None
+            logger.exception("Failed to fetch wallpapers from Unsplash")
+            return []
 
-        url = data.get("urls", {}).get("regular")
-        if not url:
-            return None
+        if isinstance(data, dict):
+            data = [data]
 
-        description = data.get("description") or data.get("alt_description") or ""
-        label = f"Unsplash: {description}" if description else "Unsplash"
-        return Artwork(url=url, label=label)
+        artworks = []
+        for photo in data:
+            url = photo.get("urls", {}).get("regular")
+            if not url:
+                continue
+
+            description = photo.get("description") or photo.get("alt_description") or ""
+            label = f"Unsplash: {description}" if description else "Unsplash"
+            artworks.append(Artwork(url=url, label=label))
+
+        return artworks

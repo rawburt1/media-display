@@ -1,0 +1,40 @@
+# Copy this file to config.yaml and fill in your own values.
+#
+# Run `python -m vinyl_recognizer --list-devices` first to find the name (or
+# index) of your Behringer UCA202 (or other USB audio interface).
+
+# API token from https://dashboard.audd.io/
+audd_api_key: YOUR_AUDD_API_TOKEN
+
+# Substring of the input device's name (e.g. "UCA202"), or its numeric
+# index. Leave empty to use the system default input device.
+input_device: "UCA202"
+
+sample_rate: 44100
+
+# How often (in seconds) to record a short clip to check whether anything
+# is playing.
+poll_interval_seconds: 5
+
+# Length (in seconds) of that signal-detection clip.
+signal_clip_seconds: 1
+
+# Length (in seconds) of the clip sent to AudD for recognition.
+recognition_clip_seconds: 8
+
+# Minimum time (in seconds) between AudD requests while audio keeps
+# playing - keep this high enough to stay within AudD's free tier
+# (300 requests/day by default).
+recognition_interval_seconds: 60
+
+# RMS amplitude (0-1) below which audio is considered silence.
+silence_threshold: 0.01
+
+# How long (in seconds) signal must be absent before the current track is
+# cleared (i.e. "nothing playing").
+silence_grace_seconds: 15
+
+# HTTP server that pixoo_media's "vinyl" source polls for the current
+# recognition result.
+host: 0.0.0.0
+port: 8091
