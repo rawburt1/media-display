@@ -176,6 +176,29 @@ def test_strip_decoration_leaves_non_qualifier_dash_suffix_unchanged():
     assert YoutubeSource._strip_decoration("Yesterday - The Beatles") == "Yesterday - The Beatles"
 
 
+def test_strip_decoration_removes_stray_dash_glued_to_word():
+    assert (
+        YoutubeSource._strip_decoration("Led Zeppelin- The Battle of Evermore")
+        == "Led Zeppelin The Battle of Evermore"
+    )
+
+
+def test_strip_decoration_leaves_properly_spaced_dash_alone():
+    assert YoutubeSource._strip_decoration("Led Zeppelin - The Battle of Evermore") == (
+        "Led Zeppelin - The Battle of Evermore"
+    )
+
+
+def test_strip_decoration_removes_multiple_stray_dashes():
+    # The stray dashes are removed outright (not treated as qualifier
+    # separators), so "Live" stays - there's no longer a dash for the
+    # trailing-qualifier regex to match against.
+    assert (
+        YoutubeSource._strip_decoration("Sounds of Silence- Final Live Performance- Great Sound!")
+        == "Sounds of Silence Final Live Performance Great Sound!"
+    )
+
+
 # ---------------------------------------------------------------------------
 # _detect_song_artist
 # ---------------------------------------------------------------------------

@@ -14,7 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   decoration instead. All parenthesized/bracketed text (e.g.
   "(Official Video)", "[Remastered 2011]", "(feat. Someone)") is now
   stripped from the title too, not just the previous fixed set of
-  "Official Video/Audio/Lyrics" suffixes.
+  "Official Video/Audio/Lyrics" suffixes. A dash glued directly onto a
+  word with no space before it (e.g. "Led Zeppelin- The Battle of
+  Evermore", a stray punctuation artifact in some real-world titles) is
+  now removed outright, rather than being mistaken for a "<Song> -
+  <Artist>" separator.
 - The `config` output's `appletv` source card now has a "Pair" button
   driving the same pyatv-based pairing flow as
   `python -m mediainfo auth appletv` (scan, begin pairing, enter/confirm

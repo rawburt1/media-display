@@ -25,7 +25,10 @@ just decoration and the channel name is used as the artist as usual.
 
 All parenthesized/bracketed content (e.g. "(Official Video)", "[Remastered
 2011]") is stripped from the title, plus any trailing " - <tag>" segment
-naming a version/edition (see `_QUALIFIER_WORDS`).
+naming a version/edition (see `_QUALIFIER_WORDS`). A dash glued directly
+onto a word with no space before it (e.g. "Led Zeppelin- The Battle of
+Evermore") is treated as a stray punctuation artifact and removed outright
+rather than as a "<Song> - <Artist>" separator.
 
 Music enrichment (fanart.tv/MusicBrainz/Last.fm/Discogs/Wikipedia) then
 takes over to fetch artwork and bio info from whichever of those is
@@ -66,6 +69,13 @@ _SESSION_HEADER_RE = re.compile(r"\(userId=\d+\)\s*$")
 # Any parenthesized/bracketed content, e.g. "(Official Video)",
 # "[Remastered 2011]", "(feat. Someone)" - removed from the title entirely.
 _PAREN_RE = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]\s*")
+
+# A dash glued directly onto the end of a word with no space before it
+# (e.g. "Led Zeppelin- The Battle of Evermore") is a stray punctuation
+# artifact in the original title, not a "<Song> - <Artist>" separator -
+# removed outright. Properly-spaced dashes (with a space on both sides)
+# are left alone, since those are what _detect_song_artist looks for.
+_STRAY_DASH_RE = re.compile(r"(?<=\S)-(?=\s)")
 
 # Version/edition tags that indicate a trailing "- <word>" segment is *not*
 # an artist name (e.g. "Song - Live", "Song - Remix").
@@ -228,6 +238,7 @@ class YoutubeSource(MediaSource):
 
     @staticmethod
     def _strip_decoration(title: str) -> str:
-        without_parens = _PAREN_RE.sub(" ", title)
+        without_stray_dash = _STRAY_DASH_RE.sub("", title)
+        without_parens = _PAREN_RE.sub(" ", without_stray_dash)
         without_qualifier = _TRAILING_QUALIFIER_RE.sub("", without_parens)
         return " ".join(without_qualifier.split()).strip()
