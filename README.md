@@ -210,8 +210,13 @@ See `config.example.yaml` for all options. Key things to fill in:
   summary is shown by the `info` output and included in RSS/Atom feed
   entries.
 - **`cache.dir`**: where downloaded artwork is stored.
-- **`cache.max_age_days`**: how long unused cached artwork is kept before
-  being deleted (default 30).
+- **`cache.max_age_days`**: how long unused cached now-playing artwork is
+  kept before being deleted (default 30).
+- **`cache.idle_max_age_hours`**: how long unused cached idle wallpapers
+  (Unsplash, Last.fm scrobble history) are kept before being deleted
+  (default 48) - much shorter than `max_age_days`, since they're
+  decorative and easily refetched rather than tied to a specific item.
+  Stored separately under `<cache.dir>/idle`.
 
 ## Extending with new sources/outputs
 

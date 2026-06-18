@@ -206,3 +206,69 @@ def test_skips_unsupported_media_type(mock_get):
     enricher.enrich(np)
 
     mock_get.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Caching
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_second_lookup_for_same_artist_does_not_hit_network(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response()]
+    enricher = WikipediaEnricher(_config())
+
+    enricher.enrich(_music(artist="Queen"))
+    assert mock_get.call_count == 2
+
+    np2 = _music(artist="Queen", title="A Different Song")
+    enricher.enrich(np2)
+
+    assert mock_get.call_count == 2  # no new requests
+    assert np2.summary == "A British rock band."
+    assert np2.images[0].url == "https://example.com/t.jpg"
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_cache_is_keyed_per_enricher_instance_not_global(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response()]
+    WikipediaEnricher(_config()).enrich(_music(artist="Queen"))
+
+    mock_get.side_effect = [_search_response(), _summary_response("A different result.")]
+    np = _music(artist="Queen")
+    WikipediaEnricher(_config()).enrich(np)
+
+    assert np.summary == "A different result."
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_cache_different_artists_both_hit_network(mock_get):
+    mock_get.side_effect = [
+        _search_response("Queen (band)"), _summary_response("Queen bio."),
+        _search_response("Beatles"), _summary_response("Beatles bio."),
+    ]
+    enricher = WikipediaEnricher(_config())
+
+    np1 = _music(artist="Queen")
+    enricher.enrich(np1)
+    np2 = _music(artist="Beatles")
+    enricher.enrich(np2)
+
+    assert mock_get.call_count == 4
+    assert np1.summary == "Queen bio."
+    assert np2.summary == "Beatles bio."
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_negative_result_is_cached_too(mock_get):
+    mock_get.return_value = _mock_response({"query": {"search": []}})
+    enricher = WikipediaEnricher(_config())
+
+    enricher.enrich(_music(artist="ZZZ Nonexistent Artist"))
+    call_count_after_first = mock_get.call_count
+
+    np2 = _music(artist="ZZZ Nonexistent Artist")
+    enricher.enrich(np2)
+
+    assert mock_get.call_count == call_count_after_first  # no retry
+    assert np2.summary == ""
+    assert np2.images == []

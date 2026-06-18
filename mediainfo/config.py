@@ -234,6 +234,10 @@ class VideoOutputConfig:
 class CacheConfig:
     dir: str = "./cache"
     max_age_days: int = 30
+    # Idle wallpapers (Unsplash, Last.fm scrobble history, etc.) are purged
+    # on a much shorter schedule than now-playing artwork, since they're
+    # decorative and easily refetched rather than tied to a specific item.
+    idle_max_age_hours: int = 48
 
 
 @dataclasses.dataclass

@@ -13,6 +13,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   silently failing to download.
 
 ### Added
+- Wikipedia enricher lookups (search + summary) are now cached in memory
+  for the life of the process, keyed by artist/movie/show. The orchestrator
+  already skips re-enriching the same continuously-playing item, but
+  replaying the same content across separate sessions previously hit
+  Wikipedia's API every time; "nothing found" results are cached too, to
+  skip wasted retries.
+- Idle wallpapers (Unsplash, Last.fm scrobble history) are now cached under
+  a separate `<cache.dir>/idle` subdirectory with their own, much shorter
+  retention window - `cache.idle_max_age_hours` (default 48) instead of
+  `cache.max_age_days` (default 30 days) - since they're decorative and
+  easily refetched rather than tied to a specific now-playing item.
 - `mediainfo/idle/lastfm.py`: `idle.lastfm` wallpaper source - shows album
   art from a configured Last.fm user's recent scrobbles on outputs while
   nothing is playing, deduplicated by album art URL. Free API key, same

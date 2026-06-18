@@ -31,16 +31,28 @@ _HEADERS = {"User-Agent": "mediainfo/1.0 (+https://github.com/rawburt1/media-dis
 class ImageCache:
     """Downloads artwork once per URL and reuses the cached file afterwards."""
 
-    def __init__(self, cache_dir: Union[str, Path], max_age_days: int = 30):
+    def __init__(
+        self,
+        cache_dir: Union[str, Path],
+        max_age_days: int = 30,
+        idle_max_age_hours: int = 48,
+    ):
         # Resolve to an absolute path: Flask's send_file() resolves relative
         # paths against the app module's directory, not the cwd, so a
         # relative cache dir would point at the wrong location when serving
         # images.
         self.cache_dir = Path(cache_dir).resolve()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Idle wallpapers (Unsplash, Last.fm scrobble history, etc.) live in
+        # their own subdirectory so they can be purged on a much shorter
+        # schedule than now-playing artwork - they're decorative and easily
+        # refetched, unlike artwork tied to a specific item.
+        self.idle_dir = self.cache_dir / "idle"
+        self.idle_dir.mkdir(parents=True, exist_ok=True)
         self.max_age_seconds = max_age_days * 86400
+        self.idle_max_age_seconds = idle_max_age_hours * 3600
 
-    def get_path(self, artwork: Optional[Artwork]) -> Optional[Path]:
+    def get_path(self, artwork: Optional[Artwork], idle: bool = False) -> Optional[Path]:
         """Return a local file path for the artwork, downloading it if needed.
 
         Returns None if there is no artwork (or its URL is empty).
@@ -53,8 +65,9 @@ class ImageCache:
             path = Path(urlparse(artwork.url).path)
             return path if path.exists() else None
 
+        base_dir = self.idle_dir if idle else self.cache_dir
         key = hashlib.sha256(artwork.url.encode("utf-8")).hexdigest()
-        existing = self._find_existing(key)
+        existing = self._find_existing(key, base_dir)
         if existing is not None:
             return existing
 
@@ -64,13 +77,14 @@ class ImageCache:
         content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
         extension = _EXTENSIONS.get(content_type, _DEFAULT_EXTENSION)
 
-        path = self.cache_dir / f"{key}{extension}"
+        path = base_dir / f"{key}{extension}"
         path.write_bytes(response.content)
         logger.info("Cached artwork %r -> %s", artwork.label or artwork.url, path.name)
         return path
 
-    def _find_existing(self, key: str) -> Optional[Path]:
-        for path in self.cache_dir.glob(f"{key}.*"):
+    @staticmethod
+    def _find_existing(key: str, base_dir: Path) -> Optional[Path]:
+        for path in base_dir.glob(f"{key}.*"):
             return path
         return None
 
@@ -79,15 +93,18 @@ class ImageCache:
 
         The result is cached on disk keyed by (original stem, pipeline hash)
         so the pipeline is only applied once per unique image+transform combo.
-        Returns the original path unchanged when the pipeline is empty.
+        Returns the original path unchanged when the pipeline is empty. The
+        transformed copy is written alongside the original (idle or not), so
+        it's purged on the same schedule.
         """
         if not transforms:
             return original_path
 
         from mediainfo.transforms import pipeline_cache_key
 
+        base_dir = original_path.parent
         key = f"{original_path.stem}_{pipeline_cache_key(transforms)}"
-        existing = self._find_existing(key)
+        existing = self._find_existing(key, base_dir)
         if existing is not None:
             return existing
 
@@ -95,17 +112,22 @@ class ImageCache:
         for transform in transforms:
             img = transform.apply(img)
 
-        out_path = self.cache_dir / f"{key}.jpg"
+        out_path = base_dir / f"{key}.jpg"
         img.convert("RGB").save(out_path, format="JPEG", quality=95)
         return out_path
 
     def purge_expired(self) -> None:
-        """Delete cached files that haven't been (re)downloaded in
-        max_age_days. Anything still in regular use is re-fetched on its
-        next access, which refreshes its mtime.
+        """Delete cached files past their retention window. Anything still
+        in regular use is re-fetched on its next access, which refreshes its
+        mtime, so this only ever removes genuinely stale files.
         """
-        cutoff = time.time() - self.max_age_seconds
-        for path in self.cache_dir.iterdir():
+        self._purge_dir(self.cache_dir, self.max_age_seconds)
+        self._purge_dir(self.idle_dir, self.idle_max_age_seconds)
+
+    @staticmethod
+    def _purge_dir(dir_path: Path, max_age_seconds: float) -> None:
+        cutoff = time.time() - max_age_seconds
+        for path in dir_path.iterdir():
             if path.is_file() and path.stat().st_mtime < cutoff:
                 path.unlink()
                 logger.info("Purged expired cached artwork %s", path.name)

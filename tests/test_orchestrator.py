@@ -194,7 +194,7 @@ def test_idle_batch_each_output_gets_independently_shuffled_order():
     output_a = MagicMock()
     output_b = MagicMock()
     cache = MagicMock()
-    cache.get_path.side_effect = lambda artwork: f"/cache/{artwork.label}"
+    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
     cache.get_transformed_path.side_effect = lambda path, _: path
 
     orchestrator = _orchestrator(outputs=[output_a, output_b], cache=cache, idle_source=idle_source)
@@ -214,12 +214,26 @@ def test_idle_batch_each_output_gets_independently_shuffled_order():
     assert idle_source.calls == 1
 
 
+def test_idle_wallpaper_fetched_with_idle_flag_for_separate_cache_purging():
+    idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=300)
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/cache/wallpaper.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
+    orchestrator._tick()
+
+    _, kwargs = cache.get_path.call_args
+    assert kwargs.get("idle") is True
+
+
 def test_idle_rotation_advances_each_output_independently():
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=300)
     output_a = MagicMock()
     output_b = MagicMock()
     cache = MagicMock()
-    cache.get_path.side_effect = lambda artwork: f"/cache/{artwork.label}"
+    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
 
     orchestrator = Orchestrator(
         sources=[_FakeSource()],

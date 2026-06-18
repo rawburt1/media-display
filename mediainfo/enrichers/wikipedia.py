@@ -3,12 +3,21 @@
 Uses the public Wikipedia REST API (no API key required): a search call
 finds the best-matching page title, then the summary endpoint returns a
 plain-text extract and a thumbnail image for that page.
+
+Lookups are cached in memory for the life of the process, keyed by the
+primary query (artist name / "Title (year film)" / "Title (TV series)").
+The orchestrator only re-enriches when the playing item actually changes,
+but the same artist/movie/show is looked up again on every replay across
+separate play sessions - the cache (including a "nothing found" sentinel
+for misses) avoids hitting Wikipedia's API for those repeats. There's no
+TTL since Wikipedia summaries for a given title rarely change within a
+single run of this process.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 import requests
@@ -23,16 +32,40 @@ _SEARCH_URL = "https://en.wikipedia.org/w/api.php"
 _SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 _HEADERS = {"User-Agent": "mediainfo/1.0 (https://github.com/rawburt1/media-display)"}
 
+# (summary text, thumbnail url or None) on a hit; None means "looked up
+# before and nothing usable was found" - cached too, to skip a wasted retry.
+_CacheEntry = Optional[Tuple[str, Optional[str]]]
+
 
 class WikipediaEnricher(ArtworkEnricher):
     def __init__(self, config: WikipediaConfig):
         self.config = config
+        self._cache: Dict[str, _CacheEntry] = {}
 
     def enrich(self, now_playing: NowPlaying) -> None:
         queries = self._queries_for(now_playing)
         if not queries:
             return
 
+        cache_key = queries[0]
+        if cache_key in self._cache:
+            self._apply(now_playing, self._cache[cache_key])
+            return
+
+        result = self._lookup(queries)
+        self._cache[cache_key] = result
+        self._apply(now_playing, result)
+
+    @staticmethod
+    def _apply(now_playing: NowPlaying, result: _CacheEntry) -> None:
+        if result is None:
+            return
+        summary, thumbnail = result
+        now_playing.summary = summary
+        if thumbnail and not any(image.url == thumbnail for image in now_playing.images):
+            now_playing.images.append(Artwork(url=thumbnail, label="Photo (Wikipedia)"))
+
+    def _lookup(self, queries: List[str]) -> _CacheEntry:
         try:
             for query in queries:
                 title = self._search(query)
@@ -47,15 +80,13 @@ class WikipediaEnricher(ArtworkEnricher):
                 if not extract:
                     continue
 
-                now_playing.summary = extract
                 thumbnail = (summary.get("thumbnail") or {}).get("source") or (
                     summary.get("originalimage") or {}
                 ).get("source")
-                if thumbnail and not any(image.url == thumbnail for image in now_playing.images):
-                    now_playing.images.append(Artwork(url=thumbnail, label="Photo (Wikipedia)"))
-                return
+                return extract, thumbnail
         except Exception:
             logger.exception("Wikipedia enrichment error")
+        return None
 
     @staticmethod
     def _queries_for(np: NowPlaying) -> List[str]:

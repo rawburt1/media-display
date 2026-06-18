@@ -390,9 +390,13 @@ enrichers:
 
 cache:
   dir: ./cache
-  # Delete cached artwork files that haven't been used in this many days.
-  # The check runs once per day in the background.
+  # Delete cached now-playing artwork files that haven't been used in this
+  # many days. The check runs once per day in the background.
   max_age_days: 30
+  # Idle wallpapers (Unsplash, Last.fm scrobble history, etc. - stored under
+  # <dir>/idle) are purged on a much shorter schedule, since they're
+  # decorative and easily refetched rather than tied to a specific item.
+  idle_max_age_hours: 48
 
 
 # ---------------------------------------------------------------------------

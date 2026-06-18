@@ -252,7 +252,7 @@ class Orchestrator:
         state = self._idle_rotation_state[index]
         artwork = self._idle_images[state.order[state.position]]
         try:
-            image_path = self.cache.get_path(artwork)
+            image_path = self.cache.get_path(artwork, idle=True)
             if image_path is None:
                 return
             image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)

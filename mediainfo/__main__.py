@@ -140,7 +140,11 @@ def main() -> None:
     signal.signal(signal.SIGINT, stop_handler)
 
     config_mtime = _file_mtime(config_path)
-    cache = ImageCache(config.cache.dir, max_age_days=config.cache.max_age_days)
+    cache = ImageCache(
+        config.cache.dir,
+        max_age_days=config.cache.max_age_days,
+        idle_max_age_hours=config.cache.idle_max_age_hours,
+    )
     orch = _start_orchestrator(config, outputs, cache)
     _wire_health_providers(outputs, orch, config)
 
@@ -165,7 +169,11 @@ def main() -> None:
 
             orch.stop()
             orch.join()
-            cache = ImageCache(config.cache.dir, max_age_days=config.cache.max_age_days)
+            cache = ImageCache(
+                config.cache.dir,
+                max_age_days=config.cache.max_age_days,
+                idle_max_age_hours=config.cache.idle_max_age_hours,
+            )
             orch = _start_orchestrator(config, outputs, cache)
             _wire_health_providers(outputs, orch, config)
             logger.info("Config reloaded successfully")
