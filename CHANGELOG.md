@@ -21,6 +21,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Branch protection on `master`: requires the `test` CI check to pass and
   1 approving PR review before merging (repo admins are exempt).
 
+### Changed
+- CODE_OF_CONDUCT.md now uses the exact Contributor Covenant v2.0 text
+  (only the enforcement contact line is customized), so GitHub's
+  community-profile detector recognizes it as Contributor Covenant
+  instead of "Other".
+
 ### Notes
 - Going forward, CHANGELOG.md updates accompanying a change are folded
   into that change's own entry rather than logged separately.
