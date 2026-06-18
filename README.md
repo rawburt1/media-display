@@ -266,7 +266,14 @@ See `config.example.yaml` for all options. Key things to fill in:
   (e.g. the Shield source, for SVT Play) get it resolved by name via
   thetvdb's own search, cached in memory for the process's lifetime. List
   this enricher before `enrichers.fanarttv` so the resolved id is also
-  available to fanart.tv's TV branch.
+  available to fanart.tv's TV branch. A bare title search is ambiguous
+  for common names (several unrelated shows are all called "Kingdom") -
+  when more than one candidate comes back, the episode subtitle (reported
+  as `"<number>. <episode title>"` by e.g. the Shield source) is checked
+  against each candidate's actual episode list (including a Swedish
+  translation, for SVT Play) before trusting one. If no candidate's
+  episode list can be verified this way, no artwork is added rather than
+  guessing - showing a wrong show's poster is worse than showing none.
 - **`enrichers.discogs`**: free personal access `token` from
   https://www.discogs.com/settings/developers. Adds album cover art for
   music by searching Discogs by artist + album name; only runs when both

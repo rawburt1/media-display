@@ -10,12 +10,23 @@ enricher's cache - no persistence, but a given title is only looked up
 once per run). The resolved id is written back into `now_playing.ids`,
 so the fanart.tv enricher's TV branch (which also needs a tvdb id) gets
 to use it too, if it runs afterward.
+
+A bare title search is ambiguous for common show names ("Kingdom" matches
+at least three unrelated series). When the search returns more than one
+candidate, the episode subtitle (e.g. "5. När makten skiftar" - shield.py
+and similar sources report it as "<number>. <episode title>") is used to
+disambiguate: each candidate's episode list (in the subtitle's language,
+where available) is checked for an episode whose name actually matches,
+and only a verified match is used. If nothing can be verified, this
+returns no artwork rather than guessing and attaching a wrong show's
+poster - the original failure mode this exists to fix.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+import re
+from typing import Any, List, Optional, Tuple
 
 import requests
 
@@ -27,6 +38,14 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api4.thetvdb.com/v4"
 
+# Cap how many ambiguous search candidates get their episode list checked,
+# so a very generic title can't trigger a pile of API calls.
+_MAX_SEARCH_CANDIDATES = 5
+
+# Sources that report an episode subtitle as "<number>. <episode title>"
+# (e.g. the Shield source, for SVT Play - see sources/shield.py).
+_EPISODE_SUBTITLE_RE = re.compile(r"^\s*\d+\.\s*(.+)$")
+
 
 class TheTvDbEnricher(ArtworkEnricher):
     def __init__(self, config: TheTvDbConfig):
@@ -37,9 +56,11 @@ class TheTvDbEnricher(ArtworkEnricher):
         # constants, so look them up by name instead of hardcoding them).
         self._poster_type: Optional[int] = None
         self._background_type: Optional[int] = None
-        # Title -> resolved series id (or None for "not found"), for
-        # sources that only give us a name - see module docstring.
-        self._series_search_cache: dict[str, Optional[str]] = {}
+        # (title, subtitle) -> resolved series id (or None for "not
+        # found"/"unverifiable"), for sources that only give us a name -
+        # see module docstring. Keyed on subtitle too, since which series
+        # is correct can depend on which episode is actually playing.
+        self._series_search_cache: dict[Tuple[str, str], Optional[str]] = {}
 
     def enrich(self, now_playing: NowPlaying) -> None:
         if now_playing.media_type != "episode":
@@ -50,7 +71,7 @@ class TheTvDbEnricher(ArtworkEnricher):
             if not series_id:
                 if not now_playing.title:
                     return
-                series_id = self._resolve_series_id(now_playing.title)
+                series_id = self._resolve_series_id(now_playing.title, now_playing.subtitle)
                 if not series_id:
                     return
                 now_playing.ids["tvdb"] = series_id
@@ -68,20 +89,51 @@ class TheTvDbEnricher(ArtworkEnricher):
         except Exception:
             logger.exception("thetvdb.com enrichment error")
 
-    def _resolve_series_id(self, title: str) -> Optional[str]:
-        if title in self._series_search_cache:
-            return self._series_search_cache[title]
+    def _resolve_series_id(self, title: str, subtitle: str) -> Optional[str]:
+        cache_key = (title, subtitle)
+        if cache_key in self._series_search_cache:
+            return self._series_search_cache[cache_key]
 
-        series_id = None
-        results = self._get("/search", params={"query": title, "type": "series"})
-        for result in results or []:
-            candidate = result.get("tvdb_id")
-            if candidate:
-                series_id = str(candidate)
-                break
+        results = self._get("/search", params={"query": title, "type": "series"}) or []
+        candidates = [str(r["tvdb_id"]) for r in results if r.get("tvdb_id")]
+        candidates = candidates[:_MAX_SEARCH_CANDIDATES]
 
-        self._series_search_cache[title] = series_id
+        if len(candidates) <= 1:
+            # Nothing to disambiguate - trust the only (or lack of a) match.
+            series_id = candidates[0] if candidates else None
+        else:
+            series_id = self._disambiguate_by_episode(candidates, subtitle)
+
+        self._series_search_cache[cache_key] = series_id
         return series_id
+
+    def _disambiguate_by_episode(self, candidate_ids: List[str], subtitle: str) -> Optional[str]:
+        """Among several same-titled series, return the one whose episode
+        list actually contains an episode matching `subtitle` - or None if
+        none can be verified (better no artwork than a wrong show's).
+        """
+        match = _EPISODE_SUBTITLE_RE.match(subtitle or "")
+        if not match:
+            return None
+
+        target = match.group(1).strip().casefold()
+        if not target:
+            return None
+
+        # The episode title in `subtitle` may be in a language other than
+        # whatever thetvdb's default/original-language episode names are
+        # (e.g. Swedish for SVT Play) - try the default list, then fall
+        # back to a Swedish-translated one, where thetvdb has it. Add more
+        # languages here as _VIDEO_PACKAGES (sources/shield.py) grows.
+        for params in (None, {"lang": "swe"}):
+            for candidate_id in candidate_ids:
+                data = self._get(f"/series/{candidate_id}/episodes/default", params=params)
+                for episode in (data or {}).get("episodes") or []:
+                    name = (episode.get("name") or "").strip().casefold()
+                    if name and (name == target or target in name or name in target):
+                        return candidate_id
+
+        return None
 
     def _ensure_artwork_types(self) -> bool:
         if self._poster_type is not None and self._background_type is not None:

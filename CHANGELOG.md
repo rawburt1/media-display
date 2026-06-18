@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
+- `enrichers.thetvdb`'s title-based series resolution (for sources that
+  only know a show's name, not its tvdb id) trusted the first search
+  result, which is wrong for common titles matching several unrelated
+  shows (e.g. "Kingdom"). When a title search returns more than one
+  candidate, each one's actual episode list is now checked against the
+  episode subtitle (parsed from `"<number>. <episode title>"`, including
+  a Swedish-translation fallback for SVT Play) before trusting it - if
+  none can be verified this way, no artwork is added rather than
+  attaching a wrong show's poster.
 - `WebOutput`'s per-client rotation background thread (`_rotate_clients_loop`)
   had no exception handling: an unexpected error there would silently kill
   the thread and stop per-client rotation for that output forever, with

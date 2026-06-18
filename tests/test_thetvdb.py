@@ -163,6 +163,142 @@ def test_series_search_no_results_skips(mock_post, mock_get):
     assert "tvdb" not in now_playing.ids
 
 
+# ---------------------------------------------------------------------------
+# Disambiguating same-titled shows by episode (e.g. several "Kingdom"s)
+# ---------------------------------------------------------------------------
+
+_AMBIGUOUS_RESULTS = {
+    "data": [
+        {"tvdb_id": "111", "name": "Kingdom", "type": "series"},
+        {"tvdb_id": "222", "name": "Kingdom", "type": "series"},
+    ]
+}
+
+
+def _episodes(*names):
+    return {"data": {"episodes": [{"name": n} for n in names]}}
+
+
+def _kingdom_now_playing(subtitle="5. När makten skiftar") -> NowPlaying:
+    return NowPlaying(
+        source="shield", media_type="episode", title="Kingdom", subtitle=subtitle, ids={}
+    )
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_disambiguates_multiple_candidates_by_episode_name(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response(_AMBIGUOUS_RESULTS),
+        _response(_episodes("Some Other Episode")),       # candidate 111: no match
+        _response(_episodes("När makten skiftar")),        # candidate 222: match
+        _response(_ARTWORK_TYPES),
+        _response(_SERIES_ARTWORKS),
+    ]
+
+    now_playing = _kingdom_now_playing()
+    _enricher().enrich(now_playing)
+
+    assert now_playing.ids["tvdb"] == "222"
+    assert len(now_playing.images) == 2
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_disambiguates_using_swedish_translation_when_default_name_does_not_match(
+    mock_post, mock_get
+):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response(_AMBIGUOUS_RESULTS),
+        _response(_episodes("Episode One")),               # 111 default: no match
+        _response(_episodes("Episode Five")),               # 222 default: no match
+        _response(_episodes("Avsnitt ett")),                # 111 swedish: no match
+        _response(_episodes("När makten skiftar")),         # 222 swedish: match
+        _response(_ARTWORK_TYPES),
+        _response(_SERIES_ARTWORKS),
+    ]
+
+    now_playing = _kingdom_now_playing()
+    _enricher().enrich(now_playing)
+
+    assert now_playing.ids["tvdb"] == "222"
+    # Second-to-last and 4th-to-last calls used the Swedish lang param.
+    swedish_call = mock_get.call_args_list[4]
+    assert swedish_call.kwargs["params"] == {"lang": "swe"}
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_no_candidate_verified_returns_no_artwork(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response(_AMBIGUOUS_RESULTS),
+        _response(_episodes("Episode One")),
+        _response(_episodes("Episode Five")),
+        _response(_episodes("Avsnitt ett")),
+        _response(_episodes("Avsnitt fem")),
+    ]
+
+    now_playing = _kingdom_now_playing()
+    _enricher().enrich(now_playing)
+
+    assert now_playing.images == []
+    assert "tvdb" not in now_playing.ids
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_subtitle_without_episode_number_prefix_skips_disambiguation(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.return_value = _response(_AMBIGUOUS_RESULTS)
+
+    now_playing = _kingdom_now_playing(subtitle="S01E05")  # no "N. " prefix
+    _enricher().enrich(now_playing)
+
+    assert now_playing.images == []
+    assert "tvdb" not in now_playing.ids
+    # Only the /search call - no episode lists fetched for unverifiable subtitle.
+    assert mock_get.call_count == 1
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_single_search_result_is_trusted_without_disambiguation(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response(_SEARCH_RESULTS),  # one result only
+        _response(_ARTWORK_TYPES),
+        _response(_SERIES_ARTWORKS),
+    ]
+
+    now_playing = _kingdom_now_playing()
+    _enricher().enrich(now_playing)
+
+    assert now_playing.ids["tvdb"] == "98765"
+    assert len(now_playing.images) == 2
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_search_candidates_are_capped(mock_post, mock_get):
+    many_results = {
+        "data": [{"tvdb_id": str(i), "name": "Kingdom", "type": "series"} for i in range(10)]
+    }
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [_response(many_results)] + [
+        _response(_episodes("No match here")) for _ in range(10)
+    ]
+
+    now_playing = _kingdom_now_playing()
+    _enricher().enrich(now_playing)
+
+    # 1 search call + at most 5 candidates x 2 languages = 11 calls max.
+    assert mock_get.call_count <= 11
+    assert now_playing.images == []
+
+
 @patch("mediainfo.enrichers.thetvdb.requests.get")
 @patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_does_not_duplicate_existing_image(mock_post, mock_get):
