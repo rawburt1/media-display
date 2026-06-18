@@ -208,7 +208,11 @@ def _idle_wallpapers(count=3):
     ]
 
 
-def test_idle_batch_each_output_gets_independently_shuffled_order():
+def test_idle_batch_each_output_starts_on_a_different_picture():
+    # Outputs share one shuffled order but start at different positions in
+    # it, so - as long as there are at least as many images as outputs -
+    # they never start on the same picture (previously each output shuffled
+    # independently, which could coincidentally collide).
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=300)
     output_a = MagicMock()
     output_b = MagicMock()
@@ -220,17 +224,34 @@ def test_idle_batch_each_output_gets_independently_shuffled_order():
 
     with patch(
         "mediainfo.orchestrator.random.shuffle",
-        side_effect=_fake_shuffle([[2, 0, 1], [1, 2, 0]]),
+        side_effect=_fake_shuffle([[2, 0, 1]]),
     ):
         orchestrator._tick()
 
     _, artwork_a, path_a = output_a.update.call_args[0]
     _, artwork_b, path_b = output_b.update.call_args[0]
-    assert artwork_a.label == "Wallpaper 2"
+    assert artwork_a.label == "Wallpaper 2"  # shared order [2, 0, 1], position 0
     assert path_a == "/cache/Wallpaper 2"
-    assert artwork_b.label == "Wallpaper 1"
-    assert path_b == "/cache/Wallpaper 1"
+    assert artwork_b.label == "Wallpaper 0"  # shared order [2, 0, 1], position 1
+    assert path_b == "/cache/Wallpaper 0"
+    assert artwork_a.label != artwork_b.label
     assert idle_source.calls == 1
+
+
+def test_idle_batch_no_two_outputs_share_a_picture_when_enough_images():
+    # Real (unmocked) shuffle - with >= as many images as outputs, no two
+    # outputs should ever start on the same picture.
+    idle_source = _FakeIdleSource(_idle_wallpapers(count=10), rotation_interval_seconds=300)
+    outputs = [MagicMock() for _ in range(4)]
+    cache = MagicMock()
+    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = _orchestrator(outputs=outputs, cache=cache, idle_source=idle_source)
+    orchestrator._tick()
+
+    labels = [o.update.call_args[0][1].label for o in outputs]
+    assert len(set(labels)) == len(outputs)
 
 
 def test_idle_wallpaper_fetched_with_idle_flag_for_separate_cache_purging():
@@ -311,9 +332,9 @@ def test_idle_rotation_advances_each_output_independently():
     clock = _FakeClock()
     with patch("mediainfo.orchestrator.time.monotonic", clock), patch(
         "mediainfo.orchestrator.random.shuffle",
-        side_effect=_fake_shuffle([[0, 1, 2], [0, 2, 1]]),
+        side_effect=_fake_shuffle([[0, 1, 2]]),
     ):
-        orchestrator._tick()  # initial batch: both outputs show "Wallpaper 0"
+        orchestrator._tick()  # initial batch: order [0,1,2] -> a="Wallpaper 0", b="Wallpaper 1"
 
         output_a.update.reset_mock()
         output_b.update.reset_mock()
@@ -323,8 +344,8 @@ def test_idle_rotation_advances_each_output_independently():
 
     _, artwork_a, _ = output_a.update.call_args[0]
     _, artwork_b, _ = output_b.update.call_args[0]
-    assert artwork_a.label == "Wallpaper 1"  # order [0, 1, 2] -> position 1
-    assert artwork_b.label == "Wallpaper 2"  # order [0, 2, 1] -> position 1
+    assert artwork_a.label == "Wallpaper 1"  # position 0 -> 1
+    assert artwork_b.label == "Wallpaper 2"  # position 1 -> 2
     assert idle_source.calls == 1
 
 
@@ -421,7 +442,10 @@ def _multi_image_now_playing():
     return NowPlaying(source="kodi", media_type="movie", title="Inception", images=artworks)
 
 
-def test_each_output_gets_independently_shuffled_order():
+def test_each_output_starts_on_a_different_picture():
+    # Outputs share one shuffled order but start at different positions in
+    # it, so they never start on the same picture (as long as there are at
+    # least as many images as outputs).
     now_playing = _multi_image_now_playing()
     output_a = MagicMock()
     output_b = MagicMock()
@@ -440,16 +464,17 @@ def test_each_output_gets_independently_shuffled_order():
 
     with patch(
         "mediainfo.orchestrator.random.shuffle",
-        side_effect=_fake_shuffle([[2, 0, 1], [1, 2, 0]]),
+        side_effect=_fake_shuffle([[2, 0, 1]]),
     ):
         orchestrator._tick()
 
     _, artwork_a, path_a = output_a.update.call_args[0]
     _, artwork_b, path_b = output_b.update.call_args[0]
-    assert artwork_a.label == "Image 2"
+    assert artwork_a.label == "Image 2"  # shared order [2, 0, 1], position 0
     assert path_a == "/cache/Image 2"
-    assert artwork_b.label == "Image 1"
-    assert path_b == "/cache/Image 1"
+    assert artwork_b.label == "Image 0"  # shared order [2, 0, 1], position 1
+    assert path_b == "/cache/Image 0"
+    assert artwork_a.label != artwork_b.label
 
 
 def test_rotation_advances_each_output_independently():
@@ -471,9 +496,9 @@ def test_rotation_advances_each_output_independently():
     clock = _FakeClock()
     with patch("mediainfo.orchestrator.time.monotonic", clock), patch(
         "mediainfo.orchestrator.random.shuffle",
-        side_effect=_fake_shuffle([[0, 1, 2], [0, 2, 1]]),
+        side_effect=_fake_shuffle([[0, 1, 2]]),
     ):
-        orchestrator._tick()  # initial image: both outputs show "Image 0"
+        orchestrator._tick()  # initial image: order [0,1,2] -> a="Image 0", b="Image 1"
 
         output_a.update.reset_mock()
         output_b.update.reset_mock()
@@ -483,8 +508,8 @@ def test_rotation_advances_each_output_independently():
 
     _, artwork_a, _ = output_a.update.call_args[0]
     _, artwork_b, _ = output_b.update.call_args[0]
-    assert artwork_a.label == "Image 1"  # order [0, 1, 2] -> position 1
-    assert artwork_b.label == "Image 2"  # order [0, 2, 1] -> position 1
+    assert artwork_a.label == "Image 1"  # position 0 -> 1
+    assert artwork_b.label == "Image 2"  # position 1 -> 2
 
 
 def test_single_image_does_not_rotate():

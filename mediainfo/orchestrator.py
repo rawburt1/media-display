@@ -154,10 +154,9 @@ class Orchestrator:
             self._show_idle_wallpaper(notify_idle=False)
             return
 
-        self._rotation_state = {
-            index: self._new_rotation_state(len(now_playing.images))
-            for index in range(len(self.outputs))
-        }
+        self._rotation_state = self._build_rotation_states(
+            len(now_playing.images), len(self.outputs)
+        )
         for index, output in enumerate(self.outputs):
             self._show_image_for_output(index, output)
 
@@ -172,17 +171,29 @@ class Orchestrator:
         self._last_cache_purge = now
         self._safe_call(self.cache.purge_expired)
 
-    def _new_rotation_state(self, num_images: int) -> _RotationState:
+    def _build_rotation_states(self, num_images: int, num_outputs: int) -> Dict[int, _RotationState]:
+        """Build one _RotationState per output, sharing a single shuffled
+        order but starting each output at a different position in it - so
+        outputs never start on the same picture (as long as there are at
+        least as many images as outputs) instead of leaving that to chance
+        via independent per-output shuffles, which can (and visibly does,
+        with a modest-sized image pool) coincidentally collide.
+
+        Each output's rotation clock is also given its own random phase
+        within the interval, so they don't all advance to their next image
+        at the same instant either - otherwise every output would become
+        "due" to rotate on the exact same tick forever after.
+        """
         order = list(range(num_images))
         random.shuffle(order)
-        # Stagger each output's first rotation by a random phase within the
-        # interval, rather than starting everyone's clock from the same
-        # instant - otherwise every output becomes "due" to advance at
-        # exactly the same tick forever after, which (combined with a small
-        # image pool) makes the independently-shuffled order look
-        # synchronized since outputs all flip in lockstep.
-        jitter = random.uniform(0, self.rotation_interval_seconds)
-        return _RotationState(order=order, position=0, last_rotation=time.monotonic() - jitter)
+        now = time.monotonic()
+        states = {}
+        for index in range(num_outputs):
+            jitter = random.uniform(0, self.rotation_interval_seconds)
+            states[index] = _RotationState(
+                order=order, position=index % num_images, last_rotation=now - jitter
+            )
+        return states
 
     def _maybe_rotate(self) -> None:
         if self._current is None or len(self._current.images) <= 1:
@@ -252,9 +263,7 @@ class Orchestrator:
                 source="idle", media_type="wallpaper", title="", subtitle=""
             )
             self._last_idle_batch_fetch = now
-            self._idle_rotation_state = {
-                index: self._new_rotation_state(len(images)) for index in range(len(self.outputs))
-            }
+            self._idle_rotation_state = self._build_rotation_states(len(images), len(self.outputs))
             for index, output in enumerate(self.outputs):
                 self._show_idle_image_for_output(index, output)
             return

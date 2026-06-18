@@ -8,14 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - Idle wallpaper (and now-playing image) rotation across multiple outputs
-  looked synchronized: each output already had its own independently
-  shuffled order, but every output's rotation timer started from the
-  exact same instant, so they all became "due" to flip to the next image
-  on the same tick forever after - visible as outputs changing in
-  lockstep, and (with a small image pool) often showing the same picture
-  at the same time. Each output's initial rotation timer is now staggered
-  by a random phase within the rotation interval, so outputs drift apart
-  and rotate independently.
+  looked synchronized, for two compounding reasons:
+  - Every output's rotation timer started from the exact same instant, so
+    they all became "due" to flip to the next image on the same tick
+    forever after - now each output's timer starts at a random phase
+    within the rotation interval instead, so they drift apart and rotate
+    independently.
+  - Each output picked its starting picture from its own independently
+    shuffled order, which (especially with a modest-sized image pool) could
+    coincidentally collide and show the same picture as another output -
+    outputs now share one shuffled order but start at different positions
+    in it, so as long as there are at least as many images as outputs, no
+    two outputs ever show the same picture at the same time.
 
 ### Added
 - Music library artist/album/track matching is now fuzzy-tolerant: case,
