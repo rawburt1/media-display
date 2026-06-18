@@ -19,6 +19,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   original resolution.
 - Feed output (`outputs.feed`, RSS/Atom) now includes the Wikipedia summary
   in each entry's description when one was found.
+- `mediainfo/outputs/config_ui.py`: `config` output (default port 8094) - a
+  web page for editing every config option (sources, outputs, enrichers,
+  idle sources, polling intervals), auto-generated from their config
+  dataclasses, plus an "Advanced" raw-YAML editor for list-typed fields.
+  Saves are validated with the new `Config.from_dict()` before being
+  written, and round-trip through `ruamel.yaml` to preserve existing
+  comments in config.yaml. Picked up by the existing config hot-reload -
+  no restart needed. Has write access to config.yaml including any
+  credentials in it and no authentication of its own; see SECURITY.md.
+- `Config.from_dict()`: builds a `Config` from an already-parsed dict,
+  split out of `Config.load()` so the new `config` output can validate
+  edits before writing them to disk.
 - `mediainfo/sources/jellyfin.py`: Jellyfin and Emby sources (Sessions API).
 - `mediainfo/enrichers/discogs.py`: Discogs enricher for album cover art.
 - `/health` endpoint on the web output reporting uptime, current

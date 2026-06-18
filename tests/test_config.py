@@ -75,3 +75,34 @@ outputs:
     assert [u.device_ip for u in config.outputs["ulanzi"]] == ["192.168.1.30", "192.168.1.31"]
     assert config.outputs["ulanzi"][1].app_name == "now_playing_bedroom"
     assert config.outputs["web"] == [WebConfig(enabled=True, port=8090)]
+
+
+# ---------------------------------------------------------------------------
+# Config.from_dict
+# ---------------------------------------------------------------------------
+
+def test_from_dict_builds_equivalent_config_to_load(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("poll_interval_seconds: 9\nsources:\n  kodi:\n    enabled: true\n    host: 1.2.3.4\n")
+
+    via_load = Config.load(config_path)
+    via_dict = Config.from_dict(
+        {"poll_interval_seconds": 9, "sources": {"kodi": {"enabled": True, "host": "1.2.3.4"}}}
+    )
+
+    assert via_load.poll_interval_seconds == via_dict.poll_interval_seconds == 9
+    assert via_load.sources["kodi"].host == via_dict.sources["kodi"].host == "1.2.3.4"
+
+
+def test_from_dict_empty_dict_uses_defaults():
+    config = Config.from_dict({})
+    assert config.poll_interval_seconds == 5
+    assert config.rotation_interval_seconds == 30
+    assert config.priority == []
+    assert config.sources == {}
+    assert config.outputs == {}
+
+
+def test_from_dict_raises_on_unknown_field():
+    with pytest.raises(TypeError):
+        Config.from_dict({"sources": {"kodi": {"enabled": True, "no_such_field": "x"}}})

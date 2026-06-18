@@ -138,6 +138,13 @@ class InfoConfig:
 
 
 @dataclasses.dataclass
+class ConfigUiConfig:
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8094
+
+
+@dataclasses.dataclass
 class FeedConfig:
     enabled: bool = False
     host: str = "0.0.0.0"
@@ -312,6 +319,7 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
 }
 
 OUTPUT_CONFIG_TYPES: dict[str, type] = {
+    "config": ConfigUiConfig,
     "feed": FeedConfig,
     "folder": FolderConfig,
     "info": InfoConfig,
@@ -369,6 +377,16 @@ class Config:
         with path.open("r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
 
+        return cls.from_dict(raw)
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "Config":
+        """Build a Config from an already-parsed YAML dict.
+
+        Split out from `load()` so callers that already hold a parsed dict
+        (e.g. the `config` output's validate-before-save logic) can build
+        and validate a Config without writing it to a file first.
+        """
         sources = {
             name: SOURCE_CONFIG_TYPES[name](**values)
             for name, values in (raw.get("sources") or {}).items()

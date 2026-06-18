@@ -156,6 +156,18 @@ sources:
 
 outputs:
 
+  # Config UI — a web page for editing this entire file (sources, outputs,
+  # enrichers, idle wallpaper sources, polling intervals) from the browser.
+  # Saved changes are picked up by the running process within a few seconds
+  # (same hot-reload used for manual edits) — no restart needed.
+  # SECURITY: this output can read AND write config.yaml, including any
+  # credentials in it, and has no authentication of its own. Only enable it
+  # on a trusted local network — see SECURITY.md.
+  config:
+    enabled: true
+    host: 0.0.0.0
+    port: 8094
+
   # RSS/Atom feed — "now playing" history as a machine-readable feed.
   # Subscribe with any feed reader or home-automation tool (Home Assistant,
   # Node-RED, etc.) to track what has been playing.

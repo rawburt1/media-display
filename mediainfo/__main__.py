@@ -23,6 +23,7 @@ from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
 from mediainfo.enrichers.wikipedia import WikipediaEnricher
 from mediainfo.idle.unsplash import UnsplashWallpaperSource
+from mediainfo.outputs.config_ui import ConfigUiOutput
 from mediainfo.outputs.feeds import FeedOutput
 from mediainfo.outputs.folder import FolderOutput
 from mediainfo.outputs.info import InfoOutput
@@ -56,6 +57,7 @@ SOURCE_CLASSES = {
 }
 
 OUTPUT_CLASSES = {
+    "config": ConfigUiOutput,
     "feed": FeedOutput,
     "folder": FolderOutput,
     "info": InfoOutput,
@@ -65,6 +67,12 @@ OUTPUT_CLASSES = {
     "ulanzi": UlanziOutput,
     "video": VideoOutput,
     "web": WebOutput,
+}
+
+# Outputs that need extra constructor arguments beyond their own config
+# (e.g. ConfigUiOutput needs the path to config.yaml to read/write it).
+_OUTPUT_EXTRA_ARGS = {
+    "config": lambda config_path: (config_path,),
 }
 
 ENRICHER_CLASSES = {
@@ -86,6 +94,7 @@ _ENRICHER_NAME_BY_CLASS = {cls: name for name, cls in ENRICHER_CLASSES.items()}
 
 # Config attributes to include per output type in the /health response.
 _OUTPUT_DETAIL_FIELDS: dict = {
+    "config":   ["port"],
     "feed":     ["port"],
     "folder":   ["dir"],
     "info":     ["port"],
@@ -121,7 +130,7 @@ def main() -> None:
 
     # Outputs are created once and stay alive for the life of the process.
     # Their background servers (Flask, MQTT, etc.) keep running across reloads.
-    outputs = _instantiate_outputs(config)
+    outputs = _instantiate_outputs(config, config_path)
 
     stop_event = threading.Event()
     stop_handler = _make_stop_handler(stop_event)
@@ -230,17 +239,18 @@ def _setup_logging(log_config: LoggingConfig) -> None:
 # Plugin instantiation
 # ---------------------------------------------------------------------------
 
-def _instantiate_outputs(config: Config) -> list:
+def _instantiate_outputs(config: Config, config_path: Path) -> list:
     outputs = []
     for name, output_configs in config.outputs.items():
         output_cls = OUTPUT_CLASSES.get(name)
         if output_cls is None:
             logger.warning("Unknown output: %s", name)
             continue
+        extra_args = _OUTPUT_EXTRA_ARGS.get(name, lambda _path: ())(config_path)
         for output_config in output_configs:
             if not output_config.enabled:
                 continue
-            outputs.append(output_cls(output_config))
+            outputs.append(output_cls(output_config, *extra_args))
     return outputs
 
 

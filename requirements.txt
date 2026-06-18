@@ -9,3 +9,4 @@ spotipy
 paho-mqtt
 flask-sock
 pyatv
+ruamel.yaml

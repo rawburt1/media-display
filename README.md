@@ -38,7 +38,11 @@ Currently implemented:
   pairs the current artwork at its original (high) resolution with the
   Wikipedia summary text; MQTT publishes now-playing state to a broker
   topic; feed output serves RSS/Atom feeds of recently-played items,
-  including the Wikipedia summary when available
+  including the Wikipedia summary when available; config output
+  (`http://<host>:8094/`) is a web page for editing every config option
+  above (sources, outputs, enrichers, idle sources, polling intervals)
+  without hand-editing YAML - saved changes are hot-reloaded within a
+  few seconds
 - **Idle wallpapers**: Unsplash - while nothing is playing, downloads a fresh
   batch of wallpapers matching the configured search queries every
   `rotation_interval_seconds`, and each output independently rotates through
@@ -116,6 +120,17 @@ See `config.example.yaml` for all options. Key things to fill in:
   Ulanzi displays in different rooms, or web servers on different ports. If
   you add multiple `web` or `nest_hub` instances, make sure each one uses a
   distinct `port`/`server_port` and update `docker-compose.yml` accordingly.
+- **`outputs.config`**: `host`/`port` (default 8094) for a web page that
+  edits config.yaml itself - every source/output/enricher/idle source and
+  the top-level polling intervals, generated automatically from their
+  config dataclasses. List-typed fields (`transforms`, `blacklist`, and
+  additional instances of multi-instance outputs like `ulanzi`) aren't
+  shown as individual form fields; use the page's "Advanced" raw-YAML
+  editor for those. Saves are validated before being written, and the
+  running process picks up the change via its existing hot-reload within
+  a few seconds. This output can read and write config.yaml, including any
+  credentials in it, with no authentication of its own - see SECURITY.md
+  before exposing it beyond a trusted local network.
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page.
