@@ -23,6 +23,9 @@ _EXTENSIONS = {
     "image/webp": ".webp",
 }
 _DEFAULT_EXTENSION = ".jpg"
+# Some hosts (e.g. Wikimedia, used by the Wikipedia enricher) return 403 for
+# the default python-requests User-Agent and require a descriptive one.
+_HEADERS = {"User-Agent": "mediainfo/1.0 (+https://github.com/rawburt1/media-display)"}
 
 
 class ImageCache:
@@ -55,7 +58,7 @@ class ImageCache:
         if existing is not None:
             return existing
 
-        response = requests.get(artwork.url, timeout=10, auth=artwork.auth)
+        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=_HEADERS)
         response.raise_for_status()
 
         content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()

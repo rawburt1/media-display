@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- `ImageCache` now sends a descriptive `User-Agent` header when downloading
+  artwork. Wikimedia (used by the Wikipedia enricher's thumbnails) rejects
+  the default python-requests User-Agent with a 403, so those photos were
+  silently failing to download.
+
 ### Added
 - `mediainfo/idle/lastfm.py`: `idle.lastfm` wallpaper source - shows album
   art from a configured Last.fm user's recent scrobbles on outputs while

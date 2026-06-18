@@ -38,6 +38,24 @@ def test_get_path_downloads_and_caches(mock_get, tmp_path):
     assert mock_get.call_count == 1
 
 
+@patch("mediainfo.cache.requests.get")
+def test_get_path_sends_a_descriptive_user_agent(mock_get, tmp_path):
+    # Some hosts (e.g. Wikimedia, used by the Wikipedia enricher) return 403
+    # for the default python-requests User-Agent.
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"fake-image-bytes"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    cache.get_path(Artwork(url="http://example.com/art.jpg"))
+
+    _, kwargs = mock_get.call_args
+    assert "User-Agent" in kwargs["headers"]
+    assert kwargs["headers"]["User-Agent"]
+
+
 def test_purge_expired_removes_old_files_only(tmp_path):
     cache = ImageCache(tmp_path, max_age_days=30)
 
