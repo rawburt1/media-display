@@ -196,6 +196,28 @@ def test_fetch_connects_and_returns_result_on_fresh_start():
     assert result.title == "Bohemian Rhapsody"
 
 
+def test_connect_passes_loop_to_pyatv_scan_and_connect():
+    # Regression test: this pyatv version requires an explicit `loop`
+    # argument to scan()/connect() - omitting it raises TypeError (it
+    # doesn't fall back to the running loop).
+    src = _source()
+
+    mock_atv = MagicMock()
+    mock_conf = MagicMock()
+    mock_conf.name = "Living Room"
+    mock_scan = AsyncMock(return_value=[mock_conf])
+    mock_connect = AsyncMock(return_value=mock_atv)
+
+    with (
+        patch("mediainfo.sources.appletv.pyatv.scan", new=mock_scan),
+        patch("mediainfo.sources.appletv.pyatv.connect", new=mock_connect),
+    ):
+        run(src._connect())
+
+    assert mock_scan.call_args.args[0] is src._loop
+    assert mock_connect.call_args.args[1] is src._loop
+
+
 # ---------------------------------------------------------------------------
 # _fetch_artwork
 # ---------------------------------------------------------------------------

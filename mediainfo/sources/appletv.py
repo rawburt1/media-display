@@ -130,14 +130,14 @@ class AppleTvSource(MediaSource):
 
     async def _connect(self) -> None:
         try:
-            results = await pyatv.scan(hosts=[self._config.host])
+            results = await pyatv.scan(self._loop, hosts=[self._config.host])
             if not results:
                 logger.warning("Apple TV: no device found at %s", self._config.host)
                 return
 
             conf = results[0]
             _apply_credentials(conf, self._config)
-            self._atv = await pyatv.connect(conf)
+            self._atv = await pyatv.connect(conf, self._loop)
             logger.info("Apple TV: connected to %s", conf.name)
         except Exception:
             logger.exception("Apple TV: failed to connect to %s", self._config.host)

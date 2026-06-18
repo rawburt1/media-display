@@ -22,6 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   requires an explicit `loop` argument to `pyatv.scan()`/`pyatv.pair()`
   that wasn't being passed, so it always raised `TypeError`. Found and
   fixed while building the web-based pairing flow above.
+- `sources.appletv`'s actual runtime connection (`AppleTvSource._connect`)
+  had the same missing-`loop` bug in `pyatv.scan()`/`pyatv.connect()` -
+  found by testing pairing against a real device, where pairing itself
+  succeeded but the source then failed to connect on every poll. Fixed
+  by passing the source's own background event loop, which it already
+  maintains for running coroutines via `run_coroutine_threadsafe`.
 - `docker-compose.yml` now bind-mounts `./config` as a directory
   (containing `config.yaml`) instead of bind-mounting `config.yaml`
   itself. A single-file bind mount pins to that file's inode; any tool
