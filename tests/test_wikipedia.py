@@ -1,0 +1,208 @@
+"""Tests for the Wikipedia summary/photo enricher."""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from mediainfo.config import WikipediaConfig
+from mediainfo.enrichers.wikipedia import WikipediaEnricher
+from mediainfo.models import Artwork, NowPlaying
+
+
+def _config():
+    return WikipediaConfig(enabled=True)
+
+
+def _music(artist="Queen", title="Bohemian Rhapsody", images=None):
+    return NowPlaying(
+        source="kodi", media_type="music", title=title, subtitle=artist, images=images or []
+    )
+
+
+def _movie(title="Inception", year=2010, images=None):
+    return NowPlaying(
+        source="kodi", media_type="movie", title=title, year=year, images=images or []
+    )
+
+
+def _episode(show="Breaking Bad", subtitle="Pilot", images=None):
+    return NowPlaying(
+        source="kodi", media_type="episode", title=show, subtitle=subtitle, images=images or []
+    )
+
+
+def _mock_response(json_data, status_code=200):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = json_data
+    resp.raise_for_status = MagicMock()
+    return resp
+
+
+def _search_response(title="Queen (band)"):
+    return _mock_response({"query": {"search": [{"title": title}]}})
+
+
+def _summary_response(extract="A British rock band.", thumbnail="https://example.com/t.jpg"):
+    data = {"extract": extract}
+    if thumbnail:
+        data["thumbnail"] = {"source": thumbnail}
+    return _mock_response(data)
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_adds_summary_and_photo_for_music(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response()]
+    enricher = WikipediaEnricher(_config())
+    np = _music()
+
+    enricher.enrich(np)
+
+    assert np.summary == "A British rock band."
+    assert len(np.images) == 1
+    assert np.images[0].url == "https://example.com/t.jpg"
+    assert "Wikipedia" in np.images[0].label
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_searches_using_artist_for_music(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response()]
+    enricher = WikipediaEnricher(_config())
+
+    enricher.enrich(_music(artist="Queen"))
+
+    params = mock_get.call_args_list[0].kwargs["params"]
+    assert params["srsearch"] == "Queen"
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_searches_using_title_and_year_for_movie(mock_get):
+    mock_get.side_effect = [_search_response("Inception"), _summary_response("A heist movie.")]
+    enricher = WikipediaEnricher(_config())
+
+    enricher.enrich(_movie(title="Inception", year=2010))
+
+    params = mock_get.call_args_list[0].kwargs["params"]
+    assert params["srsearch"] == "Inception (2010 film)"
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_searches_using_title_without_year_for_movie(mock_get):
+    mock_get.side_effect = [_search_response("Inception"), _summary_response("A heist movie.")]
+    enricher = WikipediaEnricher(_config())
+
+    enricher.enrich(_movie(title="Inception", year=None))
+
+    params = mock_get.call_args_list[0].kwargs["params"]
+    assert params["srsearch"] == "Inception (film)"
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_searches_using_show_title_for_episode(mock_get):
+    mock_get.side_effect = [_search_response("Breaking Bad"), _summary_response("A drama series.")]
+    enricher = WikipediaEnricher(_config())
+
+    enricher.enrich(_episode(show="Breaking Bad"))
+
+    params = mock_get.call_args_list[0].kwargs["params"]
+    assert params["srsearch"] == "Breaking Bad (TV series)"
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_skips_when_no_artist_for_music(mock_get):
+    enricher = WikipediaEnricher(_config())
+    np = _music(artist="")
+
+    enricher.enrich(np)
+
+    mock_get.assert_not_called()
+    assert np.summary == ""
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_skips_when_no_search_results(mock_get):
+    mock_get.return_value = _mock_response({"query": {"search": []}})
+    enricher = WikipediaEnricher(_config())
+    np = _music()
+
+    enricher.enrich(np)
+
+    assert np.summary == ""
+    assert np.images == []
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_summary_404_leaves_now_playing_unchanged(mock_get):
+    mock_get.side_effect = [_search_response(), _mock_response({}, status_code=404)]
+    enricher = WikipediaEnricher(_config())
+    np = _music()
+
+    enricher.enrich(np)
+
+    assert np.summary == ""
+    assert np.images == []
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_no_thumbnail_does_not_add_image(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response(thumbnail=None)]
+    enricher = WikipediaEnricher(_config())
+    np = _music()
+
+    enricher.enrich(np)
+
+    assert np.summary == "A British rock band."
+    assert np.images == []
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_does_not_add_duplicate_image(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response()]
+    enricher = WikipediaEnricher(_config())
+    existing = Artwork(url="https://example.com/t.jpg", label="existing")
+    np = _music(images=[existing])
+
+    enricher.enrich(np)
+
+    assert len(np.images) == 1
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_handles_network_exception(mock_get):
+    mock_get.side_effect = ConnectionError("no network")
+    enricher = WikipediaEnricher(_config())
+    np = _music()
+
+    enricher.enrich(np)
+
+    assert np.summary == ""
+    assert np.images == []
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_falls_back_when_first_result_is_disambiguation(mock_get):
+    disambiguation = _mock_response({"type": "disambiguation", "extract": "Queen may refer to..."})
+    mock_get.side_effect = [
+        _search_response("Queen"),
+        disambiguation,
+        _search_response("Queen (band)"),
+        _summary_response("A British rock band formed in 1970."),
+    ]
+    enricher = WikipediaEnricher(_config())
+    np = _music(artist="Queen")
+
+    enricher.enrich(np)
+
+    assert np.summary == "A British rock band formed in 1970."
+    srsearch_calls = [c.kwargs["params"]["srsearch"] for c in mock_get.call_args_list if "params" in c.kwargs]
+    assert srsearch_calls == ["Queen", "Queen (band)"]
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_skips_unsupported_media_type(mock_get):
+    enricher = WikipediaEnricher(_config())
+    np = NowPlaying(source="idle", media_type="wallpaper", title="x", images=[])
+
+    enricher.enrich(np)
+
+    mock_get.assert_not_called()

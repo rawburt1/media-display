@@ -127,6 +127,17 @@ class WebConfig:
 
 
 @dataclasses.dataclass
+class InfoConfig:
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8093
+    # Image transforms applied before display. Left empty by default so
+    # this output shows artwork at its original (high) resolution, unlike
+    # outputs aimed at small physical displays.
+    transforms: list = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
 class FeedConfig:
     enabled: bool = False
     host: str = "0.0.0.0"
@@ -255,6 +266,12 @@ class TheTvDbConfig:
 
 
 @dataclasses.dataclass
+class WikipediaConfig:
+    enabled: bool = False
+    # No API key required; uses the free Wikipedia REST API.
+
+
+@dataclasses.dataclass
 class UnsplashWallpaperConfig:
     enabled: bool = False
     # Comma-separated list of search queries to pick wallpapers from while
@@ -297,6 +314,7 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
 OUTPUT_CONFIG_TYPES: dict[str, type] = {
     "feed": FeedConfig,
     "folder": FolderConfig,
+    "info": InfoConfig,
     "mqtt": MqttConfig,
     "nest_hub": NestHubConfig,
     "pixoo": PixooConfig,
@@ -311,6 +329,7 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "lastfm": LastFmConfig,
     "musicbrainz": MusicBrainzConfig,
     "thetvdb": TheTvDbConfig,
+    "wikipedia": WikipediaConfig,
 }
 
 # Idle wallpaper sources: shown on outputs when nothing is playing.

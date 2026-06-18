@@ -23,7 +23,8 @@ Currently implemented:
   Discogs also add (and prefer) album covers for music, matched via
   MusicBrainz ids or, failing that, by looking up the artist/album name
   (e.g. for Sonos) via the MusicBrainz API or Discogs' search; Last.fm adds
-  artist photos
+  artist photos; Wikipedia adds an artist bio / movie info / TV show info
+  summary plus a photo, for the `info` output and RSS/Atom feeds below
 - **Outputs**: Pixoo64 (local HTTP API), web page (`http://<host>:8090/`),
   and Google Nest Hub (Cast) each rotate between all available poster/fanart
   images for the current item on their own randomized schedule - each one
@@ -33,8 +34,11 @@ Currently implemented:
   scrolling text instead of artwork (e.g. "Artist - Song",
   "Title (Year)", "Show s01e01"); video output serves a full-screen web
   player that shows idle stock-footage clips (Pexels/Pixabay) and switches
-  to artwork when something plays; MQTT publishes now-playing state to a
-  broker topic; feed output serves RSS/Atom feeds of recently-played items
+  to artwork when something plays; info output (`http://<host>:8093/`)
+  pairs the current artwork at its original (high) resolution with the
+  Wikipedia summary text; MQTT publishes now-playing state to a broker
+  topic; feed output serves RSS/Atom feeds of recently-played items,
+  including the Wikipedia summary when available
 - **Idle wallpapers**: Unsplash - while nothing is playing, downloads a fresh
   batch of wallpapers matching the configured search queries every
   `rotation_interval_seconds`, and each output independently rotates through
@@ -155,7 +159,14 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`outputs.feed`**: serves RSS (`/rss`) and Atom (`/atom`) feeds of
   recently-played items, with artwork as enclosures, plus an HTML
   discovery page at `/`. `max_items` caps how many recent items are kept
-  in memory (default 50); `title` names the feed.
+  in memory (default 50); `title` names the feed. Each entry's description
+  includes the Wikipedia summary (see `enrichers.wikipedia`) when one was
+  found for that item.
+- **`outputs.info`**: `host`/`port` (default 8093) for a web page pairing
+  the current artwork with its bio/plot summary - artist bio for music,
+  movie info, or TV show info, supplied by `enrichers.wikipedia`. No image
+  transforms are applied by default, so artwork is shown at its original
+  resolution rather than scaled down as on the small physical displays.
 - **`idle.unsplash`**: comma-separated `queries` to pull wallpapers from
   while nothing is playing. `batch_size` wallpapers are downloaded every
   `rotation_interval_seconds`, and each output rotates through that batch
@@ -171,6 +182,11 @@ See `config.example.yaml` for all options. Key things to fill in:
   are known, to avoid matching the wrong release.
 - **`enrichers.lastfm`**: free `api_key` from
   https://www.last.fm/api/account/create. Adds an artist photo for music.
+- **`enrichers.wikipedia`**: no API key required (free public REST API).
+  Searches Wikipedia for the artist (music), movie, or TV show, and adds
+  a plain-text summary (`NowPlaying.summary`) plus a thumbnail photo. The
+  summary is shown by the `info` output and included in RSS/Atom feed
+  entries.
 - **`cache.dir`**: where downloaded artwork is stored.
 - **`cache.max_age_days`**: how long unused cached artwork is kept before
   being deleted (default 30).

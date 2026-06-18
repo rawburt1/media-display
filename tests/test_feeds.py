@@ -92,6 +92,34 @@ def test_format_episode():
     assert desc == ""
 
 
+def test_format_music_includes_summary_with_album():
+    np = _music(album="A Night at the Opera")
+    np.summary = "A British rock band formed in 1970."
+    _, desc = FeedOutput._format(np)
+    assert desc == "Album: A Night at the Opera\n\nA British rock band formed in 1970."
+
+
+def test_format_music_includes_summary_without_album():
+    np = NowPlaying(source="kodi", media_type="music", title="Track", subtitle="Artist", images=[])
+    np.summary = "Artist bio."
+    _, desc = FeedOutput._format(np)
+    assert desc == "Artist bio."
+
+
+def test_format_movie_includes_summary():
+    np = _movie()
+    np.summary = "A thief who steals secrets via dream-sharing."
+    _, desc = FeedOutput._format(np)
+    assert desc == "A thief who steals secrets via dream-sharing."
+
+
+def test_format_episode_includes_summary():
+    np = _episode()
+    np.summary = "A high school chemistry teacher turns to crime."
+    _, desc = FeedOutput._format(np)
+    assert desc == "A high school chemistry teacher turns to crime."
+
+
 # ---------------------------------------------------------------------------
 # on_new_item
 # ---------------------------------------------------------------------------

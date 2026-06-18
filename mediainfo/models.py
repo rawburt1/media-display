@@ -35,6 +35,8 @@ class NowPlaying:
     season: Optional[int] = None
     # Release year, for movies (used by the Ulanzi text output).
     year: Optional[int] = None
+    # Bio/plot summary text, e.g. from the Wikipedia enricher.
+    summary: str = ""
 
     @property
     def identity(self) -> tuple:

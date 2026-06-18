@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `mediainfo/enrichers/wikipedia.py`: Wikipedia enricher adding an artist
+  bio / movie info / TV show info summary (`NowPlaying.summary`) plus a
+  thumbnail photo, via the free public Wikipedia REST API (no API key).
+- `mediainfo/outputs/info.py`: high-resolution `info` output (default port
+  8093) pairing the current artwork with its Wikipedia summary text. No
+  image transforms are applied by default, so artwork is shown at its
+  original resolution.
+- Feed output (`outputs.feed`, RSS/Atom) now includes the Wikipedia summary
+  in each entry's description when one was found.
 - `mediainfo/sources/jellyfin.py`: Jellyfin and Emby sources (Sessions API).
 - `mediainfo/enrichers/discogs.py`: Discogs enricher for album cover art.
 - `/health` endpoint on the web output reporting uptime, current

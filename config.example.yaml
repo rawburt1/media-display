@@ -184,6 +184,16 @@ outputs:
   #   - enabled: true
   #     dir: /mnt/photoframe/artwork
 
+  # Info output — a high-resolution web page pairing the current artwork
+  # with a bio/plot summary (artist bio, movie info, TV show info — see the
+  # `wikipedia` enricher below, which fills in `summary`). No image
+  # transforms are applied by default, so artwork is shown at its original
+  # resolution rather than scaled down for a small physical display.
+  info:
+    enabled: true
+    host: 0.0.0.0
+    port: 8093
+
   # MQTT publish — sends now-playing metadata to an MQTT broker.
   # Useful for triggering home-automation flows (Home Assistant, Node-RED, …)
   # or feeding data to other displays.
@@ -353,6 +363,13 @@ enrichers:
     enabled: true
     api_key: YOUR_THETVDB_API_KEY
     pin: ""                      # Only needed for "user-supported" API keys
+
+  # Wikipedia — artist bio / movie info / TV show info, plus a photo.
+  # No API key required; uses the free Wikipedia REST API. Fills in
+  # `summary` (shown by the `info` output and included in RSS/Atom feed
+  # entries) and adds a thumbnail photo to the image rotation.
+  wikipedia:
+    enabled: true
 
 
 # ---------------------------------------------------------------------------

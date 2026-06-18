@@ -113,14 +113,16 @@ class FeedOutput(Output):
     def _format(np: NowPlaying) -> Tuple[str, str]:
         if np.media_type == "music":
             title = f"{np.subtitle} – {np.title}" if np.subtitle else np.title
-            desc = f"Album: {np.album}" if np.album else ""
-            return title, desc
+            parts = [f"Album: {np.album}"] if np.album else []
+            if np.summary:
+                parts.append(np.summary)
+            return title, "\n\n".join(parts)
         if np.media_type == "movie":
             title = f"{np.title} ({np.year})" if np.year else np.title
-            return title, ""
+            return title, np.summary
         if np.media_type == "episode":
             title = f"{np.title} – {np.subtitle}" if np.subtitle else np.title
-            return title, ""
+            return title, np.summary
         return np.title, np.subtitle
 
     def _run_server(self) -> None:

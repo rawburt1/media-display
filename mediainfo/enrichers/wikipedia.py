@@ -1,0 +1,100 @@
+"""Wikipedia enricher: adds an artist/movie/TV-show summary and photo.
+
+Uses the public Wikipedia REST API (no API key required): a search call
+finds the best-matching page title, then the summary endpoint returns a
+plain-text extract and a thumbnail image for that page.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import List, Optional
+from urllib.parse import quote
+
+import requests
+
+from mediainfo.config import WikipediaConfig
+from mediainfo.enrichers.base import ArtworkEnricher
+from mediainfo.models import Artwork, NowPlaying
+
+logger = logging.getLogger(__name__)
+
+_SEARCH_URL = "https://en.wikipedia.org/w/api.php"
+_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
+_HEADERS = {"User-Agent": "mediainfo/1.0 (https://github.com/rawburt1/media-display)"}
+
+
+class WikipediaEnricher(ArtworkEnricher):
+    def __init__(self, config: WikipediaConfig):
+        self.config = config
+
+    def enrich(self, now_playing: NowPlaying) -> None:
+        queries = self._queries_for(now_playing)
+        if not queries:
+            return
+
+        try:
+            for query in queries:
+                title = self._search(query)
+                if not title:
+                    continue
+
+                summary = self._get_summary(title)
+                if not summary or summary.get("type") == "disambiguation":
+                    continue
+
+                extract = summary.get("extract")
+                if not extract:
+                    continue
+
+                now_playing.summary = extract
+                thumbnail = (summary.get("thumbnail") or {}).get("source") or (
+                    summary.get("originalimage") or {}
+                ).get("source")
+                if thumbnail and not any(image.url == thumbnail for image in now_playing.images):
+                    now_playing.images.append(Artwork(url=thumbnail, label="Photo (Wikipedia)"))
+                return
+        except Exception:
+            logger.exception("Wikipedia enrichment error")
+
+    @staticmethod
+    def _queries_for(np: NowPlaying) -> List[str]:
+        if np.media_type == "music":
+            if not np.subtitle:
+                return []
+            # Plain artist name first; many common-word band names (e.g.
+            # "Queen") resolve to a disambiguation page, so fall back to
+            # genre-specific disambiguators.
+            return [np.subtitle, f"{np.subtitle} (band)", f"{np.subtitle} (musician)"]
+        if np.media_type == "movie":
+            if not np.title:
+                return []
+            queries = []
+            if np.year:
+                queries.append(f"{np.title} ({np.year} film)")
+            queries.append(f"{np.title} (film)")
+            return queries
+        if np.media_type == "episode":
+            return [f"{np.title} (TV series)"] if np.title else []
+        return []
+
+    def _search(self, query: str) -> Optional[str]:
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "srlimit": 1,
+            "format": "json",
+        }
+        response = requests.get(_SEARCH_URL, params=params, headers=_HEADERS, timeout=10)
+        response.raise_for_status()
+        results = (response.json().get("query") or {}).get("search") or []
+        return results[0]["title"] if results else None
+
+    def _get_summary(self, title: str) -> Optional[dict]:
+        url = _SUMMARY_URL.format(title=quote(title.replace(" ", "_")))
+        response = requests.get(url, headers=_HEADERS, timeout=10)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()

@@ -21,9 +21,11 @@ from mediainfo.enrichers.fanarttv import FanartTvEnricher
 from mediainfo.enrichers.lastfm import LastFmEnricher
 from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
+from mediainfo.enrichers.wikipedia import WikipediaEnricher
 from mediainfo.idle.unsplash import UnsplashWallpaperSource
 from mediainfo.outputs.feeds import FeedOutput
 from mediainfo.outputs.folder import FolderOutput
+from mediainfo.outputs.info import InfoOutput
 from mediainfo.outputs.mqtt import MqttOutput
 from mediainfo.outputs.nest_hub import NestHubOutput
 from mediainfo.outputs.pixoo import PixooOutput
@@ -56,6 +58,7 @@ SOURCE_CLASSES = {
 OUTPUT_CLASSES = {
     "feed": FeedOutput,
     "folder": FolderOutput,
+    "info": InfoOutput,
     "mqtt": MqttOutput,
     "nest_hub": NestHubOutput,
     "pixoo": PixooOutput,
@@ -70,6 +73,7 @@ ENRICHER_CLASSES = {
     "lastfm": LastFmEnricher,
     "musicbrainz": MusicBrainzEnricher,
     "thetvdb": TheTvDbEnricher,
+    "wikipedia": WikipediaEnricher,
 }
 
 IDLE_CLASSES = {
@@ -84,6 +88,7 @@ _ENRICHER_NAME_BY_CLASS = {cls: name for name, cls in ENRICHER_CLASSES.items()}
 _OUTPUT_DETAIL_FIELDS: dict = {
     "feed":     ["port"],
     "folder":   ["dir"],
+    "info":     ["port"],
     "mqtt":     ["host", "port", "topic"],
     "nest_hub": ["device_ip", "server_port"],
     "pixoo":    ["ip"],
