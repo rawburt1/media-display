@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   templates.
 - `.editorconfig`.
 
+### Notes
+- Going forward, CHANGELOG.md updates accompanying a change are folded
+  into that change's own entry rather than logged separately.
+
 ### Changed
 - Renamed the `pixoo_media` package to `mediainfo` (Dockerfile,
   docker-compose.yml, config.example.yaml, vinyl_recognizer references)
