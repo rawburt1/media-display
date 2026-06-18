@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - GitHub Actions workflow running the test suite on every push/PR, with a
   required status check on `master`.
 - CONTRIBUTING.md, CODE_OF_CONDUCT.md, LICENSE (MIT), and CI status badge.
+- CHANGELOG.md, CODEOWNERS, SECURITY.md, and GitHub pull request/issue
+  templates.
 
 ### Changed
 - Renamed the `pixoo_media` package to `mediainfo` (Dockerfile,
