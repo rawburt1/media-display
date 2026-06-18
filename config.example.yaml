@@ -471,6 +471,10 @@ idle:
 # To also write to a rotating file, fill in the path below.
 
 logging:
+  # DEBUG, INFO, WARNING, ERROR, or CRITICAL. DEBUG is noisy (e.g. logs
+  # every skipped/unsupported Sonos coordinator) but useful when
+  # troubleshooting why a source isn't detecting playback.
+  level: INFO
   file: ./logs/mediainfo.log
   max_bytes: 1048576             # Rotate at 1 MB
   backup_count: 3               # Keep 3 old log files

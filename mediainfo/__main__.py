@@ -241,10 +241,14 @@ def _setup_logging(log_config: LoggingConfig) -> None:
                 backupCount=log_config.backup_count,
             )
         )
+    level = logging.getLevelName(log_config.level.upper())
+    if not isinstance(level, int):
+        level = logging.INFO
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         handlers=handlers,
+        force=True,
     )
 
 

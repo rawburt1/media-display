@@ -10,6 +10,8 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
+import logging
+
 from mediainfo.__main__ import (
     _file_mtime,
     _make_stop_handler,
@@ -19,7 +21,9 @@ from mediainfo.__main__ import (
     _build_enrichers,
     _build_idle_source,
     _start_orchestrator,
+    _setup_logging,
 )
+from mediainfo.config import LoggingConfig
 
 
 # ---------------------------------------------------------------------------
@@ -262,3 +266,37 @@ def test_start_orchestrator_starts_and_returns_orchestrator():
     mock_cls.assert_called_once()
     mock_orch.start.assert_called_once()
     assert result is mock_orch
+
+
+# ---------------------------------------------------------------------------
+# _setup_logging
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _reset_root_logger():
+    root = logging.getLogger()
+    original_level = root.level
+    original_handlers = list(root.handlers)
+    yield
+    root.setLevel(original_level)
+    root.handlers = original_handlers
+
+
+def test_setup_logging_defaults_to_info():
+    _setup_logging(LoggingConfig())
+    assert logging.getLogger().level == logging.INFO
+
+
+def test_setup_logging_honors_debug_level():
+    _setup_logging(LoggingConfig(level="DEBUG"))
+    assert logging.getLogger().level == logging.DEBUG
+
+
+def test_setup_logging_is_case_insensitive():
+    _setup_logging(LoggingConfig(level="warning"))
+    assert logging.getLogger().level == logging.WARNING
+
+
+def test_setup_logging_falls_back_to_info_for_invalid_level():
+    _setup_logging(LoggingConfig(level="NOT_A_LEVEL"))
+    assert logging.getLogger().level == logging.INFO

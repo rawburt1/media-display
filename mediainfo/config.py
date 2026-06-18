@@ -336,6 +336,8 @@ class LastFmHistoryConfig:
 
 @dataclasses.dataclass
 class LoggingConfig:
+    # Python logging level name: DEBUG, INFO, WARNING, ERROR, or CRITICAL.
+    level: str = "INFO"
     # Path to a log file. Empty (the default) means console-only logging.
     file: str = ""
     # Rotate the log file once it reaches this size (bytes).

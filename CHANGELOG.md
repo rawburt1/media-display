@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `logging.level` config option (`DEBUG`/`INFO`/`WARNING`/`ERROR`/
+  `CRITICAL`, default `INFO`) to control verbosity without code changes -
+  switch to `DEBUG` to see things like every Sonos coordinator
+  checked/skipped, normally too noisy for everyday use.
 - `sources.sonos.speaker_ip` is now `speaker_ips` (a list). Previously the
   Sonos source discovered the whole household's zone topology from a
   single configured speaker, so if that one speaker was off or

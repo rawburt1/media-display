@@ -264,6 +264,13 @@ See `config.example.yaml` for all options. Key things to fill in:
   (default 48) - much shorter than `max_age_days`, since they're
   decorative and easily refetched rather than tied to a specific item.
   Stored separately under `<cache.dir>/idle`.
+- **`logging.level`**: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`, or
+  `CRITICAL`. Switch to `DEBUG` when troubleshooting why a source isn't
+  detecting playback - it logs things like each Sonos coordinator
+  checked/skipped, which are normally too noisy for everyday use.
+- **`logging.file`** / **`logging.max_bytes`** / **`logging.backup_count`**:
+  optionally also write logs to a rotating file (logs always go to
+  stdout, visible via `docker compose logs`).
 
 ## Extending with new sources/outputs
 
