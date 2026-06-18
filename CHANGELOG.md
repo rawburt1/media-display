@@ -13,7 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   now-playing item, and per-source/output/enricher status.
 - GitHub Actions workflow running the test suite on every push/PR, with a
   required status check on `master`.
-- CONTRIBUTING.md, CODE_OF_CONDUCT.md, LICENSE (MIT), and CI status badge.
+- CONTRIBUTING.md, CODE_OF_CONDUCT.md, LICENSE (MIT), and CI/license status
+  badges.
 - CHANGELOG.md, CODEOWNERS, SECURITY.md, and GitHub pull request/issue
   templates.
 - `.editorconfig`.
