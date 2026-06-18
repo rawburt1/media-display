@@ -181,7 +181,12 @@ See `config.example.yaml` for all options. Key things to fill in:
   credentials directly - no shell/docker-exec access needed.
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
-- **`outputs.web`**: host/port for the local web page.
+- **`outputs.web`**: host/port for the local web page. Each browser/screen
+  that connects (over the same port) gets its own independent rotation
+  through the available images - randomized order, randomized timing -
+  rather than every screen seeing an identical broadcast, so multiple
+  screens pointed at the same URL don't all show the same picture at the
+  same time.
 - **`outputs.folder`**: `dir` is a local directory that mirrors all of the
   current item's artwork (album art, fanart, posters) as individual image
   files, named after each image's label (e.g. `Poster (fanart.tv).jpg`).

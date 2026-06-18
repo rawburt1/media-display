@@ -77,9 +77,15 @@ OUTPUT_CLASSES = {
 }
 
 # Outputs that need extra constructor arguments beyond their own config
-# (e.g. ConfigUiOutput needs the path to config.yaml to read/write it).
+# (e.g. ConfigUiOutput needs the path to config.yaml to read/write it; web
+# needs the global rotation interval and the ImageCache up front, to drive
+# its own per-client rotation before the first on_new_item() call ever
+# arrives (e.g. idle wallpapers shown at startup, before anything plays) -
+# see WebOutput's docstring for why it can't just reuse the orchestrator's
+# rotation like other outputs do).
 _OUTPUT_EXTRA_ARGS = {
-    "config": lambda config_path: (config_path,),
+    "config": lambda config, config_path, cache: (config_path,),
+    "web": lambda config, config_path, cache: (config.rotation_interval_seconds, cache),
 }
 
 ENRICHER_CLASSES = {
@@ -151,9 +157,15 @@ def main() -> None:
     _setup_logging(config.logging)
     logger.info("Starting mediainfo")
 
+    cache = ImageCache(
+        config.cache.dir,
+        max_age_days=config.cache.max_age_days,
+        idle_max_age_hours=config.cache.idle_max_age_hours,
+    )
+
     # Outputs are created once and stay alive for the life of the process.
     # Their background servers (Flask, MQTT, etc.) keep running across reloads.
-    outputs = _instantiate_outputs(config, config_path)
+    outputs = _instantiate_outputs(config, config_path, cache)
 
     stop_event = threading.Event()
     stop_handler = _make_stop_handler(stop_event)
@@ -161,11 +173,6 @@ def main() -> None:
     signal.signal(signal.SIGINT, stop_handler)
 
     config_mtime = _file_mtime(config_path)
-    cache = ImageCache(
-        config.cache.dir,
-        max_age_days=config.cache.max_age_days,
-        idle_max_age_hours=config.cache.idle_max_age_hours,
-    )
     library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
     orch = _start_orchestrator(config, outputs, cache, library)
     _wire_health_providers(outputs, orch, config)
@@ -282,14 +289,16 @@ def _setup_logging(log_config: LoggingConfig) -> None:
 # Plugin instantiation
 # ---------------------------------------------------------------------------
 
-def _instantiate_outputs(config: Config, config_path: Path) -> list:
+def _instantiate_outputs(config: Config, config_path: Path, cache: ImageCache) -> list:
     outputs = []
     for name, output_configs in config.outputs.items():
         output_cls = OUTPUT_CLASSES.get(name)
         if output_cls is None:
             logger.warning("Unknown output: %s", name)
             continue
-        extra_args = _OUTPUT_EXTRA_ARGS.get(name, lambda _path: ())(config_path)
+        extra_args = _OUTPUT_EXTRA_ARGS.get(name, lambda _config, _path, _cache: ())(
+            config, config_path, cache
+        )
         for output_config in output_configs:
             if not output_config.enabled:
                 continue

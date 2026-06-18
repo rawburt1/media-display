@@ -260,7 +260,7 @@ class Orchestrator:
             logger.info("Fetched %d idle wallpaper(s)", len(images))
             self._idle_images = images
             self._idle_now_playing = NowPlaying(
-                source="idle", media_type="wallpaper", title="", subtitle=""
+                source="idle", media_type="wallpaper", title="", subtitle="", images=images
             )
             self._last_idle_batch_fetch = now
             self._idle_rotation_state = self._build_rotation_states(len(images), len(self.outputs))

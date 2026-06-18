@@ -1,6 +1,7 @@
 """Tests for the WebOutput push logic."""
 
 import json
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -14,13 +15,13 @@ def _config(**kwargs):
     return WebConfig(enabled=True, host="127.0.0.1", port=8090, **kwargs)
 
 
-def _music(title="Bohemian Rhapsody", artist="Queen"):
+def _music(title="Bohemian Rhapsody", artist="Queen", images=None):
     return NowPlaying(
         source="kodi",
         media_type="music",
         title=title,
         subtitle=artist,
-        images=[],
+        images=images if images is not None else [],
     )
 
 
@@ -48,9 +49,19 @@ def no_server(monkeypatch):
     monkeypatch.setattr("threading.Thread.start", lambda self: None)
 
 
-def _output(config=None):
+def _output(config=None, rotation_interval_seconds=30):
     from mediainfo.outputs.web import WebOutput
-    return WebOutput(config or _config())
+    return WebOutput(config or _config(), rotation_interval_seconds)
+
+
+def _connect(out) -> "_FakeConn":
+    """Simulate a real /ws connection: register the client and assign it a
+    rotation state, the same as the real route handler does."""
+    conn = _FakeConn()
+    with out._clients_lock:
+        out._clients.add(conn)
+        out._assign_client_rotation(conn)
+    return conn
 
 
 # ---------------------------------------------------------------------------
@@ -125,12 +136,13 @@ def test_push_with_no_clients_is_noop():
 
 def test_update_pushes_payload(tmp_path):
     out = _output()
-    conn = _FakeConn()
-    out._clients = {conn}
+    conn = _connect(out)
     img = tmp_path / "xyz.jpg"
     img.write_bytes(b"x")
+    art = _artwork()
+    out._cache = MagicMock(get_path=lambda *a, **k: img, get_transformed_path=lambda p, _: p)
 
-    out.update(_music(), _artwork(), img)
+    out.update(_music(images=[art]), art, img)
 
     assert len(conn.sent) == 1
     payload = json.loads(conn.sent[0])
@@ -175,19 +187,180 @@ def test_on_idle_clears_state():
 
 def test_update_after_on_new_item_adds_image(tmp_path):
     out = _output()
-    conn = _FakeConn()
-    out._clients = {conn}
+    conn = _connect(out)
     img = tmp_path / "abc.jpg"
     img.write_bytes(b"x")
+    art = _artwork()
+    cache = MagicMock(get_path=lambda *a, **k: img, get_transformed_path=lambda p, _: p)
 
-    out.on_new_item(_music(), MagicMock())   # push 1: no image
-    out.update(_music(), _artwork(), img)    # push 2: with image
+    out.on_new_item(_music(), cache)         # push 1: no image (pool still empty)
+    out.update(_music(images=[art]), art, img)  # push 2: pool now has an image
 
     assert len(conn.sent) == 2
     first = json.loads(conn.sent[0])
     second = json.loads(conn.sent[1])
     assert "image" not in first
     assert "image" in second
+
+
+# ---------------------------------------------------------------------------
+# Per-client rotation (multiple screens sharing one port)
+# ---------------------------------------------------------------------------
+
+def _art(label):
+    return Artwork(url=f"https://example.com/{label}.jpg", label=label)
+
+
+def _cache_for(tmp_path, images):
+    """A fake ImageCache that maps each artwork to its own distinct file."""
+    paths = {}
+    for art in images:
+        path = tmp_path / f"{art.label}.jpg"
+        path.write_bytes(b"x")
+        paths[art.url] = path
+    return MagicMock(
+        get_path=lambda artwork, **kwargs: paths.get(artwork.url),
+        get_transformed_path=lambda p, _: p,
+    )
+
+
+def test_each_client_gets_a_distinct_starting_image(tmp_path):
+    out = _output()
+    images = [_art("a"), _art("b"), _art("c")]
+    out._cache = _cache_for(tmp_path, images)
+    conn_x = _connect(out)
+    conn_y = _connect(out)
+
+    with patch("mediainfo.outputs.web.random.shuffle", side_effect=lambda lst: None):
+        out.update(_music(images=images), images[0], tmp_path / "a.jpg")
+
+    payload_x = json.loads(conn_x.sent[-1])
+    payload_y = json.loads(conn_y.sent[-1])
+    assert payload_x["art_label"] != payload_y["art_label"]
+
+
+def test_client_connecting_after_pool_established_gets_assigned_rotation(tmp_path):
+    out = _output()
+    images = [_art("a"), _art("b")]
+    out._cache = _cache_for(tmp_path, images)
+    out.update(_music(images=images), images[0], tmp_path / "a.jpg")
+
+    conn = _connect(out)
+
+    assert conn in out._client_rotation
+
+
+def test_update_with_unchanged_pool_does_not_reset_client_position(tmp_path):
+    out = _output()
+    images = [_art("a"), _art("b")]
+    out._cache = _cache_for(tmp_path, images)
+    conn = _connect(out)
+    out.update(_music(images=images), images[0], tmp_path / "a.jpg")
+
+    state_before = out._client_rotation[conn]
+    state_before.position = 1  # simulate having already rotated once
+
+    out.update(_music(images=images), images[1], tmp_path / "b.jpg")  # same pool
+
+    assert out._client_rotation[conn] is state_before
+    assert out._client_rotation[conn].position == 1
+
+
+def test_rotate_clients_once_advances_due_clients(tmp_path):
+    out = _output(rotation_interval_seconds=10)
+    images = [_art("a"), _art("b"), _art("c")]
+    out._cache = _cache_for(tmp_path, images)
+    conn = _connect(out)
+    out.update(_music(images=images), images[0], tmp_path / "a.jpg")
+
+    state = out._client_rotation[conn]
+    state.next_due = time.monotonic() - 1  # force due now
+    start_position = state.position
+
+    out._rotate_clients_once()
+
+    assert out._client_rotation[conn].position == (start_position + 1) % len(images)
+
+
+def test_rotate_clients_once_skips_clients_not_yet_due(tmp_path):
+    out = _output(rotation_interval_seconds=300)
+    images = [_art("a"), _art("b")]
+    out._cache = _cache_for(tmp_path, images)
+    conn = _connect(out)
+    out.update(_music(images=images), images[0], tmp_path / "a.jpg")
+    out._client_rotation[conn].next_due = time.monotonic() + 300  # far in the future
+
+    sent_before = len(conn.sent)
+    out._rotate_clients_once()
+
+    assert len(conn.sent) == sent_before  # no push, not due yet
+
+
+def test_idle_wallpapers_are_personalized_per_client(tmp_path):
+    out = _output()
+    images = [_art("a"), _art("b")]
+    out._cache = _cache_for(tmp_path, images)
+    idle_now_playing = NowPlaying(
+        source="idle", media_type="wallpaper", title="", subtitle="", images=images
+    )
+    conn_x = _connect(out)
+    conn_y = _connect(out)
+
+    with patch("mediainfo.outputs.web.random.shuffle", side_effect=lambda lst: None):
+        out.update(idle_now_playing, images[0], tmp_path / "a.jpg")
+
+    payload_x = json.loads(conn_x.sent[-1])
+    payload_y = json.loads(conn_y.sent[-1])
+    assert payload_x["art_label"] != payload_y["art_label"]
+
+
+def test_disconnect_removes_client_rotation_state(tmp_path):
+    out = _output()
+    images = [_art("a")]
+    out._cache = _cache_for(tmp_path, images)
+    conn = _connect(out)
+    out.update(_music(images=images), images[0], tmp_path / "a.jpg")
+    assert conn in out._client_rotation
+
+    with out._clients_lock:
+        out._clients.discard(conn)
+        out._client_rotation.pop(conn, None)
+
+    assert conn not in out._client_rotation
+
+
+# ---------------------------------------------------------------------------
+# /image/current ?v= lookup
+# ---------------------------------------------------------------------------
+
+def test_image_current_serves_file_for_known_v(tmp_path):
+    out = _output()
+    img = tmp_path / "abc.jpg"
+    img.write_bytes(b"image-bytes")
+    out._known_images["abc"] = img
+
+    resp = out.app.test_client().get("/image/current?v=abc")
+
+    assert resp.status_code == 200
+    assert resp.data == b"image-bytes"
+
+
+def test_image_current_falls_back_to_global_pick_for_unknown_v(tmp_path):
+    out = _output()
+    img = tmp_path / "fallback.jpg"
+    img.write_bytes(b"fallback-bytes")
+    out._image_path = img
+
+    resp = out.app.test_client().get("/image/current?v=does-not-exist")
+
+    assert resp.status_code == 200
+    assert resp.data == b"fallback-bytes"
+
+
+def test_image_current_404_when_nothing_available():
+    out = _output()
+    resp = out.app.test_client().get("/image/current")
+    assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------

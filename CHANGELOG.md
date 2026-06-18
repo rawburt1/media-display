@@ -20,6 +20,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     outputs now share one shuffled order but start at different positions
     in it, so as long as there are at least as many images as outputs, no
     two outputs ever show the same picture at the same time.
+  - Both of the above only desynchronize separate *outputs* - multiple
+    screens/browsers all pointed at the same `web` output's port were
+    still all seeing one identical broadcast, since that's a single
+    output instance from the orchestrator's point of view no matter how
+    many clients connect to it. Each WebSocket connection to the `web`
+    output now gets its own independent rotation (own shuffled order,
+    own staggered timer) the same way separate outputs do, so multiple
+    screens can share one port and still show different pictures. The
+    `/image/current` endpoint now takes a `v=<id>` param identifying which
+    cached image to serve (previously always the single most-recently-set
+    one, with `v` only used for browser cache-busting) so each client's
+    chosen image is actually distinct, not just labeled differently.
 
 ### Added
 - Music library artist/album/track matching is now fuzzy-tolerant: case,
