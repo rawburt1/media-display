@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `mediainfo/enrichers/wikipedia.py`: Wikipedia enricher adding an artist
   bio / movie info / TV show info summary (`NowPlaying.summary`) plus a
   thumbnail photo, via the free public Wikipedia REST API (no API key).
+  Falls back to "(band)"/"(musician)" disambiguators when the plain
+  artist name resolves to a disambiguation page instead of the artist
+  (e.g. "Queen" -> "Queen (band)").
 - `mediainfo/outputs/info.py`: high-resolution `info` output (default port
   8093) pairing the current artwork with its Wikipedia summary text. No
   image transforms are applied by default, so artwork is shown at its
