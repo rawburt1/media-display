@@ -404,6 +404,10 @@ cache:
 
 idle:
 
+  # Only one idle source can be active at a time - if more than one is
+  # enabled, the first one listed here wins (same rule as `priority` for
+  # sources).
+
   # Unsplash — high-resolution photography.
   # Create a free app at https://unsplash.com/oauth/applications and use the
   # "Demo" access key (no approval required).
@@ -415,6 +419,17 @@ idle:
     rotation_interval_seconds: 300
     batch_size: 10               # Images to download per batch
     access_key: YOUR_UNSPLASH_ACCESS_KEY
+
+  # Last.fm scrobble history — shows album art from your recent scrobbles
+  # instead of (or as an alternative to) photography.
+  # Get a free API key at https://www.last.fm/api/account/create (same key
+  # as enrichers.lastfm, if that's also enabled).
+  lastfm:
+    enabled: false
+    api_key: YOUR_LASTFM_API_KEY
+    username: YOUR_LASTFM_USERNAME
+    batch_size: 10                # Recent scrobbles to fetch per refresh
+    rotation_interval_seconds: 300
 
 
 # ---------------------------------------------------------------------------

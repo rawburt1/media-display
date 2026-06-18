@@ -22,6 +22,7 @@ from mediainfo.enrichers.lastfm import LastFmEnricher
 from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
 from mediainfo.enrichers.wikipedia import WikipediaEnricher
+from mediainfo.idle.lastfm import LastFmWallpaperSource
 from mediainfo.idle.unsplash import UnsplashWallpaperSource
 from mediainfo.outputs.config_ui import ConfigUiOutput
 from mediainfo.outputs.feeds import FeedOutput
@@ -85,6 +86,7 @@ ENRICHER_CLASSES = {
 }
 
 IDLE_CLASSES = {
+    "lastfm": LastFmWallpaperSource,
     "unsplash": UnsplashWallpaperSource,
 }
 

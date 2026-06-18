@@ -295,6 +295,23 @@ class UnsplashWallpaperConfig:
 
 
 @dataclasses.dataclass
+class LastFmHistoryConfig:
+    enabled: bool = False
+    # Free API key from https://www.last.fm/api/account/create (same key
+    # used by enrichers.lastfm, if that's also enabled).
+    api_key: str = ""
+    # Last.fm username whose scrobble history to show.
+    username: str = ""
+    # Number of recent scrobbles to fetch per refresh (deduplicated by
+    # album art, so fewer wallpapers than this may actually be shown).
+    batch_size: int = 10
+    # How often (in seconds) to re-fetch scrobble history while idle. Each
+    # output then independently rotates through that batch (in its own
+    # random order) using the top-level rotation_interval_seconds.
+    rotation_interval_seconds: int = 300
+
+
+@dataclasses.dataclass
 class LoggingConfig:
     # Path to a log file. Empty (the default) means console-only logging.
     file: str = ""
@@ -342,6 +359,7 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
 
 # Idle wallpaper sources: shown on outputs when nothing is playing.
 IDLE_CONFIG_TYPES: dict[str, type] = {
+    "lastfm": LastFmHistoryConfig,
     "unsplash": UnsplashWallpaperConfig,
 }
 

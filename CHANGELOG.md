@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `mediainfo/idle/lastfm.py`: `idle.lastfm` wallpaper source - shows album
+  art from a configured Last.fm user's recent scrobbles on outputs while
+  nothing is playing, deduplicated by album art URL. Free API key, same
+  one used by `enrichers.lastfm` if that's also enabled.
 - `mediainfo/enrichers/wikipedia.py`: Wikipedia enricher adding an artist
   bio / movie info / TV show info summary (`NowPlaying.summary`) plus a
   thumbnail photo, via the free public Wikipedia REST API (no API key).

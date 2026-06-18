@@ -43,11 +43,12 @@ Currently implemented:
   above (sources, outputs, enrichers, idle sources, polling intervals)
   without hand-editing YAML - saved changes are hot-reloaded within a
   few seconds
-- **Idle wallpapers**: Unsplash - while nothing is playing, downloads a fresh
-  batch of wallpapers matching the configured search queries every
-  `rotation_interval_seconds`, and each output independently rotates through
-  that batch on its own randomized schedule (same as the now-playing artwork
-  rotation above)
+- **Idle wallpapers**: Unsplash, or Last.fm scrobble history (album art from
+  your recent scrobbles) - while nothing is playing, downloads a fresh batch
+  of wallpapers every `rotation_interval_seconds`, and each output
+  independently rotates through that batch on its own randomized schedule
+  (same as the now-playing artwork rotation above). Only one idle source
+  can be active at a time.
 - Disk cache for downloaded artwork (each image is only fetched once,
   and unused files are purged after `cache.max_age_days`)
 - `/health` endpoint (on the web output) reports uptime, the current
@@ -187,6 +188,12 @@ See `config.example.yaml` for all options. Key things to fill in:
   `rotation_interval_seconds`, and each output rotates through that batch
   independently (using the top-level `rotation_interval_seconds`). Requires
   a free `access_key` from https://unsplash.com/oauth/applications.
+- **`idle.lastfm`**: shows album art from `username`'s recent Last.fm
+  scrobbles while nothing is playing - `batch_size` recent tracks are
+  fetched every `rotation_interval_seconds` (deduplicated by album art, so
+  fewer wallpapers than `batch_size` may actually be shown). Requires a
+  free `api_key` from https://www.last.fm/api/account/create (the same key
+  as `enrichers.lastfm`, if that's also enabled).
 - **`enrichers.fanarttv`**: free `api_key` from https://fanart.tv/get-an-api-key/.
 - **`enrichers.thetvdb`**: free `api_key` from
   https://thetvdb.com/dashboard/account/apikey (only "user-supported" keys

@@ -9,7 +9,10 @@ services:
       - "8093:8093"
       - "8094:8094"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
+      # Read-write so the `config` output (see config.example.yaml) can save
+      # edits made through its web UI. Mount `:ro` instead if that output is
+      # disabled and you only ever edit config.yaml by hand.
+      - ./config.yaml:/app/config.yaml
       - ./cache:/app/cache
       - ./logs:/app/logs
       - ./adb_keys:/app/adb_keys
