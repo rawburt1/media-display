@@ -175,7 +175,14 @@ class Orchestrator:
     def _new_rotation_state(self, num_images: int) -> _RotationState:
         order = list(range(num_images))
         random.shuffle(order)
-        return _RotationState(order=order, position=0, last_rotation=time.monotonic())
+        # Stagger each output's first rotation by a random phase within the
+        # interval, rather than starting everyone's clock from the same
+        # instant - otherwise every output becomes "due" to advance at
+        # exactly the same tick forever after, which (combined with a small
+        # image pool) makes the independently-shuffled order look
+        # synchronized since outputs all flip in lockstep.
+        jitter = random.uniform(0, self.rotation_interval_seconds)
+        return _RotationState(order=order, position=0, last_rotation=time.monotonic() - jitter)
 
     def _maybe_rotate(self) -> None:
         if self._current is None or len(self._current.images) <= 1:

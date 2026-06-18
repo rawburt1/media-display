@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.orchestrator import Orchestrator
 
@@ -243,6 +245,50 @@ def test_idle_wallpaper_fetched_with_idle_flag_for_separate_cache_purging():
 
     _, kwargs = cache.get_path.call_args
     assert kwargs.get("idle") is True
+
+
+def test_idle_rotation_state_staggers_initial_last_rotation_per_output():
+    # Without staggering, every output's last_rotation is set to the exact
+    # same instant, so they all become "due" to advance in lockstep forever
+    # - this is what made independently-shuffled outputs look synchronized
+    # (they all flip to a new image at the same moment).
+    idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=300)
+    output_a = MagicMock()
+    output_b = MagicMock()
+    cache = MagicMock()
+    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = _orchestrator(outputs=[output_a, output_b], cache=cache, idle_source=idle_source)
+
+    with patch("mediainfo.orchestrator.random.uniform", side_effect=[5.0, 12.0]):
+        orchestrator._tick()
+
+    assert orchestrator._idle_rotation_state[0].last_rotation != orchestrator._idle_rotation_state[1].last_rotation
+    diff = orchestrator._idle_rotation_state[1].last_rotation - orchestrator._idle_rotation_state[0].last_rotation
+    assert diff == pytest.approx(5.0 - 12.0, abs=0.01)
+
+
+def test_rotation_state_staggers_initial_last_rotation_per_output():
+    now_playing = _multi_image_now_playing()
+    output_a = MagicMock()
+    output_b = MagicMock()
+    cache = MagicMock()
+    cache.get_path.side_effect = lambda artwork: f"/cache/{artwork.label}"
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output_a, output_b],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=10,
+    )
+
+    with patch("mediainfo.orchestrator.random.uniform", side_effect=[2.0, 8.0]):
+        orchestrator._tick()
+
+    assert orchestrator._rotation_state[0].last_rotation != orchestrator._rotation_state[1].last_rotation
 
 
 def test_idle_rotation_advances_each_output_independently():

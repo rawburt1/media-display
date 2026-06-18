@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- Idle wallpaper (and now-playing image) rotation across multiple outputs
+  looked synchronized: each output already had its own independently
+  shuffled order, but every output's rotation timer started from the
+  exact same instant, so they all became "due" to flip to the next image
+  on the same tick forever after - visible as outputs changing in
+  lockstep, and (with a small image pool) often showing the same picture
+  at the same time. Each output's initial rotation timer is now staggered
+  by a random phase within the rotation interval, so outputs drift apart
+  and rotate independently.
+
 ### Added
 - Music library artist/album/track matching is now fuzzy-tolerant: case,
   accents, "&" vs "and", and punctuation differences no longer cause a
