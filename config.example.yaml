@@ -25,6 +25,7 @@ rotation_interval_seconds: 30
 priority:
   - kodi
   - appletv
+  - youtube
   - shield
   - plex
   - sonos
@@ -79,6 +80,20 @@ sources:
     # Path to the ADB private key used to authenticate with the device.
     # Generated automatically on first run; accept the on-screen prompt.
     adb_key_path: ./adb_keys/shield
+
+  # YouTube on Android TV (e.g. the same Nvidia Shield as `shield` above).
+  # Unlike `shield`'s generic any-app session grab, this specifically
+  # targets the YouTube app and only reports "now playing" when the video
+  # looks like a song (channel name ends in "- Topic", or the title itself
+  # follows "Artist - Song") - other videos are ignored. Once detected, the
+  # usual music enrichers (fanart.tv/MusicBrainz/Last.fm/Discogs/Wikipedia)
+  # fetch artwork and artist bio info, same as for any other music source.
+  youtube:
+    enabled: true
+    host: 192.168.1.21       # IP address of the Android TV device
+    port: 5555               # ADB network port (enable in Developer options)
+    # Use a separate key from `shield`'s if pointed at the same device.
+    adb_key_path: ./adb_keys/youtube
 
   # Spotify — current playback via the Spotify Web API.
   # 1. Create a free app at https://developer.spotify.com/dashboard

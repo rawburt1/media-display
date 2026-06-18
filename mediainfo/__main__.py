@@ -42,6 +42,7 @@ from mediainfo.sources.shield import ShieldSource
 from mediainfo.sources.sonos import SonosSource
 from mediainfo.sources.spotify import SpotifySource
 from mediainfo.sources.vinyl import VinylSource
+from mediainfo.sources.youtube import YoutubeSource
 
 # Registries mapping config names to plugin classes. Adding a new source,
 # output, or enricher starts here (and in mediainfo/config.py).
@@ -55,6 +56,7 @@ SOURCE_CLASSES = {
     "sonos": SonosSource,
     "spotify": SpotifySource,
     "vinyl": VinylSource,
+    "youtube": YoutubeSource,
 }
 
 OUTPUT_CLASSES = {

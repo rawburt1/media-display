@@ -15,9 +15,10 @@ Currently implemented:
   posters+fanart, music), Jellyfin and Emby (movie/episode posters+fanart,
   music, via the Sessions API), Sonos (album art), Spotify (current playback
   via the Web API), Apple TV (any app, via the Companion/MRP/AirPlay
-  protocols), Android TV / Nvidia Shield (via ADB, "now playing" from any
-  app), vinyl turntable (audio recognition via
-  [vinyl_recognizer](vinyl_recognizer/) + AudD)
+  protocols), YouTube on Android TV (via ADB, reports a song only when the
+  video looks like one - see "Extending" below), Android TV / Nvidia Shield
+  (via ADB, generic "now playing" from any other app), vinyl turntable
+  (audio recognition via [vinyl_recognizer](vinyl_recognizer/) + AudD)
 - **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
   movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
   Discogs also add (and prefer) album covers for music, matched via
@@ -111,6 +112,21 @@ See `config.example.yaml` for all options. Key things to fill in:
   debugging?" prompt - accept it (and tick "Always allow") so future
   connections don't need re-approval. No artwork is available this way; for
   music apps, fanart.tv's MusicBrainz lookup (see below) is used instead.
+- **`sources.youtube`**: same `host`/`port`/ADB pairing flow as
+  `sources.shield` above (can point at the same device - use a separate
+  `adb_key_path`), but targets the YouTube app specifically rather than
+  whatever app is in the foreground. Since YouTube doesn't reliably report
+  a separate artist field, this only reports "now playing" when the video
+  looks like a song: either the channel follows YouTube's auto-generated
+  "`Artist` - Topic" convention for officially distributed music, or the
+  video title itself follows "`Artist` - `Song`" (common for official
+  audio/lyric videos, with trailing "(Official Video)"-style decorations
+  stripped). Anything else (a vlog, a trailer, etc.) is ignored. Once a
+  song is detected, the usual music enrichers (fanart.tv/MusicBrainz/
+  Last.fm/Discogs/Wikipedia) fetch artwork and artist bio info from
+  whichever of those you have enabled, exactly as for any other music
+  source - put `youtube` ahead of `shield` in `priority` so it takes
+  precedence when both point at the same device.
 - **`sources.vinyl`**: host/port of a [vinyl_recognizer](vinyl_recognizer/)
   instance - a separate service that runs on the machine a Behringer UCA202
   (or similar USB audio interface) is connected to, listens to a turntable's

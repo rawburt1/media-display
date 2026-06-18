@@ -97,6 +97,21 @@ class ShieldConfig:
 
 
 @dataclasses.dataclass
+class YoutubeConfig:
+    enabled: bool = False
+    # IP address of the Android TV device running the YouTube app (e.g.
+    # the same Nvidia Shield as `sources.shield` - can point at the same
+    # device, since this connects independently over ADB).
+    host: str = ""
+    port: int = 5555
+    # Path to the ADB private key. Generated automatically on first run if
+    # missing - accept the resulting authorization prompt on the device's
+    # screen. Use a separate key from sources.shield's if pointed at the
+    # same device, to avoid two sources racing to (re)create the same file.
+    adb_key_path: str = "./adb_keys/youtube"
+
+
+@dataclasses.dataclass
 class PlexConfig:
     enabled: bool = False
     host: str = ""
@@ -337,6 +352,7 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
     "sonos": SonosConfig,
     "spotify": SpotifyConfig,
     "vinyl": VinylConfig,
+    "youtube": YoutubeConfig,
 }
 
 OUTPUT_CONFIG_TYPES: dict[str, type] = {

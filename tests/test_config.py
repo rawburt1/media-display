@@ -14,7 +14,9 @@ def test_load_example_config():
 
     assert config.poll_interval_seconds == 5
     assert config.rotation_interval_seconds == 30
-    assert config.priority == ["kodi", "appletv", "shield", "plex", "sonos", "spotify", "vinyl"]
+    assert config.priority == [
+        "kodi", "appletv", "youtube", "shield", "plex", "sonos", "spotify", "vinyl",
+    ]
 
     assert config.sources["kodi"].enabled is True
     assert config.sources["kodi"].host == "192.168.1.21"
