@@ -48,6 +48,19 @@ def config_path(tmp_path):
     return path
 
 
+@pytest.fixture
+def library_config_path(tmp_path):
+    """Like config_path, but with library.db_path redirected into
+    tmp_path - otherwise the config UI's library browser would open
+    (and create) ./library/library.db relative to the test runner's CWD.
+    """
+    path = tmp_path / "config.yaml"
+    text = EXAMPLE_CONFIG.read_text(encoding="utf-8")
+    text = text.replace("db_path: ./library/library.db", f"db_path: {tmp_path / 'library.db'}")
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 # ---------------------------------------------------------------------------
 # /api/schema
 # ---------------------------------------------------------------------------
@@ -718,3 +731,90 @@ def test_index_page_served(config_path):
     resp = out.app.test_client().get("/")
     assert resp.status_code == 200
     assert b"configuration" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# library page and /api/library/*
+# ---------------------------------------------------------------------------
+
+def test_library_page_served(library_config_path):
+    out = _output(library_config_path)
+    resp = out.app.test_client().get("/library")
+    assert resp.status_code == 200
+    assert b"library" in resp.data.lower()
+
+
+def test_library_stats_empty(library_config_path):
+    out = _output(library_config_path)
+    resp = out.app.test_client().get("/api/library/stats")
+    assert resp.get_json() == {"artists": 0, "albums": 0, "tracks": 0}
+
+
+def test_library_stats_counts_seeded_data(library_config_path):
+    out = _output(library_config_path)
+    library = out._get_library()
+    artist_id = library.get_or_create_artist("Pink Floyd")
+    library.get_or_create_album(artist_id, "The Wall")
+    library.get_or_create_track(artist_id, "Money")
+
+    resp = out.app.test_client().get("/api/library/stats")
+    assert resp.get_json() == {"artists": 1, "albums": 1, "tracks": 1}
+
+
+def test_library_search_empty_query_returns_empty_list(library_config_path):
+    out = _output(library_config_path)
+    resp = out.app.test_client().get("/api/library/search")
+    assert resp.get_json() == []
+
+
+def test_library_search_returns_matching_artists(library_config_path):
+    out = _output(library_config_path)
+    library = out._get_library()
+    library.get_or_create_artist("Pink Floyd")
+    library.get_or_create_artist("Queen")
+
+    resp = out.app.test_client().get("/api/library/search?q=pink")
+    data = resp.get_json()
+    assert len(data) == 1
+    assert data[0]["name"] == "Pink Floyd"
+    assert isinstance(data[0]["id"], int)
+
+
+def test_library_search_is_fuzzy(library_config_path):
+    out = _output(library_config_path)
+    library = out._get_library()
+    library.get_or_create_artist("Simon & Garfunkel")
+
+    resp = out.app.test_client().get("/api/library/search?q=simon and garfunkel")
+    assert [a["name"] for a in resp.get_json()] == ["Simon & Garfunkel"]
+
+
+def test_library_artist_returns_albums_and_tracks(library_config_path):
+    out = _output(library_config_path)
+    library = out._get_library()
+    artist_id = library.get_or_create_artist("Pink Floyd")
+    library.set_mbid("artist", artist_id, "artist-mbid")
+    album_id = library.get_or_create_album(artist_id, "The Wall")
+    library.set_mbid("album", album_id, "album-mbid")
+    library.get_or_create_track(artist_id, "Money")
+
+    resp = out.app.test_client().get(f"/api/library/artist/{artist_id}")
+    data = resp.get_json()
+    assert data["name"] == "Pink Floyd"
+    assert data["mbid"] == "artist-mbid"
+    assert data["albums"] == [{"id": album_id, "title": "The Wall", "mbid": "album-mbid"}]
+    assert len(data["tracks"]) == 1
+    assert data["tracks"][0]["title"] == "Money"
+
+
+def test_library_artist_not_found_returns_404(library_config_path):
+    out = _output(library_config_path)
+    resp = out.app.test_client().get("/api/library/artist/999")
+    assert resp.status_code == 404
+
+
+def test_get_library_reuses_connection_across_requests(library_config_path):
+    out = _output(library_config_path)
+    lib1 = out._get_library()
+    lib2 = out._get_library()
+    assert lib1 is lib2

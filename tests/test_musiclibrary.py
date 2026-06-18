@@ -1,12 +1,41 @@
 """Tests for the local MusicLibrary metadata cache."""
 
+import sqlite3
 import time
 
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.musiclibrary import MusicLibrary, normalize
 
 
 def _library(tmp_path, max_age_days=30):
     return MusicLibrary(str(tmp_path / "library.db"), max_age_days=max_age_days)
+
+
+# ---------------------------------------------------------------------------
+# normalize()
+# ---------------------------------------------------------------------------
+
+def test_normalize_lowercases():
+    assert normalize("Pink Floyd") == "pink floyd"
+
+
+def test_normalize_folds_ampersand_to_and():
+    assert normalize("Simon & Garfunkel") == normalize("Simon and Garfunkel")
+
+
+def test_normalize_strips_accents():
+    assert normalize("Beyoncé") == "beyonce"
+
+
+def test_normalize_strips_punctuation():
+    assert normalize("Guns N' Roses") == normalize("Guns N Roses")
+
+
+def test_normalize_collapses_whitespace():
+    assert normalize("The   Beatles") == normalize("The Beatles")
+
+
+def test_normalize_ignores_leading_trailing_whitespace():
+    assert normalize("  Queen  ") == "queen"
 
 
 # ---------------------------------------------------------------------------
@@ -53,8 +82,75 @@ def test_get_or_create_track_is_idempotent_per_artist(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# MusicBrainz ids
+# Fuzzy matching
 # ---------------------------------------------------------------------------
+
+def test_get_or_create_artist_matches_different_case(tmp_path):
+    lib = _library(tmp_path)
+    first = lib.get_or_create_artist("Pink Floyd")
+    second = lib.get_or_create_artist("pink floyd")
+    assert first == second
+
+
+def test_get_or_create_artist_matches_ampersand_variant(tmp_path):
+    lib = _library(tmp_path)
+    first = lib.get_or_create_artist("Simon & Garfunkel")
+    second = lib.get_or_create_artist("Simon and Garfunkel")
+    assert first == second
+
+
+def test_get_or_create_artist_matches_accent_variant(tmp_path):
+    lib = _library(tmp_path)
+    first = lib.get_or_create_artist("Beyoncé")
+    second = lib.get_or_create_artist("Beyonce")
+    assert first == second
+
+
+def test_get_or_create_artist_keeps_original_text_from_first_insert(tmp_path):
+    lib = _library(tmp_path)
+    lib.get_or_create_artist("Pink Floyd")
+    lib.get_or_create_artist("PINK FLOYD")  # matches, doesn't overwrite
+    row = lib._conn.execute("SELECT name FROM artists").fetchone()
+    assert row[0] == "Pink Floyd"
+
+
+def test_get_or_create_track_matches_punctuation_variant(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Guns N' Roses")
+    first = lib.get_or_create_track(artist_id, "Don't Cry")
+    second = lib.get_or_create_track(artist_id, "Dont Cry")
+    assert first == second
+
+
+def test_find_artist_matches_different_case(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    assert lib.find_artist("pink floyd") == artist_id
+
+
+def test_find_track_matches_ampersand_variant(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    track_id = lib.get_or_create_track(artist_id, "Mother & Father")
+    assert lib.find_track(artist_id, "Mother and Father") == track_id
+
+
+def test_normalized_column_migration_backfills_legacy_database(tmp_path):
+    db_path = tmp_path / "legacy.db"
+    # Simulate a database created before fuzzy matching existed: same
+    # tables, but no *_normalized columns.
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript("""
+        CREATE TABLE artists (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, mbid TEXT, updated_at REAL NOT NULL
+        );
+        INSERT INTO artists (id, name, updated_at) VALUES (1, 'Pink Floyd', 0);
+    """)
+    conn.commit()
+    conn.close()
+
+    lib = MusicLibrary(str(db_path))
+    assert lib.find_artist("pink floyd") == 1
 
 def test_mbid_defaults_to_none(tmp_path):
     lib = _library(tmp_path)
@@ -156,6 +252,86 @@ def test_link_track_album_is_idempotent(tmp_path):
     lib.link_track_album(track_id, album_id)  # should not raise or duplicate
 
     assert len(lib.get_albums_for_track(track_id)) == 1
+
+
+# ---------------------------------------------------------------------------
+# random_albums / search / albums_for_artist / tracks_for_artist / stats
+# ---------------------------------------------------------------------------
+
+def test_random_albums_only_returns_albums_with_mbid(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    with_mbid = lib.get_or_create_album(artist_id, "The Wall")
+    lib.set_mbid("album", with_mbid, "wall-mbid")
+    lib.get_or_create_album(artist_id, "Unreleased Demos")  # no mbid
+
+    albums = lib.random_albums(10)
+    assert len(albums) == 1
+    assert albums[0] == (with_mbid, "Pink Floyd", "The Wall", "wall-mbid")
+
+
+def test_random_albums_respects_limit(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    for i in range(5):
+        album_id = lib.get_or_create_album(artist_id, f"Album {i}")
+        lib.set_mbid("album", album_id, f"mbid-{i}")
+
+    assert len(lib.random_albums(3)) == 3
+    assert len(lib.random_albums(100)) == 5
+
+
+def test_search_matches_substring_case_insensitive(tmp_path):
+    lib = _library(tmp_path)
+    lib.get_or_create_artist("Pink Floyd")
+    lib.get_or_create_artist("Queen")
+
+    results = lib.search("pink")
+    assert [name for _, name in results] == ["Pink Floyd"]
+
+
+def test_search_matches_normalized_form(tmp_path):
+    lib = _library(tmp_path)
+    lib.get_or_create_artist("Simon & Garfunkel")
+
+    results = lib.search("simon and garfunkel")
+    assert [name for _, name in results] == ["Simon & Garfunkel"]
+
+
+def test_search_returns_empty_for_no_match(tmp_path):
+    lib = _library(tmp_path)
+    lib.get_or_create_artist("Pink Floyd")
+    assert lib.search("nonexistent") == []
+
+
+def test_albums_for_artist_returns_sorted_titles(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    lib.get_or_create_album(artist_id, "The Wall")
+    lib.get_or_create_album(artist_id, "Animals")
+
+    albums = lib.albums_for_artist(artist_id)
+    assert [title for _, title, _ in albums] == ["Animals", "The Wall"]
+
+
+def test_tracks_for_artist_returns_sorted_titles(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    lib.get_or_create_track(artist_id, "Money")
+    lib.get_or_create_track(artist_id, "Breathe")
+
+    tracks = lib.tracks_for_artist(artist_id)
+    assert [title for _, title, _ in tracks] == ["Breathe", "Money"]
+
+
+def test_stats_counts_entities(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    lib.get_or_create_album(artist_id, "The Wall")
+    lib.get_or_create_track(artist_id, "Money")
+    lib.get_or_create_track(artist_id, "Breathe")
+
+    assert lib.stats() == {"artists": 1, "albums": 1, "tracks": 2}
 
 
 # ---------------------------------------------------------------------------

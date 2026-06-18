@@ -355,6 +355,18 @@ class LastFmHistoryConfig:
 
 
 @dataclasses.dataclass
+class LibraryIdleConfig:
+    enabled: bool = False
+    # Number of random albums (with a known MusicBrainz id) to show per
+    # refresh while idle.
+    batch_size: int = 10
+    # How often (in seconds) to pick a fresh batch of albums while idle.
+    # Each output then independently rotates through that batch (in its
+    # own random order) using the top-level rotation_interval_seconds.
+    rotation_interval_seconds: int = 300
+
+
+@dataclasses.dataclass
 class LoggingConfig:
     # Python logging level name: DEBUG, INFO, WARNING, ERROR, or CRITICAL.
     level: str = "INFO"
@@ -407,6 +419,7 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
 # Idle wallpaper sources: shown on outputs when nothing is playing.
 IDLE_CONFIG_TYPES: dict[str, type] = {
     "lastfm": LastFmHistoryConfig,
+    "library": LibraryIdleConfig,
     "unsplash": UnsplashWallpaperConfig,
 }
 

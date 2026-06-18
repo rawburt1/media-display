@@ -486,6 +486,13 @@ idle:
     batch_size: 10                # Recent scrobbles to fetch per refresh
     rotation_interval_seconds: 300
 
+  # Local music library — cover art from random albums in your own
+  # collection (see `library:` above). No API key required.
+  library:
+    enabled: false
+    batch_size: 10                # Albums to pick per refresh
+    rotation_interval_seconds: 300
+
 
 # ---------------------------------------------------------------------------
 # Logging

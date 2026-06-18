@@ -17,9 +17,11 @@ result from being re-queried on every single play.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 import time
+import unicodedata
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -27,6 +29,7 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS artists (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
+    name_normalized TEXT NOT NULL,
     mbid TEXT,
     updated_at REAL NOT NULL
 );
@@ -35,6 +38,7 @@ CREATE TABLE IF NOT EXISTS albums (
     id INTEGER PRIMARY KEY,
     artist_id INTEGER NOT NULL REFERENCES artists(id),
     title TEXT NOT NULL,
+    title_normalized TEXT NOT NULL,
     mbid TEXT,
     updated_at REAL NOT NULL,
     UNIQUE(artist_id, title)
@@ -44,6 +48,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     id INTEGER PRIMARY KEY,
     artist_id INTEGER NOT NULL REFERENCES artists(id),
     title TEXT NOT NULL,
+    title_normalized TEXT NOT NULL,
     mbid TEXT,
     updated_at REAL NOT NULL,
     UNIQUE(artist_id, title)
@@ -68,6 +73,23 @@ CREATE TABLE IF NOT EXISTS source_claims (
 
 _ENTITY_TABLES = {"artist": "artists", "album": "albums", "track": "tracks"}
 
+# Tables with a name/title column that gets fuzzy-matched, and the
+# normalized-column migration needed for each (see _ensure_normalized_columns).
+_NORMALIZED_COLUMNS = {"artists": "name", "albums": "title", "tracks": "title"}
+
+
+def normalize(text: str) -> str:
+    """Fold a name/title down to a form that's tolerant of the kind of
+    differences that crop up between sources reporting the same real-world
+    artist/album/song: case, accents, "&" vs "and", and punctuation.
+    """
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = text.lower().replace("&", " and ")
+    text = text.replace("'", "").replace("’", "")  # drop apostrophes, not split words
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
 
 class MusicLibrary:
     def __init__(self, db_path: str, max_age_days: float = 30):
@@ -80,6 +102,29 @@ class MusicLibrary:
         with self._lock:
             self._conn.executescript(_SCHEMA)
             self._conn.commit()
+            self._ensure_normalized_columns()
+
+    def _ensure_normalized_columns(self) -> None:
+        """Migration for databases created before fuzzy matching existed:
+        add the *_normalized column and backfill it from existing rows.
+        No-op for a fresh database, where _SCHEMA already created the
+        column - this only ever runs the ALTER/backfill once.
+        """
+        for table, base_col in _NORMALIZED_COLUMNS.items():
+            norm_col = f"{base_col}_normalized"
+            existing_cols = {row[1] for row in self._conn.execute(f"PRAGMA table_info({table})")}
+            if norm_col not in existing_cols:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {norm_col} TEXT")
+                rows = self._conn.execute(f"SELECT id, {base_col} FROM {table}").fetchall()
+                for row_id, value in rows:
+                    self._conn.execute(
+                        f"UPDATE {table} SET {norm_col} = ? WHERE id = ?",
+                        (normalize(value), row_id),
+                    )
+            self._conn.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{table}_{norm_col} ON {table}({norm_col})"
+            )
+        self._conn.commit()
 
     def close(self) -> None:
         with self._lock:
@@ -88,45 +133,65 @@ class MusicLibrary:
     # -- canonical entities --------------------------------------------
 
     def get_or_create_artist(self, name: str) -> int:
-        return self._get_or_create("artists", {"name": name})
+        normalized = normalize(name)
+        return self._get_or_create(
+            "artists",
+            match={"name_normalized": normalized},
+            insert={"name": name, "name_normalized": normalized},
+        )
 
     def get_or_create_album(self, artist_id: int, title: str) -> int:
-        return self._get_or_create("albums", {"artist_id": artist_id, "title": title})
+        normalized = normalize(title)
+        return self._get_or_create(
+            "albums",
+            match={"artist_id": artist_id, "title_normalized": normalized},
+            insert={"artist_id": artist_id, "title": title, "title_normalized": normalized},
+        )
 
     def get_or_create_track(self, artist_id: int, title: str) -> int:
-        return self._get_or_create("tracks", {"artist_id": artist_id, "title": title})
+        normalized = normalize(title)
+        return self._get_or_create(
+            "tracks",
+            match={"artist_id": artist_id, "title_normalized": normalized},
+            insert={"artist_id": artist_id, "title": title, "title_normalized": normalized},
+        )
 
-    def _get_or_create(self, table: str, keys: dict) -> int:
-        columns = list(keys)
-        where = " AND ".join(f"{c} = ?" for c in columns)
-        values = [keys[c] for c in columns]
+    def _get_or_create(self, table: str, match: dict, insert: dict) -> int:
+        where = " AND ".join(f"{c} = ?" for c in match)
         with self._lock:
             row = self._conn.execute(
-                f"SELECT id FROM {table} WHERE {where}", values
+                f"SELECT id FROM {table} WHERE {where}", list(match.values())
             ).fetchone()
             if row is not None:
                 return row[0]
 
-            insert_columns = columns + ["updated_at"]
-            placeholders = ", ".join("?" for _ in insert_columns)
+            columns = list(insert) + ["updated_at"]
+            placeholders = ", ".join("?" for _ in columns)
             cursor = self._conn.execute(
-                f"INSERT INTO {table} ({', '.join(insert_columns)}) VALUES ({placeholders})",
-                values + [time.time()],
+                f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})",
+                list(insert.values()) + [time.time()],
             )
             self._conn.commit()
             return cursor.lastrowid
 
     def find_artist(self, name: str) -> Optional[int]:
-        """Look up an artist by name without creating one if it's missing."""
+        """Look up an artist by name (fuzzy-matched) without creating one
+        if it's missing."""
+        normalized = normalize(name)
         with self._lock:
-            row = self._conn.execute("SELECT id FROM artists WHERE name = ?", (name,)).fetchone()
+            row = self._conn.execute(
+                "SELECT id FROM artists WHERE name_normalized = ?", (normalized,)
+            ).fetchone()
         return row[0] if row else None
 
     def find_track(self, artist_id: int, title: str) -> Optional[int]:
-        """Look up a track by artist+title without creating one if it's missing."""
+        """Look up a track by artist+title (fuzzy-matched) without creating
+        one if it's missing."""
+        normalized = normalize(title)
         with self._lock:
             row = self._conn.execute(
-                "SELECT id FROM tracks WHERE artist_id = ? AND title = ?", (artist_id, title)
+                "SELECT id FROM tracks WHERE artist_id = ? AND title_normalized = ?",
+                (artist_id, normalized),
             ).fetchone()
         return row[0] if row else None
 
@@ -150,6 +215,67 @@ class MusicLibrary:
                 (track_id,),
             ).fetchall()
         return [(row[0], row[1], row[2]) for row in rows]
+
+    def random_albums(self, limit: int) -> List[Tuple[int, str, str, str]]:
+        """Return up to `limit` random (album_id, artist name, album title,
+        mbid) tuples for albums that have a known MusicBrainz id - used by
+        the idle wallpaper source to show cover art from the library."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT albums.id, artists.name, albums.title, albums.mbid "
+                "FROM albums JOIN artists ON artists.id = albums.artist_id "
+                "WHERE albums.mbid IS NOT NULL AND albums.mbid != '' "
+                "ORDER BY RANDOM() LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [(row[0], row[1], row[2], row[3]) for row in rows]
+
+    def artist_name(self, artist_id: int) -> Optional[str]:
+        """Look up an artist's name by id - used by the config UI's
+        library browser. Returns None if no such artist exists."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT name FROM artists WHERE id = ?", (artist_id,)
+            ).fetchone()
+        return row[0] if row else None
+
+    def search(self, query: str, limit: int = 50) -> List[Tuple[int, str]]:
+        """Return up to `limit` (artist_id, artist name) pairs whose name
+        contains `query` (case/accent/punctuation-insensitive) - used by the
+        config UI's library browser."""
+        normalized = normalize(query)
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, name FROM artists WHERE name_normalized LIKE ? ORDER BY name LIMIT ?",
+                (f"%{normalized}%", limit),
+            ).fetchall()
+        return [(row[0], row[1]) for row in rows]
+
+    def albums_for_artist(self, artist_id: int) -> List[Tuple[int, str, Optional[str]]]:
+        """Return (album_id, title, mbid) for every album by this artist."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, title, mbid FROM albums WHERE artist_id = ? ORDER BY title",
+                (artist_id,),
+            ).fetchall()
+        return [(row[0], row[1], row[2]) for row in rows]
+
+    def tracks_for_artist(self, artist_id: int) -> List[Tuple[int, str, Optional[str]]]:
+        """Return (track_id, title, mbid) for every track by this artist."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, title, mbid FROM tracks WHERE artist_id = ? ORDER BY title",
+                (artist_id,),
+            ).fetchall()
+        return [(row[0], row[1], row[2]) for row in rows]
+
+    def stats(self) -> dict:
+        """Summary counts for the config UI's library browser."""
+        with self._lock:
+            artists = self._conn.execute("SELECT COUNT(*) FROM artists").fetchone()[0]
+            albums = self._conn.execute("SELECT COUNT(*) FROM albums").fetchone()[0]
+            tracks = self._conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+        return {"artists": artists, "albums": albums, "tracks": tracks}
 
     # -- MusicBrainz ids (source of truth) -------------------------------
 

@@ -260,6 +260,23 @@ def test_build_idle_source_returns_none_for_empty():
     assert _build_idle_source(cfg) is None
 
 
+def test_build_idle_source_passes_library_to_library_aware_classes():
+    idle_cfg = MagicMock()
+    idle_cfg.enabled = True
+    fake_cls = MagicMock(return_value=MagicMock())
+    fake_library = MagicMock()
+    cfg = _minimal_config(idle={"library": idle_cfg})
+
+    with (
+        patch("mediainfo.__main__.IDLE_CLASSES", {"library": fake_cls}),
+        patch("mediainfo.__main__._LIBRARY_AWARE_IDLE_CLASSES", {fake_cls}),
+    ):
+        result = _build_idle_source(cfg, fake_library)
+
+    fake_cls.assert_called_once_with(idle_cfg, fake_library)
+    assert result is fake_cls.return_value
+
+
 # ---------------------------------------------------------------------------
 # _start_orchestrator
 # ---------------------------------------------------------------------------

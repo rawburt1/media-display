@@ -79,6 +79,7 @@ from mediainfo.config import (
     ConfigUiConfig,
 )
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.base import Output
 
 logger = logging.getLogger(__name__)
@@ -190,6 +191,8 @@ class ConfigUiOutput(Output):
         self._lock = threading.Lock()
         self._appletv_lock = threading.Lock()
         self._appletv_session: Optional[_AppleTvSession] = None
+        self._library: Optional[MusicLibrary] = None
+        self._library_db_path: Optional[str] = None
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
 
@@ -207,6 +210,26 @@ class ConfigUiOutput(Output):
         self.app.run(host=self.config.host, port=self.config.port, threaded=True)
 
     # -- request handling -------------------------------------------------
+
+    def _get_library(self) -> MusicLibrary:
+        """Lazily open (or reopen, if config.yaml's library.db_path
+        changed) a MusicLibrary connection for the library browser.
+
+        Independent of the orchestrator's own MusicLibrary instance -
+        this output is created once and outlives config reloads, so it
+        manages its own connection rather than holding a reference that
+        could be closed out from under it by a reload.
+        """
+        with self._lock:
+            data = _read_config(self.config_path)
+        library_cfg = data.get("library") or {}
+        db_path = library_cfg.get("db_path", "./library/library.db")
+        if self._library is None or self._library_db_path != db_path:
+            if self._library is not None:
+                self._library.close()
+            self._library = MusicLibrary(db_path, max_age_days=library_cfg.get("max_age_days", 30))
+            self._library_db_path = db_path
+        return self._library
 
     def _get_values(self) -> Dict[str, Any]:
         """Flat dotted-key values for the single-instance categories
@@ -557,6 +580,38 @@ class ConfigUiOutput(Output):
             self._appletv_pair_cancel()
             return jsonify({"ok": True})
 
+        @app.get("/library")
+        def library_page():
+            return _LIBRARY_HTML
+
+        @app.get("/api/library/stats")
+        def library_stats():
+            return jsonify(self._get_library().stats())
+
+        @app.get("/api/library/search")
+        def library_search():
+            query = (request.args.get("q") or "").strip()
+            if not query:
+                return jsonify([])
+            results = self._get_library().search(query)
+            return jsonify([{"id": artist_id, "name": name} for artist_id, name in results])
+
+        @app.get("/api/library/artist/<int:artist_id>")
+        def library_artist(artist_id: int):
+            library = self._get_library()
+            name = library.artist_name(artist_id)
+            if name is None:
+                return jsonify({"error": "Artist not found"}), 404
+            albums = library.albums_for_artist(artist_id)
+            tracks = library.tracks_for_artist(artist_id)
+            return jsonify({
+                "id": artist_id,
+                "name": name,
+                "mbid": library.get_mbid("artist", artist_id),
+                "albums": [{"id": i, "title": t, "mbid": m} for i, t, m in albums],
+                "tracks": [{"id": i, "title": t, "mbid": m} for i, t, m in tracks],
+            })
+
         return app
 
 
@@ -609,9 +664,12 @@ _INDEX_HTML = """<!DOCTYPE html>
                  border: 1px solid #1a2540; border-radius: 8px; padding: 12px;
                  font-family: ui-monospace, monospace; font-size: 13px; }
   details summary { cursor: pointer; color: #6b7fa8; font-size: 12px; margin: 30px 0 10px; }
+  .nav-link { float: right; color: #6b7fa8; font-size: 12px; text-decoration: none; }
+  .nav-link:hover { color: #dce8ff; }
 </style>
 </head>
 <body>
+<a class="nav-link" href="/library">Library &rarr;</a>
 <h1>mediainfo configuration</h1>
 <div id="form"></div>
 
@@ -938,6 +996,126 @@ function load() {
 }
 
 load();
+</script>
+</body>
+</html>
+"""
+
+_LIBRARY_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mediainfo &middot; library</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #080d1a; color: #c0ccdf;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; min-height: 100vh; padding: 24px 20px 80px;
+    max-width: 1080px; margin: 0 auto;
+  }
+  h1 { font-size: 17px; font-weight: 700; color: #e8f0ff; margin-bottom: 8px; }
+  .nav-link { float: right; color: #6b7fa8; font-size: 12px; text-decoration: none; }
+  .nav-link:hover { color: #dce8ff; }
+  #stats { font-size: 12px; color: #6b7fa8; margin-bottom: 20px; }
+  #search { width: 100%; background: #0d1629; border: 1px solid #1a2540; border-radius: 8px;
+            color: #dce8ff; padding: 10px 14px; font-size: 14px; margin-bottom: 16px; }
+  .card { background: #0d1629; border: 1px solid #1a2540; border-radius: 12px;
+          padding: 14px 18px; margin-bottom: 10px; cursor: pointer; }
+  .card:hover { border-color: #2563eb; }
+  .card-title { font-size: 13px; font-weight: 600; color: #dce8ff; }
+  .card-meta { font-size: 11px; color: #6b7fa8; margin-top: 2px; }
+  .detail-list { margin-top: 10px; padding-left: 0; list-style: none; }
+  .detail-list li { font-size: 12px; color: #8aa0c4; padding: 4px 0;
+                     border-top: 1px solid #1a2540; }
+  .detail-list li:first-child { border-top: none; }
+  .mbid { color: #4a5f7a; font-family: ui-monospace, monospace; font-size: 10px; }
+  .no-mbid { color: #5a3030; }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+       color: #6b7fa8; margin: 14px 0 6px; }
+  #empty { font-size: 12px; color: #4a5f7a; padding: 20px 0; }
+</style>
+</head>
+<body>
+<a class="nav-link" href="/">&larr; Configuration</a>
+<h1>Music library</h1>
+<div id="stats">Loading...</div>
+<input id="search" type="text" placeholder="Search artists..." autofocus>
+<div id="results"></div>
+
+<script>
+let debounceTimer = null;
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
+}
+
+function loadStats() {
+  fetch('/api/library/stats').then(function(r) { return r.json(); }).then(function(s) {
+    document.getElementById('stats').textContent =
+      s.artists + ' artist(s), ' + s.albums + ' album(s), ' + s.tracks + ' track(s)';
+  });
+}
+
+function renderMbid(mbid) {
+  return mbid ? '<span class="mbid">' + escapeHtml(mbid) + '</span>'
+              : '<span class="no-mbid">no mbid</span>';
+}
+
+function showArtist(id) {
+  fetch('/api/library/artist/' + id).then(function(r) { return r.json(); }).then(function(a) {
+    let html = '<div class="card"><div class="card-title">' + escapeHtml(a.name) + '</div>' +
+      '<div class="card-meta">' + renderMbid(a.mbid) + '</div>';
+    html += '<h2>Albums (' + a.albums.length + ')</h2><ul class="detail-list">';
+    a.albums.forEach(function(album) {
+      html += '<li>' + escapeHtml(album.title) + ' &mdash; ' + renderMbid(album.mbid) + '</li>';
+    });
+    html += '</ul><h2>Tracks (' + a.tracks.length + ')</h2><ul class="detail-list">';
+    a.tracks.forEach(function(track) {
+      html += '<li>' + escapeHtml(track.title) + ' &mdash; ' + renderMbid(track.mbid) + '</li>';
+    });
+    html += '</ul></div>';
+    document.getElementById('results').innerHTML = html;
+  });
+}
+
+function renderResults(artists) {
+  const results = document.getElementById('results');
+  results.innerHTML = '';
+  if (artists.length === 0) {
+    results.innerHTML = '<div id="empty">No matching artists.</div>';
+    return;
+  }
+  artists.forEach(function(a) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const title = document.createElement('div');
+    title.className = 'card-title';
+    title.textContent = a.name;
+    card.appendChild(title);
+    card.addEventListener('click', function() { showArtist(a.id); });
+    results.appendChild(card);
+  });
+}
+
+document.getElementById('search').addEventListener('input', function(e) {
+  const query = e.target.value.trim();
+  clearTimeout(debounceTimer);
+  if (!query) {
+    document.getElementById('results').innerHTML = '';
+    return;
+  }
+  debounceTimer = setTimeout(function() {
+    fetch('/api/library/search?q=' + encodeURIComponent(query))
+      .then(function(r) { return r.json(); })
+      .then(renderResults);
+  }, 200);
+});
+
+loadStats();
 </script>
 </body>
 </html>

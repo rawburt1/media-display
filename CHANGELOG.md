@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Music library artist/album/track matching is now fuzzy-tolerant: case,
+  accents, "&" vs "and", and punctuation differences no longer cause a
+  miss (e.g. a source reporting "Simon and Garfunkel" now matches a
+  library entry imported as "Simon & Garfunkel"). Existing databases are
+  migrated automatically (a one-time backfill) on next startup.
+- New `idle.library` idle wallpaper source: shows cover art from random
+  albums in the local music library while nothing is playing, no API key
+  required (only the free Cover Art Archive for the actual images,
+  cached per album to avoid repeat lookups).
+- New library browser at `/library` on the `config` output - search
+  artists and see their albums/tracks/MusicBrainz ids, useful for
+  checking what's actually in the local library and debugging match
+  misses.
 - New `enrichers.library` enricher: for sources that don't report an
   album at all (e.g. YouTube), looks up the playing artist+song in the
   local music library and adds cover art for every album the song

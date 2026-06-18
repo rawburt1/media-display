@@ -26,6 +26,7 @@ from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
 from mediainfo.enrichers.wikipedia import WikipediaEnricher
 from mediainfo.idle.lastfm import LastFmWallpaperSource
+from mediainfo.idle.library import LibraryWallpaperSource
 from mediainfo.idle.unsplash import UnsplashWallpaperSource
 from mediainfo.outputs.config_ui import ConfigUiOutput
 from mediainfo.outputs.feeds import FeedOutput
@@ -93,8 +94,12 @@ ENRICHER_CLASSES = {
 
 IDLE_CLASSES = {
     "lastfm": LastFmWallpaperSource,
+    "library": LibraryWallpaperSource,
     "unsplash": UnsplashWallpaperSource,
 }
+
+# Idle wallpaper sources that need the local MusicLibrary cache.
+_LIBRARY_AWARE_IDLE_CLASSES = {LibraryWallpaperSource}
 
 # Enrichers that look up music metadata by artist/album name and so can use
 # the local MusicLibrary cache to avoid repeating the same external lookup.
@@ -322,7 +327,7 @@ def _build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> 
     return enrichers
 
 
-def _build_idle_source(config: Config):
+def _build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
     for name, idle_config in config.idle.items():
         if not idle_config.enabled:
             continue
@@ -330,6 +335,8 @@ def _build_idle_source(config: Config):
         if idle_cls is None:
             logger.warning("Unknown idle wallpaper source: %s", name)
             continue
+        if idle_cls in _LIBRARY_AWARE_IDLE_CLASSES:
+            return idle_cls(idle_config, library)
         return idle_cls(idle_config)
     return None
 
@@ -344,7 +351,7 @@ def _start_orchestrator(
         cache=cache,
         poll_interval_seconds=config.poll_interval_seconds,
         rotation_interval_seconds=config.rotation_interval_seconds,
-        idle_source=_build_idle_source(config),
+        idle_source=_build_idle_source(config, library),
     )
     orch.start()
     return orch

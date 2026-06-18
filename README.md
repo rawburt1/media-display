@@ -241,6 +241,11 @@ See `config.example.yaml` for all options. Key things to fill in:
   fewer wallpapers than `batch_size` may actually be shown). Requires a
   free `api_key` from https://www.last.fm/api/account/create (the same key
   as `enrichers.lastfm`, if that's also enabled).
+- **`idle.library`**: shows cover art from `batch_size` random albums in
+  the local music library (see `library:` below) while nothing is
+  playing, refreshed every `rotation_interval_seconds`. No API key
+  required; only shows albums that have a known MusicBrainz id (e.g. from
+  `import-lidarr`).
 - **`enrichers.fanarttv`**: free `api_key` from https://fanart.tv/get-an-api-key/.
 - **`enrichers.thetvdb`**: free `api_key` from
   https://thetvdb.com/dashboard/account/apikey (only "user-supported" keys
@@ -287,7 +292,11 @@ See `config.example.yaml` for all options. Key things to fill in:
   `--config config/config.yaml`) imports its already-verified
   artist/album/track MusicBrainz ids in bulk, so the enrichers have
   everything cached up front instead of discovering it one play at a
-  time.
+  time. Artist/album/track name matching is fuzzy-tolerant (case,
+  accents, "&" vs "and", and punctuation are ignored), so a source
+  reporting "Simon and Garfunkel" still matches a library entry imported
+  as "Simon & Garfunkel". Browse/search the library at `/library` on the
+  `config` output's port (e.g. http://localhost:8094/library).
 - **`logging.level`**: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`, or
   `CRITICAL`. Switch to `DEBUG` when troubleshooting why a source isn't
   detecting playback - it logs things like each Sonos coordinator
