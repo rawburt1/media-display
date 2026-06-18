@@ -163,6 +163,7 @@ def main() -> None:
     config = Config.load(config_path)
     _setup_logging(config.logging)
     logger.info("Starting mediainfo")
+    _validate_config(config)
 
     cache = ImageCache(
         config.cache.dir,
@@ -201,6 +202,7 @@ def main() -> None:
                 continue
 
             _warn_output_changes(config, new_config)
+            _validate_config(new_config)
             library_config_changed = new_config.library != config.library
             config = new_config
 
@@ -258,6 +260,22 @@ def _warn_output_changes(old: Config, new: Config) -> None:
         logger.warning(
             "Output configuration changed — restart the service for output changes to take effect"
         )
+
+
+def _validate_config(config: Config) -> None:
+    """Log warnings for common config mistakes that otherwise fail
+    silently. Run at startup and after every reload, since the mistake
+    this guards against (enabling a source without adding it to
+    `priority`) is just as easy to make through the config UI later as
+    it is by hand up front.
+    """
+    for name, source_config in config.sources.items():
+        if source_config.enabled and name not in config.priority:
+            logger.warning(
+                "sources.%s is enabled but not listed in priority - it will never be "
+                "polled. Add it to the priority list to actually use it.",
+                name,
+            )
 
 
 def _shutdown_outputs(outputs: list) -> None:

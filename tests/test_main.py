@@ -17,6 +17,7 @@ from mediainfo.__main__ import (
     _make_stop_handler,
     _shutdown_outputs,
     _warn_output_changes,
+    _validate_config,
     _build_sources,
     _build_enrichers,
     _build_idle_source,
@@ -140,6 +141,46 @@ def test_warn_output_changes_silent_when_same(caplog):
 
     warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert warnings == []
+
+
+# ---------------------------------------------------------------------------
+# _validate_config
+# ---------------------------------------------------------------------------
+
+def test_validate_config_warns_when_enabled_source_missing_from_priority(caplog):
+    cfg = MagicMock()
+    cfg.priority = ["kodi"]
+    kodi_cfg = MagicMock(enabled=True)
+    youtube_cfg = MagicMock(enabled=True)
+    cfg.sources = {"kodi": kodi_cfg, "youtube": youtube_cfg}
+
+    with caplog.at_level(logging.WARNING, logger="mediainfo.__main__"):
+        _validate_config(cfg)
+
+    assert any("youtube" in r.message and "priority" in r.message for r in caplog.records)
+    assert not any("kodi" in r.message for r in caplog.records)
+
+
+def test_validate_config_silent_when_disabled_source_missing_from_priority(caplog):
+    cfg = MagicMock()
+    cfg.priority = []
+    cfg.sources = {"youtube": MagicMock(enabled=False)}
+
+    with caplog.at_level(logging.WARNING, logger="mediainfo.__main__"):
+        _validate_config(cfg)
+
+    assert caplog.records == []
+
+
+def test_validate_config_silent_when_all_enabled_sources_listed(caplog):
+    cfg = MagicMock()
+    cfg.priority = ["kodi", "youtube"]
+    cfg.sources = {"kodi": MagicMock(enabled=True), "youtube": MagicMock(enabled=True)}
+
+    with caplog.at_level(logging.WARNING, logger="mediainfo.__main__"):
+        _validate_config(cfg)
+
+    assert caplog.records == []
 
 
 # ---------------------------------------------------------------------------

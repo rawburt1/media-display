@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
+- `WebOutput`'s per-client rotation background thread (`_rotate_clients_loop`)
+  had no exception handling: an unexpected error there would silently kill
+  the thread and stop per-client rotation for that output forever, with
+  nothing logged. It now logs and keeps looping, matching how the
+  orchestrator's own main loop already handles this.
 - Idle wallpaper (and now-playing image) rotation across multiple outputs
   looked synchronized, for two compounding reasons:
   - Every output's rotation timer started from the exact same instant, so
@@ -34,6 +39,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     chosen image is actually distinct, not just labeled differently.
 
 ### Added
+- Startup (and config-reload) validation warns when a source is `enabled:
+  true` but missing from `priority` - previously this failed completely
+  silently (the source is just never instantiated, see `_build_sources()`),
+  which is exactly what happened to this deployment's own `spotify` source.
 - New optional `auth` config section (off by default): HTTP Basic Auth
   for the web/config/info/feed/video/nest_hub outputs. Requests from
   RFC1918 private-use addresses and loopback are never challenged

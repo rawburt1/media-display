@@ -572,7 +572,14 @@ class WebOutput(Output):
     def _rotate_clients_loop(self) -> None:
         while True:
             time.sleep(_ROTATION_CHECK_INTERVAL_SECONDS)
-            self._rotate_clients_once()
+            try:
+                self._rotate_clients_once()
+            except Exception:
+                # Without this, any unexpected error here (e.g. a bad
+                # artwork URL raising somewhere unanticipated) would kill
+                # this thread silently and stop per-client rotation for
+                # this output forever, with nothing logged.
+                logger.exception("Error rotating web output clients")
 
     def _rotate_clients_once(self) -> None:
         now = time.monotonic()

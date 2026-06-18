@@ -82,7 +82,10 @@ config/config.yaml`), so editors/tools that save by replacing the file
 See `config.example.yaml` for all options. Key things to fill in:
 
 - **`priority`**: ordered list of source names. When more than one source
-  is active at once, the first one in this list wins.
+  is active at once, the first one in this list wins. A source that's
+  `enabled: true` but missing from this list is never actually polled -
+  logged as a warning at startup and on every config reload, so this
+  mistake doesn't fail silently.
 - **`sources.kodi`**: Kodi host/port and credentials. In Kodi, enable
   *Settings → Services → Control → Allow remote control via HTTP*.
 - **`sources.sonos`**: IP address of every Sonos speaker on your network

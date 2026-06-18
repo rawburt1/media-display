@@ -296,6 +296,42 @@ def test_rotate_clients_once_skips_clients_not_yet_due(tmp_path):
     assert len(conn.sent) == sent_before  # no push, not due yet
 
 
+class _StopLoop(Exception):
+    """Sentinel used to break out of the infinite _rotate_clients_loop in
+    tests once we've proven it survived a prior exception."""
+
+
+def test_rotate_clients_loop_survives_unexpected_exception(monkeypatch):
+    # _rotate_clients_loop's except clause necessarily catches *any*
+    # exception (that's the fix), so the loop can't be stopped by raising
+    # through _rotate_clients_once - the sleep call (outside the
+    # try/except) is the only place this test can inject a way out.
+    out = _output()
+    calls = []
+    sleep_calls = []
+
+    def _boom():
+        calls.append(1)
+        raise RuntimeError("boom")
+
+    def _fake_sleep(_seconds):
+        sleep_calls.append(1)
+        if len(sleep_calls) >= 2:
+            raise _StopLoop()
+
+    monkeypatch.setattr(out, "_rotate_clients_once", _boom)
+    monkeypatch.setattr("mediainfo.outputs.web.time.sleep", _fake_sleep)
+
+    with pytest.raises(_StopLoop):
+        out._rotate_clients_loop()
+
+    # The loop survived the first RuntimeError and made it back around to
+    # sleep() a second time - proof the thread doesn't die on an
+    # unexpected exception.
+    assert len(calls) == 1
+    assert len(sleep_calls) == 2
+
+
 def test_idle_wallpapers_are_personalized_per_client(tmp_path):
     out = _output()
     images = [_art("a"), _art("b")]
