@@ -256,6 +256,14 @@ See `config.example.yaml` for all options. Key things to fill in:
   a plain-text summary (`NowPlaying.summary`) plus a thumbnail photo. The
   summary is shown by the `info` output and included in RSS/Atom feed
   entries.
+- **`enrichers.library`**: no API key required. For sources that don't
+  report an album at all (e.g. YouTube), looks up the playing artist+song
+  in the local music library and adds cover art for every album the song
+  appears on (a song on more than one release - the original album, a
+  singles compilation, a remaster, ... - gets art for all of them, not
+  just one). List it before the other music enrichers in `enrichers:` so
+  that if it fills in the album name unambiguously, they get a chance to
+  also contribute art for it.
 - **`cache.dir`**: where downloaded artwork is stored.
 - **`cache.max_age_days`**: how long unused cached now-playing artwork is
   kept before being deleted (default 30).

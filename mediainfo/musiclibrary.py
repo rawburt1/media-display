@@ -21,7 +21,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS artists (
@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS tracks (
     mbid TEXT,
     updated_at REAL NOT NULL,
     UNIQUE(artist_id, title)
+);
+
+CREATE TABLE IF NOT EXISTS track_albums (
+    track_id INTEGER NOT NULL REFERENCES tracks(id),
+    album_id INTEGER NOT NULL REFERENCES albums(id),
+    PRIMARY KEY (track_id, album_id)
 );
 
 CREATE TABLE IF NOT EXISTS source_claims (
@@ -109,6 +115,41 @@ class MusicLibrary:
             )
             self._conn.commit()
             return cursor.lastrowid
+
+    def find_artist(self, name: str) -> Optional[int]:
+        """Look up an artist by name without creating one if it's missing."""
+        with self._lock:
+            row = self._conn.execute("SELECT id FROM artists WHERE name = ?", (name,)).fetchone()
+        return row[0] if row else None
+
+    def find_track(self, artist_id: int, title: str) -> Optional[int]:
+        """Look up a track by artist+title without creating one if it's missing."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id FROM tracks WHERE artist_id = ? AND title = ?", (artist_id, title)
+            ).fetchone()
+        return row[0] if row else None
+
+    # -- track <-> album (a song can appear on more than one release) ----
+
+    def link_track_album(self, track_id: int, album_id: int) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO track_albums (track_id, album_id) VALUES (?, ?)",
+                (track_id, album_id),
+            )
+            self._conn.commit()
+
+    def get_albums_for_track(self, track_id: int) -> List[Tuple[int, str, Optional[str]]]:
+        """Return (album_id, title, mbid) for every album that contains this track."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT albums.id, albums.title, albums.mbid "
+                "FROM albums JOIN track_albums ON track_albums.album_id = albums.id "
+                "WHERE track_albums.track_id = ?",
+                (track_id,),
+            ).fetchall()
+        return [(row[0], row[1], row[2]) for row in rows]
 
     # -- MusicBrainz ids (source of truth) -------------------------------
 

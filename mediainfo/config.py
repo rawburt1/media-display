@@ -300,6 +300,13 @@ class MusicBrainzConfig:
 
 
 @dataclasses.dataclass
+class LibraryEnricherConfig:
+    # No API key required; looks up the local MusicLibrary only (plus the
+    # free Cover Art Archive for the actual cover image).
+    enabled: bool = True
+
+
+@dataclasses.dataclass
 class TheTvDbConfig:
     enabled: bool = False
     # Project API key from https://thetvdb.com/dashboard/account/apikey
@@ -391,6 +398,7 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "discogs": DiscogsConfig,
     "fanarttv": FanartTvConfig,
     "lastfm": LastFmConfig,
+    "library": LibraryEnricherConfig,
     "musicbrainz": MusicBrainzConfig,
     "thetvdb": TheTvDbConfig,
     "wikipedia": WikipediaConfig,

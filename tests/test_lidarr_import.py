@@ -17,12 +17,12 @@ def _artist(id=1, name="Pink Floyd", mbid="83d91898-7763-47d7-b03b-b92132375c47"
     return {"id": id, "artistName": name, "foreignArtistId": mbid}
 
 
-def _album(title="The Wall", mbid="album-mbid"):
-    return {"title": title, "foreignAlbumId": mbid}
+def _album(id=1, title="The Wall", mbid="album-mbid"):
+    return {"id": id, "title": title, "foreignAlbumId": mbid}
 
 
-def _track(title="Comfortably Numb", mbid="recording-mbid"):
-    return {"title": title, "foreignRecordingId": mbid}
+def _track(title="Comfortably Numb", mbid="recording-mbid", album_id=1):
+    return {"title": title, "foreignRecordingId": mbid, "albumId": album_id}
 
 
 def _library(tmp_path):
@@ -109,10 +109,13 @@ def test_multiple_artists_albums_and_tracks(mock_get, tmp_path):
     library = _library(tmp_path)
     mock_get.side_effect = [
         _response([_artist(id=1, name="Pink Floyd"), _artist(id=2, name="Queen", mbid="queen-mbid")]),
-        _response([_album(title="The Wall"), _album(title="Animals", mbid="animals-mbid")]),
-        _response([_track(title="Comfortably Numb"), _track(title="Money", mbid="money-mbid")]),
-        _response([_album(title="A Night at the Opera", mbid="anato-mbid")]),
-        _response([_track(title="Bohemian Rhapsody", mbid="br-mbid")]),
+        _response([_album(id=1, title="The Wall"), _album(id=2, title="Animals", mbid="animals-mbid")]),
+        _response([
+            _track(title="Comfortably Numb", album_id=1),
+            _track(title="Money", mbid="money-mbid", album_id=2),
+        ]),
+        _response([_album(id=3, title="A Night at the Opera", mbid="anato-mbid")]),
+        _response([_track(title="Bohemian Rhapsody", mbid="br-mbid", album_id=3)]),
     ]
 
     stats = import_from_lidarr(library, "http://lidarr.local:6003", "test-key")
@@ -120,6 +123,34 @@ def test_multiple_artists_albums_and_tracks(mock_get, tmp_path):
     assert stats.artists == 2
     assert stats.albums == 3
     assert stats.tracks == 3
+
+    artist_id = library.get_or_create_artist("Pink Floyd")
+    track_id = library.get_or_create_track(artist_id, "Comfortably Numb")
+    albums = library.get_albums_for_track(track_id)
+    assert [title for _, title, _ in albums] == ["The Wall"]
+
+
+@patch("mediainfo.lidarr_import.requests.get")
+def test_links_track_to_multiple_albums(mock_get, tmp_path):
+    library = _library(tmp_path)
+    mock_get.side_effect = [
+        _response([_artist(id=1, name="Pink Floyd")]),
+        _response([
+            _album(id=1, title="The Wall", mbid="wall-mbid"),
+            _album(id=2, title="Is There Anybody Out There?", mbid="live-mbid"),
+        ]),
+        _response([
+            _track(title="Comfortably Numb", album_id=1),
+            _track(title="Comfortably Numb", album_id=2),
+        ]),
+    ]
+
+    import_from_lidarr(library, "http://lidarr.local:6003", "test-key")
+
+    artist_id = library.get_or_create_artist("Pink Floyd")
+    track_id = library.get_or_create_track(artist_id, "Comfortably Numb")
+    albums = library.get_albums_for_track(track_id)
+    assert sorted(title for _, title, _ in albums) == ["Is There Anybody Out There?", "The Wall"]
 
 
 @patch("mediainfo.lidarr_import.requests.get")

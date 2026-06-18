@@ -81,6 +81,84 @@ def test_mbid_persists_across_library_instances(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# find_artist / find_track (lookup without create)
+# ---------------------------------------------------------------------------
+
+def test_find_artist_returns_none_when_missing(tmp_path):
+    lib = _library(tmp_path)
+    assert lib.find_artist("Pink Floyd") is None
+
+
+def test_find_artist_returns_existing_id(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    assert lib.find_artist("Pink Floyd") == artist_id
+
+
+def test_find_track_returns_none_when_missing(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    assert lib.find_track(artist_id, "Comfortably Numb") is None
+
+
+def test_find_track_returns_existing_id(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    track_id = lib.get_or_create_track(artist_id, "Comfortably Numb")
+    assert lib.find_track(artist_id, "Comfortably Numb") == track_id
+
+
+# ---------------------------------------------------------------------------
+# track <-> album linkage
+# ---------------------------------------------------------------------------
+
+def test_get_albums_for_track_returns_empty_when_unlinked(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    track_id = lib.get_or_create_track(artist_id, "Comfortably Numb")
+    assert lib.get_albums_for_track(track_id) == []
+
+
+def test_link_track_album_and_retrieve(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    track_id = lib.get_or_create_track(artist_id, "Comfortably Numb")
+    album_id = lib.get_or_create_album(artist_id, "The Wall")
+    lib.set_mbid("album", album_id, "wall-mbid")
+
+    lib.link_track_album(track_id, album_id)
+
+    albums = lib.get_albums_for_track(track_id)
+    assert albums == [(album_id, "The Wall", "wall-mbid")]
+
+
+def test_link_track_to_multiple_albums(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    track_id = lib.get_or_create_track(artist_id, "Comfortably Numb")
+    wall_id = lib.get_or_create_album(artist_id, "The Wall")
+    live_id = lib.get_or_create_album(artist_id, "Is There Anybody Out There?")
+
+    lib.link_track_album(track_id, wall_id)
+    lib.link_track_album(track_id, live_id)
+
+    albums = lib.get_albums_for_track(track_id)
+    assert {title for _, title, _ in albums} == {"The Wall", "Is There Anybody Out There?"}
+
+
+def test_link_track_album_is_idempotent(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    track_id = lib.get_or_create_track(artist_id, "Comfortably Numb")
+    album_id = lib.get_or_create_album(artist_id, "The Wall")
+
+    lib.link_track_album(track_id, album_id)
+    lib.link_track_album(track_id, album_id)  # should not raise or duplicate
+
+    assert len(lib.get_albums_for_track(track_id)) == 1
+
+
+# ---------------------------------------------------------------------------
 # Source claims
 # ---------------------------------------------------------------------------
 

@@ -70,6 +70,7 @@ def _import_artist(
         library.set_mbid("artist", artist_id, mbid)
 
     album_count = 0
+    albums_by_lidarr_id: dict[int, int] = {}
     response = requests.get(
         f"{base_url}/api/v1/album",
         params={"artistId": lidarr_artist_id},
@@ -79,12 +80,14 @@ def _import_artist(
     response.raise_for_status()
     for album in response.json():
         title = album.get("title")
-        if not title:
+        lidarr_album_id = album.get("id")
+        if not title or lidarr_album_id is None:
             continue
         album_id = library.get_or_create_album(artist_id, title)
         album_mbid = album.get("foreignAlbumId")
         if album_mbid:
             library.set_mbid("album", album_id, album_mbid)
+        albums_by_lidarr_id[lidarr_album_id] = album_id
         album_count += 1
 
     track_count = 0
@@ -103,6 +106,11 @@ def _import_artist(
         track_mbid = track.get("foreignRecordingId")
         if track_mbid:
             library.set_mbid("track", track_id, track_mbid)
+
+        album_id = albums_by_lidarr_id.get(track.get("albumId"))
+        if album_id is not None:
+            library.link_track_album(track_id, album_id)
+
         track_count += 1
 
     return album_count, track_count

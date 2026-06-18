@@ -21,6 +21,7 @@ from mediainfo.orchestrator import Orchestrator
 from mediainfo.enrichers.discogs import DiscogsEnricher
 from mediainfo.enrichers.fanarttv import FanartTvEnricher
 from mediainfo.enrichers.lastfm import LastFmEnricher
+from mediainfo.enrichers.library import LibraryEnricher
 from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
 from mediainfo.enrichers.wikipedia import WikipediaEnricher
@@ -84,6 +85,7 @@ ENRICHER_CLASSES = {
     "discogs": DiscogsEnricher,
     "fanarttv": FanartTvEnricher,
     "lastfm": LastFmEnricher,
+    "library": LibraryEnricher,
     "musicbrainz": MusicBrainzEnricher,
     "thetvdb": TheTvDbEnricher,
     "wikipedia": WikipediaEnricher,
@@ -96,7 +98,9 @@ IDLE_CLASSES = {
 
 # Enrichers that look up music metadata by artist/album name and so can use
 # the local MusicLibrary cache to avoid repeating the same external lookup.
-_LIBRARY_AWARE_ENRICHERS = {DiscogsEnricher, FanartTvEnricher, LastFmEnricher, MusicBrainzEnricher}
+_LIBRARY_AWARE_ENRICHERS = {
+    DiscogsEnricher, FanartTvEnricher, LastFmEnricher, LibraryEnricher, MusicBrainzEnricher,
+}
 
 # Reverse lookups: class → registry key, used when building health data.
 _OUTPUT_NAME_BY_CLASS = {cls: name for name, cls in OUTPUT_CLASSES.items()}

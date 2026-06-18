@@ -374,6 +374,17 @@ outputs:
 
 enrichers:
 
+  # Local music library — fills in album art for sources that don't
+  # report an album at all (e.g. YouTube), by looking up the playing
+  # artist+song in the local library (see `library:` below, populated via
+  # `python -m mediainfo import-lidarr` or by the other enrichers below as
+  # they resolve things by name) and adding cover art for every album the
+  # song appears on. Listed first so that if it fills in the album name,
+  # the name-based enrichers below get a chance to also contribute art for
+  # it (a free cache hit, since the name now matches what's on file).
+  library:
+    enabled: true
+
   # fanart.tv — high-quality posters, backgrounds, and disc art.
   # Get a free personal API key at https://fanart.tv/get-an-api-key/
   fanarttv:

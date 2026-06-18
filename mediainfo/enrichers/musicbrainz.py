@@ -67,6 +67,19 @@ def resolve_release_group_ids(
     return artist_mbid, album_mbid
 
 
+def fetch_front_cover(mbid: str) -> Optional[str]:
+    """Return the final URL of a release-group's front cover from the
+    Cover Art Archive, or None if not available."""
+    url = _CAA_FRONT_URL.format(mbid=mbid)
+    try:
+        resp = requests.head(url, allow_redirects=True, timeout=10)
+        if resp.status_code == 200:
+            return resp.url
+    except Exception:
+        logger.debug("CAA request failed for %s", mbid)
+    return None
+
+
 def _query_musicbrainz(artist: str, album: str) -> Optional[Tuple[str, str]]:
     query = f'artist:"{artist}" AND release:"{album}"'
     try:
@@ -113,20 +126,8 @@ class MusicBrainzEnricher(ArtworkEnricher):
                     return
                 mbid = resolved[1]
 
-            image_url = self._fetch_front_cover(mbid)
+            image_url = fetch_front_cover(mbid)
             if image_url and not any(img.url == image_url for img in now_playing.images):
                 now_playing.images.append(Artwork(url=image_url, label="Album art (MusicBrainz)"))
         except Exception:
             logger.exception("MusicBrainz enrichment error")
-
-    @staticmethod
-    def _fetch_front_cover(mbid: str) -> Optional[str]:
-        """Return the final URL of the front cover, or None if not available."""
-        url = _CAA_FRONT_URL.format(mbid=mbid)
-        try:
-            resp = requests.head(url, allow_redirects=True, timeout=10)
-            if resp.status_code == 200:
-                return resp.url
-        except Exception:
-            logger.debug("CAA request failed for %s", mbid)
-        return None

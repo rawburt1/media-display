@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- New `enrichers.library` enricher: for sources that don't report an
+  album at all (e.g. YouTube), looks up the playing artist+song in the
+  local music library and adds cover art for every album the song
+  appears on - a song on multiple releases gets art for all of them, not
+  just the first match. Backed by a new `track_albums` table in the
+  music library, populated by `import-lidarr` (which now also imports
+  each track's album linkage, not just its own mbid).
 - `python -m mediainfo import-lidarr --url <lidarr-url> --api-key <key>`
   bulk-imports a [Lidarr](https://lidarr.audio/) library's already-verified
   artist/album/track MusicBrainz ids into the local music library cache
