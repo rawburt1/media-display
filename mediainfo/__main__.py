@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 import signal
 import sys
@@ -507,9 +508,6 @@ def _auth_spotify(config_path: str) -> None:
 
 
 def _auth_appletv(config_path: str) -> None:
-    import asyncio
-    import pyatv
-
     config = Config.load(config_path)
     atv_cfg = config.sources.get("appletv")
     if atv_cfg is None or not atv_cfg.enabled:
@@ -522,8 +520,10 @@ def _auth_appletv(config_path: str) -> None:
 async def _pair_appletv(host: str) -> None:
     import pyatv
 
+    loop = asyncio.get_running_loop()
+
     print(f"\nScanning for Apple TV at {host} ...")
-    results = await pyatv.scan(hosts=[host])
+    results = await pyatv.scan(loop, hosts=[host])
     if not results:
         print(f"Error: No Apple TV found at {host}")
         sys.exit(1)
@@ -537,7 +537,7 @@ async def _pair_appletv(host: str) -> None:
         proto_name = protocol.name.lower()
         print(f"Pairing with {protocol.name} protocol ...")
         try:
-            pairing = await pyatv.pair(conf, protocol=protocol)
+            pairing = await pyatv.pair(conf, protocol, loop)
             await pairing.begin()
 
             if pairing.device_provides_pin:

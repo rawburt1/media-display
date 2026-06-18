@@ -6,7 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- The `config` output's `appletv` source card now has a "Pair" button
+  driving the same pyatv-based pairing flow as
+  `python -m mediainfo auth appletv` (scan, begin pairing, enter/confirm
+  a PIN, finish) entirely from the browser, saving the resulting
+  `companion_credentials`/`mrp_credentials` directly to config.yaml - no
+  shell/docker-exec access needed. Verified end-to-end in a real browser
+  with mocked pyatv calls. Pairing is async and gets its own short-lived
+  background event loop thread per attempt (`/api/appletv/pair/start`,
+  `/finish`, `/cancel`); only one attempt is tracked at a time.
+
 ### Fixed
+- `python -m mediainfo auth appletv` was broken: this pyatv version
+  requires an explicit `loop` argument to `pyatv.scan()`/`pyatv.pair()`
+  that wasn't being passed, so it always raised `TypeError`. Found and
+  fixed while building the web-based pairing flow above.
 - `docker-compose.yml` now bind-mounts `./config` as a directory
   (containing `config.yaml`) instead of bind-mounting `config.yaml`
   itself. A single-file bind mount pins to that file's inode; any tool

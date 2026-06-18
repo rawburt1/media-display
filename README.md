@@ -106,7 +106,10 @@ See `config.example.yaml` for all options. Key things to fill in:
   with `python -m mediainfo auth appletv --config config.yaml` (or the
   `docker compose run` equivalent, with `--config config/config.yaml`)
   - follow the prompts to enter the PIN
-  shown on the TV, then paste the printed credentials into config.yaml.
+  shown on the TV, then paste the printed credentials into config.yaml -
+  or, easier, use the "Pair" button on the `appletv` card of the
+  `config` output's web page (see below), which drives the same flow
+  and saves the credentials for you, no shell/docker-exec access needed.
   Reports whatever's playing in any app (TV+, Plex, Infuse, music apps,
   etc.) via the Companion/MRP/AirPlay protocols.
 - **`sources.shield`**: IP address of an Android TV device (e.g. Nvidia
@@ -164,7 +167,11 @@ See `config.example.yaml` for all options. Key things to fill in:
   process - the same signal `docker stop`/Ctrl-C already trigger - so it
   comes back up automatically under a supervisor (Docker's
   `restart: unless-stopped`, already set up in docker-compose.yml) but
-  just exits if run unsupervised.
+  just exits if run unsupervised. The `appletv` source's card also has a
+  "Pair" button that drives the same pairing flow as
+  `python -m mediainfo auth appletv` (scan, begin pairing, enter the PIN
+  or confirm one shown on screen, finish) and saves the resulting
+  credentials directly - no shell/docker-exec access needed.
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page.

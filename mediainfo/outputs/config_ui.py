@@ -43,10 +43,20 @@ existing graceful-shutdown path. Whether it actually comes back up depends
 on a process supervisor restarting it: the documented `docker-compose.yml`
 (restart: unless-stopped) does this automatically; running the process
 directly with no supervisor does not - it'll just exit.
+
+The page can also pair an Apple TV (the same pyatv-based flow as
+`python -m mediainfo auth appletv`, see __main__.py), without needing
+shell/docker-exec access. Apple TV pairing is async (pyatv) and
+inherently a multi-step wizard (start -> enter/confirm PIN -> finish), so
+it gets its own short-lived background event loop thread per pairing
+attempt, created in `_appletv_pair_start` and torn down in
+`_appletv_pair_finish`/`_appletv_pair_cancel`. Only one pairing attempt is
+tracked at a time, which is fine for a single-operator local admin tool.
 """
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import io
 import logging
@@ -142,6 +152,22 @@ def _as_instance_list(raw: Any) -> list:
     return [raw] if raw else []
 
 
+@dataclasses.dataclass
+class _AppleTvSession:
+    """An in-progress pairing attempt, with the resources needed to finish
+    or cancel it. The event loop/thread must outlive the request that
+    started the pairing, since pyatv's PairingHandler keeps background
+    network state tied to the loop it was created on.
+    """
+
+    loop: asyncio.AbstractEventLoop
+    thread: threading.Thread
+    pairing: Any  # pyatv.interface.PairingHandler
+    protocol_name: str
+    device_name: str
+    manual_pin: Optional[int] = None
+
+
 def _read_config(path: Path) -> Any:
     if not path.exists():
         return _yaml.map()
@@ -162,6 +188,8 @@ class ConfigUiOutput(Output):
         self.config = config
         self.config_path = Path(config_path)
         self._lock = threading.Lock()
+        self._appletv_lock = threading.Lock()
+        self._appletv_session: Optional[_AppleTvSession] = None
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
 
@@ -310,6 +338,152 @@ class ConfigUiOutput(Output):
                 f.write(raw_yaml)
         return None
 
+    # -- Apple TV pairing ---------------------------------------------
+
+    def _appletv_pair_start(self, host: str, protocol_name: str) -> dict:
+        with self._appletv_lock:
+            if self._appletv_session is not None:
+                raise RuntimeError(
+                    "A pairing attempt is already in progress - cancel it first."
+                )
+            loop = asyncio.new_event_loop()
+            thread = threading.Thread(target=loop.run_forever, daemon=True)
+            thread.start()
+
+        try:
+            result = self._run_appletv_async(
+                loop, self._do_appletv_pair_start(loop, host, protocol_name)
+            )
+        except Exception:
+            self._stop_appletv_loop(loop, thread)
+            raise
+
+        with self._appletv_lock:
+            self._appletv_session = _AppleTvSession(
+                loop=loop,
+                thread=thread,
+                pairing=result["pairing"],
+                protocol_name=protocol_name,
+                device_name=result["device_name"],
+                manual_pin=result["manual_pin"],
+            )
+
+        return {
+            "device_name": result["device_name"],
+            "protocol": protocol_name,
+            "device_provides_pin": result["device_provides_pin"],
+            "manual_pin": result["manual_pin"],
+        }
+
+    @staticmethod
+    async def _do_appletv_pair_start(loop, host: str, protocol_name: str) -> dict:
+        import pyatv
+
+        protocols = {"companion": pyatv.const.Protocol.Companion, "mrp": pyatv.const.Protocol.MRP}
+        protocol = protocols.get(protocol_name)
+        if protocol is None:
+            raise ValueError(f"Unknown protocol: {protocol_name!r} (expected companion or mrp)")
+
+        results = await pyatv.scan(loop, hosts=[host], timeout=5)
+        if not results:
+            raise RuntimeError(f"No Apple TV found at {host}")
+        conf = results[0]
+
+        pairing = await pyatv.pair(conf, protocol, loop)
+        await pairing.begin()
+
+        manual_pin = None
+        if not pairing.device_provides_pin:
+            manual_pin = 1234
+            pairing.pin(manual_pin)
+
+        return {
+            "pairing": pairing,
+            "device_name": conf.name,
+            "device_provides_pin": pairing.device_provides_pin,
+            "manual_pin": manual_pin,
+        }
+
+    def _appletv_pair_finish(self, pin: Optional[str]) -> dict:
+        with self._appletv_lock:
+            session = self._appletv_session
+        if session is None:
+            raise RuntimeError('No pairing in progress - click "Start pairing" first.')
+
+        try:
+            credentials = self._run_appletv_async(
+                session.loop, self._do_appletv_pair_finish(session, pin)
+            )
+        finally:
+            with self._appletv_lock:
+                self._appletv_session = None
+            self._stop_appletv_loop(session.loop, session.thread)
+
+        field = f"{session.protocol_name}_credentials"
+        self._save_appletv_credentials(field, credentials)
+        return {"protocol": session.protocol_name, "field": field, "credentials": credentials}
+
+    @staticmethod
+    async def _do_appletv_pair_finish(session: _AppleTvSession, pin: Optional[str]) -> str:
+        if session.pairing.device_provides_pin:
+            if not pin:
+                raise ValueError("Enter the PIN shown on the Apple TV.")
+            session.pairing.pin(int(pin))
+
+        await session.pairing.finish()
+
+        if not session.pairing.has_paired:
+            await session.pairing.close()
+            raise RuntimeError("Pairing failed - check the PIN and try again.")
+
+        credentials = session.pairing.service.credentials
+        await session.pairing.close()
+        return credentials
+
+    def _appletv_pair_cancel(self) -> None:
+        with self._appletv_lock:
+            session = self._appletv_session
+            self._appletv_session = None
+        if session is None:
+            return
+        try:
+            self._run_appletv_async(session.loop, session.pairing.close())
+        except Exception:
+            logger.exception("Error closing cancelled Apple TV pairing session")
+        self._stop_appletv_loop(session.loop, session.thread)
+
+    def _save_appletv_credentials(self, field: str, value: str) -> None:
+        with self._lock:
+            data = _read_config(self.config_path)
+            section = data.setdefault("sources", {})
+            entry = section.get("appletv")
+            entry = entry if isinstance(entry, dict) else {}
+            entry[field] = value
+            entry["enabled"] = True
+            section["appletv"] = entry
+
+            Config.from_dict(data)
+
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.config_path.open("w", encoding="utf-8") as f:
+                f.write(_dump_config(data))
+
+    @staticmethod
+    def _run_appletv_async(loop: asyncio.AbstractEventLoop, coro, timeout: float = 30) -> Any:
+        """Run `coro` on `loop` (which belongs to a different thread) and
+        block this thread until it completes. Split out so tests can
+        monkeypatch it to use asyncio.run() instead of a real background
+        loop+thread.
+        """
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result(timeout=timeout)
+
+    @staticmethod
+    def _stop_appletv_loop(loop: asyncio.AbstractEventLoop, thread: threading.Thread) -> None:
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=5)
+        loop.close()
+
     def _build_app(self) -> Flask:
         app = Flask(__name__)
 
@@ -352,6 +526,35 @@ class ConfigUiOutput(Output):
         @app.post("/api/restart")
         def restart():
             threading.Timer(_RESTART_DELAY_SECONDS, _restart_process).start()
+            return jsonify({"ok": True})
+
+        @app.post("/api/appletv/pair/start")
+        def appletv_pair_start():
+            body = request.get_json(silent=True) or {}
+            host = (body.get("host") or "").strip()
+            protocol = (body.get("protocol") or "companion").strip().lower()
+            if not host:
+                return jsonify({"ok": False, "error": "Enter the Apple TV's host/IP first."}), 400
+            try:
+                result = self._appletv_pair_start(host, protocol)
+            except Exception as exc:
+                logger.warning("Apple TV pairing start failed: %s", exc)
+                return jsonify({"ok": False, "error": str(exc)}), 400
+            return jsonify({"ok": True, **result})
+
+        @app.post("/api/appletv/pair/finish")
+        def appletv_pair_finish():
+            body = request.get_json(silent=True) or {}
+            try:
+                result = self._appletv_pair_finish(body.get("pin"))
+            except Exception as exc:
+                logger.warning("Apple TV pairing finish failed: %s", exc)
+                return jsonify({"ok": False, "error": str(exc)}), 400
+            return jsonify({"ok": True, **result})
+
+        @app.post("/api/appletv/pair/cancel")
+        def appletv_pair_cancel():
+            self._appletv_pair_cancel()
             return jsonify({"ok": True})
 
         return app
@@ -458,9 +661,125 @@ function renderField(category, typeName, field) {
 
 function renderTypeCard(category, typeName, fields) {
   if (!fields.length) return '';
+  var extra = (category === 'sources' && typeName === 'appletv') ? renderAppletvPairing() : '';
   return '<div class="card"><div class="card-title">' + typeName + '</div>'
     + fields.map(function(f) { return renderField(category, typeName, f); }).join('')
+    + extra
     + '</div>';
+}
+
+// -- Apple TV pairing wizard (sources.appletv only) --------------------
+
+var appletvState = {step: 'idle', protocol: 'companion', devicePin: null, error: null};
+
+function renderAppletvPairing() {
+  var rows = '';
+  if (appletvState.step === 'idle') {
+    rows = ''
+      + '<select id="appletv-protocol">'
+      + '<option value="companion"' + (appletvState.protocol === 'companion' ? ' selected' : '') + '>Companion (tvOS 15+)</option>'
+      + '<option value="mrp"' + (appletvState.protocol === 'mrp' ? ' selected' : '') + '>MRP (older devices)</option>'
+      + '</select> '
+      + '<button type="button" class="secondary small" onclick="appletvPairStart()">Pair</button>';
+  } else if (appletvState.step === 'starting') {
+    rows = '<span>Scanning and starting pairing&hellip;</span>';
+  } else if (appletvState.step === 'need_pin') {
+    rows = ''
+      + '<div class="row"><label>PIN shown on device</label>'
+      + '<input type="text" id="appletv-pin" inputmode="numeric"></div>'
+      + '<button type="button" class="secondary small" onclick="appletvPairSubmit()">Submit PIN</button> '
+      + '<button type="button" class="secondary small" onclick="appletvPairCancel()">Cancel</button>';
+  } else if (appletvState.step === 'need_manual_entry') {
+    rows = ''
+      + '<p style="font-size:12px;color:#8aa0c4;">Enter <b>' + appletvState.devicePin + '</b> on the '
+      + 'Apple TV, then click Continue.</p>'
+      + '<button type="button" class="secondary small" onclick="appletvPairSubmit()">Continue</button> '
+      + '<button type="button" class="secondary small" onclick="appletvPairCancel()">Cancel</button>';
+  } else if (appletvState.step === 'finishing') {
+    rows = '<span>Finishing pairing&hellip;</span>';
+  } else if (appletvState.step === 'done') {
+    rows = '<p style="font-size:12px;color:#22c55e;">Paired - credentials saved below and to config.yaml.</p>'
+      + '<button type="button" class="secondary small" onclick="appletvPairReset()">Pair again</button>';
+  }
+  var error = appletvState.error
+    ? '<p style="font-size:12px;color:#f87171;">' + appletvState.error + '</p>'
+    : '';
+  return '<div class="instance" id="appletv-pairing"><div class="instance-title">Pair</div>' + error + rows + '</div>';
+}
+
+function appletvRerenderCard() {
+  var fields = schema.sources.appletv;
+  var card = document.getElementById('appletv-pairing').closest('.card');
+  card.innerHTML = '<div class="card-title">appletv</div>'
+    + fields.map(function(f) { return renderField('sources', 'appletv', f); }).join('')
+    + renderAppletvPairing();
+}
+
+function appletvPairStart() {
+  var host = document.getElementById('sources.appletv.host');
+  appletvState.protocol = document.getElementById('appletv-protocol').value;
+  appletvState.step = 'starting';
+  appletvState.error = null;
+  appletvRerenderCard();
+
+  fetch('/api/appletv/pair/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({host: host ? host.value : '', protocol: appletvState.protocol}),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) {
+      appletvState.step = 'idle';
+      appletvState.error = d.error;
+    } else if (d.device_provides_pin) {
+      appletvState.step = 'need_pin';
+    } else {
+      appletvState.step = 'need_manual_entry';
+      appletvState.devicePin = d.manual_pin;
+    }
+    appletvRerenderCard();
+  }).catch(function() {
+    appletvState.step = 'idle';
+    appletvState.error = 'Request failed.';
+    appletvRerenderCard();
+  });
+}
+
+function appletvPairSubmit() {
+  var pinEl = document.getElementById('appletv-pin');
+  var pin = pinEl ? pinEl.value : null;
+  appletvState.step = 'finishing';
+  appletvRerenderCard();
+
+  fetch('/api/appletv/pair/finish', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pin: pin}),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) {
+      appletvState.step = appletvState.devicePin ? 'need_manual_entry' : 'need_pin';
+      appletvState.error = d.error;
+      appletvRerenderCard();
+      return;
+    }
+    values['sources.appletv.' + d.field] = d.credentials;
+    values['sources.appletv.enabled'] = true;
+    appletvState.step = 'done';
+    appletvRerenderCard();
+  }).catch(function() {
+    appletvState.error = 'Request failed.';
+    appletvRerenderCard();
+  });
+}
+
+function appletvPairCancel() {
+  fetch('/api/appletv/pair/cancel', {method: 'POST'}).catch(function() {});
+  appletvState = {step: 'idle', protocol: appletvState.protocol, devicePin: null, error: null};
+  appletvRerenderCard();
+}
+
+function appletvPairReset() {
+  appletvState = {step: 'idle', protocol: appletvState.protocol, devicePin: null, error: null};
+  appletvRerenderCard();
 }
 
 function renderCategory(title, category) {

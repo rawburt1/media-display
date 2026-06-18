@@ -1,10 +1,11 @@
 """Tests for the config output (web UI for editing config.yaml)."""
 
+import asyncio
 import os
 import shutil
 import signal
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -17,6 +18,19 @@ EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 @pytest.fixture(autouse=True)
 def no_server(monkeypatch):
     monkeypatch.setattr("threading.Thread.start", lambda self: None)
+
+
+@pytest.fixture(autouse=True)
+def fake_appletv_async(monkeypatch):
+    # Thread.start() above is a no-op, so the real background loop+thread
+    # created per pairing attempt never actually runs. Run coroutines
+    # directly instead, and skip tearing down the (never-started) thread.
+    monkeypatch.setattr(
+        ConfigUiOutput,
+        "_run_appletv_async",
+        staticmethod(lambda loop, coro, timeout=30: asyncio.run(coro)),
+    )
+    monkeypatch.setattr(ConfigUiOutput, "_stop_appletv_loop", staticmethod(lambda loop, thread: None))
 
 
 def _config(**kwargs):
@@ -449,6 +463,232 @@ def test_restart_process_sends_sigterm_to_self(mock_kill):
     _restart_process()
 
     mock_kill.assert_called_once_with(os.getpid(), signal.SIGTERM)
+
+
+# ---------------------------------------------------------------------------
+# Apple TV pairing
+# ---------------------------------------------------------------------------
+
+def _fake_pairing_handler(device_provides_pin=True, has_paired=True, credentials="cafef00d"):
+    handler = MagicMock()
+    handler.device_provides_pin = device_provides_pin
+    handler.begin = AsyncMock()
+    handler.finish = AsyncMock()
+    handler.close = AsyncMock()
+    handler.has_paired = has_paired
+    handler.service.credentials = credentials
+    return handler
+
+
+def _fake_scan_result(name="Living Room"):
+    conf = MagicMock()
+    conf.name = name
+    return conf
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_start_with_device_provided_pin(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+    handler = _fake_pairing_handler(device_provides_pin=True)
+    mock_pair.return_value = handler
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "companion"})
+
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["device_name"] == "Living Room"
+    assert data["protocol"] == "companion"
+    assert data["device_provides_pin"] is True
+    assert data["manual_pin"] is None
+    handler.pin.assert_not_called()
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_start_with_manual_pin(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+    handler = _fake_pairing_handler(device_provides_pin=False)
+    mock_pair.return_value = handler
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "mrp"})
+
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["device_provides_pin"] is False
+    assert data["manual_pin"] == 1234
+    handler.pin.assert_called_once_with(1234)
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_start_requires_host(mock_scan, mock_pair, config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/appletv/pair/start", json={"host": "", "protocol": "companion"})
+
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+    mock_scan.assert_not_called()
+
+
+@patch("pyatv.scan")
+def test_pair_start_no_device_found(mock_scan, config_path):
+    mock_scan.return_value = []
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
+
+    data = resp.get_json()
+    assert resp.status_code == 400
+    assert data["ok"] is False
+    assert "No Apple TV found" in data["error"]
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_start_rejects_unknown_protocol(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "bogus"})
+
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+    mock_pair.assert_not_called()
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_start_rejects_concurrent_attempt(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+    mock_pair.return_value = _fake_pairing_handler()
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
+    resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
+
+    assert resp.status_code == 400
+    assert "already in progress" in resp.get_json()["error"]
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_finish_with_correct_pin_saves_credentials(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+    handler = _fake_pairing_handler(device_provides_pin=True, has_paired=True, credentials="abc123")
+    mock_pair.return_value = handler
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "companion"})
+    resp = client.post("/api/appletv/pair/finish", json={"pin": "4321"})
+
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["protocol"] == "companion"
+    assert data["field"] == "companion_credentials"
+    assert data["credentials"] == "abc123"
+    handler.pin.assert_called_once_with(4321)
+
+    cfg = Config.load(config_path)
+    assert cfg.sources["appletv"].companion_credentials == "abc123"
+    assert cfg.sources["appletv"].enabled is True
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_finish_without_pin_when_required_fails(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+    handler = _fake_pairing_handler(device_provides_pin=True)
+    mock_pair.return_value = handler
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
+    resp = client.post("/api/appletv/pair/finish", json={})
+
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_finish_with_manual_pin_does_not_require_pin_in_request(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+    handler = _fake_pairing_handler(device_provides_pin=False, has_paired=True, credentials="xyz")
+    mock_pair.return_value = handler
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "mrp"})
+    resp = client.post("/api/appletv/pair/finish", json={})
+
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["field"] == "mrp_credentials"
+
+    cfg = Config.load(config_path)
+    assert cfg.sources["appletv"].mrp_credentials == "xyz"
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_finish_when_pairing_fails(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+    handler = _fake_pairing_handler(device_provides_pin=True, has_paired=False)
+    mock_pair.return_value = handler
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
+    resp = client.post("/api/appletv/pair/finish", json={"pin": "1111"})
+
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+    handler.close.assert_awaited()
+
+
+def test_pair_finish_without_start_fails(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/appletv/pair/finish", json={"pin": "1234"})
+
+    assert resp.status_code == 400
+    assert "No pairing in progress" in resp.get_json()["error"]
+
+
+@patch("pyatv.pair")
+@patch("pyatv.scan")
+def test_pair_cancel_clears_session_and_allows_restart(mock_scan, mock_pair, config_path):
+    mock_scan.return_value = [_fake_scan_result()]
+    handler = _fake_pairing_handler()
+    mock_pair.return_value = handler
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
+    cancel_resp = client.post("/api/appletv/pair/cancel")
+    restart_resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
+
+    assert cancel_resp.get_json() == {"ok": True}
+    assert restart_resp.get_json()["ok"] is True
+    handler.close.assert_awaited()
+
+
+def test_pair_cancel_with_no_session_is_noop(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/appletv/pair/cancel")
+
+    assert resp.get_json() == {"ok": True}
 
 
 # ---------------------------------------------------------------------------
