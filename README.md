@@ -1,6 +1,7 @@
 # mediainfo
 
 [![Tests](https://github.com/rawburt1/media-display/actions/workflows/tests.yml/badge.svg)](https://github.com/rawburt1/media-display/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Polls "now playing" media sources on your network and shows the current
 album art / poster on a [Divoom Pixoo64](https://divoom.com/) LED display,
