@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `sources.youtube` now splits video titles that look like
+  "`Song` - `Artist`" (song first), using the title's artist instead of
+  the channel name - unless the part after the dash is a version/edition
+  tag like "Live" or "Remix" (a fixed keyword list), which is treated as
+  decoration instead. All parenthesized/bracketed text (e.g.
+  "(Official Video)", "[Remastered 2011]", "(feat. Someone)") is now
+  stripped from the title too, not just the previous fixed set of
+  "Official Video/Audio/Lyrics" suffixes.
 - The `config` output's `appletv` source card now has a "Pair" button
   driving the same pyatv-based pairing flow as
   `python -m mediainfo auth appletv` (scan, begin pairing, enter/confirm

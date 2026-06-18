@@ -12,14 +12,26 @@ version of this source tried to detect a "<Artist> - Topic" channel suffix
 or an "<Artist> - <Song>" title pattern, but real-world testing showed
 YouTube TV reports the channel as just "Phil Collins", not
 "Phil Collins - Topic" - so neither heuristic actually fired). So this
-reports whatever's actively playing in YouTube as music, with the video
-title as `title` and the channel name as `subtitle` (treated as the
-artist) - trailing decorations like "(Official Video)" are stripped from
-the title. Music enrichment (fanart.tv/MusicBrainz/Last.fm/Discogs/
-Wikipedia) then takes over to fetch artwork and bio info from whichever of
-those is configured, exactly as for any other music source; if the
-"artist" name doesn't correspond to a real one (e.g. for a non-music
-video), those enrichers will simply find nothing to add.
+reports whatever's actively playing in YouTube as music, with the channel
+name as `subtitle` (treated as the artist) by default.
+
+Some videos instead encode the artist in the title itself, as
+"<Song> - <Artist>" (song first, then artist - the reverse of the usual
+"Artist - Song" convention seen elsewhere). When the title matches that
+shape, it's split and the title's artist wins over the channel name -
+unless the part after the dash is a version/edition tag like "Live" or
+"Remix" rather than an artist (see `_QUALIFIER_WORDS`), in which case it's
+just decoration and the channel name is used as the artist as usual.
+
+All parenthesized/bracketed content (e.g. "(Official Video)", "[Remastered
+2011]") is stripped from the title, plus any trailing " - <tag>" segment
+naming a version/edition (see `_QUALIFIER_WORDS`).
+
+Music enrichment (fanart.tv/MusicBrainz/Last.fm/Discogs/Wikipedia) then
+takes over to fetch artwork and bio info from whichever of those is
+configured, exactly as for any other music source; if the "artist" name
+doesn't correspond to a real one (e.g. for a non-music video), those
+enrichers will simply find nothing to add.
 """
 
 from __future__ import annotations
@@ -51,10 +63,22 @@ _STATE_RE = re.compile(r"^state=PlaybackState \{state=(\d+)")
 _DESCRIPTION_RE = re.compile(r"^metadata: size=\d+, description=(.*)$")
 _SESSION_HEADER_RE = re.compile(r"\(userId=\d+\)\s*$")
 
-# Trailing decorations commonly appended to official music video titles,
-# e.g. "(Official Video)", "[Official Audio]", "(Lyrics)".
-_DECORATION_RE = re.compile(
-    r"\s*[\(\[]\s*(official\s+)?(music\s+)?(video|audio|lyrics?|visualizer)\s*[\)\]]\s*$",
+# Any parenthesized/bracketed content, e.g. "(Official Video)",
+# "[Remastered 2011]", "(feat. Someone)" - removed from the title entirely.
+_PAREN_RE = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]\s*")
+
+# Version/edition tags that indicate a trailing "- <word>" segment is *not*
+# an artist name (e.g. "Song - Live", "Song - Remix").
+_QUALIFIER_WORDS = (
+    "remix", "live", "acoustic", "cover", "demo", "instrumental",
+    "extended", "edit", "version", "mix", "remaster", "remastered",
+    "mono", "stereo", "karaoke", "tribute", "medley", "explicit", "clean",
+    "unplugged", "session", "sessions", "performance",
+)
+_QUALIFIER_RE = re.compile(r"\b(" + "|".join(_QUALIFIER_WORDS) + r")\b", re.IGNORECASE)
+# A trailing " - <phrase containing a qualifier word>" suffix to strip.
+_TRAILING_QUALIFIER_RE = re.compile(
+    r"\s*-\s*[^-]*\b(" + "|".join(_QUALIFIER_WORDS) + r")\b[^-]*$",
     re.IGNORECASE,
 )
 
@@ -96,11 +120,13 @@ class YoutubeSource(MediaSource):
         if not video_title:
             return None
 
+        title, artist = self._detect_song_artist(video_title, channel)
+
         return NowPlaying(
             source=self.name,
             media_type="music",
-            title=self._strip_decoration(video_title),
-            subtitle=channel,
+            title=title,
+            subtitle=artist,
         )
 
     def _shell(self, command: str) -> str:
@@ -182,6 +208,26 @@ class YoutubeSource(MediaSource):
         parts += [""] * (3 - len(parts))
         return tuple("" if p == "null" else p for p in parts[:3])
 
+    @classmethod
+    def _detect_song_artist(cls, video_title: str, channel: str) -> Tuple[str, str]:
+        """Return (title, artist) for a YouTube video.
+
+        If the title looks like "<Song> - <Artist>" (and <Artist> isn't a
+        version/edition tag like "Live" or "Remix"), split it - some videos
+        encode the artist this way instead of (or in addition to) the
+        channel name. Otherwise fall back to the channel name as the
+        artist, as usual.
+        """
+        cleaned = cls._strip_decoration(video_title)
+        if " - " in cleaned:
+            song, _, rest = cleaned.partition(" - ")
+            song, rest = song.strip(), rest.strip()
+            if song and rest and not _QUALIFIER_RE.search(rest):
+                return song, rest
+        return cleaned, channel
+
     @staticmethod
     def _strip_decoration(title: str) -> str:
-        return _DECORATION_RE.sub("", title).strip()
+        without_parens = _PAREN_RE.sub(" ", title)
+        without_qualifier = _TRAILING_QUALIFIER_RE.sub("", without_parens)
+        return " ".join(without_qualifier.split()).strip()

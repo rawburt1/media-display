@@ -154,6 +154,66 @@ def test_strip_decoration_leaves_plain_title_unchanged():
     assert YoutubeSource._strip_decoration("Yesterday") == "Yesterday"
 
 
+def test_strip_decoration_removes_any_parenthesized_content():
+    assert YoutubeSource._strip_decoration("Yesterday (feat. Someone)") == "Yesterday"
+    assert YoutubeSource._strip_decoration("Yesterday [2011 Remaster]") == "Yesterday"
+    assert YoutubeSource._strip_decoration("Yesterday (Live at Wembley)") == "Yesterday"
+
+
+def test_strip_decoration_removes_multiple_parenthesized_segments():
+    assert YoutubeSource._strip_decoration("Yesterday (feat. Someone) [HQ]") == "Yesterday"
+
+
+def test_strip_decoration_removes_trailing_qualifier_suffix():
+    assert YoutubeSource._strip_decoration("Yesterday - Live") == "Yesterday"
+    assert YoutubeSource._strip_decoration("Yesterday - Remix") == "Yesterday"
+    assert YoutubeSource._strip_decoration("Yesterday - Acoustic Version") == "Yesterday"
+
+
+def test_strip_decoration_leaves_non_qualifier_dash_suffix_unchanged():
+    # "Artist" isn't a qualifier word, so this isn't decoration to strip -
+    # it's handled by _detect_song_artist's splitting instead.
+    assert YoutubeSource._strip_decoration("Yesterday - The Beatles") == "Yesterday - The Beatles"
+
+
+# ---------------------------------------------------------------------------
+# _detect_song_artist
+# ---------------------------------------------------------------------------
+
+def test_detect_song_artist_splits_song_dash_artist():
+    title, artist = YoutubeSource._detect_song_artist("In the Air Tonight - Phil Collins", "SomeUploader")
+    assert title == "In the Air Tonight"
+    assert artist == "Phil Collins"
+
+
+def test_detect_song_artist_falls_back_to_channel_when_no_dash():
+    title, artist = YoutubeSource._detect_song_artist("In the Air Tonight", "Phil Collins")
+    assert title == "In the Air Tonight"
+    assert artist == "Phil Collins"
+
+
+def test_detect_song_artist_treats_qualifier_suffix_as_decoration_not_artist():
+    title, artist = YoutubeSource._detect_song_artist("In the Air Tonight - Live", "Phil Collins")
+    assert title == "In the Air Tonight"
+    assert artist == "Phil Collins"  # falls back to channel, "Live" isn't an artist
+
+
+def test_detect_song_artist_strips_parens_before_splitting():
+    title, artist = YoutubeSource._detect_song_artist(
+        "In the Air Tonight (Official Video) - Phil Collins", "SomeUploader"
+    )
+    assert title == "In the Air Tonight"
+    assert artist == "Phil Collins"
+
+
+def test_detect_song_artist_handles_qualifier_after_artist():
+    title, artist = YoutubeSource._detect_song_artist(
+        "In the Air Tonight - Phil Collins - Live", "SomeUploader"
+    )
+    assert title == "In the Air Tonight"
+    assert artist == "Phil Collins"
+
+
 # ---------------------------------------------------------------------------
 # get_now_playing
 # ---------------------------------------------------------------------------
@@ -176,6 +236,19 @@ def test_get_now_playing_strips_decoration_from_title(tmp_path):
 
     assert now_playing.title == "Bohemian Rhapsody"
     assert now_playing.subtitle == "Queen"
+
+
+def test_get_now_playing_splits_song_dash_artist_title(tmp_path):
+    dump = _YOUTUBE_MUSIC_DUMP.replace(
+        "In the Air Tonight, Phil Collins, null",
+        "In the Air Tonight - Phil Collins, SomeUploader, null",
+    )
+    source, _ = _make_source(tmp_path, shell_return=dump)
+
+    now_playing = source.get_now_playing()
+
+    assert now_playing.title == "In the Air Tonight"
+    assert now_playing.subtitle == "Phil Collins"
 
 
 def test_get_now_playing_reports_any_active_video_not_just_music(tmp_path):

@@ -89,7 +89,12 @@ sources:
   # video, so this reports whatever's actively playing rather than
   # filtering - the usual music enrichers (fanart.tv/MusicBrainz/Last.fm/
   # Discogs/Wikipedia) just won't find anything to add when the channel
-  # isn't a real artist. Put this ahead of `shield` in `priority`.
+  # isn't a real artist. If the title itself looks like "Song - Artist"
+  # (song first), that's split and used instead of the channel name -
+  # unless the part after the dash is a version/edition tag like "Live"
+  # or "Remix", which is stripped as decoration along with any
+  # parenthesized/bracketed text (e.g. "(Official Video)"). Put this
+  # ahead of `shield` in `priority`.
   youtube:
     enabled: true
     host: 192.168.1.21       # IP address of the Android TV device

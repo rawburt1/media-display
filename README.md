@@ -133,8 +133,13 @@ See `config.example.yaml` for all options. Key things to fill in:
   this reports whatever's actively playing rather than trying to filter -
   the usual music enrichers (fanart.tv/MusicBrainz/Last.fm/Discogs/
   Wikipedia) simply won't find anything to add for a channel name that
-  isn't a real artist. Put `youtube` ahead of `shield` in `priority` so it
-  takes precedence when both point at the same device.
+  isn't a real artist. If the video title itself looks like
+  "`Song` - `Artist`" (song first), that's split and used instead of the
+  channel name - unless the part after the dash is a version/edition tag
+  like "Live" or "Remix", which is just stripped as decoration. All
+  parenthesized/bracketed text (e.g. "(Official Video)", "[Remastered
+  2011]") is stripped from the title too. Put `youtube` ahead of `shield`
+  in `priority` so it takes precedence when both point at the same device.
 - **`sources.vinyl`**: host/port of a [vinyl_recognizer](vinyl_recognizer/)
   instance - a separate service that runs on the machine a Behringer UCA202
   (or similar USB audio interface) is connected to, listens to a turntable's
