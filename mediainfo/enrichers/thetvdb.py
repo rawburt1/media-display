@@ -1,4 +1,16 @@
-"""thetvdb.com enricher: adds posters/backgrounds for TV shows."""
+"""thetvdb.com enricher: adds posters/backgrounds for TV shows.
+
+Most sources (Kodi, Jellyfin/Emby, Plex) already supply a tvdb series id
+from their own local library metadata. Sources that can't (e.g. the
+Shield source, which only knows a title parsed from a generic Android
+media session - see sources/shield.py) get a title-based fallback here:
+thetvdb.com's own search API resolves a series name to its id, cached in
+memory for the life of the process (same trade-off as the Wikipedia
+enricher's cache - no persistence, but a given title is only looked up
+once per run). The resolved id is written back into `now_playing.ids`,
+so the fanart.tv enricher's TV branch (which also needs a tvdb id) gets
+to use it too, if it runs afterward.
+"""
 
 from __future__ import annotations
 
@@ -25,16 +37,24 @@ class TheTvDbEnricher(ArtworkEnricher):
         # constants, so look them up by name instead of hardcoding them).
         self._poster_type: Optional[int] = None
         self._background_type: Optional[int] = None
+        # Title -> resolved series id (or None for "not found"), for
+        # sources that only give us a name - see module docstring.
+        self._series_search_cache: dict[str, Optional[str]] = {}
 
     def enrich(self, now_playing: NowPlaying) -> None:
         if now_playing.media_type != "episode":
             return
 
-        series_id = now_playing.ids.get("tvdb")
-        if not series_id:
-            return
-
         try:
+            series_id = now_playing.ids.get("tvdb")
+            if not series_id:
+                if not now_playing.title:
+                    return
+                series_id = self._resolve_series_id(now_playing.title)
+                if not series_id:
+                    return
+                now_playing.ids["tvdb"] = series_id
+
             if not self._ensure_artwork_types():
                 return
 
@@ -47,6 +67,21 @@ class TheTvDbEnricher(ArtworkEnricher):
             self._append_best(now_playing, artworks, self._background_type, "Fanart (TheTVDB)")
         except Exception:
             logger.exception("thetvdb.com enrichment error")
+
+    def _resolve_series_id(self, title: str) -> Optional[str]:
+        if title in self._series_search_cache:
+            return self._series_search_cache[title]
+
+        series_id = None
+        results = self._get("/search", params={"query": title, "type": "series"})
+        for result in results or []:
+            candidate = result.get("tvdb_id")
+            if candidate:
+                series_id = str(candidate)
+                break
+
+        self._series_search_cache[title] = series_id
+        return series_id
 
     def _ensure_artwork_types(self) -> bool:
         if self._poster_type is not None and self._background_type is not None:

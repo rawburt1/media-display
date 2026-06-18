@@ -109,16 +109,17 @@ def _make_source(tmp_path, shell_return=None, shell_side_effect=None):
 
 
 def test_parses_active_playing_session():
-    description = ShieldSource._find_playing_description(_SVT_PLAY_DUMP)
+    description, package = ShieldSource._find_playing_session(_SVT_PLAY_DUMP)
     assert description == "Morgonstudion, Idag 07:00, null"
+    assert package == "se.svt.android.svtplay"
 
 
 def test_no_active_playing_session_returns_none():
-    assert ShieldSource._find_playing_description(_SPOTIFY_PAUSED_DUMP) is None
+    assert ShieldSource._find_playing_session(_SPOTIFY_PAUSED_DUMP) is None
 
 
 def test_no_sessions_returns_none():
-    assert ShieldSource._find_playing_description(_NO_SESSIONS_DUMP) is None
+    assert ShieldSource._find_playing_session(_NO_SESSIONS_DUMP) is None
 
 
 def test_parse_description_without_album():
@@ -141,13 +142,16 @@ def test_parse_description_title_only():
     assert ShieldSource._parse_description("Just a title") == ("Just a title", "", "")
 
 
-def test_get_now_playing_for_live_tv_session(tmp_path):
+def test_get_now_playing_for_svt_play_session_is_reported_as_episode(tmp_path):
+    # SVT Play is a known video app (_VIDEO_PACKAGES), so the thetvdb
+    # enricher gets a chance to look up its title as a TV series - see
+    # enrichers/thetvdb.py.
     source, _ = _make_source(tmp_path, shell_return=_SVT_PLAY_DUMP)
 
     now_playing = source.get_now_playing()
 
     assert now_playing.source == "shield"
-    assert now_playing.media_type == "music"
+    assert now_playing.media_type == "episode"
     assert now_playing.title == "Morgonstudion"
     assert now_playing.subtitle == "Idag 07:00"
     assert now_playing.album == ""
@@ -159,6 +163,7 @@ def test_get_now_playing_for_music_session_includes_album(tmp_path):
 
     now_playing = source.get_now_playing()
 
+    assert now_playing.media_type == "music"  # not a known video package
     assert now_playing.title == "Comfortably Numb"
     assert now_playing.subtitle == "Pink Floyd"
     assert now_playing.album == "The Wall"

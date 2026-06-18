@@ -39,6 +39,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     chosen image is actually distinct, not just labeled differently.
 
 ### Added
+- The Shield source now reports apps known to stream TV/video (currently
+  SVT Play - see `_VIDEO_PACKAGES` in `sources/shield.py`) as `episode`
+  instead of `music`, and `enrichers.thetvdb` can now resolve a series by
+  title (cached in memory, written back into `now_playing.ids` so
+  `enrichers.fanarttv`'s TV branch can use it too) - previously these
+  sessions were always reported as music, so neither artwork enricher
+  ever ran for them, no matter the title. Reordered `enrichers.thetvdb`
+  before `enrichers.fanarttv` in config.example.yaml so the resolved id
+  is available to both.
 - Startup (and config-reload) validation warns when a source is `enabled:
   true` but missing from `priority` - previously this failed completely
   silently (the source is just never instantiated, see `_build_sources()`),

@@ -82,15 +82,85 @@ def test_skips_non_episode(mock_post, mock_get):
 
 @patch("mediainfo.enrichers.thetvdb.requests.get")
 @patch("mediainfo.enrichers.thetvdb.requests.post")
-def test_no_tvdb_id_skips(mock_post, mock_get):
+def test_no_tvdb_id_and_no_title_skips(mock_post, mock_get):
     now_playing = NowPlaying(
-        source="kodi", media_type="episode", title="Pilot", subtitle="S01E01", ids={}
+        source="shield", media_type="episode", title="", subtitle="", ids={}
     )
 
     _enricher().enrich(now_playing)
 
     mock_post.assert_not_called()
     mock_get.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Title-based fallback (for sources with no tvdb id, e.g. the Shield source)
+# ---------------------------------------------------------------------------
+
+_SEARCH_RESULTS = {"data": [{"tvdb_id": "98765", "name": "Kingdom", "type": "series"}]}
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_resolves_series_id_by_title_when_no_tvdb_id(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response(_SEARCH_RESULTS),
+        _response(_ARTWORK_TYPES),
+        _response(_SERIES_ARTWORKS),
+    ]
+
+    now_playing = NowPlaying(
+        source="shield", media_type="episode", title="Kingdom",
+        subtitle="5. När makten skiftar", ids={},
+    )
+    _enricher().enrich(now_playing)
+
+    assert now_playing.ids["tvdb"] == "98765"
+    assert len(now_playing.images) == 2
+
+    search_args, search_kwargs = mock_get.call_args_list[0]
+    assert search_args[0] == "https://api4.thetvdb.com/v4/search"
+    assert search_kwargs["params"] == {"query": "Kingdom", "type": "series"}
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_series_id_resolution_is_cached_across_calls(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response(_SEARCH_RESULTS),
+        _response(_ARTWORK_TYPES),
+        _response(_SERIES_ARTWORKS),
+        _response(_SERIES_ARTWORKS),
+    ]
+
+    enricher = _enricher()
+    np1 = NowPlaying(source="shield", media_type="episode", title="Kingdom", ids={})
+    enricher.enrich(np1)
+    search_calls_after_first = mock_get.call_count
+
+    np2 = NowPlaying(source="shield", media_type="episode", title="Kingdom", ids={})
+    enricher.enrich(np2)
+
+    assert np2.ids["tvdb"] == "98765"
+    # Only one more call (artworks) - no repeat /search call for the same title.
+    assert mock_get.call_count == search_calls_after_first + 1
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_series_search_no_results_skips(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.return_value = _response({"data": []})
+
+    now_playing = NowPlaying(
+        source="shield", media_type="episode", title="Some Unknown Show", ids={}
+    )
+    _enricher().enrich(now_playing)
+
+    assert now_playing.images == []
+    assert "tvdb" not in now_playing.ids
 
 
 @patch("mediainfo.enrichers.thetvdb.requests.get")

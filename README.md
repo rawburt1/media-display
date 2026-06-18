@@ -128,6 +128,10 @@ See `config.example.yaml` for all options. Key things to fill in:
   debugging?" prompt - accept it (and tick "Always allow") so future
   connections don't need re-approval. No artwork is available this way; for
   music apps, fanart.tv's MusicBrainz lookup (see below) is used instead.
+  Apps known to stream TV/video rather than music (currently just SVT
+  Play - see `_VIDEO_PACKAGES` in `sources/shield.py`, easy to extend) are
+  reported as `episode` instead of `music`, so `enrichers.thetvdb` can
+  resolve the show by title and add a poster.
 - **`sources.youtube`**: same `host`/`port`/ADB pairing flow as
   `sources.shield` above (can point at the same device - use a separate
   `adb_key_path`), but targets the YouTube app specifically rather than
@@ -257,7 +261,12 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`enrichers.fanarttv`**: free `api_key` from https://fanart.tv/get-an-api-key/.
 - **`enrichers.thetvdb`**: free `api_key` from
   https://thetvdb.com/dashboard/account/apikey (only "user-supported" keys
-  need a `pin`).
+  need a `pin`). Sources that already know a show's tvdb id (Kodi,
+  Jellyfin/Emby, Plex) use it directly; sources that only know a title
+  (e.g. the Shield source, for SVT Play) get it resolved by name via
+  thetvdb's own search, cached in memory for the process's lifetime. List
+  this enricher before `enrichers.fanarttv` so the resolved id is also
+  available to fanart.tv's TV branch.
 - **`enrichers.discogs`**: free personal access `token` from
   https://www.discogs.com/settings/developers. Adds album cover art for
   music by searching Discogs by artist + album name; only runs when both

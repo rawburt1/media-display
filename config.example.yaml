@@ -385,6 +385,16 @@ enrichers:
   library:
     enabled: true
 
+  # TheTVDB — TV episode artwork and banners.
+  # Get a free project API key at https://thetvdb.com/dashboard/account/apikey
+  # Listed before fanarttv: for sources that only give us a show title (no
+  # tvdb id - e.g. the Shield source), this resolves it by name and writes
+  # the id back, so fanart.tv's TV branch below gets to use it too.
+  thetvdb:
+    enabled: true
+    api_key: YOUR_THETVDB_API_KEY
+    pin: ""                      # Only needed for "user-supported" API keys
+
   # fanart.tv — high-quality posters, backgrounds, and disc art.
   # Get a free personal API key at https://fanart.tv/get-an-api-key/
   fanarttv:
@@ -407,13 +417,6 @@ enrichers:
   # provides scanned physical album covers.
   musicbrainz:
     enabled: true
-
-  # TheTVDB — TV episode artwork and banners.
-  # Get a free project API key at https://thetvdb.com/dashboard/account/apikey
-  thetvdb:
-    enabled: true
-    api_key: YOUR_THETVDB_API_KEY
-    pin: ""                      # Only needed for "user-supported" API keys
 
   # Wikipedia — artist bio / movie info / TV show info, plus a photo.
   # No API key required; uses the free Wikipedia REST API. Fills in
