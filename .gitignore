@@ -6,6 +6,7 @@ venv/
 
 # Local configuration (contains credentials/IPs)
 config.yaml
+config/config.yaml
 
 # Downloaded artwork cache
 cache/

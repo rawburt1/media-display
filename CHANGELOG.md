@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
+- `docker-compose.yml` now bind-mounts `./config` as a directory
+  (containing `config.yaml`) instead of bind-mounting `config.yaml`
+  itself. A single-file bind mount pins to that file's inode; any tool
+  that saves by replacing the file (atomic rename, rather than writing in
+  place) orphans the mount, so the running container keeps serving the
+  old content until the container is recreated (a restart isn't enough -
+  this bit the new `config` output's Restart button, and separately any
+  direct edits to config.yaml). Existing setups need to move their
+  config.yaml into `./config/config.yaml` and update any
+  `docker compose run` commands to add `--config config/config.yaml`.
 - `ImageCache` now sends a descriptive `User-Agent` header when downloading
   artwork. Wikimedia (used by the Wikipedia enricher's thumbnails) rejects
   the default python-requests User-Agent with a 403, so those photos were

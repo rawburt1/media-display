@@ -71,6 +71,12 @@ python -m mediainfo --config config.yaml
 
 The web page is then available at `http://<this-machine>:8090/`.
 
+Running via `docker compose` instead (see `docker-compose.yml`)? Put
+config.yaml in `./config/config.yaml` rather than the project root - it's
+bind-mounted as a directory there (`cp config.example.yaml
+config/config.yaml`), so editors/tools that save by replacing the file
+(rather than writing in place) don't orphan the mount.
+
 ## Configuration
 
 See `config.example.yaml` for all options. Key things to fill in:
@@ -92,12 +98,14 @@ See `config.example.yaml` for all options. Key things to fill in:
   `http://localhost:8888/callback` (or your configured `redirect_uri`) added
   as a Redirect URI. Authorize once with
   `python -m mediainfo auth spotify --config config.yaml` (or
-  `docker compose run --rm mediainfo python -m mediainfo auth spotify`),
-  which opens a login flow and caches the token at `cache_path`. Only
-  reports playback on the account that's actively listening.
+  `docker compose run --rm mediainfo python -m mediainfo auth spotify
+  --config config/config.yaml`), which opens a login flow and caches the
+  token at `cache_path`. Only reports playback on the account that's
+  actively listening.
 - **`sources.appletv`**: `host` is the Apple TV's IP/hostname. Pair once
   with `python -m mediainfo auth appletv --config config.yaml` (or the
-  `docker compose run` equivalent) - follow the prompts to enter the PIN
+  `docker compose run` equivalent, with `--config config/config.yaml`)
+  - follow the prompts to enter the PIN
   shown on the TV, then paste the printed credentials into config.yaml.
   Reports whatever's playing in any app (TV+, Plex, Infuse, music apps,
   etc.) via the Companion/MRP/AirPlay protocols.

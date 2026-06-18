@@ -2,6 +2,7 @@ services:
   mediainfo:
     build: .
     restart: unless-stopped
+    command: ["python", "-m", "mediainfo", "--config", "config/config.yaml"]
     ports:
       - "8090:8090"
       - "8091:8091"
@@ -9,10 +10,16 @@ services:
       - "8093:8093"
       - "8094:8094"
     volumes:
-      # Read-write so the `config` output (see config.example.yaml) can save
-      # edits made through its web UI. Mount `:ro` instead if that output is
+      # A directory mount (not a single-file mount) so config.yaml stays
+      # readable/writable across edits that replace the file via rename
+      # (atomic saves - many editors and tools do this, including the
+      # `config` output's own save path) without orphaning a stale inode,
+      # which a single-file bind mount is prone to. Put config.yaml in
+      # ./config/ (cp config.example.yaml config/config.yaml) - read-write
+      # so the `config` output (see config.example.yaml) can save edits
+      # made through its web UI; mount `:ro` instead if that output is
       # disabled and you only ever edit config.yaml by hand.
-      - ./config.yaml:/app/config.yaml
+      - ./config:/app/config
       - ./cache:/app/cache
       - ./logs:/app/logs
       - ./adb_keys:/app/adb_keys

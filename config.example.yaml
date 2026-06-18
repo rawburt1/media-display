@@ -41,7 +41,7 @@ sources:
 
   # Apple TV — reports the currently-playing item from any app (TV+, Plex,
   # Infuse, etc.) via the Companion or MRP protocol.  Pairing is required:
-  #   docker compose run --rm mediainfo python -m mediainfo auth appletv
+  #   docker compose run --rm mediainfo python -m mediainfo auth appletv --config config/config.yaml
   # Follow the prompts; paste the printed credentials below.
   appletv:
     enabled: true
@@ -100,7 +100,7 @@ sources:
   # Spotify — current playback via the Spotify Web API.
   # 1. Create a free app at https://developer.spotify.com/dashboard
   # 2. Add http://localhost:8888/callback as a Redirect URI in the app settings.
-  # 3. Authorize once: docker compose run --rm mediainfo python -m mediainfo auth spotify
+  # 3. Authorize once: docker compose run --rm mediainfo python -m mediainfo auth spotify --config config/config.yaml
   spotify:
     enabled: true
     client_id: YOUR_SPOTIFY_CLIENT_ID
