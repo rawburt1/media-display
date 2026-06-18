@@ -83,11 +83,13 @@ sources:
 
   # YouTube on Android TV (e.g. the same Nvidia Shield as `shield` above).
   # Unlike `shield`'s generic any-app session grab, this specifically
-  # targets the YouTube app and only reports "now playing" when the video
-  # looks like a song (channel name ends in "- Topic", or the title itself
-  # follows "Artist - Song") - other videos are ignored. Once detected, the
-  # usual music enrichers (fanart.tv/MusicBrainz/Last.fm/Discogs/Wikipedia)
-  # fetch artwork and artist bio info, same as for any other music source.
+  # targets the YouTube app, reporting the video title and channel name
+  # (treated as the artist) as music. YouTube TV's media session doesn't
+  # expose anything that reliably distinguishes a song from any other
+  # video, so this reports whatever's actively playing rather than
+  # filtering - the usual music enrichers (fanart.tv/MusicBrainz/Last.fm/
+  # Discogs/Wikipedia) just won't find anything to add when the channel
+  # isn't a real artist. Put this ahead of `shield` in `priority`.
   youtube:
     enabled: true
     host: 192.168.1.21       # IP address of the Android TV device

@@ -29,12 +29,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   right instance when saving.
 - `mediainfo/sources/youtube.py`: `sources.youtube` source for the YouTube
   app on Android TV (e.g. Nvidia Shield), via ADB. Unlike the generic
-  `shield` source, this targets YouTube specifically and only reports
-  "now playing" when the video looks like a song - either the channel
-  follows YouTube's "`Artist` - Topic" auto-generated convention, or the
-  video title itself follows "`Artist` - `Song`" - so other video content
-  is ignored. Once detected, the existing music enrichers (fanart.tv/
-  MusicBrainz/Last.fm/Discogs/Wikipedia) take over for artwork/bio info.
+  `shield` source, this targets YouTube specifically, reporting the video
+  title and channel name (treated as the artist) as music - the existing
+  music enrichers (fanart.tv/MusicBrainz/Last.fm/Discogs/Wikipedia) take
+  over for artwork/bio info. An earlier version of this tried to filter to
+  only videos that "look like" songs (a "`Artist` - Topic" channel
+  convention, or "`Artist` - `Song`" in the title), but real-device
+  testing showed YouTube TV's media session doesn't expose anything that
+  reliably distinguishes a song from any other video, so that filtering
+  was dropped before release.
 - Wikipedia enricher lookups (search + summary) are now cached in memory
   for the life of the process, keyed by artist/movie/show. The orchestrator
   already skips re-enriching the same continuously-playing item, but

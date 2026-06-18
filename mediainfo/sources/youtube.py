@@ -4,23 +4,22 @@ Targets the YouTube app specifically (package com.google.android.youtube.tv
 on Android TV devices, e.g. Nvidia Shield), unlike the generic `shield`
 source which reports whatever app currently has an active media session.
 
-YouTube's regular video app doesn't reliably report a separate artist field
-via its media session, so this only reports "now playing" when the content
-looks like a song, using two heuristics (checked in order):
-
-1. The channel name follows YouTube's well-known auto-generated convention
-   for officially distributed music: "<Artist> - Topic". This is the most
-   reliable signal and gives a clean artist name directly.
-2. The video title itself follows the common "<Artist> - <Song>" convention
-   used by official audio/lyric videos, with trailing decorations like
-   "(Official Video)" stripped.
-
-Anything else (a vlog, a tutorial, a movie trailer, etc.) is treated as "not
-a song" and ignored - get_now_playing() returns None, so other sources or
-the idle wallpaper take over. Once an artist name is identified, normal
-music enrichment (fanart.tv/MusicBrainz/Last.fm/Discogs/Wikipedia) takes
-over to fetch artwork and bio info from whichever of those is configured,
-exactly as for any other music source.
+YouTube's Android TV app doesn't expose a field that reliably distinguishes
+a song from any other video - a music track's media session looks exactly
+like a vlog's: `description=<title>, <channel>, null`. There's no "this is
+music" flag and no separate clean artist field to filter on (an early
+version of this source tried to detect a "<Artist> - Topic" channel suffix
+or an "<Artist> - <Song>" title pattern, but real-world testing showed
+YouTube TV reports the channel as just "Phil Collins", not
+"Phil Collins - Topic" - so neither heuristic actually fired). So this
+reports whatever's actively playing in YouTube as music, with the video
+title as `title` and the channel name as `subtitle` (treated as the
+artist) - trailing decorations like "(Official Video)" are stripped from
+the title. Music enrichment (fanart.tv/MusicBrainz/Last.fm/Discogs/
+Wikipedia) then takes over to fetch artwork and bio info from whichever of
+those is configured, exactly as for any other music source; if the
+"artist" name doesn't correspond to a real one (e.g. for a non-music
+video), those enrichers will simply find nothing to add.
 """
 
 from __future__ import annotations
@@ -52,11 +51,6 @@ _STATE_RE = re.compile(r"^state=PlaybackState \{state=(\d+)")
 _DESCRIPTION_RE = re.compile(r"^metadata: size=\d+, description=(.*)$")
 _SESSION_HEADER_RE = re.compile(r"\(userId=\d+\)\s*$")
 
-# YouTube's auto-generated channel name for officially distributed music
-# (e.g. "Queen - Topic").
-_TOPIC_CHANNEL_RE = re.compile(r"^(.+?)\s+-\s+Topic$")
-# "<Artist> - <Song>" convention used by official audio/lyric videos.
-_ARTIST_TITLE_RE = re.compile(r"^(.+?)\s+-\s+(.+)$")
 # Trailing decorations commonly appended to official music video titles,
 # e.g. "(Official Video)", "[Official Audio]", "(Lyrics)".
 _DECORATION_RE = re.compile(
@@ -102,15 +96,11 @@ class YoutubeSource(MediaSource):
         if not video_title:
             return None
 
-        artist, song_title = self._detect_song(video_title, channel)
-        if artist is None:
-            return None
-
         return NowPlaying(
             source=self.name,
             media_type="music",
-            title=song_title,
-            subtitle=artist,
+            title=self._strip_decoration(video_title),
+            subtitle=channel,
         )
 
     def _shell(self, command: str) -> str:
@@ -191,26 +181,6 @@ class YoutubeSource(MediaSource):
         parts = [p.strip() for p in description.split(",", 2)]
         parts += [""] * (3 - len(parts))
         return tuple("" if p == "null" else p for p in parts[:3])
-
-    @classmethod
-    def _detect_song(
-        cls, video_title: str, channel: str
-    ) -> Tuple[Optional[str], Optional[str]]:
-        """Return (artist, song_title), or (None, None) if this doesn't
-        look like a song being played, rather than some other video.
-        """
-        match = _TOPIC_CHANNEL_RE.match(channel)
-        if match:
-            return match.group(1).strip(), cls._strip_decoration(video_title)
-
-        match = _ARTIST_TITLE_RE.match(video_title)
-        if match:
-            artist = match.group(1).strip()
-            song = cls._strip_decoration(match.group(2))
-            if artist and song:
-                return artist, song
-
-        return None, None
 
     @staticmethod
     def _strip_decoration(title: str) -> str:

@@ -115,18 +115,15 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`sources.youtube`**: same `host`/`port`/ADB pairing flow as
   `sources.shield` above (can point at the same device - use a separate
   `adb_key_path`), but targets the YouTube app specifically rather than
-  whatever app is in the foreground. Since YouTube doesn't reliably report
-  a separate artist field, this only reports "now playing" when the video
-  looks like a song: either the channel follows YouTube's auto-generated
-  "`Artist` - Topic" convention for officially distributed music, or the
-  video title itself follows "`Artist` - `Song`" (common for official
-  audio/lyric videos, with trailing "(Official Video)"-style decorations
-  stripped). Anything else (a vlog, a trailer, etc.) is ignored. Once a
-  song is detected, the usual music enrichers (fanart.tv/MusicBrainz/
-  Last.fm/Discogs/Wikipedia) fetch artwork and artist bio info from
-  whichever of those you have enabled, exactly as for any other music
-  source - put `youtube` ahead of `shield` in `priority` so it takes
-  precedence when both point at the same device.
+  whatever app is in the foreground, reporting the video title and channel
+  name (treated as the artist) as music. YouTube TV's media session
+  doesn't expose anything that reliably distinguishes a song from any
+  other video (a music track and a vlog report the exact same fields), so
+  this reports whatever's actively playing rather than trying to filter -
+  the usual music enrichers (fanart.tv/MusicBrainz/Last.fm/Discogs/
+  Wikipedia) simply won't find anything to add for a channel name that
+  isn't a real artist. Put `youtube` ahead of `shield` in `priority` so it
+  takes precedence when both point at the same device.
 - **`sources.vinyl`**: host/port of a [vinyl_recognizer](vinyl_recognizer/)
   instance - a separate service that runs on the machine a Behringer UCA202
   (or similar USB audio interface) is connected to, listens to a turntable's

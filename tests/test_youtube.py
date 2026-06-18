@@ -5,9 +5,48 @@ from unittest.mock import MagicMock, patch
 from mediainfo.config import YoutubeConfig
 from mediainfo.sources.youtube import YoutubeSource
 
-# Synthetic `dumpsys media_session` dump: YouTube playing an officially
-# distributed track via a "<Artist> - Topic" auto-generated channel.
-_YOUTUBE_TOPIC_DUMP = """\
+# Real `dumpsys media_session` output captured from an Nvidia Shield Pro
+# while YouTube TV played a music track. Note the channel is reported as
+# the plain artist name ("Phil Collins"), not "Phil Collins - Topic" - an
+# earlier version of this source assumed the "- Topic" suffix would be
+# present and never matched real-world data.
+_YOUTUBE_MUSIC_DUMP = """\
+MEDIA SESSION SERVICE (dumpsys media_session)
+
+6 sessions listeners.
+Global priority session is null
+User Records:
+Record for full_user=0
+  Volume key long-press listener: null
+  Volume key long-press listener package:
+  Media key listener: null
+  Media key listener package:
+  OnMediaKeyEventDispatchedListener: added 0 listener(s)
+  OnMediaKeyEventSessionChangedListener: added 1 listener(s)
+    from com.android.bluetooth
+  Last MediaButtonReceiver: null
+  Media button session is com.google.android.youtube.tv/starboard (userId=0)
+  Sessions Stack - have 1 sessions:
+    starboard com.google.android.youtube.tv/starboard (userId=0)
+      ownerPid=1769, ownerUid=10079, userId=0
+      package=com.google.android.youtube.tv
+      launchIntent=null
+      mediaButtonReceiver=null
+      active=true
+      flags=3
+      rating type=0
+      controllers: 5
+      state=PlaybackState {state=3, position=787, buffered position=0, speed=1.0, updated=1739869823, actions=379, custom actions=[], active item id=-1, error=null}
+      audioAttrs=AudioAttributes: usage=USAGE_MEDIA content=CONTENT_TYPE_UNKNOWN flags=0x800 tags= bundle=null
+      volumeType=1, controlType=2, max=0, current=0
+      metadata: size=5, description=In the Air Tonight, Phil Collins, null
+      queueTitle=null, size=0
+Audio playback (lastly played comes first)
+  uid=10079 packages=com.google.android.youtube.tv
+"""
+
+# YouTube playing a video whose title has an "(Official Video)" decoration.
+_YOUTUBE_DECORATED_TITLE_DUMP = """\
 MEDIA SESSION SERVICE (dumpsys media_session)
 
 User Records:
@@ -17,46 +56,13 @@ Record for full_user=0
       package=com.google.android.youtube.tv
       active=true
       state=PlaybackState {state=3, position=12345, buffered position=-1, speed=1.0, updated=1452600117, actions=7339771, custom actions=[], active item id=1, error=null}
-      metadata: size=9, description=Bohemian Rhapsody (Official Video), Queen - Topic, null
+      metadata: size=9, description=Bohemian Rhapsody (Official Video), Queen, null
 Audio playback (lastly played comes first)
   uid=10050 packages=com.google.android.youtube.tv
 """
 
-# YouTube playing an official music video, channel isn't a "- Topic" channel,
-# but the video title itself follows "<Artist> - <Song>".
-_YOUTUBE_ARTIST_TITLE_DUMP = """\
-MEDIA SESSION SERVICE (dumpsys media_session)
-
-User Records:
-Record for full_user=0
-  Sessions Stack - have 1 sessions:
-    com.google.android.youtube.tv/MediaButtonReceiver (userId=0)
-      package=com.google.android.youtube.tv
-      active=true
-      state=PlaybackState {state=3, position=12345, buffered position=-1, speed=1.0, updated=1452600117, actions=7339771, custom actions=[], active item id=1, error=null}
-      metadata: size=9, description=Daft Punk - One More Time [Official Music Video], Daft Punk, null
-Audio playback (lastly played comes first)
-  uid=10050 packages=com.google.android.youtube.tv
-"""
-
-# YouTube playing a non-music video (a vlog) - should be ignored.
-_YOUTUBE_VLOG_DUMP = """\
-MEDIA SESSION SERVICE (dumpsys media_session)
-
-User Records:
-Record for full_user=0
-  Sessions Stack - have 1 sessions:
-    com.google.android.youtube.tv/MediaButtonReceiver (userId=0)
-      package=com.google.android.youtube.tv
-      active=true
-      state=PlaybackState {state=3, position=12345, buffered position=-1, speed=1.0, updated=1452600117, actions=7339771, custom actions=[], active item id=1, error=null}
-      metadata: size=9, description=My Morning Routine, SomeVlogger, null
-Audio playback (lastly played comes first)
-  uid=10050 packages=com.google.android.youtube.tv
-"""
-
-# Same Topic dump, but paused (state=2, not state=3).
-_YOUTUBE_PAUSED_DUMP = _YOUTUBE_TOPIC_DUMP.replace("state=3,", "state=2,")
+# Same dump, but paused (state=2, not state=3).
+_YOUTUBE_PAUSED_DUMP = _YOUTUBE_MUSIC_DUMP.replace("state=3,", "state=2,")
 
 # A different app (Spotify) is playing - YouTube source should ignore it.
 _SPOTIFY_PLAYING_DUMP = """\
@@ -112,8 +118,8 @@ def _make_source(tmp_path, shell_return=None, shell_side_effect=None):
 # ---------------------------------------------------------------------------
 
 def test_finds_description_for_active_youtube_session():
-    description = YoutubeSource._find_youtube_description(_YOUTUBE_TOPIC_DUMP)
-    assert description == "Bohemian Rhapsody (Official Video), Queen - Topic, null"
+    description = YoutubeSource._find_youtube_description(_YOUTUBE_MUSIC_DUMP)
+    assert description == "In the Air Tonight, Phil Collins, null"
 
 
 def test_ignores_other_apps_session():
@@ -126,39 +132,6 @@ def test_ignores_paused_youtube_session():
 
 def test_no_sessions_returns_none():
     assert YoutubeSource._find_youtube_description(_NO_SESSIONS_DUMP) is None
-
-
-# ---------------------------------------------------------------------------
-# _detect_song
-# ---------------------------------------------------------------------------
-
-def test_detect_song_via_topic_channel():
-    artist, title = YoutubeSource._detect_song(
-        "Bohemian Rhapsody (Official Video)", "Queen - Topic"
-    )
-    assert artist == "Queen"
-    assert title == "Bohemian Rhapsody"
-
-
-def test_detect_song_via_artist_title_in_video_title():
-    artist, title = YoutubeSource._detect_song(
-        "Daft Punk - One More Time [Official Music Video]", "Daft Punk"
-    )
-    assert artist == "Daft Punk"
-    assert title == "One More Time"
-
-
-def test_detect_song_returns_none_for_non_music_video():
-    artist, title = YoutubeSource._detect_song("My Morning Routine", "SomeVlogger")
-    assert artist is None
-    assert title is None
-
-
-def test_detect_song_prefers_topic_channel_over_title_parsing():
-    # Title doesn't contain " - " at all, but channel is a Topic channel.
-    artist, title = YoutubeSource._detect_song("Bohemian Rhapsody", "Queen - Topic")
-    assert artist == "Queen"
-    assert title == "Bohemian Rhapsody"
 
 
 # ---------------------------------------------------------------------------
@@ -185,30 +158,38 @@ def test_strip_decoration_leaves_plain_title_unchanged():
 # get_now_playing
 # ---------------------------------------------------------------------------
 
-def test_get_now_playing_for_topic_channel_song(tmp_path):
-    source, _ = _make_source(tmp_path, shell_return=_YOUTUBE_TOPIC_DUMP)
+def test_get_now_playing_reports_channel_as_subtitle(tmp_path):
+    source, _ = _make_source(tmp_path, shell_return=_YOUTUBE_MUSIC_DUMP)
 
     now_playing = source.get_now_playing()
 
     assert now_playing.source == "youtube"
     assert now_playing.media_type == "music"
+    assert now_playing.title == "In the Air Tonight"
+    assert now_playing.subtitle == "Phil Collins"
+
+
+def test_get_now_playing_strips_decoration_from_title(tmp_path):
+    source, _ = _make_source(tmp_path, shell_return=_YOUTUBE_DECORATED_TITLE_DUMP)
+
+    now_playing = source.get_now_playing()
+
     assert now_playing.title == "Bohemian Rhapsody"
     assert now_playing.subtitle == "Queen"
 
 
-def test_get_now_playing_for_artist_title_song(tmp_path):
-    source, _ = _make_source(tmp_path, shell_return=_YOUTUBE_ARTIST_TITLE_DUMP)
+def test_get_now_playing_reports_any_active_video_not_just_music(tmp_path):
+    # YouTube TV doesn't expose a reliable "is this a song" signal (see
+    # module docstring), so anything actively playing is reported.
+    dump = _SPOTIFY_PLAYING_DUMP.replace("com.spotify.music", "com.google.android.youtube.tv").replace(
+        "Comfortably Numb, Pink Floyd, The Wall", "My Morning Routine, SomeVlogger, null"
+    )
+    source, _ = _make_source(tmp_path, shell_return=dump)
 
     now_playing = source.get_now_playing()
 
-    assert now_playing.title == "One More Time"
-    assert now_playing.subtitle == "Daft Punk"
-
-
-def test_get_now_playing_returns_none_for_non_music_video(tmp_path):
-    source, _ = _make_source(tmp_path, shell_return=_YOUTUBE_VLOG_DUMP)
-
-    assert source.get_now_playing() is None
+    assert now_playing.title == "My Morning Routine"
+    assert now_playing.subtitle == "SomeVlogger"
 
 
 def test_get_now_playing_returns_none_when_paused(tmp_path):
