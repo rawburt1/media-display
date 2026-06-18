@@ -301,6 +301,58 @@ def test_search_candidates_are_capped(mock_post, mock_get):
 
 @patch("mediainfo.enrichers.thetvdb.requests.get")
 @patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_search_candidate_cap_is_configurable(mock_post, mock_get):
+    many_results = {
+        "data": [{"tvdb_id": str(i), "name": "Kingdom", "type": "series"} for i in range(10)]
+    }
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [_response(many_results)] + [
+        _response(_episodes("No match here")) for _ in range(20)
+    ]
+
+    now_playing = _kingdom_now_playing()
+    _enricher(max_search_candidates=2).enrich(now_playing)
+
+    # 1 search call + at most 2 candidates x 2 languages = 5 calls max.
+    assert mock_get.call_count <= 5
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_logs_when_no_candidate_can_be_verified(mock_post, mock_get, caplog):
+    import logging
+
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response(_AMBIGUOUS_RESULTS),
+        _response(_episodes("Episode One")),
+        _response(_episodes("Episode Five")),
+        _response(_episodes("Avsnitt ett")),
+        _response(_episodes("Avsnitt fem")),
+    ]
+
+    with caplog.at_level(logging.INFO, logger="mediainfo.enrichers.thetvdb"):
+        _enricher().enrich(_kingdom_now_playing())
+
+    assert any("could not verify" in r.message for r in caplog.records)
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_logs_when_subtitle_has_no_episode_number_prefix(mock_post, mock_get, caplog):
+    import logging
+
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.return_value = _response(_AMBIGUOUS_RESULTS)
+
+    with caplog.at_level(logging.INFO, logger="mediainfo.enrichers.thetvdb"):
+        _enricher().enrich(_kingdom_now_playing(subtitle="S01E05"))
+
+    assert any("can't disambiguate" in r.message for r in caplog.records)
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_does_not_duplicate_existing_image(mock_post, mock_get):
     mock_post.return_value = _response({"data": {"token": "test-token"}})
     mock_get.side_effect = [_response(_ARTWORK_TYPES), _response(_SERIES_ARTWORKS)]

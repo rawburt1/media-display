@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- `enrichers.thetvdb.max_search_candidates` (default 5, same as before):
+  how many ambiguous title-search results get checked episode-by-episode
+  before giving up - now configurable instead of a fixed constant, so it
+  can be raised to catch a correct match thetvdb's search ranks further
+  down, at the cost of more API calls for generic titles. When no
+  candidate can be verified, this now also logs why (which title, how
+  many candidates, which episode subtitle) instead of silently adding no
+  artwork with no explanation.
+- Config validation (see "Fixed" below) now also warns about a source/
+  enricher/idle source that's enabled with a required credential left
+  blank (e.g. `enrichers.thetvdb` enabled with no `api_key`), and about
+  `auth.enabled: true` with a blank username/password - the latter means
+  *any* request presenting empty credentials authenticates successfully,
+  which is no real protection.
+
 ### Fixed
 - `enrichers.thetvdb`'s title-based series resolution (for sources that
   only know a show's name, not its tvdb id) trusted the first search

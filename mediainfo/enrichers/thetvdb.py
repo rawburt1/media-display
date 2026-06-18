@@ -38,10 +38,6 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api4.thetvdb.com/v4"
 
-# Cap how many ambiguous search candidates get their episode list checked,
-# so a very generic title can't trigger a pile of API calls.
-_MAX_SEARCH_CANDIDATES = 5
-
 # Sources that report an episode subtitle as "<number>. <episode title>"
 # (e.g. the Shield source, for SVT Play - see sources/shield.py).
 _EPISODE_SUBTITLE_RE = re.compile(r"^\s*\d+\.\s*(.+)$")
@@ -95,14 +91,20 @@ class TheTvDbEnricher(ArtworkEnricher):
             return self._series_search_cache[cache_key]
 
         results = self._get("/search", params={"query": title, "type": "series"}) or []
-        candidates = [str(r["tvdb_id"]) for r in results if r.get("tvdb_id")]
-        candidates = candidates[:_MAX_SEARCH_CANDIDATES]
+        all_candidates = [str(r["tvdb_id"]) for r in results if r.get("tvdb_id")]
+        candidates = all_candidates[: self.config.max_search_candidates]
 
-        if len(candidates) <= 1:
+        if len(all_candidates) <= 1:
             # Nothing to disambiguate - trust the only (or lack of a) match.
             series_id = candidates[0] if candidates else None
         else:
             series_id = self._disambiguate_by_episode(candidates, subtitle)
+            if series_id is None:
+                logger.info(
+                    "thetvdb: could not verify any of %d candidate(s) for %r against "
+                    "episode %r (of %d total search results) - no artwork added",
+                    len(candidates), title, subtitle, len(all_candidates),
+                )
 
         self._series_search_cache[cache_key] = series_id
         return series_id
@@ -114,6 +116,11 @@ class TheTvDbEnricher(ArtworkEnricher):
         """
         match = _EPISODE_SUBTITLE_RE.match(subtitle or "")
         if not match:
+            logger.info(
+                "thetvdb: %d candidates for an ambiguous title, but subtitle %r isn't in "
+                "'<number>. <episode title>' form - can't disambiguate, no artwork added",
+                len(candidate_ids), subtitle,
+            )
             return None
 
         target = match.group(1).strip().casefold()

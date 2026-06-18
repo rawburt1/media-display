@@ -327,6 +327,12 @@ class TheTvDbConfig:
     api_key: str = ""
     # Only needed for "user-supported" API keys.
     pin: str = ""
+    # When a title search for a show name is ambiguous (matches several
+    # unrelated series - e.g. "Kingdom"), how many of the search results
+    # to check episode-by-episode before giving up rather than guessing
+    # wrong. Higher catches matches ranked further down by thetvdb's own
+    # search, at the cost of more API calls for generic titles.
+    max_search_candidates: int = 5
 
 
 @dataclasses.dataclass

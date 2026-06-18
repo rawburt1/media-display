@@ -394,6 +394,12 @@ enrichers:
     enabled: true
     api_key: YOUR_THETVDB_API_KEY
     pin: ""                      # Only needed for "user-supported" API keys
+    # When a title search is ambiguous (e.g. several unrelated shows
+    # called "Kingdom"), how many search results to check episode-by-
+    # episode before giving up rather than guessing wrong. Raise this to
+    # catch a correct match that thetvdb's own search ranks further down,
+    # at the cost of more API calls for generic titles.
+    max_search_candidates: 5
 
   # fanart.tv — high-quality posters, backgrounds, and disc art.
   # Get a free personal API key at https://fanart.tv/get-an-api-key/

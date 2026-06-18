@@ -85,7 +85,11 @@ See `config.example.yaml` for all options. Key things to fill in:
   is active at once, the first one in this list wins. A source that's
   `enabled: true` but missing from this list is never actually polled -
   logged as a warning at startup and on every config reload, so this
-  mistake doesn't fail silently.
+  mistake doesn't fail silently. The same startup/reload check also warns
+  about a source/enricher/idle source that's enabled with a required
+  credential left blank (e.g. `enrichers.thetvdb` with no `api_key`), and
+  about `auth.enabled: true` with a blank username/password (see `auth`
+  below).
 - **`sources.kodi`**: Kodi host/port and credentials. In Kodi, enable
   *Settings → Services → Control → Allow remote control via HTTP*.
 - **`sources.sonos`**: IP address of every Sonos speaker on your network
@@ -273,7 +277,12 @@ See `config.example.yaml` for all options. Key things to fill in:
   against each candidate's actual episode list (including a Swedish
   translation, for SVT Play) before trusting one. If no candidate's
   episode list can be verified this way, no artwork is added rather than
-  guessing - showing a wrong show's poster is worse than showing none.
+  guessing - showing a wrong show's poster is worse than showing none -
+  and a log line explains why (e.g. "could not verify any of 5
+  candidates for 'Kingdom' ..."). `max_search_candidates` (default 5)
+  controls how many search results get checked this way before giving
+  up; raise it to catch a correct match thetvdb's search ranks further
+  down, at the cost of more API calls for generic titles.
 - **`enrichers.discogs`**: free personal access `token` from
   https://www.discogs.com/settings/developers. Adds album cover art for
   music by searching Discogs by artist + album name; only runs when both

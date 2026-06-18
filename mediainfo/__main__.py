@@ -262,12 +262,30 @@ def _warn_output_changes(old: Config, new: Config) -> None:
         )
 
 
+# (category, type name) -> required field name(s) for that type to be able
+# to do anything once enabled. Deliberately excludes appletv's credentials
+# (blank is a normal, expected state before `python -m mediainfo auth
+# appletv` has been run, not a mistake) and anything with no credential at
+# all (musicbrainz, wikipedia, library, sonos, kodi, shield, youtube, vinyl).
+_REQUIRED_CREDENTIAL_FIELDS: dict[tuple, list] = {
+    ("sources", "plex"): ["token"],
+    ("sources", "emby"): ["api_key"],
+    ("sources", "jellyfin"): ["api_key"],
+    ("sources", "spotify"): ["client_id", "client_secret"],
+    ("enrichers", "fanarttv"): ["api_key"],
+    ("enrichers", "thetvdb"): ["api_key"],
+    ("enrichers", "discogs"): ["token"],
+    ("enrichers", "lastfm"): ["api_key"],
+    ("idle", "unsplash"): ["access_key"],
+    ("idle", "lastfm"): ["api_key"],
+}
+
+
 def _validate_config(config: Config) -> None:
     """Log warnings for common config mistakes that otherwise fail
-    silently. Run at startup and after every reload, since the mistake
-    this guards against (enabling a source without adding it to
-    `priority`) is just as easy to make through the config UI later as
-    it is by hand up front.
+    silently. Run at startup and after every reload, since the mistakes
+    this guards against are just as easy to make through the config UI
+    later as they are by hand up front.
     """
     for name, source_config in config.sources.items():
         if source_config.enabled and name not in config.priority:
@@ -276,6 +294,24 @@ def _validate_config(config: Config) -> None:
                 "polled. Add it to the priority list to actually use it.",
                 name,
             )
+
+    for (category, name), fields in _REQUIRED_CREDENTIAL_FIELDS.items():
+        item = getattr(config, category).get(name)
+        if item is None or not getattr(item, "enabled", False):
+            continue
+        missing = [f for f in fields if not getattr(item, f, None)]
+        if missing:
+            logger.warning(
+                "%s.%s is enabled but %s %s blank - it will fail on every attempt.",
+                category, name, " and ".join(missing), "is" if len(missing) == 1 else "are",
+            )
+
+    if config.auth.enabled and not (config.auth.username and config.auth.password):
+        logger.warning(
+            "auth.enabled is true but username/password is blank - this means *any* "
+            "request presenting empty credentials will authenticate successfully, "
+            "which is no real protection. Set a real username/password."
+        )
 
 
 def _shutdown_outputs(outputs: list) -> None:
