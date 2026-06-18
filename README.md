@@ -1,5 +1,7 @@
 # mediainfo
 
+[![Tests](https://github.com/rawburt1/media-display/actions/workflows/tests.yml/badge.svg)](https://github.com/rawburt1/media-display/actions/workflows/tests.yml)
+
 Polls "now playing" media sources on your network and shows the current
 album art / poster on a [Divoom Pixoo64](https://divoom.com/) LED display,
 a Ulanzi TC001, a Google Nest Hub, a simple local web page, and more.
