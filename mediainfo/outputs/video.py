@@ -11,10 +11,11 @@ from typing import Optional
 from flask import Flask, jsonify, send_file
 
 from mediainfo.cache import ImageCache
-from mediainfo.config import VideoOutputConfig
+from mediainfo.config import AuthConfig, VideoOutputConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 from mediainfo.video.base import VideoClip, VideoSource
+from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -205,8 +206,9 @@ class VideoOutput(Output):
     # routed here (see _show_idle_image_for_output in orchestrator).
     handles_images = False
 
-    def __init__(self, config: VideoOutputConfig):
+    def __init__(self, config: VideoOutputConfig, auth_config: Optional[AuthConfig] = None):
         self.config = config
+        self.auth_config = auth_config
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         self._artwork: Optional[Artwork] = None
@@ -323,4 +325,5 @@ class VideoOutput(Output):
 
             return send_file(image_path)
 
+        install_auth(app, self.auth_config)
         return app

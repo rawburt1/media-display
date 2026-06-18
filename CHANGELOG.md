@@ -34,6 +34,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     chosen image is actually distinct, not just labeled differently.
 
 ### Added
+- New optional `auth` config section (off by default): HTTP Basic Auth
+  for the web/config/info/feed/video/nest_hub outputs. Requests from
+  RFC1918 private-use addresses and loopback are never challenged
+  regardless of `enabled`, so a typical LAN-only setup is unaffected -
+  this is meant for exposing one of these outputs beyond your LAN
+  (port-forwarding, a reverse proxy, a VPN you don't fully trust, ...)
+  without requiring every device on your own network to log in.
 - Music library artist/album/track matching is now fuzzy-tolerant: case,
   accents, "&" vs "and", and punctuation differences no longer cause a
   miss (e.g. a source reporting "Simon and Garfunkel" now matches a

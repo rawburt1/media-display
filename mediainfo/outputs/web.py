@@ -41,10 +41,11 @@ from flask import Flask, jsonify, request, send_file
 from flask_sock import Sock
 
 from mediainfo.cache import ImageCache
-from mediainfo.config import WebConfig
+from mediainfo.config import AuthConfig, WebConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 from mediainfo.transforms import parse_pipeline
+from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -391,8 +392,10 @@ class WebOutput(Output):
         config: WebConfig,
         rotation_interval_seconds: float = 30,
         cache: Optional[ImageCache] = None,
+        auth_config: Optional[AuthConfig] = None,
     ):
         self.config = config
+        self.auth_config = auth_config
         self.rotation_interval_seconds = rotation_interval_seconds
         self.transform_pipeline = parse_pipeline(config.transforms)
         self._lock = threading.Lock()
@@ -666,4 +669,5 @@ class WebOutput(Output):
 
             return send_file(image_path)
 
+        install_auth(app, self.auth_config)
         return app

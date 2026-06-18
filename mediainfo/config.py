@@ -263,6 +263,20 @@ class LibraryConfig:
 
 
 @dataclasses.dataclass
+class AuthConfig:
+    # Off by default. When enabled, HTTP Basic Auth is required for the
+    # web/config/info/feed/video/nest_hub outputs - but only for requests
+    # whose source address is *not* an RFC1918 private-use (or loopback)
+    # address, so your own LAN keeps working without a login prompt. The
+    # common reason to turn this on is exposing one of these outputs
+    # beyond your LAN (port-forwarding, a reverse proxy, a VPN you don't
+    # fully trust, ...).
+    enabled: bool = False
+    username: str = ""
+    password: str = ""
+
+
+@dataclasses.dataclass
 class CacheConfig:
     dir: str = "./cache"
     max_age_days: int = 30
@@ -443,6 +457,7 @@ class Config:
     cache: CacheConfig
     library: LibraryConfig
     logging: LoggingConfig
+    auth: AuthConfig
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "Config":
@@ -500,4 +515,5 @@ class Config:
             cache=CacheConfig(**(raw.get("cache") or {})),
             library=LibraryConfig(**(raw.get("library") or {})),
             logging=LoggingConfig(**(raw.get("logging") or {})),
+            auth=AuthConfig(**(raw.get("auth") or {})),
         )

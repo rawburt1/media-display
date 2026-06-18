@@ -508,3 +508,20 @@ logging:
   file: ./logs/mediainfo.log
   max_bytes: 1048576             # Rotate at 1 MB
   backup_count: 3               # Keep 3 old log files
+
+
+# ---------------------------------------------------------------------------
+# Optional authentication
+# ---------------------------------------------------------------------------
+# Off by default - your own LAN keeps working with no login prompt either
+# way, since requests from RFC1918 private-use addresses (and loopback)
+# are never challenged, regardless of `enabled`. Turn this on if you're
+# exposing the web/config/info/feed/video/nest_hub outputs beyond your LAN
+# (port-forwarding, a reverse proxy, a VPN you don't fully trust, ...) and
+# want anything reaching them from outside that range to need a login.
+# Applies to all of those outputs at once (one shared username/password).
+
+auth:
+  enabled: false
+  username: YOUR_USERNAME
+  password: YOUR_PASSWORD

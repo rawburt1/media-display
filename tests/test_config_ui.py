@@ -818,3 +818,33 @@ def test_get_library_reuses_connection_across_requests(library_config_path):
     lib1 = out._get_library()
     lib2 = out._get_library()
     assert lib1 is lib2
+
+
+# ---------------------------------------------------------------------------
+# Optional auth (config.yaml's config has write access to credentials, so
+# this is the highest-value place for it - see web_auth.py)
+# ---------------------------------------------------------------------------
+
+def test_auth_disabled_by_default(config_path):
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+    out = ConfigUiOutput(_config(), config_path)
+    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
+    assert resp.status_code == 200
+
+
+def test_auth_required_for_public_address_when_enabled(config_path):
+    from mediainfo.config import AuthConfig
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+    auth = AuthConfig(enabled=True, username="admin", password="secret")
+    out = ConfigUiOutput(_config(), config_path, auth)
+    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
+    assert resp.status_code == 401
+
+
+def test_auth_not_required_for_private_address_when_enabled(config_path):
+    from mediainfo.config import AuthConfig
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+    auth = AuthConfig(enabled=True, username="admin", password="secret")
+    out = ConfigUiOutput(_config(), config_path, auth)
+    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
+    assert resp.status_code == 200

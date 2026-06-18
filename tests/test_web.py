@@ -402,3 +402,32 @@ def test_health_content_type_is_json():
     client = out.app.test_client()
     resp = client.get("/health")
     assert "application/json" in resp.content_type
+
+
+# ---------------------------------------------------------------------------
+# Optional auth
+# ---------------------------------------------------------------------------
+
+def test_auth_disabled_by_default():
+    from mediainfo.outputs.web import WebOutput
+    out = WebOutput(_config())
+    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
+    assert resp.status_code == 200
+
+
+def test_auth_required_for_public_address_when_enabled():
+    from mediainfo.config import AuthConfig
+    from mediainfo.outputs.web import WebOutput
+    auth = AuthConfig(enabled=True, username="admin", password="secret")
+    out = WebOutput(_config(), auth_config=auth)
+    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
+    assert resp.status_code == 401
+
+
+def test_auth_not_required_for_private_address_when_enabled():
+    from mediainfo.config import AuthConfig
+    from mediainfo.outputs.web import WebOutput
+    auth = AuthConfig(enabled=True, username="admin", password="secret")
+    out = WebOutput(_config(), auth_config=auth)
+    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
+    assert resp.status_code == 200

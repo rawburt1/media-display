@@ -82,10 +82,17 @@ OUTPUT_CLASSES = {
 # its own per-client rotation before the first on_new_item() call ever
 # arrives (e.g. idle wallpapers shown at startup, before anything plays) -
 # see WebOutput's docstring for why it can't just reuse the orchestrator's
-# rotation like other outputs do).
+# rotation like other outputs do). Every Flask-based output also takes
+# config.auth, to optionally require HTTP Basic Auth - see web_auth.py.
 _OUTPUT_EXTRA_ARGS = {
-    "config": lambda config, config_path, cache: (config_path,),
-    "web": lambda config, config_path, cache: (config.rotation_interval_seconds, cache),
+    "config": lambda config, config_path, cache: (config_path, config.auth),
+    "web": lambda config, config_path, cache: (
+        config.rotation_interval_seconds, cache, config.auth,
+    ),
+    "info": lambda config, config_path, cache: (config.auth,),
+    "feed": lambda config, config_path, cache: (config.auth,),
+    "video": lambda config, config_path, cache: (config.auth,),
+    "nest_hub": lambda config, config_path, cache: (config.auth,),
 }
 
 ENRICHER_CLASSES = {

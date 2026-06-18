@@ -19,10 +19,11 @@ from flask import Flask, jsonify, send_file
 from flask_sock import Sock
 
 from mediainfo.cache import ImageCache
-from mediainfo.config import InfoConfig
+from mediainfo.config import AuthConfig, InfoConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 from mediainfo.transforms import parse_pipeline
+from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -119,8 +120,9 @@ _INDEX_HTML = """<!DOCTYPE html>
 
 
 class InfoOutput(Output):
-    def __init__(self, config: InfoConfig):
+    def __init__(self, config: InfoConfig, auth_config: Optional[AuthConfig] = None):
         self.config = config
+        self.auth_config = auth_config
         self.transform_pipeline = parse_pipeline(config.transforms)
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
@@ -228,4 +230,5 @@ class InfoOutput(Output):
 
             return send_file(image_path)
 
+        install_auth(app, self.auth_config)
         return app

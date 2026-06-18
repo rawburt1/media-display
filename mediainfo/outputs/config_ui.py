@@ -75,12 +75,14 @@ from mediainfo.config import (
     IDLE_CONFIG_TYPES,
     OUTPUT_CONFIG_TYPES,
     SOURCE_CONFIG_TYPES,
+    AuthConfig,
     Config,
     ConfigUiConfig,
 )
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.base import Output
+from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -185,8 +187,14 @@ def _dump_config(data: Any) -> str:
 class ConfigUiOutput(Output):
     handles_images = False
 
-    def __init__(self, config: ConfigUiConfig, config_path: Path):
+    def __init__(
+        self,
+        config: ConfigUiConfig,
+        config_path: Path,
+        auth_config: Optional[AuthConfig] = None,
+    ):
         self.config = config
+        self.auth_config = auth_config
         self.config_path = Path(config_path)
         self._lock = threading.Lock()
         self._appletv_lock = threading.Lock()
@@ -612,6 +620,7 @@ class ConfigUiOutput(Output):
                 "tracks": [{"id": i, "title": t, "mbid": m} for i, t, m in tracks],
             })
 
+        install_auth(app, self.auth_config)
         return app
 
 

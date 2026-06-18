@@ -25,9 +25,10 @@ from xml.etree import ElementTree as ET
 from flask import Flask, make_response, request
 
 from mediainfo.cache import ImageCache
-from mediainfo.config import FeedConfig
+from mediainfo.config import AuthConfig, FeedConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
+from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +74,9 @@ class _Entry:
 class FeedOutput(Output):
     handles_images = False
 
-    def __init__(self, config: FeedConfig):
+    def __init__(self, config: FeedConfig, auth_config: Optional[AuthConfig] = None):
         self.config = config
+        self.auth_config = auth_config
         self._entries: List[_Entry] = []
         self._lock = threading.Lock()
         self.app = self._build_app()
@@ -152,6 +154,7 @@ class FeedOutput(Output):
             resp.content_type = "application/atom+xml; charset=utf-8"
             return resp
 
+        install_auth(app, self.auth_config)
         return app
 
     def _build_rss(self, entries: List[_Entry], base_url: str) -> str:

@@ -309,6 +309,15 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`logging.file`** / **`logging.max_bytes`** / **`logging.backup_count`**:
   optionally also write logs to a rotating file (logs always go to
   stdout, visible via `docker compose logs`).
+- **`auth`**: optional HTTP Basic Auth for the `web`/`config`/`info`/
+  `feed`/`video`/`nest_hub` outputs, off by default (`enabled: false`).
+  When turned on, requests from RFC1918 private-use addresses and
+  loopback are still never challenged - only requests from outside those
+  ranges need `username`/`password` - so your own LAN keeps working with
+  no login prompt either way. Turn this on if you're exposing one of
+  these outputs beyond your LAN (port-forwarding, a reverse proxy, a VPN
+  you don't fully trust, ...). One shared username/password applies to
+  all of them. See SECURITY.md for more on this.
 
 ## Extending with new sources/outputs
 

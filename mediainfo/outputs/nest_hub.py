@@ -18,10 +18,11 @@ from typing import Optional
 import pychromecast
 from flask import Flask, send_file
 
-from mediainfo.config import NestHubConfig
+from mediainfo.config import AuthConfig, NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 from mediainfo.transforms import parse_pipeline
+from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +40,9 @@ _CONNECT_TIMEOUT_SECONDS = 10
 
 
 class NestHubOutput(Output):
-    def __init__(self, config: NestHubConfig):
+    def __init__(self, config: NestHubConfig, auth_config: Optional[AuthConfig] = None):
         self.config = config
+        self.auth_config = auth_config
         self.transform_pipeline = parse_pipeline(config.transforms)
         self._lock = threading.Lock()
         self._image_path: Optional[Path] = None
@@ -89,6 +91,7 @@ class NestHubOutput(Output):
 
             return send_file(image_path)
 
+        install_auth(app, self.auth_config)
         return app
 
     def _cast_image(self, image_path: Path) -> None:
