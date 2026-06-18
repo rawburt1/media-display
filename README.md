@@ -151,7 +151,15 @@ See `config.example.yaml` for all options. Key things to fill in:
   running process picks up the change via its existing hot-reload within
   a few seconds. This output can read and write config.yaml, including any
   credentials in it, with no authentication of its own - see SECURITY.md
-  before exposing it beyond a trusted local network.
+  before exposing it beyond a trusted local network. The page also has a
+  "Restart" button - sources/enrichers/idle sources apply automatically
+  via hot-reload, but `outputs` changes (added/removed/reconfigured
+  instances) only take effect after a restart, since outputs are only
+  instantiated once at startup. It works by sending SIGTERM to the
+  process - the same signal `docker stop`/Ctrl-C already trigger - so it
+  comes back up automatically under a supervisor (Docker's
+  `restart: unless-stopped`, already set up in docker-compose.yml) but
+  just exits if run unsupervised.
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page.

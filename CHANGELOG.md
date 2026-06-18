@@ -13,6 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   silently failing to download.
 
 ### Added
+- The `config` output now has a "Restart" button (`POST /api/restart`),
+  since `outputs` changes (added/removed/reconfigured instances) only take
+  effect after a restart - unlike sources/enrichers/idle sources, which
+  pick up changes via the existing hot-reload. It sends SIGTERM to the
+  process, reusing the existing graceful-shutdown path; whether it comes
+  back up depends on a process supervisor (Docker's
+  `restart: unless-stopped`, already configured, handles this).
 - The `config` output's web form now supports multiple instances of
   multi-instance-capable outputs (e.g. two `ulanzi` displays), with
   "+ Add instance" / "- Remove last" controls per output type. Previously

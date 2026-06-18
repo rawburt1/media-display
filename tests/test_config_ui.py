@@ -1,12 +1,15 @@
 """Tests for the config output (web UI for editing config.yaml)."""
 
+import os
 import shutil
+import signal
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from mediainfo.config import Config, ConfigUiConfig
-from mediainfo.outputs.config_ui import ConfigUiOutput
+from mediainfo.outputs.config_ui import ConfigUiOutput, _restart_process
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 
@@ -421,6 +424,31 @@ def test_save_raw_rejects_malformed_source_section(config_path):
     )
     assert resp.get_json()["ok"] is False
     assert config_path.read_text() == original
+
+
+# ---------------------------------------------------------------------------
+# /api/restart
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.outputs.config_ui.threading.Timer")
+def test_restart_endpoint_schedules_restart_without_blocking(mock_timer_cls, config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.post("/api/restart")
+
+    assert resp.get_json() == {"ok": True}
+    mock_timer_cls.assert_called_once()
+    args = mock_timer_cls.call_args.args
+    assert args[1] is _restart_process
+    mock_timer_cls.return_value.start.assert_called_once()
+
+
+@patch("mediainfo.outputs.config_ui.os.kill")
+def test_restart_process_sends_sigterm_to_self(mock_kill):
+    _restart_process()
+
+    mock_kill.assert_called_once_with(os.getpid(), signal.SIGTERM)
 
 
 # ---------------------------------------------------------------------------

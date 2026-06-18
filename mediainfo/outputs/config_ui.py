@@ -32,6 +32,17 @@ editor lets you tidy up the formatting by hand if it bothers you.
 This output has write access to config.yaml, including any credentials in
 it, with no authentication of its own - see SECURITY.md before exposing it
 beyond a trusted local network.
+
+The page also has a "Restart" button, since changes to `outputs` (added/
+removed/reconfigured instances) need a process restart to take effect -
+unlike sources/enrichers/idle sources, outputs are only instantiated once
+at startup (see mediainfo/__main__.py) and aren't recreated by the config
+hot-reload. It works by sending SIGTERM to this process - the same signal
+SIGTERM/Ctrl-C/`docker stop` already trigger, so it shuts down via the
+existing graceful-shutdown path. Whether it actually comes back up depends
+on a process supervisor restarting it: the documented `docker-compose.yml`
+(restart: unless-stopped) does this automatically; running the process
+directly with no supervisor does not - it'll just exit.
 """
 
 from __future__ import annotations
@@ -39,6 +50,8 @@ from __future__ import annotations
 import dataclasses
 import io
 import logging
+import os
+import signal
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -76,6 +89,15 @@ _GENERAL_FIELDS = [
 
 _yaml = YAML()
 _yaml.preserve_quotes = True
+
+# Give the HTTP response time to reach the browser before this process
+# receives SIGTERM and starts shutting down.
+_RESTART_DELAY_SECONDS = 0.5
+
+
+def _restart_process() -> None:
+    logger.info("Restarting (SIGTERM to self) - requested via the config UI")
+    os.kill(os.getpid(), signal.SIGTERM)
 
 
 def _is_secret(name: str) -> bool:
@@ -327,6 +349,11 @@ class ConfigUiOutput(Output):
                 return jsonify({"ok": False, "error": error}), 400
             return jsonify({"ok": True})
 
+        @app.post("/api/restart")
+        def restart():
+            threading.Timer(_RESTART_DELAY_SECONDS, _restart_process).start()
+            return jsonify({"ok": True})
+
         return app
 
 
@@ -367,6 +394,8 @@ _INDEX_HTML = """<!DOCTYPE html>
   button:hover { background: #1d4ed8; }
   button.secondary { background: #1a2540; }
   button.secondary:hover { background: #243456; }
+  button.danger { background: #7f1d1d; }
+  button.danger:hover { background: #991b1b; }
   button.small { padding: 5px 12px; font-size: 12px; }
   #toolbar { position: sticky; bottom: 0; background: #080d1a; padding: 14px 0;
              border-top: 1px solid #1a2540; display: flex; gap: 10px; align-items: center; }
@@ -395,8 +424,16 @@ _INDEX_HTML = """<!DOCTYPE html>
 
 <div id="toolbar">
   <button onclick="saveForm()">Save</button>
+  <button class="danger" onclick="restart()">Restart mediainfo</button>
   <span id="status"></span>
 </div>
+<p style="font-size: 11px; color: #3b5070; margin-top: 8px;">
+  Changes to outputs (added/removed/reconfigured instances) need a restart to take
+  effect - sources, enrichers, and idle sources apply automatically within a few
+  seconds. Restarting briefly takes every output offline and only comes back up
+  automatically if something supervises this process (e.g. Docker's
+  <code>restart: unless-stopped</code>, already set up in docker-compose.yml).
+</p>
 
 <script>
 let schema = null;
@@ -558,6 +595,14 @@ function saveRaw() {
     setStatus(status, d.ok, d.ok ? 'Saved - changes take effect within a few seconds.' : d.error);
     if (d.ok) load();
   }).catch(function() { setStatus(status, false, 'Request failed.'); });
+}
+
+function restart() {
+  if (!confirm('Restart mediainfo now? Every output goes offline until it comes back up.')) return;
+  const status = document.getElementById('status');
+  // The process may exit before this resolves, so treat any outcome the same.
+  fetch('/api/restart', {method: 'POST'}).catch(function() {});
+  setStatus(status, true, 'Restarting...');
 }
 
 function load() {
