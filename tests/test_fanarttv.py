@@ -2,9 +2,9 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import FanartTvConfig
-from pixoo_media.enrichers.fanarttv import FanartTvEnricher
-from pixoo_media.models import Artwork, NowPlaying
+from mediainfo.config import FanartTvConfig
+from mediainfo.enrichers.fanarttv import FanartTvEnricher
+from mediainfo.models import Artwork, NowPlaying
 
 
 def _enricher() -> FanartTvEnricher:
@@ -47,7 +47,7 @@ def _song(**kwargs) -> NowPlaying:
     return NowPlaying(**defaults)
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_movie_picks_best_poster_and_background(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -82,7 +82,7 @@ def test_movie_picks_best_poster_and_background(mock_get):
     assert kwargs["params"] == {"api_key": "test-key"}
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_skips_duplicate_already_in_images(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -103,7 +103,7 @@ def test_skips_duplicate_already_in_images(mock_get):
     assert len(now_playing.images) == 1
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_movie_without_id_does_nothing(mock_get):
     now_playing = _movie(ids={})
     _enricher().enrich(now_playing)
@@ -112,7 +112,7 @@ def test_movie_without_id_does_nothing(mock_get):
     mock_get.assert_not_called()
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_episode_matches_season_poster(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -147,7 +147,7 @@ def test_episode_matches_season_poster(mock_get):
     assert args[0] == "https://webservice.fanart.tv/v3/tv/121361"
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_episode_falls_back_to_show_poster_without_season_match(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -171,7 +171,7 @@ def test_episode_falls_back_to_show_poster_without_season_match(mock_get):
     assert "http://fanart.tv/season2.jpg" not in urls
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_404_response_does_nothing(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 404
@@ -183,7 +183,7 @@ def test_404_response_does_nothing(mock_get):
     assert now_playing.images == []
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_music_prepends_album_cover(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -218,7 +218,7 @@ def test_music_prepends_album_cover(mock_get):
     assert args[0] == "https://webservice.fanart.tv/v3/music/83d91898-7763-47d7-b03b-b92132375c47"
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_music_without_ids_does_nothing(mock_get):
     now_playing = _song(ids={})
     _enricher().enrich(now_playing)
@@ -227,7 +227,7 @@ def test_music_without_ids_does_nothing(mock_get):
     mock_get.assert_not_called()
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_music_without_matching_album_does_nothing(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -241,7 +241,7 @@ def test_music_without_matching_album_does_nothing(mock_get):
     assert now_playing.images == []
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_music_resolves_musicbrainz_ids_by_name_when_missing(mock_get):
     mb_response = MagicMock()
     mb_response.status_code = 200
@@ -285,7 +285,7 @@ def test_music_resolves_musicbrainz_ids_by_name_when_missing(mock_get):
     assert fanart_args[0] == "https://webservice.fanart.tv/v3/music/83d91898-7763-47d7-b03b-b92132375c47"
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_music_without_album_name_does_nothing(mock_get):
     now_playing = _song(ids={}, album="", source="sonos")
     _enricher().enrich(now_playing)
@@ -294,7 +294,7 @@ def test_music_without_album_name_does_nothing(mock_get):
     mock_get.assert_not_called()
 
 
-@patch("pixoo_media.enrichers.fanarttv.requests.get")
+@patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_music_musicbrainz_no_results_does_nothing(mock_get):
     mb_response = MagicMock()
     mb_response.status_code = 200

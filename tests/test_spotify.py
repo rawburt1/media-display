@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import SpotifyConfig
-from pixoo_media.sources.spotify import SpotifySource
+from mediainfo.config import SpotifyConfig
+from mediainfo.sources.spotify import SpotifySource
 
 
 def _make_config():
@@ -33,8 +33,8 @@ def _make_result(is_playing=True, kind="track", title="Bohemian Rhapsody",
     }
 
 
-@patch("pixoo_media.sources.spotify.spotipy.Spotify")
-@patch("pixoo_media.sources.spotify.SpotifyOAuth")
+@patch("mediainfo.sources.spotify.spotipy.Spotify")
+@patch("mediainfo.sources.spotify.SpotifyOAuth")
 def test_returns_now_playing(MockOAuth, MockSpotify):
     MockOAuth.return_value.get_cached_token.return_value = {"access_token": "tok"}
     MockSpotify.return_value.current_user_playing_track.return_value = _make_result()
@@ -51,7 +51,7 @@ def test_returns_now_playing(MockOAuth, MockSpotify):
     assert result.media_type == "music"
 
 
-@patch("pixoo_media.sources.spotify.SpotifyOAuth")
+@patch("mediainfo.sources.spotify.SpotifyOAuth")
 def test_returns_none_when_no_cached_token(MockOAuth):
     MockOAuth.return_value.get_cached_token.return_value = None
 
@@ -60,8 +60,8 @@ def test_returns_none_when_no_cached_token(MockOAuth):
     assert result is None
 
 
-@patch("pixoo_media.sources.spotify.spotipy.Spotify")
-@patch("pixoo_media.sources.spotify.SpotifyOAuth")
+@patch("mediainfo.sources.spotify.spotipy.Spotify")
+@patch("mediainfo.sources.spotify.SpotifyOAuth")
 def test_returns_none_when_not_playing(MockOAuth, MockSpotify):
     MockOAuth.return_value.get_cached_token.return_value = {"access_token": "tok"}
     MockSpotify.return_value.current_user_playing_track.return_value = _make_result(is_playing=False)
@@ -71,8 +71,8 @@ def test_returns_none_when_not_playing(MockOAuth, MockSpotify):
     assert result is None
 
 
-@patch("pixoo_media.sources.spotify.spotipy.Spotify")
-@patch("pixoo_media.sources.spotify.SpotifyOAuth")
+@patch("mediainfo.sources.spotify.spotipy.Spotify")
+@patch("mediainfo.sources.spotify.SpotifyOAuth")
 def test_returns_none_when_api_returns_none(MockOAuth, MockSpotify):
     MockOAuth.return_value.get_cached_token.return_value = {"access_token": "tok"}
     MockSpotify.return_value.current_user_playing_track.return_value = None
@@ -82,8 +82,8 @@ def test_returns_none_when_api_returns_none(MockOAuth, MockSpotify):
     assert result is None
 
 
-@patch("pixoo_media.sources.spotify.spotipy.Spotify")
-@patch("pixoo_media.sources.spotify.SpotifyOAuth")
+@patch("mediainfo.sources.spotify.spotipy.Spotify")
+@patch("mediainfo.sources.spotify.SpotifyOAuth")
 def test_returns_none_for_podcast_episode(MockOAuth, MockSpotify):
     MockOAuth.return_value.get_cached_token.return_value = {"access_token": "tok"}
     MockSpotify.return_value.current_user_playing_track.return_value = _make_result(kind="episode")
@@ -93,8 +93,8 @@ def test_returns_none_for_podcast_episode(MockOAuth, MockSpotify):
     assert result is None
 
 
-@patch("pixoo_media.sources.spotify.spotipy.Spotify")
-@patch("pixoo_media.sources.spotify.SpotifyOAuth")
+@patch("mediainfo.sources.spotify.spotipy.Spotify")
+@patch("mediainfo.sources.spotify.SpotifyOAuth")
 def test_returns_none_on_exception(MockOAuth, MockSpotify):
     MockOAuth.return_value.get_cached_token.return_value = {"access_token": "tok"}
     MockSpotify.return_value.current_user_playing_track.side_effect = RuntimeError("network error")

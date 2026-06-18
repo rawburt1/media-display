@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pixoo_media.config import LastFmConfig
-from pixoo_media.enrichers.lastfm import LastFmEnricher, _PLACEHOLDER_HASH
-from pixoo_media.models import Artwork, NowPlaying
+from mediainfo.config import LastFmConfig
+from mediainfo.enrichers.lastfm import LastFmEnricher, _PLACEHOLDER_HASH
+from mediainfo.models import Artwork, NowPlaying
 
 
 def _config(api_key="TEST_KEY"):
@@ -43,7 +43,7 @@ def _mock_get(json_data, status_code=200):
     return resp
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_adds_artist_photo_on_success(mock_get):
     mock_get.return_value = _mock_get(_api_response([
         _image("small", "https://example.com/small.jpg"),
@@ -60,7 +60,7 @@ def test_adds_artist_photo_on_success(mock_get):
     assert "Queen" in np.images[0].label
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_prefers_larger_size(mock_get):
     mega_url = "https://example.com/mega.jpg"
     mock_get.return_value = _mock_get(_api_response([
@@ -76,7 +76,7 @@ def test_prefers_larger_size(mock_get):
     assert np.images[0].url == mega_url
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_skips_placeholder_image(mock_get):
     mock_get.return_value = _mock_get(_api_response([
         _image("extralarge", PLACEHOLDER_URL),
@@ -90,7 +90,7 @@ def test_skips_placeholder_image(mock_get):
     assert np.images == []
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_skips_empty_url(mock_get):
     mock_get.return_value = _mock_get(_api_response([
         _image("extralarge", ""),
@@ -104,7 +104,7 @@ def test_skips_empty_url(mock_get):
     assert np.images == []
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_falls_back_to_smaller_size_when_large_is_placeholder(mock_get):
     medium_url = "https://example.com/medium.jpg"
     mock_get.return_value = _mock_get(_api_response([
@@ -121,7 +121,7 @@ def test_falls_back_to_smaller_size_when_large_is_placeholder(mock_get):
     assert np.images[0].url == medium_url
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_does_not_add_duplicate(mock_get):
     mock_get.return_value = _mock_get(_api_response([
         _image("extralarge", REAL_URL),
@@ -134,7 +134,7 @@ def test_does_not_add_duplicate(mock_get):
     assert len(np.images) == 1
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_skips_non_music(mock_get):
     enricher = LastFmEnricher(_config())
     np = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[])
@@ -145,7 +145,7 @@ def test_skips_non_music(mock_get):
     assert np.images == []
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_skips_when_no_artist(mock_get):
     enricher = LastFmEnricher(_config())
     np = NowPlaying(source="kodi", media_type="music", title="Unknown", subtitle="", images=[])
@@ -156,7 +156,7 @@ def test_skips_when_no_artist(mock_get):
     assert np.images == []
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_handles_api_error_response(mock_get):
     mock_get.return_value = _mock_get({"error": 6, "message": "Artist not found"})
     enricher = LastFmEnricher(_config())
@@ -167,7 +167,7 @@ def test_handles_api_error_response(mock_get):
     assert np.images == []
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_handles_network_exception(mock_get):
     mock_get.side_effect = ConnectionError("no network")
     enricher = LastFmEnricher(_config())
@@ -178,7 +178,7 @@ def test_handles_network_exception(mock_get):
     assert np.images == []
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_passes_autocorrect_param(mock_get):
     mock_get.return_value = _mock_get(_api_response([]))
     enricher = LastFmEnricher(_config())
@@ -189,7 +189,7 @@ def test_passes_autocorrect_param(mock_get):
     assert kwargs["params"]["autocorrect"] == "1"
 
 
-@patch("pixoo_media.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.lastfm.requests.get")
 def test_passes_api_key(mock_get):
     mock_get.return_value = _mock_get(_api_response([]))
     enricher = LastFmEnricher(_config(api_key="MY_KEY"))

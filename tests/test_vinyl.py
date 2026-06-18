@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import VinylConfig
-from pixoo_media.sources.vinyl import VinylSource
+from mediainfo.config import VinylConfig
+from mediainfo.sources.vinyl import VinylSource
 
 
 def _source(**kwargs) -> VinylSource:
@@ -12,7 +12,7 @@ def _source(**kwargs) -> VinylSource:
     return VinylSource(VinylConfig(**defaults))
 
 
-@patch("pixoo_media.sources.vinyl.requests.get")
+@patch("mediainfo.sources.vinyl.requests.get")
 def test_returns_now_playing_with_artwork(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -38,7 +38,7 @@ def test_returns_now_playing_with_artwork(mock_get):
     assert args[0] == "http://192.168.1.40:8091/now-playing"
 
 
-@patch("pixoo_media.sources.vinyl.requests.get")
+@patch("mediainfo.sources.vinyl.requests.get")
 def test_returns_now_playing_without_artwork(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -55,7 +55,7 @@ def test_returns_now_playing_without_artwork(mock_get):
     assert now_playing.images == []
 
 
-@patch("pixoo_media.sources.vinyl.requests.get")
+@patch("mediainfo.sources.vinyl.requests.get")
 def test_returns_none_when_nothing_recognized(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -65,7 +65,7 @@ def test_returns_none_when_nothing_recognized(mock_get):
     assert _source().get_now_playing() is None
 
 
-@patch("pixoo_media.sources.vinyl.requests.get")
+@patch("mediainfo.sources.vinyl.requests.get")
 def test_returns_none_on_connection_error(mock_get):
     mock_get.side_effect = RuntimeError("connection refused")
 

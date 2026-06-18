@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from pixoo_media.__main__ import (
+from mediainfo.__main__ import (
     _file_mtime,
     _make_stop_handler,
     _shutdown_outputs,
@@ -119,7 +119,7 @@ def test_warn_output_changes_warns_when_outputs_differ(caplog):
     new = MagicMock()
     new.outputs = {"web": [object()]}  # different instance
 
-    with caplog.at_level(logging.WARNING, logger="pixoo_media.__main__"):
+    with caplog.at_level(logging.WARNING, logger="mediainfo.__main__"):
         _warn_output_changes(old, new)
 
     assert any("restart" in r.message.lower() for r in caplog.records)
@@ -131,7 +131,7 @@ def test_warn_output_changes_silent_when_same(caplog):
     cfg = MagicMock()
     cfg.outputs = {}
 
-    with caplog.at_level(logging.WARNING, logger="pixoo_media.__main__"):
+    with caplog.at_level(logging.WARNING, logger="mediainfo.__main__"):
         _warn_output_changes(cfg, cfg)  # same object → equal
 
     warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
@@ -172,7 +172,7 @@ def test_build_sources_skips_unknown(caplog):
     source_cfg = MagicMock()
     source_cfg.enabled = True
     cfg = _minimal_config(priority=["nonexistent"], sources={"nonexistent": source_cfg})
-    with caplog.at_level(logging.WARNING, logger="pixoo_media.__main__"):
+    with caplog.at_level(logging.WARNING, logger="mediainfo.__main__"):
         result = _build_sources(cfg)
     assert result == []
     assert any("nonexistent" in r.message for r in caplog.records)
@@ -185,7 +185,7 @@ def test_build_sources_instantiates_enabled():
     fake_cls = MagicMock(return_value=MagicMock())
     cfg = _minimal_config(priority=["kodi"], sources={"kodi": source_cfg})
 
-    with patch("pixoo_media.__main__.SOURCE_CLASSES", {"kodi": fake_cls}):
+    with patch("mediainfo.__main__.SOURCE_CLASSES", {"kodi": fake_cls}):
         result = _build_sources(cfg)
 
     fake_cls.assert_called_once_with(source_cfg)
@@ -206,7 +206,7 @@ def test_build_enrichers_instantiates_enabled():
     fake_cls = MagicMock(return_value=MagicMock())
     cfg = _minimal_config(enrichers={"fanarttv": enc_cfg})
 
-    with patch("pixoo_media.__main__.ENRICHER_CLASSES", {"fanarttv": fake_cls}):
+    with patch("mediainfo.__main__.ENRICHER_CLASSES", {"fanarttv": fake_cls}):
         result = _build_enrichers(cfg)
 
     fake_cls.assert_called_once_with(enc_cfg)
@@ -227,7 +227,7 @@ def test_build_idle_source_returns_instance_when_enabled():
     fake_cls = MagicMock(return_value=MagicMock())
     cfg = _minimal_config(idle={"unsplash": idle_cfg})
 
-    with patch("pixoo_media.__main__.IDLE_CLASSES", {"unsplash": fake_cls}):
+    with patch("mediainfo.__main__.IDLE_CLASSES", {"unsplash": fake_cls}):
         result = _build_idle_source(cfg)
 
     fake_cls.assert_called_once_with(idle_cfg)
@@ -256,7 +256,7 @@ def test_start_orchestrator_starts_and_returns_orchestrator():
     cache = MagicMock()
 
     mock_orch = MagicMock()
-    with patch("pixoo_media.__main__.Orchestrator", return_value=mock_orch) as mock_cls:
+    with patch("mediainfo.__main__.Orchestrator", return_value=mock_orch) as mock_cls:
         result = _start_orchestrator(cfg, outputs, cache)
 
     mock_cls.assert_called_once()

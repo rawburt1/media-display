@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pixoo_media.config import Config, WebConfig
+from mediainfo.config import Config, WebConfig
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 

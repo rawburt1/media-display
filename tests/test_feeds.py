@@ -6,9 +6,9 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from pixoo_media.config import FeedConfig
-from pixoo_media.models import Artwork, NowPlaying
-from pixoo_media.outputs.feeds import FeedOutput, _image_mime
+from mediainfo.config import FeedConfig
+from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs.feeds import FeedOutput, _image_mime
 
 _ATOM_NS = "http://www.w3.org/2005/Atom"
 
@@ -319,7 +319,7 @@ def test_atom_entry_id_and_updated():
     with out.app.test_client() as client:
         root = ET.fromstring(client.get("/atom").data)
     entry = root.find(_a("entry"))
-    assert entry.find(_a("id")).text.startswith("urn:pixoo-media:")
+    assert entry.find(_a("id")).text.startswith("urn:mediainfo:")
     assert entry.find(_a("updated")).text
 
 

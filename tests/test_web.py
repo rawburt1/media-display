@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pixoo_media.config import WebConfig
-from pixoo_media.models import Artwork, NowPlaying
+from mediainfo.config import WebConfig
+from mediainfo.models import Artwork, NowPlaying
 
 
 def _config(**kwargs):
@@ -49,7 +49,7 @@ def no_server(monkeypatch):
 
 
 def _output(config=None):
-    from pixoo_media.outputs.web import WebOutput
+    from mediainfo.outputs.web import WebOutput
     return WebOutput(config or _config())
 
 
@@ -188,3 +188,44 @@ def test_update_after_on_new_item_adds_image(tmp_path):
     second = json.loads(conn.sent[1])
     assert "image" not in first
     assert "image" in second
+
+
+# ---------------------------------------------------------------------------
+# /health endpoint
+# ---------------------------------------------------------------------------
+
+def test_health_returns_starting_when_no_provider():
+    out = _output()
+    client = out.app.test_client()
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["status"] == "starting"
+
+
+def test_health_calls_provider_and_returns_json():
+    out = _output()
+    out.set_health_provider(lambda: {"status": "ok", "uptime_seconds": 42.0})
+    client = out.app.test_client()
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["status"] == "ok"
+    assert data["uptime_seconds"] == 42.0
+
+
+def test_health_provider_can_be_replaced():
+    out = _output()
+    out.set_health_provider(lambda: {"status": "old"})
+    out.set_health_provider(lambda: {"status": "new"})
+    client = out.app.test_client()
+    data = client.get("/health").get_json()
+    assert data["status"] == "new"
+
+
+def test_health_content_type_is_json():
+    out = _output()
+    out.set_health_provider(lambda: {"status": "ok"})
+    client = out.app.test_client()
+    resp = client.get("/health")
+    assert "application/json" in resp.content_type

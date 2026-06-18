@@ -2,9 +2,9 @@
 
 from unittest.mock import patch
 
-from pixoo_media.config import MusicBrainzConfig
-from pixoo_media.enrichers.musicbrainz import MusicBrainzEnricher
-from pixoo_media.models import Artwork, NowPlaying
+from mediainfo.config import MusicBrainzConfig
+from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
+from mediainfo.models import Artwork, NowPlaying
 
 
 def _config():
@@ -19,13 +19,13 @@ def _music(**kwargs):
     return NowPlaying(**defaults)
 
 
-@patch("pixoo_media.enrichers.musicbrainz.requests.head")
+@patch("mediainfo.enrichers.musicbrainz.requests.head")
 def test_enriches_with_known_mbid(mock_head):
     np = _music(ids={"musicbrainzalbum": "known-mbid"})
     mock_head.return_value.status_code = 200
     mock_head.return_value.url = "https://caa.example.com/cover.jpg"
 
-    with patch("pixoo_media.enrichers.musicbrainz.requests.get") as mock_get:
+    with patch("mediainfo.enrichers.musicbrainz.requests.get") as mock_get:
         MusicBrainzEnricher(_config()).enrich(np)
         mock_get.assert_not_called()
 
@@ -33,8 +33,8 @@ def test_enriches_with_known_mbid(mock_head):
     assert np.images[-1].url == "https://caa.example.com/cover.jpg"
 
 
-@patch("pixoo_media.enrichers.musicbrainz.requests.get")
-@patch("pixoo_media.enrichers.musicbrainz.requests.head")
+@patch("mediainfo.enrichers.musicbrainz.requests.get")
+@patch("mediainfo.enrichers.musicbrainz.requests.head")
 def test_resolves_mbid_by_artist_and_album(mock_head, mock_get):
     np = _music()
     mock_get.return_value.status_code = 200
@@ -49,8 +49,8 @@ def test_resolves_mbid_by_artist_and_album(mock_head, mock_get):
     assert any("MusicBrainz" in img.label for img in np.images)
 
 
-@patch("pixoo_media.enrichers.musicbrainz.requests.get")
-@patch("pixoo_media.enrichers.musicbrainz.requests.head")
+@patch("mediainfo.enrichers.musicbrainz.requests.get")
+@patch("mediainfo.enrichers.musicbrainz.requests.head")
 def test_prefers_album_type_over_compilation(mock_head, mock_get):
     np = _music()
     mock_get.return_value.json.return_value = {
@@ -68,7 +68,7 @@ def test_prefers_album_type_over_compilation(mock_head, mock_get):
     assert "album-mbid" in called_url
 
 
-@patch("pixoo_media.enrichers.musicbrainz.requests.head")
+@patch("mediainfo.enrichers.musicbrainz.requests.head")
 def test_skips_when_caa_returns_404(mock_head):
     np = _music(ids={"musicbrainzalbum": "known-mbid"})
     mock_head.return_value.status_code = 404
@@ -80,19 +80,19 @@ def test_skips_when_caa_returns_404(mock_head):
 
 def test_skips_non_music():
     np = _music(media_type="movie")
-    with patch("pixoo_media.enrichers.musicbrainz.requests.get") as mock_get:
+    with patch("mediainfo.enrichers.musicbrainz.requests.get") as mock_get:
         MusicBrainzEnricher(_config()).enrich(np)
         mock_get.assert_not_called()
 
 
 def test_skips_when_no_artist_or_album():
     np = _music(subtitle="", album="")
-    with patch("pixoo_media.enrichers.musicbrainz.requests.get") as mock_get:
+    with patch("mediainfo.enrichers.musicbrainz.requests.get") as mock_get:
         MusicBrainzEnricher(_config()).enrich(np)
         mock_get.assert_not_called()
 
 
-@patch("pixoo_media.enrichers.musicbrainz.requests.head")
+@patch("mediainfo.enrichers.musicbrainz.requests.head")
 def test_no_duplicate_images(mock_head):
     existing_url = "https://caa.example.com/existing.jpg"
     np = _music(ids={"musicbrainzalbum": "mbid"},

@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pixoo_media.config import MqttConfig
-from pixoo_media.models import Artwork, NowPlaying
-from pixoo_media.outputs.mqtt import MqttOutput
+from mediainfo.config import MqttConfig
+from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs.mqtt import MqttOutput
 
 
 def _config(**kwargs):
@@ -15,7 +15,7 @@ def _config(**kwargs):
         enabled=True,
         host="localhost",
         port=1883,
-        topic="pixoo-media/now_playing",
+        topic="mediainfo/now_playing",
         client_id="test-client",
         username="",
         password="",
@@ -39,7 +39,7 @@ def _now_playing(**kwargs):
     return NowPlaying(**defaults)
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_publishes_playing_payload_on_new_item(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config())
@@ -48,7 +48,7 @@ def test_publishes_playing_payload_on_new_item(MockClient):
 
     mock_client.publish.assert_called_once()
     args, kwargs = mock_client.publish.call_args
-    assert args[0] == "pixoo-media/now_playing"
+    assert args[0] == "mediainfo/now_playing"
     payload = json.loads(args[1])
     assert payload["state"] == "playing"
     assert payload["title"] == "Bohemian Rhapsody"
@@ -58,7 +58,7 @@ def test_publishes_playing_payload_on_new_item(MockClient):
     assert payload["media_type"] == "music"
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_publishes_idle_payload_on_idle(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config())
@@ -71,7 +71,7 @@ def test_publishes_idle_payload_on_idle(MockClient):
     assert payload == {"state": "idle"}
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_publishes_to_configured_topic(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config(topic="home/living_room/media"))
@@ -82,7 +82,7 @@ def test_publishes_to_configured_topic(MockClient):
     assert args[0] == "home/living_room/media"
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_retain_and_qos_passed_to_publish(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config(qos=1, retain=False))
@@ -94,7 +94,7 @@ def test_retain_and_qos_passed_to_publish(MockClient):
     assert kwargs["retain"] is False
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_credentials_set_when_username_provided(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config(username="user", password="secret"))
@@ -102,7 +102,7 @@ def test_credentials_set_when_username_provided(MockClient):
     mock_client.username_pw_set.assert_called_once_with("user", "secret")
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_no_credentials_when_username_blank(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config(username="", password=""))
@@ -110,7 +110,7 @@ def test_no_credentials_when_username_blank(MockClient):
     mock_client.username_pw_set.assert_not_called()
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_loop_start_called_on_init(MockClient):
     mock_client = MockClient.return_value
     MqttOutput(_config())
@@ -118,7 +118,7 @@ def test_loop_start_called_on_init(MockClient):
     mock_client.loop_start.assert_called_once()
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_update_is_noop(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config())
@@ -129,7 +129,7 @@ def test_update_is_noop(MockClient):
     mock_client.publish.assert_not_called()
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_publish_exception_does_not_propagate(MockClient):
     mock_client = MockClient.return_value
     mock_client.publish.side_effect = RuntimeError("broker gone")
@@ -140,7 +140,7 @@ def test_publish_exception_does_not_propagate(MockClient):
     output.on_new_item(_now_playing(), MagicMock())
 
 
-@patch("pixoo_media.outputs.mqtt.mqtt.Client")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_connect_failure_does_not_prevent_loop_start(MockClient):
     mock_client = MockClient.return_value
     mock_client.connect_async.side_effect = OSError("connection refused")

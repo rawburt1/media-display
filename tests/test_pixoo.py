@@ -9,9 +9,9 @@ from unittest.mock import MagicMock, patch, call
 import pytest
 from PIL import Image
 
-from pixoo_media.config import PixooConfig
-from pixoo_media.models import Artwork, NowPlaying
-from pixoo_media.outputs.pixoo import PixooOutput, _prepare_for_led, _save_preview
+from mediainfo.config import PixooConfig
+from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs.pixoo import PixooOutput, _prepare_for_led, _save_preview
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +197,7 @@ def test_update_no_preview_when_not_configured(tmp_path):
     img_path = _save_image(tmp_path / "art.jpg")
     output = PixooOutput(_config())  # no preview_path
 
-    with patch.object(output, "_post"), patch("pixoo_media.outputs.pixoo._save_preview") as mock_prev:
+    with patch.object(output, "_post"), patch("mediainfo.outputs.pixoo._save_preview") as mock_prev:
         output.update(_now_playing(), _artwork(), img_path)
 
     mock_prev.assert_not_called()

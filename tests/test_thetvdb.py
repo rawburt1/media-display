@@ -2,9 +2,9 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import TheTvDbConfig
-from pixoo_media.enrichers.thetvdb import TheTvDbEnricher
-from pixoo_media.models import Artwork, NowPlaying
+from mediainfo.config import TheTvDbConfig
+from mediainfo.enrichers.thetvdb import TheTvDbEnricher
+from mediainfo.models import Artwork, NowPlaying
 
 _ARTWORK_TYPES = {
     "data": [
@@ -49,8 +49,8 @@ def _response(payload, status_code=200):
     return response
 
 
-@patch("pixoo_media.enrichers.thetvdb.requests.get")
-@patch("pixoo_media.enrichers.thetvdb.requests.post")
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_adds_poster_and_fanart(mock_post, mock_get):
     mock_post.return_value = _response({"data": {"token": "test-token"}})
     mock_get.side_effect = [_response(_ARTWORK_TYPES), _response(_SERIES_ARTWORKS)]
@@ -68,8 +68,8 @@ def test_adds_poster_and_fanart(mock_post, mock_get):
     assert kwargs["json"] == {"apikey": "test-key"}
 
 
-@patch("pixoo_media.enrichers.thetvdb.requests.get")
-@patch("pixoo_media.enrichers.thetvdb.requests.post")
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_skips_non_episode(mock_post, mock_get):
     now_playing = _now_playing(media_type="movie", subtitle="")
 
@@ -80,8 +80,8 @@ def test_skips_non_episode(mock_post, mock_get):
     assert now_playing.images == []
 
 
-@patch("pixoo_media.enrichers.thetvdb.requests.get")
-@patch("pixoo_media.enrichers.thetvdb.requests.post")
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_no_tvdb_id_skips(mock_post, mock_get):
     now_playing = NowPlaying(
         source="kodi", media_type="episode", title="Pilot", subtitle="S01E01", ids={}
@@ -93,8 +93,8 @@ def test_no_tvdb_id_skips(mock_post, mock_get):
     mock_get.assert_not_called()
 
 
-@patch("pixoo_media.enrichers.thetvdb.requests.get")
-@patch("pixoo_media.enrichers.thetvdb.requests.post")
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_does_not_duplicate_existing_image(mock_post, mock_get):
     mock_post.return_value = _response({"data": {"token": "test-token"}})
     mock_get.side_effect = [_response(_ARTWORK_TYPES), _response(_SERIES_ARTWORKS)]
@@ -109,8 +109,8 @@ def test_does_not_duplicate_existing_image(mock_post, mock_get):
     assert "https://thetvdb.com/background.jpg" in urls
 
 
-@patch("pixoo_media.enrichers.thetvdb.requests.get")
-@patch("pixoo_media.enrichers.thetvdb.requests.post")
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_relogs_in_on_401(mock_post, mock_get):
     mock_post.side_effect = [
         _response({"data": {"token": "expired-token"}}),
@@ -129,8 +129,8 @@ def test_relogs_in_on_401(mock_post, mock_get):
     assert mock_post.call_count == 2
 
 
-@patch("pixoo_media.enrichers.thetvdb.requests.get")
-@patch("pixoo_media.enrichers.thetvdb.requests.post")
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_login_failure_returns_gracefully(mock_post, mock_get):
     mock_post.side_effect = Exception("boom")
 
@@ -140,8 +140,8 @@ def test_login_failure_returns_gracefully(mock_post, mock_get):
     assert now_playing.images == []
 
 
-@patch("pixoo_media.enrichers.thetvdb.requests.get")
-@patch("pixoo_media.enrichers.thetvdb.requests.post")
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_series_not_found_returns_gracefully(mock_post, mock_get):
     mock_post.return_value = _response({"data": {"token": "test-token"}})
     mock_get.side_effect = [_response(_ARTWORK_TYPES), _response({}, status_code=404)]

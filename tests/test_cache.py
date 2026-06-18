@@ -4,8 +4,8 @@ import os
 import time
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.cache import ImageCache
-from pixoo_media.models import Artwork
+from mediainfo.cache import ImageCache
+from mediainfo.models import Artwork
 
 
 def test_get_path_returns_none_without_artwork(tmp_path):
@@ -14,7 +14,7 @@ def test_get_path_returns_none_without_artwork(tmp_path):
     assert cache.get_path(Artwork(url="")) is None
 
 
-@patch("pixoo_media.cache.requests.get")
+@patch("mediainfo.cache.requests.get")
 def test_get_path_downloads_and_caches(mock_get, tmp_path):
     mock_response = MagicMock()
     mock_response.headers = {"Content-Type": "image/jpeg"}

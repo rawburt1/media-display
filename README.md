@@ -1,22 +1,26 @@
-# Pixoo64 Media Art Display
+# mediainfo
 
 Polls "now playing" media sources on your network and shows the current
-album art / poster on a [Divoom Pixoo64](https://divoom.com/) LED display
-and on a simple local web page.
+album art / poster on a [Divoom Pixoo64](https://divoom.com/) LED display,
+a Ulanzi TC001, a Google Nest Hub, a simple local web page, and more.
 
 ## Status
 
 Currently implemented:
 
 - **Sources**: Kodi (movie/episode posters+fanart, music), Plex (movie/episode
-  posters+fanart, music), Sonos (album art), Android TV / Nvidia Shield (via
-  ADB, "now playing" from any app), vinyl turntable (audio recognition via
+  posters+fanart, music), Jellyfin and Emby (movie/episode posters+fanart,
+  music, via the Sessions API), Sonos (album art), Spotify (current playback
+  via the Web API), Apple TV (any app, via the Companion/MRP/AirPlay
+  protocols), Android TV / Nvidia Shield (via ADB, "now playing" from any
+  app), vinyl turntable (audio recognition via
   [vinyl_recognizer](vinyl_recognizer/) + AudD)
 - **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
-  movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv also adds
-  (and prefers) album covers for music, matched via Kodi's MusicBrainz ids
-  or, failing that, by looking up the artist/album name (e.g. for Sonos) via
-  the MusicBrainz API
+  movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
+  Discogs also add (and prefer) album covers for music, matched via
+  MusicBrainz ids or, failing that, by looking up the artist/album name
+  (e.g. for Sonos) via the MusicBrainz API or Discogs' search; Last.fm adds
+  artist photos
 - **Outputs**: Pixoo64 (local HTTP API), web page (`http://<host>:8090/`),
   and Google Nest Hub (Cast) each rotate between all available poster/fanart
   images for the current item on their own randomized schedule - each one
@@ -24,7 +28,10 @@ Currently implemented:
   the same time; folder export mirrors all of the current item's artwork to
   a local directory; Ulanzi TC001 (AWTRIX3) shows the current item as
   scrolling text instead of artwork (e.g. "Artist - Song",
-  "Title (Year)", "Show s01e01")
+  "Title (Year)", "Show s01e01"); video output serves a full-screen web
+  player that shows idle stock-footage clips (Pexels/Pixabay) and switches
+  to artwork when something plays; MQTT publishes now-playing state to a
+  broker topic; feed output serves RSS/Atom feeds of recently-played items
 - **Idle wallpapers**: Unsplash - while nothing is playing, downloads a fresh
   batch of wallpapers matching the configured search queries every
   `rotation_interval_seconds`, and each output independently rotates through
@@ -32,9 +39,9 @@ Currently implemented:
   rotation above)
 - Disk cache for downloaded artwork (each image is only fetched once,
   and unused files are purged after `cache.max_age_days`)
-
-Planned (add as new `MediaSource` plugins, see "Extending" below):
-Spotify, Emby, Jellyfin.
+- `/health` endpoint (on the web output) reports uptime, the current
+  now-playing item, and per-source/output/enricher status - JSON by default,
+  or an HTML dashboard when requested with `Accept: text/html`
 
 ## Setup
 
@@ -46,7 +53,7 @@ pip install -r requirements.txt
 cp config.example.yaml config.yaml
 # edit config.yaml with your devices' IPs/credentials
 
-python -m pixoo_media --config config.yaml
+python -m mediainfo --config config.yaml
 ```
 
 The web page is then available at `http://<this-machine>:8090/`.
@@ -64,6 +71,23 @@ See `config.example.yaml` for all options. Key things to fill in:
   device list).
 - **`sources.plex`**: host/port of your Plex Media Server and an
   [X-Plex-Token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/).
+- **`sources.jellyfin`** / **`sources.emby`**: host/port and an `api_key`
+  generated from *Dashboard → Advanced → API Keys → New API Key* (Jellyfin)
+  or the equivalent Emby settings page.
+- **`sources.spotify`**: `client_id`/`client_secret` from a free app at
+  https://developer.spotify.com/dashboard, with
+  `http://localhost:8888/callback` (or your configured `redirect_uri`) added
+  as a Redirect URI. Authorize once with
+  `python -m mediainfo auth spotify --config config.yaml` (or
+  `docker compose run --rm mediainfo python -m mediainfo auth spotify`),
+  which opens a login flow and caches the token at `cache_path`. Only
+  reports playback on the account that's actively listening.
+- **`sources.appletv`**: `host` is the Apple TV's IP/hostname. Pair once
+  with `python -m mediainfo auth appletv --config config.yaml` (or the
+  `docker compose run` equivalent) - follow the prompts to enter the PIN
+  shown on the TV, then paste the printed credentials into config.yaml.
+  Reports whatever's playing in any app (TV+, Plex, Infuse, music apps,
+  etc.) via the Companion/MRP/AirPlay protocols.
 - **`sources.shield`**: IP address of an Android TV device (e.g. Nvidia
   Shield) - can be the same device as `sources.kodi`, since this reads the
   Android-level "now playing" media session (Spotify, YouTube Music, SVT
@@ -115,6 +139,20 @@ See `config.example.yaml` for all options. Key things to fill in:
   face) while idle. For music, release/version suffixes (e.g.
   "- 2011 Remaster", "(Live)", "[Deluxe Edition]") are stripped from the
   song title.
+- **`outputs.video`**: serves a full-screen web player (`host`/`port`) that
+  shows idle stock-footage clips and switches to the current artwork when
+  something plays. `source` is `pexels` or `pixabay`; `queries` is a
+  comma-separated list of search terms (e.g. `nature,ocean,mountains`); set
+  `pexels_api_key` (https://www.pexels.com/api/) or `pixabay_api_key`
+  (https://pixabay.com/api/docs/) to match. `batch_size` clips are fetched
+  every `refresh_interval_seconds` (Pixabay is capped at 20 per request).
+- **`outputs.mqtt`**: publishes the current now-playing state as JSON to
+  `topic` on the broker at `host`/`port` (with optional `username`/
+  `password`/`qos`) - useful for Home Assistant or other automation.
+- **`outputs.feed`**: serves RSS (`/rss`) and Atom (`/atom`) feeds of
+  recently-played items, with artwork as enclosures, plus an HTML
+  discovery page at `/`. `max_items` caps how many recent items are kept
+  in memory (default 50); `title` names the feed.
 - **`idle.unsplash`**: comma-separated `queries` to pull wallpapers from
   while nothing is playing. `batch_size` wallpapers are downloaded every
   `rotation_interval_seconds`, and each output rotates through that batch
@@ -124,22 +162,28 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`enrichers.thetvdb`**: free `api_key` from
   https://thetvdb.com/dashboard/account/apikey (only "user-supported" keys
   need a `pin`).
+- **`enrichers.discogs`**: free personal access `token` from
+  https://www.discogs.com/settings/developers. Adds album cover art for
+  music by searching Discogs by artist + album name; only runs when both
+  are known, to avoid matching the wrong release.
+- **`enrichers.lastfm`**: free `api_key` from
+  https://www.last.fm/api/account/create. Adds an artist photo for music.
 - **`cache.dir`**: where downloaded artwork is stored.
 - **`cache.max_age_days`**: how long unused cached artwork is kept before
   being deleted (default 30).
 
 ## Extending with new sources/outputs
 
-1. Add a config dataclass in `pixoo_media/config.py` and register it in
+1. Add a config dataclass in `mediainfo/config.py` and register it in
    `SOURCE_CONFIG_TYPES` (or `OUTPUT_CONFIG_TYPES`, or `IDLE_CONFIG_TYPES`
    for idle wallpaper sources).
-2. Add a new module under `pixoo_media/sources/` (or `outputs/`, or
+2. Add a new module under `mediainfo/sources/` (or `outputs/`, or
    `idle/`) that implements `MediaSource.get_now_playing()` (or
    `Output.update()` / `on_idle()`, or
    `IdleWallpaperSource.get_wallpapers()`), returning a
-   `pixoo_media.models.NowPlaying` (or a list of `Artwork`).
+   `mediainfo.models.NowPlaying` (or a list of `Artwork`).
 3. Register the class in `SOURCE_CLASSES` (or `OUTPUT_CLASSES`, or
-   `IDLE_CLASSES`) in `pixoo_media/__main__.py`.
+   `IDLE_CLASSES`) in `mediainfo/__main__.py`.
 4. Add it to `priority` (sources), `outputs` (outputs), or `idle` (idle
    wallpaper sources) in your `config.yaml`.
 

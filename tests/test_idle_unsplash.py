@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import UnsplashWallpaperConfig
-from pixoo_media.idle.unsplash import UnsplashWallpaperSource
+from mediainfo.config import UnsplashWallpaperConfig
+from mediainfo.idle.unsplash import UnsplashWallpaperSource
 
 
 def _source(**kwargs) -> UnsplashWallpaperSource:
@@ -23,7 +23,7 @@ def test_parses_comma_separated_queries():
     assert source.queries == ["nature", "architecture", "space"]
 
 
-@patch("pixoo_media.idle.unsplash.requests.get")
+@patch("mediainfo.idle.unsplash.requests.get")
 def test_returns_artworks_from_response(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -56,7 +56,7 @@ def test_returns_artworks_from_response(mock_get):
     assert kwargs["headers"]["Authorization"] == "Client-ID test-key"
 
 
-@patch("pixoo_media.idle.unsplash.requests.get")
+@patch("mediainfo.idle.unsplash.requests.get")
 def test_single_object_response_is_wrapped_in_a_list(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -72,7 +72,7 @@ def test_single_object_response_is_wrapped_in_a_list(mock_get):
     assert artworks[0].url == "https://images.unsplash.com/photo-123"
 
 
-@patch("pixoo_media.idle.unsplash.requests.get")
+@patch("mediainfo.idle.unsplash.requests.get")
 def test_no_queries_omits_query_param(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -86,7 +86,7 @@ def test_no_queries_omits_query_param(mock_get):
     assert kwargs["params"] == {"count": 5}
 
 
-@patch("pixoo_media.idle.unsplash.requests.get")
+@patch("mediainfo.idle.unsplash.requests.get")
 def test_photos_without_urls_are_skipped(mock_get):
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -101,7 +101,7 @@ def test_photos_without_urls_are_skipped(mock_get):
     assert [a.url for a in artworks] == ["https://images.unsplash.com/photo-123"]
 
 
-@patch("pixoo_media.idle.unsplash.requests.get")
+@patch("mediainfo.idle.unsplash.requests.get")
 def test_request_error_returns_empty_list(mock_get):
     mock_get.side_effect = Exception("boom")
 

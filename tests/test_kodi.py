@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import KodiConfig
-from pixoo_media.sources.kodi import KodiSource, resolve_kodi_image_url
+from mediainfo.config import KodiConfig
+from mediainfo.sources.kodi import KodiSource, resolve_kodi_image_url
 
 
 def test_resolve_kodi_image_url():
@@ -42,7 +42,7 @@ def _rpc_responses(active_players, item, tvshow_uniqueid=None):
     return responses
 
 
-@patch("pixoo_media.sources.kodi.requests.post")
+@patch("mediainfo.sources.kodi.requests.post")
 def test_no_active_players_returns_none(mock_post):
     response = MagicMock()
     response.json.return_value = {"result": []}
@@ -51,7 +51,7 @@ def test_no_active_players_returns_none(mock_post):
     assert _source().get_now_playing() is None
 
 
-@patch("pixoo_media.sources.kodi.requests.post")
+@patch("mediainfo.sources.kodi.requests.post")
 def test_movie_item(mock_post):
     mock_post.side_effect = _rpc_responses(
         [{"playerid": 1, "type": "video"}],
@@ -82,7 +82,7 @@ def test_movie_item(mock_post):
     assert now_playing.images[1].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://fanart.jpg/")
 
 
-@patch("pixoo_media.sources.kodi.requests.post")
+@patch("mediainfo.sources.kodi.requests.post")
 def test_episode_item_prefers_series_art(mock_post):
     mock_post.side_effect = _rpc_responses(
         [{"playerid": 1, "type": "video"}],
@@ -119,7 +119,7 @@ def test_episode_item_prefers_series_art(mock_post):
     assert now_playing.ids == {"tvdb": "405535", "tmdb": "128098", "imdb": "tt3960394"}
 
 
-@patch("pixoo_media.sources.kodi.requests.post")
+@patch("mediainfo.sources.kodi.requests.post")
 def test_episode_falls_back_to_episode_uniqueid_if_tvshow_lookup_fails(mock_post):
     mock_post.side_effect = _rpc_responses(
         [{"playerid": 1, "type": "video"}],
@@ -141,7 +141,7 @@ def test_episode_falls_back_to_episode_uniqueid_if_tvshow_lookup_fails(mock_post
     assert now_playing.ids == {"tvdb": "9999999"}
 
 
-@patch("pixoo_media.sources.kodi.requests.post")
+@patch("mediainfo.sources.kodi.requests.post")
 def test_music_item(mock_post):
     mock_post.side_effect = _rpc_responses(
         [{"playerid": 0, "type": "audio"}],
@@ -167,7 +167,7 @@ def test_music_item(mock_post):
     assert now_playing.ids == {}
 
 
-@patch("pixoo_media.sources.kodi.requests.post")
+@patch("mediainfo.sources.kodi.requests.post")
 def test_music_item_with_musicbrainz_ids(mock_post):
     mock_post.side_effect = _rpc_responses(
         [{"playerid": 0, "type": "audio"}],
@@ -189,7 +189,7 @@ def test_music_item_with_musicbrainz_ids(mock_post):
     }
 
 
-@patch("pixoo_media.sources.kodi.requests.post")
+@patch("mediainfo.sources.kodi.requests.post")
 def test_request_error_returns_none(mock_post):
     mock_post.side_effect = Exception("boom")
 

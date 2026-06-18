@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import PlexConfig
-from pixoo_media.sources.plex import PlexSource, resolve_plex_image_url
+from mediainfo.config import PlexConfig
+from mediainfo.sources.plex import PlexSource, resolve_plex_image_url
 
 
 def _source(**kwargs) -> PlexSource:
@@ -25,14 +25,14 @@ def test_resolve_plex_image_url():
     assert url == "http://192.168.1.22:32400/library/metadata/1/thumb/2?X-Plex-Token=test-token"
 
 
-@patch("pixoo_media.sources.plex.requests.get")
+@patch("mediainfo.sources.plex.requests.get")
 def test_no_sessions_returns_none(mock_get):
     mock_get.return_value = _response([])
 
     assert _source().get_now_playing() is None
 
 
-@patch("pixoo_media.sources.plex.requests.get")
+@patch("mediainfo.sources.plex.requests.get")
 def test_paused_session_returns_none(mock_get):
     mock_get.return_value = _response(
         [{"type": "movie", "title": "Inception", "Player": {"state": "paused"}}]
@@ -41,7 +41,7 @@ def test_paused_session_returns_none(mock_get):
     assert _source().get_now_playing() is None
 
 
-@patch("pixoo_media.sources.plex.requests.get")
+@patch("mediainfo.sources.plex.requests.get")
 def test_movie_session(mock_get):
     mock_get.return_value = _response(
         [
@@ -76,7 +76,7 @@ def test_movie_session(mock_get):
     assert now_playing.images[1].label == "Fanart (Plex)"
 
 
-@patch("pixoo_media.sources.plex.requests.get")
+@patch("mediainfo.sources.plex.requests.get")
 def test_episode_session(mock_get):
     mock_get.return_value = _response(
         [
@@ -116,7 +116,7 @@ def test_episode_session(mock_get):
     assert now_playing.images[1].label == "Fanart (Plex)"
 
 
-@patch("pixoo_media.sources.plex.requests.get")
+@patch("mediainfo.sources.plex.requests.get")
 def test_music_session(mock_get):
     mock_get.return_value = _response(
         [
@@ -147,7 +147,7 @@ def test_music_session(mock_get):
     assert now_playing.images[1].label == "Fanart (Plex)"
 
 
-@patch("pixoo_media.sources.plex.requests.get")
+@patch("mediainfo.sources.plex.requests.get")
 def test_request_error_returns_none(mock_get):
     mock_get.side_effect = Exception("boom")
 

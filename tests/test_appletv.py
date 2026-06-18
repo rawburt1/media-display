@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pixoo_media.config import AppleTvConfig
-from pixoo_media.sources.appletv import AppleTvSource, _enum_name, _map_media_type
+from mediainfo.config import AppleTvConfig
+from mediainfo.sources.appletv import AppleTvSource, _enum_name, _map_media_type
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +162,7 @@ def test_fetch_returns_none_when_title_none():
 
 def test_fetch_returns_none_when_not_connected_and_scan_finds_nothing():
     src = _source()
-    with patch("pixoo_media.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[])):
+    with patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[])):
         assert run(src._fetch()) is None
 
 
@@ -186,8 +186,8 @@ def test_fetch_connects_and_returns_result_on_fresh_start():
     mock_conf.name = "Living Room"
 
     with (
-        patch("pixoo_media.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[mock_conf])),
-        patch("pixoo_media.sources.appletv.pyatv.connect", new=AsyncMock(return_value=mock_atv)),
+        patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[mock_conf])),
+        patch("mediainfo.sources.appletv.pyatv.connect", new=AsyncMock(return_value=mock_atv)),
         patch.object(src, "_fetch_artwork", new=AsyncMock(return_value=None)),
     ):
         result = run(src._fetch())
@@ -202,7 +202,7 @@ def test_fetch_connects_and_returns_result_on_fresh_start():
 
 def test_fetch_artwork_writes_bytes_and_returns_path(tmp_path):
     src = _source()
-    with patch("pixoo_media.sources.appletv._ART_DIR", tmp_path):
+    with patch("mediainfo.sources.appletv._ART_DIR", tmp_path):
         src._atv = MagicMock()
         art_mock = MagicMock()
         art_mock.bytes = b"\xff\xd8\xff" * 100  # fake JPEG
@@ -223,7 +223,7 @@ def test_fetch_artwork_reuses_existing_file(tmp_path):
     existing = tmp_path / f"appletv_{digest}.jpg"
     existing.write_bytes(art_bytes)
 
-    with patch("pixoo_media.sources.appletv._ART_DIR", tmp_path):
+    with patch("mediainfo.sources.appletv._ART_DIR", tmp_path):
         src._atv = MagicMock()
         art_mock = MagicMock()
         art_mock.bytes = art_bytes
@@ -276,8 +276,8 @@ def test_get_now_playing_returns_none_on_future_error():
 # ---------------------------------------------------------------------------
 
 def test_cache_get_path_handles_file_url(tmp_path):
-    from pixoo_media.cache import ImageCache
-    from pixoo_media.models import Artwork
+    from mediainfo.cache import ImageCache
+    from mediainfo.models import Artwork
 
     img = tmp_path / "art.jpg"
     img.write_bytes(b"data")
@@ -287,8 +287,8 @@ def test_cache_get_path_handles_file_url(tmp_path):
 
 
 def test_cache_get_path_returns_none_for_missing_file_url(tmp_path):
-    from pixoo_media.cache import ImageCache
-    from pixoo_media.models import Artwork
+    from mediainfo.cache import ImageCache
+    from mediainfo.models import Artwork
 
     cache = ImageCache(tmp_path)
     result = cache.get_path(Artwork(url="file:///nonexistent/path/art.jpg"))

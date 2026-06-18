@@ -5,10 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pixoo_media.config import VideoOutputConfig
-from pixoo_media.models import Artwork, NowPlaying
-from pixoo_media.outputs.video import VideoOutput
-from pixoo_media.video.base import VideoClip
+from mediainfo.config import VideoOutputConfig
+from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs.video import VideoOutput
+from mediainfo.video.base import VideoClip
 
 
 def _make_output(**kwargs):
@@ -16,7 +16,7 @@ def _make_output(**kwargs):
     defaults = {"enabled": True, "pexels_api_key": "key"}
     defaults.update(kwargs)
     config = VideoOutputConfig(**defaults)
-    with patch("pixoo_media.outputs.video.threading.Thread"):
+    with patch("mediainfo.outputs.video.threading.Thread"):
         return VideoOutput(config)
 
 

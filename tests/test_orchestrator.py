@@ -2,17 +2,20 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.models import Artwork, NowPlaying
-from pixoo_media.orchestrator import Orchestrator
+from mediainfo.models import Artwork, NowPlaying
+from mediainfo.orchestrator import Orchestrator
 
 
 class _FakeSource:
+    name = "fake"
+
     def get_now_playing(self):
         return None
 
 
 class _StaticSource:
     """Always returns the same now-playing item."""
+    name = "static"
 
     def __init__(self, item):
         self._item = item
@@ -149,6 +152,8 @@ def test_non_image_output_does_not_get_on_idle_when_playing_without_artwork():
     now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[])
 
     class _TogglingSource:
+        name = "toggling"
+
         def __init__(self):
             self.calls = 0
 
@@ -195,7 +200,7 @@ def test_idle_batch_each_output_gets_independently_shuffled_order():
     orchestrator = _orchestrator(outputs=[output_a, output_b], cache=cache, idle_source=idle_source)
 
     with patch(
-        "pixoo_media.orchestrator.random.shuffle",
+        "mediainfo.orchestrator.random.shuffle",
         side_effect=_fake_shuffle([[2, 0, 1], [1, 2, 0]]),
     ):
         orchestrator._tick()
@@ -227,8 +232,8 @@ def test_idle_rotation_advances_each_output_independently():
     )
 
     clock = _FakeClock()
-    with patch("pixoo_media.orchestrator.time.monotonic", clock), patch(
-        "pixoo_media.orchestrator.random.shuffle",
+    with patch("mediainfo.orchestrator.time.monotonic", clock), patch(
+        "mediainfo.orchestrator.random.shuffle",
         side_effect=_fake_shuffle([[0, 1, 2], [0, 2, 1]]),
     ):
         orchestrator._tick()  # initial batch: both outputs show "Wallpaper 0"
@@ -255,7 +260,7 @@ def test_idle_batch_refetched_after_interval():
     orchestrator = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
 
     clock = _FakeClock()
-    with patch("pixoo_media.orchestrator.time.monotonic", clock):
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
         orchestrator._tick()
         clock.now += 301
         orchestrator._tick()
@@ -271,6 +276,8 @@ def test_idle_batch_not_cleared_when_playing_without_artwork():
     now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[])
 
     class _TogglingSource:
+        name = "toggling2"
+
         def __init__(self):
             self.calls = 0
 
@@ -355,7 +362,7 @@ def test_each_output_gets_independently_shuffled_order():
     )
 
     with patch(
-        "pixoo_media.orchestrator.random.shuffle",
+        "mediainfo.orchestrator.random.shuffle",
         side_effect=_fake_shuffle([[2, 0, 1], [1, 2, 0]]),
     ):
         orchestrator._tick()
@@ -385,8 +392,8 @@ def test_rotation_advances_each_output_independently():
     )
 
     clock = _FakeClock()
-    with patch("pixoo_media.orchestrator.time.monotonic", clock), patch(
-        "pixoo_media.orchestrator.random.shuffle",
+    with patch("mediainfo.orchestrator.time.monotonic", clock), patch(
+        "mediainfo.orchestrator.random.shuffle",
         side_effect=_fake_shuffle([[0, 1, 2], [0, 2, 1]]),
     ):
         orchestrator._tick()  # initial image: both outputs show "Image 0"
@@ -426,3 +433,132 @@ def test_single_image_does_not_rotate():
     orchestrator._tick()
 
     output.update.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_health()
+# ---------------------------------------------------------------------------
+
+def _health_orchestrator(sources=None, outputs=None, idle_source=None):
+    return Orchestrator(
+        sources=sources or [_FakeSource()],
+        enrichers=[],
+        outputs=outputs or [MagicMock()],
+        cache=MagicMock(),
+        poll_interval_seconds=5,
+        rotation_interval_seconds=30,
+        idle_source=idle_source,
+    )
+
+
+def test_get_health_returns_dict():
+    orch = _health_orchestrator()
+    data = orch.get_health()
+    assert isinstance(data, dict)
+    assert "uptime_seconds" in data
+    assert "poll_interval_seconds" in data
+
+
+def test_get_health_uptime_increases():
+    import time
+    orch = _health_orchestrator()
+    h1 = orch.get_health()
+    time.sleep(0.05)
+    h2 = orch.get_health()
+    assert h2["uptime_seconds"] >= h1["uptime_seconds"]
+
+
+def test_get_health_intervals_match_config():
+    orch = _health_orchestrator()
+    data = orch.get_health()
+    assert data["poll_interval_seconds"] == 5
+    assert data["rotation_interval_seconds"] == 30
+
+
+def test_get_health_now_playing_none_when_idle():
+    orch = _health_orchestrator()
+    assert orch.get_health()["now_playing"] is None
+
+
+def test_get_health_now_playing_after_tick():
+    item = NowPlaying(source="kodi", media_type="music", title="Test", subtitle="Artist",
+                      images=[Artwork(url="https://x.com/a.jpg")])
+    orch = _health_orchestrator(sources=[_StaticSource(item)], outputs=[MagicMock()])
+    orch._tick()
+    np = orch.get_health()["now_playing"]
+    assert np is not None
+    assert np["title"] == "Test"
+    assert np["source"] == "kodi"
+    assert len(np["images"]) == 1
+
+
+def test_get_health_active_source_set_after_tick():
+    item = NowPlaying(source="kodi", media_type="music", title="Test", images=[])
+    orch = _health_orchestrator(sources=[_StaticSource(item)], outputs=[MagicMock()])
+    orch._tick()
+    assert orch.get_health()["active_source"] == "static"
+
+
+def test_get_health_active_source_none_when_idle():
+    orch = _health_orchestrator()
+    orch._tick()
+    assert orch.get_health()["active_source"] is None
+
+
+def test_get_health_source_polled_recorded():
+    orch = _health_orchestrator()
+    orch._tick()
+    polled = orch.get_health()["source_last_polled_ago"]
+    assert "fake" in polled
+    assert polled["fake"] >= 0
+
+
+def test_get_health_output_error_recorded():
+    output = MagicMock()
+    output.on_idle.side_effect = RuntimeError("gone")
+    orch = _health_orchestrator(outputs=[output])
+    orch._tick()  # calls on_idle → records error at index 0
+    errors = orch.get_health()["output_errors"]
+    assert 0 in errors
+    assert "gone" in errors[0]["message"]
+
+
+def test_get_health_output_error_cleared_on_success():
+    calls = []
+
+    class _FailThenSucceed:
+        def on_idle(self):
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("transient")
+        def on_new_item(self, *a): pass
+        def update(self, *a): pass
+        handles_images = True
+        transform_pipeline = []
+
+    output = _FailThenSucceed()
+    orch = _health_orchestrator(outputs=[output])
+    orch._tick()  # first call raises → error recorded
+    assert 0 in orch.get_health()["output_errors"]
+    orch._tick()  # second call succeeds → error cleared
+    assert 0 not in orch.get_health()["output_errors"]
+
+
+def test_get_health_idle_wallpapers_loaded():
+    artwork = Artwork(url="https://example.com/wall.jpg", label="w")
+    idle_source = _FakeIdleSource([artwork], rotation_interval_seconds=0)
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/w.jpg"
+    cache.get_transformed_path.side_effect = lambda p, _: p
+    orch = Orchestrator(
+        sources=[_FakeSource()],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+        idle_source=idle_source,
+    )
+    orch._tick()
+    assert orch.get_health()["idle_wallpapers_loaded"] == 1

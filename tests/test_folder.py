@@ -2,9 +2,9 @@
 
 from unittest.mock import MagicMock
 
-from pixoo_media.config import FolderConfig
-from pixoo_media.models import Artwork, NowPlaying
-from pixoo_media.outputs.folder import FolderOutput
+from mediainfo.config import FolderConfig
+from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs.folder import FolderOutput
 
 
 def _now_playing(images, source="kodi"):

@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from PIL import Image
 
-from pixoo_media.transforms import (
+from mediainfo.transforms import (
     Blur,
     Brightness,
     Contrast,
@@ -164,7 +164,7 @@ def test_empty_pipeline_key_is_stable():
 # ---------------------------------------------------------------------------
 
 def test_get_transformed_path_noop_for_empty_pipeline(tmp_path):
-    from pixoo_media.cache import ImageCache
+    from mediainfo.cache import ImageCache
 
     img_path = tmp_path / "source.jpg"
     _rgb().save(img_path)
@@ -175,7 +175,7 @@ def test_get_transformed_path_noop_for_empty_pipeline(tmp_path):
 
 
 def test_get_transformed_path_creates_cached_file(tmp_path):
-    from pixoo_media.cache import ImageCache
+    from mediainfo.cache import ImageCache
 
     img_path = tmp_path / "source.jpg"
     _rgb(200, 200).save(img_path)
@@ -191,7 +191,7 @@ def test_get_transformed_path_creates_cached_file(tmp_path):
 
 
 def test_get_transformed_path_reuses_cached_file(tmp_path):
-    from pixoo_media.cache import ImageCache
+    from mediainfo.cache import ImageCache
 
     img_path = tmp_path / "source.jpg"
     _rgb(200, 200).save(img_path)

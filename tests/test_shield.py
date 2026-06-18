@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import ShieldConfig
-from pixoo_media.sources.shield import ShieldSource
+from mediainfo.config import ShieldConfig
+from mediainfo.sources.shield import ShieldSource
 
 # Real `dumpsys media_session` output captured from an Nvidia Shield Pro:
 # SVT Play is actively playing live TV, Netflix has a stale, inactive session.
@@ -89,8 +89,8 @@ def _make_source(tmp_path, shell_return=None, shell_side_effect=None):
     key_path = tmp_path / "shield"
     key_path.write_text("fake-key")
 
-    with patch("pixoo_media.sources.shield.PythonRSASigner") as mock_signer_cls, patch(
-        "pixoo_media.sources.shield.AdbDeviceTcp"
+    with patch("mediainfo.sources.shield.PythonRSASigner") as mock_signer_cls, patch(
+        "mediainfo.sources.shield.AdbDeviceTcp"
     ) as mock_device_cls:
         mock_signer_cls.FromRSAKeyPath.return_value = MagicMock()
         mock_device = MagicMock()

@@ -40,7 +40,7 @@ sources:
 
   # Apple TV — reports the currently-playing item from any app (TV+, Plex,
   # Infuse, etc.) via the Companion or MRP protocol.  Pairing is required:
-  #   docker compose run --rm pixoo-media-display python -m pixoo_media auth appletv
+  #   docker compose run --rm mediainfo python -m mediainfo auth appletv
   # Follow the prompts; paste the printed credentials below.
   appletv:
     enabled: true
@@ -83,7 +83,7 @@ sources:
   # Spotify — current playback via the Spotify Web API.
   # 1. Create a free app at https://developer.spotify.com/dashboard
   # 2. Add http://localhost:8888/callback as a Redirect URI in the app settings.
-  # 3. Authorize once: docker compose run --rm pixoo-media-display python -m pixoo_media auth spotify
+  # 3. Authorize once: docker compose run --rm mediainfo python -m mediainfo auth spotify
   spotify:
     enabled: true
     client_id: YOUR_SPOTIFY_CLIENT_ID
@@ -197,8 +197,8 @@ outputs:
     enabled: true
     host: 192.168.1.10           # MQTT broker IP or hostname
     port: 1883
-    topic: pixoo-media/now_playing
-    client_id: pixoo-media-display
+    topic: mediainfo/now_playing
+    client_id: mediainfo
     username: ""                  # Leave blank if broker has no auth
     password: ""
     qos: 0                        # 0 = at most once, 1 = at least once
@@ -395,6 +395,6 @@ idle:
 # To also write to a rotating file, fill in the path below.
 
 logging:
-  file: ./logs/pixoo-media.log
+  file: ./logs/mediainfo.log
   max_bytes: 1048576             # Rotate at 1 MB
   backup_count: 3               # Keep 3 old log files

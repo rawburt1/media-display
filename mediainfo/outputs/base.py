@@ -1,0 +1,35 @@
+"""Base class for output plugins."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import List
+
+from mediainfo.cache import ImageCache
+from mediainfo.models import Artwork, NowPlaying
+
+
+class Output(ABC):
+    """Something that displays the current "now playing" artwork."""
+
+    # Set to False on text-only outputs (e.g. Ulanzi) so that idle wallpaper
+    # images are not routed to them.
+    handles_images: bool = True
+
+    # List of Transform objects applied to every image before update() is
+    # called.  Populated from the output's config `transforms:` key.
+    transform_pipeline: List = []
+
+    @abstractmethod
+    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+        """Show new artwork."""
+
+    def on_idle(self) -> None:
+        """Called once when nothing is playing. Default: do nothing."""
+
+    def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
+        """Called once when the playing item changes, with access to all of
+        its available images (not just the one currently shown/rotated).
+        Default: do nothing.
+        """

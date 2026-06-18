@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pixoo_media.video.pexels import PexelsVideoSource, _best_mp4_url
+from mediainfo.video.pexels import PexelsVideoSource, _best_mp4_url
 
 
 def _make_file(quality, width, height, file_type="video/mp4"):
@@ -25,7 +25,7 @@ def _source(**kwargs):
     return PexelsVideoSource(**defaults)
 
 
-@patch("pixoo_media.video.pexels.requests.get")
+@patch("mediainfo.video.pexels.requests.get")
 def test_returns_video_clip_from_pexels(mock_get):
     mock_get.return_value = _pexels_response([
         {"video_files": [_make_file("hd", 720, 1280)]},
@@ -38,7 +38,7 @@ def test_returns_video_clip_from_pexels(mock_get):
     assert clips[0].label == "Pexels: nature"
 
 
-@patch("pixoo_media.video.pexels.requests.get")
+@patch("mediainfo.video.pexels.requests.get")
 def test_returns_empty_on_api_error(mock_get):
     mock_get.side_effect = RuntimeError("connection refused")
 
@@ -47,7 +47,7 @@ def test_returns_empty_on_api_error(mock_get):
     assert clips == []
 
 
-@patch("pixoo_media.video.pexels.requests.get")
+@patch("mediainfo.video.pexels.requests.get")
 def test_returns_empty_on_http_error(mock_get):
     mock_get.return_value = MagicMock(raise_for_status=MagicMock(side_effect=Exception("403")))
 
@@ -56,7 +56,7 @@ def test_returns_empty_on_http_error(mock_get):
     assert clips == []
 
 
-@patch("pixoo_media.video.pexels.requests.get")
+@patch("mediainfo.video.pexels.requests.get")
 def test_sends_portrait_orientation_param(mock_get):
     mock_get.return_value = _pexels_response([])
 
@@ -66,7 +66,7 @@ def test_sends_portrait_orientation_param(mock_get):
     assert kwargs["params"]["orientation"] == "portrait"
 
 
-@patch("pixoo_media.video.pexels.requests.get")
+@patch("mediainfo.video.pexels.requests.get")
 def test_picks_query_from_comma_separated_list(mock_get):
     mock_get.return_value = _pexels_response([])
 
@@ -76,7 +76,7 @@ def test_picks_query_from_comma_separated_list(mock_get):
     assert kwargs["params"]["query"] in {"nature", "ocean", "mountains"}
 
 
-@patch("pixoo_media.video.pexels.requests.get")
+@patch("mediainfo.video.pexels.requests.get")
 def test_returns_empty_for_empty_queries(mock_get):
     clips = _source(queries="").get_videos()
     mock_get.assert_not_called()

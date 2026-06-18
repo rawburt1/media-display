@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from pixoo_media.config import SonosConfig
-from pixoo_media.sources.sonos import SonosSource
+from mediainfo.config import SonosConfig
+from mediainfo.sources.sonos import SonosSource
 
 
 def _make_group(coordinator):
@@ -26,7 +26,7 @@ def _make_device(ip, state="PLAYING", title="Comfortably Numb", artist="Pink Flo
     return device
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_returns_playing_track(MockSoCo):
     device = _make_device("192.168.1.80")
     MockSoCo.return_value.all_groups = [_make_group(device)]
@@ -40,7 +40,7 @@ def test_returns_playing_track(MockSoCo):
     assert now_playing.images[0].label == "Album art (Sonos)"
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_returns_none_when_not_playing(MockSoCo):
     device = _make_device("192.168.1.80", state="STOPPED")
     MockSoCo.return_value.all_groups = [_make_group(device)]
@@ -50,7 +50,7 @@ def test_returns_none_when_not_playing(MockSoCo):
     assert result is None
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_returns_playing_track_when_transitioning(MockSoCo):
     device = _make_device("192.168.1.80", state="TRANSITIONING")
     MockSoCo.return_value.all_groups = [_make_group(device)]
@@ -61,7 +61,7 @@ def test_returns_playing_track_when_transitioning(MockSoCo):
     assert result.title == "Comfortably Numb"
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_returns_none_when_title_empty(MockSoCo):
     device = _make_device("192.168.1.80", title="")
     MockSoCo.return_value.all_groups = [_make_group(device)]
@@ -71,7 +71,7 @@ def test_returns_none_when_title_empty(MockSoCo):
     assert result is None
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_checks_all_zones_and_returns_playing_one(MockSoCo):
     idle = _make_device("192.168.1.80", state="STOPPED")
     playing = _make_device("192.168.1.81", title="Money", artist="Pink Floyd")
@@ -82,7 +82,7 @@ def test_checks_all_zones_and_returns_playing_one(MockSoCo):
     assert now_playing.title == "Money"
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_deduplicates_same_coordinator(MockSoCo):
     device = _make_device("192.168.1.80")
     # Same coordinator appears in two groups (shouldn't happen in practice, but guard against it)
@@ -94,7 +94,7 @@ def test_deduplicates_same_coordinator(MockSoCo):
     device.get_current_transport_info.assert_called_once()
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_relative_album_art_url_uses_device_ip(MockSoCo):
     device = _make_device("192.168.1.81", album_art="/getaa?s=1&u=x%3a1")
     MockSoCo.return_value.all_groups = [_make_group(device)]
@@ -104,7 +104,7 @@ def test_relative_album_art_url_uses_device_ip(MockSoCo):
     assert now_playing.images[0].url == "http://192.168.1.81:1400/getaa?s=1&u=x%3a1"
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_blacklist_skips_speaker_by_name(MockSoCo):
     blacklisted = _make_device("192.168.1.80", title="Kitchen Radio")
     blacklisted.player_name = "Kitchen"
@@ -118,7 +118,7 @@ def test_blacklist_skips_speaker_by_name(MockSoCo):
     assert now_playing.title == "Money"
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_blacklist_skips_speaker_by_ip(MockSoCo):
     blacklisted = _make_device("192.168.1.80", title="Kitchen Radio")
     blacklisted.player_name = "Kitchen"
@@ -132,7 +132,7 @@ def test_blacklist_skips_speaker_by_ip(MockSoCo):
     assert now_playing.title == "Money"
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_blacklist_returns_none_when_only_blacklisted_playing(MockSoCo):
     blacklisted = _make_device("192.168.1.80", title="Kitchen Radio")
     blacklisted.player_name = "Kitchen"
@@ -144,7 +144,7 @@ def test_blacklist_returns_none_when_only_blacklisted_playing(MockSoCo):
     assert result is None
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_returns_none_on_exception(MockSoCo):
     MockSoCo.return_value.all_groups = MagicMock(side_effect=RuntimeError("network error"))
 
@@ -153,7 +153,7 @@ def test_returns_none_on_exception(MockSoCo):
     assert result is None
 
 
-@patch("pixoo_media.sources.sonos.SoCo")
+@patch("mediainfo.sources.sonos.SoCo")
 def test_skips_unsupported_coordinator_and_checks_next(MockSoCo):
     # e.g. a Sonos device that doesn't support GetTransportInfo
     broken = MagicMock()

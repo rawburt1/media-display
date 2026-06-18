@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pixoo_media.config import UlanziConfig
-from pixoo_media.models import Artwork, NowPlaying
-from pixoo_media.outputs.ulanzi import UlanziOutput
+from mediainfo.config import UlanziConfig
+from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs.ulanzi import UlanziOutput
 
 
 def _output(**kwargs) -> UlanziOutput:
@@ -16,7 +16,7 @@ def _output(**kwargs) -> UlanziOutput:
     return UlanziOutput(UlanziConfig(**defaults))
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_music_sends_artist_and_song(mock_post):
     now_playing = NowPlaying(
         source="kodi", media_type="music", title="Comfortably Numb", subtitle="Pink Floyd"
@@ -47,7 +47,7 @@ def test_music_sends_artist_and_song(mock_post):
         "Comfortably Numb - Newly Remastered",
     ],
 )
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_music_strips_version_suffix_from_title(mock_post, title):
     now_playing = NowPlaying(source="kodi", media_type="music", title=title, subtitle="Pink Floyd")
 
@@ -57,7 +57,7 @@ def test_music_strips_version_suffix_from_title(mock_post, title):
     assert kwargs["json"]["text"] == "Pink Floyd - Comfortably Numb"
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_music_keeps_unrelated_parenthetical(mock_post):
     now_playing = NowPlaying(
         source="kodi",
@@ -72,7 +72,7 @@ def test_music_keeps_unrelated_parenthetical(mock_post):
     assert kwargs["json"]["text"] == "Pink Floyd - Shine On You Crazy Diamond (Parts I-V)"
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_movie_sends_title_and_year(mock_post):
     now_playing = NowPlaying(
         source="kodi", media_type="movie", title="Inception", subtitle="", year=2010
@@ -84,7 +84,7 @@ def test_movie_sends_title_and_year(mock_post):
     assert kwargs["json"] == {"text": "Inception (2010)", "textCase": 2}
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_movie_without_year_sends_title_only(mock_post):
     now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", subtitle="")
 
@@ -94,7 +94,7 @@ def test_movie_without_year_sends_title_only(mock_post):
     assert kwargs["json"] == {"text": "Inception", "textCase": 2}
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_episode_sends_show_and_lowercase_season_episode_code(mock_post):
     now_playing = NowPlaying(
         source="kodi",
@@ -110,7 +110,7 @@ def test_episode_sends_show_and_lowercase_season_episode_code(mock_post):
     assert kwargs["json"] == {"text": "Breaking Bad s01e01", "textCase": 2}
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_episode_with_unrecognized_subtitle_falls_back(mock_post):
     now_playing = NowPlaying(
         source="kodi", media_type="episode", title="Breaking Bad", subtitle="Pilot"
@@ -122,7 +122,7 @@ def test_episode_with_unrecognized_subtitle_falls_back(mock_post):
     assert kwargs["json"] == {"text": "Breaking Bad - Pilot", "textCase": 2}
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_on_idle_clears_custom_app(mock_post):
     output = _output()
     output._last_text = "Pink Floyd - Comfortably Numb"
@@ -136,7 +136,7 @@ def test_on_idle_clears_custom_app(mock_post):
     assert "json" not in kwargs
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_idle_wallpaper_update_clears_custom_app(mock_post):
     output = _output()
     output._last_text = "Pink Floyd - Comfortably Numb"
@@ -148,7 +148,7 @@ def test_idle_wallpaper_update_clears_custom_app(mock_post):
     assert kwargs["data"] == b""
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_unchanged_text_is_not_resent(mock_post):
     output = _output()
     now_playing = NowPlaying(
@@ -161,7 +161,7 @@ def test_unchanged_text_is_not_resent(mock_post):
     assert mock_post.call_count == 1
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_repeated_idle_does_not_resend(mock_post):
     output = _output()
     output._last_text = "Pink Floyd - Comfortably Numb"
@@ -172,7 +172,7 @@ def test_repeated_idle_does_not_resend(mock_post):
     assert mock_post.call_count == 1
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_uses_configured_app_name_and_basic_auth(mock_post):
     output = _output(app_name="my_app", username="user", password="pass")
     now_playing = NowPlaying(
@@ -186,7 +186,7 @@ def test_uses_configured_app_name_and_basic_auth(mock_post):
     assert kwargs["auth"] == ("user", "pass")
 
 
-@patch("pixoo_media.outputs.ulanzi.requests.post")
+@patch("mediainfo.outputs.ulanzi.requests.post")
 def test_request_error_is_caught(mock_post):
     mock_post.side_effect = Exception("boom")
     now_playing = NowPlaying(

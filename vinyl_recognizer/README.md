@@ -1,12 +1,12 @@
 # vinyl_recognizer
 
 Identifies whatever's currently playing on a turntable by listening to its
-audio, and serves the result over HTTP for `pixoo_media`'s `vinyl` source to
+audio, and serves the result over HTTP for `mediainfo`'s `vinyl` source to
 poll.
 
 Runs as a separate, standalone service on whichever machine your audio
 interface is connected to (it does not need to be the same machine that runs
-the main `pixoo_media` app/container).
+the main `mediainfo` app/container).
 
 ## Hardware setup
 

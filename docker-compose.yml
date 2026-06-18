@@ -1,5 +1,5 @@
 services:
-  pixoo-media-display:
+  mediainfo:
     build: .
     restart: unless-stopped
     ports:
