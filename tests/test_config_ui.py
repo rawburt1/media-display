@@ -95,6 +95,42 @@ def test_get_config_uses_defaults_for_unconfigured_type(config_path):
 
 
 # ---------------------------------------------------------------------------
+# /api/config (GET): outputs (multi-instance)
+# ---------------------------------------------------------------------------
+
+def test_get_config_outputs_single_instance_as_list_of_one(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert len(data["outputs"]["web"]) == 1
+    assert data["outputs"]["web"][0]["port"] == 8090
+
+
+def test_get_config_outputs_multiple_instances(config_path):
+    config_path.write_text(
+        """
+outputs:
+  ulanzi:
+    - enabled: true
+      device_ip: 1.1.1.1
+    - enabled: true
+      device_ip: 2.2.2.2
+"""
+    )
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    ips = [inst["device_ip"] for inst in data["outputs"]["ulanzi"]]
+    assert ips == ["1.1.1.1", "2.2.2.2"]
+
+
+def test_get_config_outputs_unconfigured_type_has_one_default_instance(config_path):
+    config_path.write_text("poll_interval_seconds: 5\n")  # no outputs section at all
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert len(data["outputs"]["web"]) == 1
+    assert data["outputs"]["web"][0]["enabled"] is False  # default
+
+
+# ---------------------------------------------------------------------------
 # /api/config/form (POST)
 # ---------------------------------------------------------------------------
 
@@ -159,7 +195,7 @@ def test_save_form_creates_new_section_for_unconfigured_type(config_path):
     assert cfg.enrichers["discogs"].token == "abc123"
 
 
-def test_save_form_updates_first_instance_of_list_output(config_path):
+def test_save_form_updates_existing_output_instances(config_path):
     config_path.write_text(
         """
 outputs:
@@ -172,11 +208,165 @@ outputs:
     )
     out = _output(config_path)
     client = out.app.test_client()
-    client.post("/api/config/form", json={"values": {"outputs.ulanzi.device_ip": "9.9.9.9"}})
+    client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {
+                "ulanzi": [
+                    {"enabled": True, "device_ip": "9.9.9.9", "app_name": "now_playing"},
+                    {"enabled": True, "device_ip": "2.2.2.2", "app_name": "now_playing"},
+                ]
+            },
+        },
+    )
 
     cfg = Config.load(config_path)
     ips = [c.device_ip for c in cfg.outputs["ulanzi"]]
     assert ips == ["9.9.9.9", "2.2.2.2"]
+
+
+def test_save_form_appends_new_output_instance(config_path):
+    config_path.write_text(
+        """
+outputs:
+  ulanzi:
+    - enabled: true
+      device_ip: 1.1.1.1
+      app_name: now_playing
+"""
+    )
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {
+                "ulanzi": [
+                    {"enabled": True, "device_ip": "1.1.1.1", "app_name": "now_playing"},
+                    {"enabled": True, "device_ip": "2.2.2.2", "app_name": "now_playing_2"},
+                ]
+            },
+        },
+    )
+
+    cfg = Config.load(config_path)
+    ips = [c.device_ip for c in cfg.outputs["ulanzi"]]
+    assert ips == ["1.1.1.1", "2.2.2.2"]
+
+
+def test_save_form_appended_instance_loads_correctly_despite_trailing_comment(config_path):
+    # ruamel.yaml can render a newly-appended instance visually before a
+    # comment that trails the original list (see module docstring) - this
+    # confirms that's purely cosmetic and the data still loads correctly.
+    config_path.write_text(
+        """
+outputs:
+  ulanzi:
+    - enabled: true
+      device_ip: 1.1.1.1
+      app_name: now_playing
+
+  # A comment that originally trailed the ulanzi section.
+  web:
+    enabled: true
+    port: 8090
+"""
+    )
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {
+                "ulanzi": [
+                    {"enabled": True, "device_ip": "1.1.1.1", "app_name": "now_playing"},
+                    {"enabled": True, "device_ip": "2.2.2.2", "app_name": "now_playing_2"},
+                ]
+            },
+        },
+    )
+    assert resp.get_json() == {"ok": True}
+
+    cfg = Config.load(config_path)
+    ips = [c.device_ip for c in cfg.outputs["ulanzi"]]
+    assert ips == ["1.1.1.1", "2.2.2.2"]
+    assert cfg.outputs["web"][0].port == 8090
+
+
+def test_save_form_removes_trailing_output_instance(config_path):
+    config_path.write_text(
+        """
+outputs:
+  ulanzi:
+    - enabled: true
+      device_ip: 1.1.1.1
+      app_name: now_playing
+    - enabled: true
+      device_ip: 2.2.2.2
+      app_name: now_playing_2
+"""
+    )
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {
+                "ulanzi": [{"enabled": True, "device_ip": "1.1.1.1", "app_name": "now_playing"}]
+            },
+        },
+    )
+
+    cfg = Config.load(config_path)
+    assert len(cfg.outputs["ulanzi"]) == 1
+    assert cfg.outputs["ulanzi"][0].device_ip == "1.1.1.1"
+
+
+def test_save_form_preserves_transforms_on_existing_output_instance(config_path):
+    config_path.write_text(
+        """
+outputs:
+  pixoo:
+    - enabled: true
+      ip: 1.1.1.1
+      transforms:
+        - fit: {width: 64, height: 64}
+"""
+    )
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"pixoo": [{"enabled": True, "ip": "9.9.9.9"}]}},
+    )
+
+    text = config_path.read_text()
+    assert "transforms" in text
+    assert "fit" in text
+    cfg = Config.load(config_path)
+    assert cfg.outputs["pixoo"][0].ip == "9.9.9.9"
+    assert cfg.outputs["pixoo"][0].transforms == [{"fit": {"width": 64, "height": 64}}]
+
+
+def test_save_form_emptying_all_instances_results_in_empty_list(config_path):
+    config_path.write_text(
+        """
+outputs:
+  ulanzi:
+    - enabled: true
+      device_ip: 1.1.1.1
+"""
+    )
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/config/form", json={"values": {}, "outputs": {"ulanzi": []}})
+
+    cfg = Config.load(config_path)
+    assert cfg.outputs["ulanzi"] == []
 
 
 def test_save_form_rejects_unknown_category(config_path):

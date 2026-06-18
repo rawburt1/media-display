@@ -140,8 +140,12 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`outputs.config`**: `host`/`port` (default 8094) for a web page that
   edits config.yaml itself - every source/output/enricher/idle source and
   the top-level polling intervals, generated automatically from their
-  config dataclasses. List-typed fields (`transforms`, `blacklist`, and
-  additional instances of multi-instance outputs like `ulanzi`) aren't
+  config dataclasses. Outputs (the only category that supports multiple
+  instances of the same type, e.g. two `ulanzi` displays) get "+ Add
+  instance" / "- Remove last" controls in the form - instances can only be
+  appended/removed from the end, not reordered, so that non-form fields
+  like `transforms` on existing instances stay attached to the right one.
+  List-typed fields themselves (`transforms`, `blacklist`) still aren't
   shown as individual form fields; use the page's "Advanced" raw-YAML
   editor for those. Saves are validated before being written, and the
   running process picks up the change via its existing hot-reload within

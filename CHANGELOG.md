@@ -13,6 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   silently failing to download.
 
 ### Added
+- The `config` output's web form now supports multiple instances of
+  multi-instance-capable outputs (e.g. two `ulanzi` displays), with
+  "+ Add instance" / "- Remove last" controls per output type. Previously
+  only the first instance of any list-configured output was editable in
+  the form. Instances can only be appended/removed from the end (not
+  reordered) so non-form fields like `transforms` stay attached to the
+  right instance when saving.
 - `mediainfo/sources/youtube.py`: `sources.youtube` source for the YouTube
   app on Android TV (e.g. Nvidia Shield), via ADB. Unlike the generic
   `shield` source, this targets YouTube specifically and only reports
