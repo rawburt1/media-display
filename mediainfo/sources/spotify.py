@@ -32,6 +32,7 @@ class SpotifySource(MediaSource):
         )
 
     def get_now_playing(self) -> Optional[NowPlaying]:
+        self.last_poll_failed = False
         try:
             token_info = self._auth.get_cached_token()
             if token_info is None:
@@ -40,6 +41,7 @@ class SpotifySource(MediaSource):
                     "run 'python -m mediainfo auth spotify' to authorize",
                     self._config.cache_path,
                 )
+                self.last_poll_failed = True
                 return None
 
             client = spotipy.Spotify(auth=token_info["access_token"])
@@ -80,4 +82,5 @@ class SpotifySource(MediaSource):
             )
         except Exception:
             logger.exception("Spotify source error")
+            self.last_poll_failed = True
             return None

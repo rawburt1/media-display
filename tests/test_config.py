@@ -20,7 +20,7 @@ def test_load_example_config():
 
     assert config.sources["kodi"].enabled is True
     assert config.sources["kodi"].host == "192.168.1.21"
-    assert config.sources["sonos"].speaker_ip == "192.168.1.80"
+    assert config.sources["sonos"].speaker_ips == ["192.168.1.80", "192.168.1.81"]
 
     assert config.sources["shield"].enabled is True
     assert config.sources["shield"].host == "192.168.1.21"

@@ -1,6 +1,6 @@
 """Tests for the Sonos now-playing source."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 from mediainfo.config import SonosConfig
 from mediainfo.sources.sonos import SonosSource
@@ -31,7 +31,7 @@ def test_returns_playing_track(MockSoCo):
     device = _make_device("192.168.1.80")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
 
     assert now_playing.title == "Comfortably Numb"
     assert now_playing.subtitle == "Pink Floyd"
@@ -45,7 +45,7 @@ def test_returns_none_when_not_playing(MockSoCo):
     device = _make_device("192.168.1.80", state="STOPPED")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    result = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    result = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
 
     assert result is None
 
@@ -55,7 +55,7 @@ def test_returns_playing_track_when_transitioning(MockSoCo):
     device = _make_device("192.168.1.80", state="TRANSITIONING")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    result = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    result = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
 
     assert result is not None
     assert result.title == "Comfortably Numb"
@@ -66,7 +66,7 @@ def test_returns_none_when_title_empty(MockSoCo):
     device = _make_device("192.168.1.80", title="")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    result = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    result = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
 
     assert result is None
 
@@ -77,7 +77,7 @@ def test_checks_all_zones_and_returns_playing_one(MockSoCo):
     playing = _make_device("192.168.1.81", title="Money", artist="Pink Floyd")
     MockSoCo.return_value.all_groups = [_make_group(idle), _make_group(playing)]
 
-    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
 
     assert now_playing.title == "Money"
 
@@ -88,7 +88,7 @@ def test_deduplicates_same_coordinator(MockSoCo):
     # Same coordinator appears in two groups (shouldn't happen in practice, but guard against it)
     MockSoCo.return_value.all_groups = [_make_group(device), _make_group(device)]
 
-    SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
 
     # Only queried once despite appearing twice
     device.get_current_transport_info.assert_called_once()
@@ -99,7 +99,7 @@ def test_relative_album_art_url_uses_device_ip(MockSoCo):
     device = _make_device("192.168.1.81", album_art="/getaa?s=1&u=x%3a1")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
 
     assert now_playing.images[0].url == "http://192.168.1.81:1400/getaa?s=1&u=x%3a1"
 
@@ -112,7 +112,7 @@ def test_blacklist_skips_speaker_by_name(MockSoCo):
     allowed.player_name = "Living Room"
     MockSoCo.return_value.all_groups = [_make_group(blacklisted), _make_group(allowed)]
 
-    config = SonosConfig(enabled=True, speaker_ip="192.168.1.80", blacklist=["Kitchen"])
+    config = SonosConfig(enabled=True, speaker_ips=["192.168.1.80"], blacklist=["Kitchen"])
     now_playing = SonosSource(config).get_now_playing()
 
     assert now_playing.title == "Money"
@@ -126,7 +126,7 @@ def test_blacklist_skips_speaker_by_ip(MockSoCo):
     allowed.player_name = "Living Room"
     MockSoCo.return_value.all_groups = [_make_group(blacklisted), _make_group(allowed)]
 
-    config = SonosConfig(enabled=True, speaker_ip="192.168.1.80", blacklist=["192.168.1.80"])
+    config = SonosConfig(enabled=True, speaker_ips=["192.168.1.80"], blacklist=["192.168.1.80"])
     now_playing = SonosSource(config).get_now_playing()
 
     assert now_playing.title == "Money"
@@ -138,7 +138,7 @@ def test_blacklist_returns_none_when_only_blacklisted_playing(MockSoCo):
     blacklisted.player_name = "Kitchen"
     MockSoCo.return_value.all_groups = [_make_group(blacklisted)]
 
-    config = SonosConfig(enabled=True, speaker_ip="192.168.1.80", blacklist=["Kitchen"])
+    config = SonosConfig(enabled=True, speaker_ips=["192.168.1.80"], blacklist=["Kitchen"])
     result = SonosSource(config).get_now_playing()
 
     assert result is None
@@ -146,11 +146,45 @@ def test_blacklist_returns_none_when_only_blacklisted_playing(MockSoCo):
 
 @patch("mediainfo.sources.sonos.SoCo")
 def test_returns_none_on_exception(MockSoCo):
-    MockSoCo.return_value.all_groups = MagicMock(side_effect=RuntimeError("network error"))
+    type(MockSoCo.return_value).all_groups = PropertyMock(side_effect=RuntimeError("network error"))
 
-    result = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    source = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"]))
+    result = source.get_now_playing()
 
     assert result is None
+    assert source.last_poll_failed is True
+
+
+@patch("mediainfo.sources.sonos.SoCo")
+def test_falls_back_to_next_speaker_when_first_seed_unreachable(MockSoCo):
+    playing = _make_device("192.168.1.81", title="Money", artist="Pink Floyd")
+    working_seed = MagicMock()
+    working_seed.all_groups = [_make_group(playing)]
+
+    def _soco(ip):
+        if ip == "192.168.1.80":
+            raise RuntimeError("device offline")
+        return working_seed
+
+    MockSoCo.side_effect = _soco
+
+    config = SonosConfig(enabled=True, speaker_ips=["192.168.1.80", "192.168.1.81"])
+    result = SonosSource(config).get_now_playing()
+
+    assert result is not None
+    assert result.title == "Money"
+
+
+@patch("mediainfo.sources.sonos.SoCo")
+def test_returns_none_when_all_seeds_unreachable(MockSoCo):
+    MockSoCo.side_effect = RuntimeError("device offline")
+
+    config = SonosConfig(enabled=True, speaker_ips=["192.168.1.80", "192.168.1.81"])
+    source = SonosSource(config)
+    result = source.get_now_playing()
+
+    assert result is None
+    assert source.last_poll_failed is True
 
 
 @patch("mediainfo.sources.sonos.SoCo")
@@ -163,7 +197,7 @@ def test_skips_unsupported_coordinator_and_checks_next(MockSoCo):
     playing = _make_device("192.168.1.80", title="Money", artist="Pink Floyd")
     MockSoCo.return_value.all_groups = [_make_group(broken), _make_group(playing)]
 
-    result = SonosSource(SonosConfig(enabled=True, speaker_ip="192.168.1.80")).get_now_playing()
+    result = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
 
     assert result is not None
     assert result.title == "Money"

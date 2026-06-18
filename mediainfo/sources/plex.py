@@ -45,6 +45,7 @@ class PlexSource(MediaSource):
         self._url = f"http://{config.host}:{config.port}"
 
     def get_now_playing(self) -> Optional[NowPlaying]:
+        self.last_poll_failed = False
         try:
             response = requests.get(
                 f"{self._url}/status/sessions",
@@ -112,4 +113,5 @@ class PlexSource(MediaSource):
             )
         except Exception:
             logger.exception("Plex source error")
+            self.last_poll_failed = True
             return None

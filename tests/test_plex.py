@@ -151,4 +151,6 @@ def test_music_session(mock_get):
 def test_request_error_returns_none(mock_get):
     mock_get.side_effect = Exception("boom")
 
-    assert _source().get_now_playing() is None
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is True

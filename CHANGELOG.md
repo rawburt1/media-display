@@ -7,6 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `sources.sonos.speaker_ip` is now `speaker_ips` (a list). Previously the
+  Sonos source discovered the whole household's zone topology from a
+  single configured speaker, so if that one speaker was off or
+  unreachable, every other zone became invisible too even though any
+  speaker can report the full topology. Now it tries each configured
+  speaker in turn until one answers, so listing more than one (e.g. one
+  per room) keeps every zone visible.
+- Sources whose device/service can't be reached are now backed off by the
+  orchestrator instead of being polled every tick forever: 30s after the
+  first consecutive failure, doubling up to a 5-minute cap, resetting the
+  moment a poll succeeds again. Sources report this via a new
+  `last_poll_failed` flag (set when `get_now_playing()` returns `None`
+  because of a connection error, left `False` when it connected fine and
+  simply found nothing playing) - added to all 9 sources. Backed-off
+  sources show up in `/health` as `status: "error"` with a
+  `retry_in_seconds` field.
 - `sources.youtube` now splits video titles that look like
   "`Song` - `Artist`" (song first), using the title's artist instead of
   the channel name - unless the part after the dash is a version/edition

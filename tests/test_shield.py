@@ -175,6 +175,7 @@ def test_get_now_playing_returns_none_on_shell_error(tmp_path):
 
     assert source.get_now_playing() is None
     mock_device.close.assert_called_once()
+    assert source.last_poll_failed is True
 
 
 def test_connects_when_not_available(tmp_path):

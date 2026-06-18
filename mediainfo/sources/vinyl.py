@@ -27,12 +27,14 @@ class VinylSource(MediaSource):
         self._url = f"http://{config.host}:{config.port}/now-playing"
 
     def get_now_playing(self) -> Optional[NowPlaying]:
+        self.last_poll_failed = False
         try:
             response = requests.get(self._url, timeout=5)
             response.raise_for_status()
             data = response.json()
         except Exception:
             logger.exception("Vinyl source error")
+            self.last_poll_failed = True
             return None
 
         title = data.get("title", "")

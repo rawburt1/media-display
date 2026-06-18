@@ -24,6 +24,23 @@ class _StaticSource:
         return self._item
 
 
+class _FailingSource:
+    """Simulates a device that can't be reached - sets last_poll_failed.
+    Set `.fail = False` to simulate the device becoming reachable again.
+    """
+    name = "failing"
+
+    def __init__(self):
+        self.calls = 0
+        self.fail = True
+        self.last_poll_failed = False
+
+    def get_now_playing(self):
+        self.calls += 1
+        self.last_poll_failed = self.fail
+        return None
+
+
 class _FakeClock:
     """Controllable stand-in for time.monotonic()."""
 
@@ -576,3 +593,153 @@ def test_get_health_idle_wallpapers_loaded():
     )
     orch._tick()
     assert orch.get_health()["idle_wallpapers_loaded"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Source backoff (MediaSource.last_poll_failed)
+# ---------------------------------------------------------------------------
+
+def _orchestrator_with_sources(sources, cache=None):
+    return Orchestrator(
+        sources=sources,
+        enrichers=[],
+        outputs=[MagicMock()],
+        cache=cache or MagicMock(),
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+
+
+def test_failed_poll_schedules_backoff():
+    source = _FailingSource()
+    orch = _orchestrator_with_sources([source])
+
+    orch._poll_sources()
+
+    assert "failing" in orch._source_backoff
+    assert orch._source_backoff["failing"].delay > 0
+
+
+def test_backed_off_source_is_skipped_until_next_attempt():
+    source = _FailingSource()
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orch = _orchestrator_with_sources([source])
+
+        orch._poll_sources()
+        assert source.calls == 1
+
+        clock.now += 1  # well before the backoff delay elapses
+        orch._poll_sources()
+        assert source.calls == 1  # still skipped
+
+
+def test_backed_off_source_is_retried_after_delay_elapses():
+    source = _FailingSource()
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orch = _orchestrator_with_sources([source])
+
+        orch._poll_sources()
+        delay = orch._source_backoff["failing"].delay
+
+        clock.now += delay + 1
+        orch._poll_sources()
+        assert source.calls == 2
+
+
+def test_backoff_delay_doubles_on_repeated_failures():
+    source = _FailingSource()
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orch = _orchestrator_with_sources([source])
+
+        orch._poll_sources()
+        first_delay = orch._source_backoff["failing"].delay
+
+        clock.now += first_delay + 1
+        orch._poll_sources()
+        second_delay = orch._source_backoff["failing"].delay
+
+        assert second_delay == first_delay * 2
+
+
+def test_backoff_delay_caps_at_max():
+    from mediainfo.orchestrator import _BACKOFF_MAX_SECONDS
+
+    source = _FailingSource()
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orch = _orchestrator_with_sources([source])
+
+        for _ in range(15):
+            orch._poll_sources()
+            clock.now += orch._source_backoff["failing"].delay + 1
+
+        assert orch._source_backoff["failing"].delay == _BACKOFF_MAX_SECONDS
+
+
+def test_successful_poll_clears_backoff():
+    source = _FailingSource()
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orch = _orchestrator_with_sources([source])
+
+        orch._poll_sources()
+        delay = orch._source_backoff["failing"].delay
+        clock.now += delay + 1
+
+        source.fail = False  # device reachable again
+        orch._poll_sources()
+
+        assert "failing" not in orch._source_backoff
+
+
+def test_idle_source_without_last_poll_failed_is_never_backed_off():
+    # _FakeSource doesn't set last_poll_failed at all - getattr(..., False)
+    # default must apply, not an AttributeError.
+    source = _FakeSource()
+    orch = _orchestrator_with_sources([source])
+
+    orch._poll_sources()
+
+    assert "fake" not in orch._source_backoff
+
+
+def test_lower_priority_source_is_polled_when_higher_priority_is_backed_off():
+    failing = _FailingSource()
+    item = NowPlaying(source="static", media_type="music", title="Song", images=[])
+    static = _StaticSource(item)
+    orch = _orchestrator_with_sources([failing, static])
+
+    result = orch._poll_sources()
+
+    assert result is item
+
+
+def test_backoff_does_not_affect_unrelated_source():
+    failing = _FailingSource()
+    item = NowPlaying(source="static", media_type="music", title="Song", images=[])
+    static = _StaticSource(item)
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orch = _orchestrator_with_sources([failing, static])
+
+        orch._poll_sources()
+        clock.now += 1
+        orch._poll_sources()
+
+        # static source has no concept of backoff/calls tracking here, but
+        # it must still be reachable (returns its item) on every tick.
+        assert orch._poll_sources() is item
+
+
+def test_get_health_includes_source_backoff_seconds():
+    source = _FailingSource()
+    orch = _orchestrator_with_sources([source])
+
+    orch._poll_sources()
+
+    backoff = orch.get_health()["source_backoff_seconds"]
+    assert "failing" in backoff
+    assert backoff["failing"] > 0

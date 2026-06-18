@@ -18,6 +18,14 @@ class MediaSource(ABC):
 
     name: str
 
+    # Set this to True at the point get_now_playing() returns None because
+    # the device/service couldn't be reached (vs. False - the default -
+    # when it connected fine and simply has nothing active). The
+    # orchestrator uses this to back off polling frequency for sources
+    # whose device is unreachable, without delaying detection for sources
+    # that are just legitimately idle.
+    last_poll_failed: bool = False
+
     @abstractmethod
     def get_now_playing(self) -> Optional[NowPlaying]:
         """Return the current snapshot, or None if nothing is active."""

@@ -55,9 +55,11 @@ def test_returns_now_playing(MockOAuth, MockSpotify):
 def test_returns_none_when_no_cached_token(MockOAuth):
     MockOAuth.return_value.get_cached_token.return_value = None
 
-    result = SpotifySource(_make_config()).get_now_playing()
+    source = SpotifySource(_make_config())
+    result = source.get_now_playing()
 
     assert result is None
+    assert source.last_poll_failed is True
 
 
 @patch("mediainfo.sources.spotify.spotipy.Spotify")
@@ -99,6 +101,8 @@ def test_returns_none_on_exception(MockOAuth, MockSpotify):
     MockOAuth.return_value.get_cached_token.return_value = {"access_token": "tok"}
     MockSpotify.return_value.current_user_playing_track.side_effect = RuntimeError("network error")
 
-    result = SpotifySource(_make_config()).get_now_playing()
+    source = SpotifySource(_make_config())
+    result = source.get_now_playing()
 
     assert result is None
+    assert source.last_poll_failed is True

@@ -69,11 +69,13 @@ class AppleTvSource(MediaSource):
     # ------------------------------------------------------------------
 
     def get_now_playing(self) -> Optional[NowPlaying]:
+        self.last_poll_failed = False
         future = asyncio.run_coroutine_threadsafe(self._fetch(), self._loop)
         try:
             return future.result(timeout=15)
         except Exception:
             logger.exception("Apple TV source error")
+            self.last_poll_failed = True
             return None
 
     # ------------------------------------------------------------------
@@ -84,6 +86,7 @@ class AppleTvSource(MediaSource):
         if self._atv is None:
             await self._connect()
         if self._atv is None:
+            self.last_poll_failed = True
             return None
 
         try:
@@ -91,6 +94,7 @@ class AppleTvSource(MediaSource):
         except Exception:
             logger.warning("Apple TV: connection lost; will reconnect next poll")
             await self._disconnect()
+            self.last_poll_failed = True
             return None
 
         if _enum_name(playing.device_state) not in _PLAYING_STATES:

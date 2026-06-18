@@ -43,6 +43,7 @@ class _MediaServerSource(MediaSource):
         self._api_key = api_key
 
     def get_now_playing(self) -> Optional[NowPlaying]:
+        self.last_poll_failed = False
         try:
             resp = requests.get(
                 f"{self._base}/Sessions",
@@ -60,6 +61,7 @@ class _MediaServerSource(MediaSource):
             return None
         except Exception:
             logger.exception("%s source error", self.name)
+            self.last_poll_failed = True
             return None
 
     def _parse_item(self, item: dict) -> NowPlaying:

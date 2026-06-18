@@ -70,7 +70,8 @@ def test_schema_excludes_list_typed_fields(config_path):
     data = out.app.test_client().get("/api/schema").get_json()
     field_names = {f["name"] for f in data["sources"]["sonos"]}
     assert "blacklist" not in field_names
-    assert "speaker_ip" in field_names
+    assert "speaker_ips" not in field_names
+    assert "enabled" in field_names
 
 
 def test_schema_marks_secret_fields(config_path):

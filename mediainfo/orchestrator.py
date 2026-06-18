@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 
 _CACHE_PURGE_INTERVAL_SECONDS = 24 * 60 * 60
 
+# Backoff for sources whose device/service couldn't be reached (see
+# MediaSource.last_poll_failed) - doubles after each consecutive failure,
+# capped at _BACKOFF_MAX_SECONDS, and resets the moment a poll succeeds
+# (connects fine, whether or not anything's playing). Sources that are
+# simply idle - no error, nothing playing - are polled every tick as usual;
+# only unreachable ones get backed off, so detection isn't delayed for
+# devices that are just sitting there idle but reachable.
+_BACKOFF_INITIAL_SECONDS = 30
+_BACKOFF_MAX_SECONDS = 300
+_BACKOFF_MULTIPLIER = 2
+
 
 @dataclasses.dataclass
 class _RotationState:
@@ -31,6 +42,12 @@ class _RotationState:
     order: List[int]
     position: int
     last_rotation: float
+
+
+@dataclasses.dataclass
+class _BackoffState:
+    delay: float
+    next_attempt: float
 
 
 class Orchestrator:
@@ -67,6 +84,7 @@ class Orchestrator:
         self._start_time = time.monotonic()
         self._active_source_name: Optional[str] = None
         self._source_polled: Dict[str, float] = {}
+        self._source_backoff: Dict[str, _BackoffState] = {}
         self._output_errors: Dict[int, Tuple[str, float]] = {}
 
     def start(self) -> None:
@@ -267,13 +285,32 @@ class Orchestrator:
         now = time.monotonic()
         for source in self.sources:
             name = getattr(source, "name", type(source).__name__)
+
+            backoff = self._source_backoff.get(name)
+            if backoff is not None and now < backoff.next_attempt:
+                continue  # backing off: skip polling this source this tick
+
             self._source_polled[name] = now
             result = source.get_now_playing()
+
+            if getattr(source, "last_poll_failed", False):
+                self._source_backoff[name] = self._next_backoff(backoff, now)
+            elif backoff is not None:
+                del self._source_backoff[name]
+
             if result is not None:
                 self._active_source_name = name
                 return result
         self._active_source_name = None
         return None
+
+    @staticmethod
+    def _next_backoff(previous: Optional["_BackoffState"], now: float) -> "_BackoffState":
+        if previous is None:
+            delay = _BACKOFF_INITIAL_SECONDS
+        else:
+            delay = min(previous.delay * _BACKOFF_MULTIPLIER, _BACKOFF_MAX_SECONDS)
+        return _BackoffState(delay=delay, next_attempt=now + delay)
 
     def _call_output(self, index: int, func, *args) -> None:
         """Call an output method, recording any exception for health reporting."""
@@ -309,6 +346,10 @@ class Orchestrator:
             "active_source": self._active_source_name,
             "source_last_polled_ago": {
                 name: round(now - ts, 1) for name, ts in self._source_polled.items()
+            },
+            "source_backoff_seconds": {
+                name: round(max(state.next_attempt - now, 0), 1)
+                for name, state in self._source_backoff.items()
             },
             "output_errors": {
                 i: {"message": msg, "ago_seconds": round(now - ts, 1)}

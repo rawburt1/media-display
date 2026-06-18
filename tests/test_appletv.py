@@ -140,6 +140,8 @@ def test_fetch_returns_none_when_not_playing(state):
     src._atv = MagicMock()
     src._atv.metadata.playing = AsyncMock(return_value=_playing(state=state))
     assert run(src._fetch()) is None
+    # Connected fine, legitimately nothing playing - not a connection failure.
+    assert src.last_poll_failed is False
 
 
 def test_fetch_returns_none_when_title_empty():
@@ -164,6 +166,7 @@ def test_fetch_returns_none_when_not_connected_and_scan_finds_nothing():
     src = _source()
     with patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[])):
         assert run(src._fetch()) is None
+    assert src.last_poll_failed is True
 
 
 def test_fetch_disconnects_on_playing_exception():
@@ -175,6 +178,7 @@ def test_fetch_disconnects_on_playing_exception():
 
     assert result is None
     assert src._atv is None  # disconnected
+    assert src.last_poll_failed is True
 
 
 def test_fetch_connects_and_returns_result_on_fresh_start():
@@ -291,6 +295,7 @@ def test_get_now_playing_returns_none_on_future_error():
     for coro in captured:
         coro.close()  # prevent "coroutine was never awaited" RuntimeWarning
     assert result is None
+    assert src.last_poll_failed is True
 
 
 # ---------------------------------------------------------------------------

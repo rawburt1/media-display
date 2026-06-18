@@ -48,7 +48,9 @@ def test_no_active_players_returns_none(mock_post):
     response.json.return_value = {"result": []}
     mock_post.return_value = response
 
-    assert _source().get_now_playing() is None
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is False  # connected fine, just idle
 
 
 @patch("mediainfo.sources.kodi.requests.post")
@@ -193,4 +195,6 @@ def test_music_item_with_musicbrainz_ids(mock_post):
 def test_request_error_returns_none(mock_post):
     mock_post.side_effect = Exception("boom")
 
-    assert _source().get_now_playing() is None
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is True

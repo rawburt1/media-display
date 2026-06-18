@@ -85,9 +85,11 @@ See `config.example.yaml` for all options. Key things to fill in:
   is active at once, the first one in this list wins.
 - **`sources.kodi`**: Kodi host/port and credentials. In Kodi, enable
   *Settings → Services → Control → Allow remote control via HTTP*.
-- **`sources.sonos`**: IP address of any Sonos speaker on your network
-  (find it in the Sonos app under speaker settings, or your router's
-  device list).
+- **`sources.sonos`**: IP address of every Sonos speaker on your network
+  (find them in the Sonos app under speaker settings, or your router's
+  device list). Any one of them can report the full household topology,
+  so listing more than one keeps every zone visible even if a particular
+  speaker is temporarily off or unreachable.
 - **`sources.plex`**: host/port of your Plex Media Server and an
   [X-Plex-Token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/).
 - **`sources.jellyfin`** / **`sources.emby`**: host/port and an `api_key`
@@ -280,7 +282,12 @@ See `config.example.yaml` for all options. Key things to fill in:
 
 Each source's `get_now_playing()` must catch its own connection errors and
 return `None` rather than raising, so one unreachable source never breaks
-the polling loop.
+the polling loop. Set `self.last_poll_failed = True` when that `None` was
+caused by a connection failure (device unreachable), and `False` when it
+connected fine and simply found nothing playing - the orchestrator uses
+this to back off polling frequency (starting at 30s, doubling up to 5
+minutes) for sources whose device is unreachable, without delaying
+detection for sources that are just legitimately idle.
 
 ## Running tests
 

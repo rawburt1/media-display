@@ -69,4 +69,6 @@ def test_returns_none_when_nothing_recognized(mock_get):
 def test_returns_none_on_connection_error(mock_get):
     mock_get.side_effect = RuntimeError("connection refused")
 
-    assert _source().get_now_playing() is None
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is True

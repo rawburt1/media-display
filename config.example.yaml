@@ -115,11 +115,17 @@ sources:
     cache_path: ./spotify_cache/token.json
 
   # Sonos multi-room audio.
-  # Discovers all Sonos zones on your network automatically from a single
-  # seed speaker IP, so music playing in any room is detected.
+  # Discovers all Sonos zones on your network automatically from the
+  # configured seed speakers, so music playing in any room is detected.
   sonos:
     enabled: true
-    speaker_ip: 192.168.1.80   # IP of any one Sonos speaker on your network
+    # IP address of every Sonos speaker on your network. Any one of them
+    # can report the full household topology, so listing more than one
+    # keeps every zone visible even if a particular speaker is
+    # temporarily off or unreachable.
+    speaker_ips:
+      - 192.168.1.80
+      - 192.168.1.81
 
     # Optional: speakers to ignore. Use the name shown in the Sonos app,
     # or the speaker's IP address. Music on these speakers won't trigger

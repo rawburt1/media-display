@@ -19,15 +19,16 @@ class SonosSource(MediaSource):
 
     def __init__(self, config: SonosConfig):
         self.config = config
-        # Seed device used to fetch the full zone topology. All groups
-        # (and their coordinators) are discovered from this one entry point,
-        # so music playing on any Sonos zone is detected.
-        self._seed = SoCo(config.speaker_ip)
 
     def get_now_playing(self) -> Optional[NowPlaying]:
+        self.last_poll_failed = False
+        groups = self._discover_groups()
+        if groups is None:
+            self.last_poll_failed = True
+            return None
         try:
             seen: set[str] = set()
-            for group in self._seed.all_groups:
+            for group in groups:
                 coordinator = group.coordinator
                 if coordinator.ip_address in seen:
                     continue
@@ -44,7 +45,21 @@ class SonosSource(MediaSource):
             return None
         except Exception:
             logger.exception("Sonos source error")
+            self.last_poll_failed = True
             return None
+
+    def _discover_groups(self):
+        # Any speaker in the household can report the full zone topology,
+        # so try each configured speaker as a discovery seed until one
+        # answers - this keeps every zone visible even if a particular
+        # speaker is temporarily off or unreachable.
+        for ip in self.config.speaker_ips:
+            try:
+                return SoCo(ip).all_groups
+            except Exception:
+                logger.debug("Sonos seed %s unreachable, trying next", ip)
+        logger.warning("Sonos: no configured speaker_ips were reachable")
+        return None
 
     def _is_blacklisted(self, device) -> bool:
         if not self.config.blacklist:

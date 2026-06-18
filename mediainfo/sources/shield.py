@@ -56,10 +56,12 @@ class ShieldSource(MediaSource):
         return PythonRSASigner.FromRSAKeyPath(str(key_path))
 
     def get_now_playing(self) -> Optional[NowPlaying]:
+        self.last_poll_failed = False
         try:
             dump = self._shell("dumpsys media_session")
         except Exception:
             logger.exception("Shield source error")
+            self.last_poll_failed = True
             return None
 
         description = self._find_playing_description(dump)

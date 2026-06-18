@@ -57,6 +57,7 @@ class KodiSource(MediaSource):
         return data.get("result")
 
     def get_now_playing(self) -> Optional[NowPlaying]:
+        self.last_poll_failed = False
         try:
             players = self._rpc("Player.GetActivePlayers")
             if not players:
@@ -138,6 +139,7 @@ class KodiSource(MediaSource):
             )
         except Exception:
             logger.exception("Kodi source error")
+            self.last_poll_failed = True
             return None
 
     def _get_tvshow_ids(self, tvshowid: Optional[int]) -> Optional[dict]:

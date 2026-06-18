@@ -130,7 +130,9 @@ def test_paused_session_returns_none(mock_get):
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_request_error_returns_none(mock_get):
     mock_get.side_effect = Exception("connection refused")
-    assert _jf().get_now_playing() is None
+    source = _jf()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is True
 
 
 @patch("mediainfo.sources.jellyfin.requests.get")

@@ -335,15 +335,18 @@ def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
 
         # Sources — active/idle for those in the orchestrator; disabled /
         # not_configured for everything else in the registry.
+        backoff_seconds = data["source_backoff_seconds"]
         active_source_names = {s.name for s in orch.sources}
         sources = []
         for source in orch.sources:
-            entry: dict = {
-                "name": source.name,
-                "status": "active" if source.name == active_source else "idle",
-            }
+            status = "active" if source.name == active_source else "idle"
+            if source.name in backoff_seconds:
+                status = "error"
+            entry: dict = {"name": source.name, "status": status}
             if source.name in polled_ago:
                 entry["last_polled_ago_seconds"] = polled_ago[source.name]
+            if source.name in backoff_seconds:
+                entry["retry_in_seconds"] = backoff_seconds[source.name]
             sources.append(entry)
         for name in SOURCE_CLASSES:
             if name in active_source_names:

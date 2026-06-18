@@ -54,7 +54,11 @@ class KodiConfig:
 @dataclasses.dataclass
 class SonosConfig:
     enabled: bool = False
-    speaker_ip: str = ""
+    # IP address(es) of Sonos speakers on your network, used as discovery
+    # seeds. Any one of them can report the full household topology, so
+    # listing more than one (e.g. one per room) keeps every zone visible
+    # even if a particular speaker is temporarily off or unreachable.
+    speaker_ips: list = dataclasses.field(default_factory=list)
     # Speaker names or IP addresses to ignore (e.g. speakers in rooms where
     # you don't want to trigger the display). Names match what's shown in
     # the Sonos app.
