@@ -217,6 +217,23 @@ def test_build_enrichers_instantiates_enabled():
     assert result == [fake_cls.return_value]
 
 
+def test_build_enrichers_passes_library_to_library_aware_enrichers():
+    enc_cfg = MagicMock()
+    enc_cfg.enabled = True
+    fake_cls = MagicMock(return_value=MagicMock())
+    fake_library = MagicMock()
+    cfg = _minimal_config(enrichers={"fanarttv": enc_cfg})
+
+    with (
+        patch("mediainfo.__main__.ENRICHER_CLASSES", {"fanarttv": fake_cls}),
+        patch("mediainfo.__main__._LIBRARY_AWARE_ENRICHERS", {fake_cls}),
+    ):
+        result = _build_enrichers(cfg, fake_library)
+
+    fake_cls.assert_called_once_with(enc_cfg, fake_library)
+    assert result == [fake_cls.return_value]
+
+
 def test_build_idle_source_returns_none_when_disabled():
     idle_cfg = MagicMock()
     idle_cfg.enabled = False

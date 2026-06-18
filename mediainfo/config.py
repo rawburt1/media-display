@@ -250,6 +250,19 @@ class VideoOutputConfig:
 
 
 @dataclasses.dataclass
+class LibraryConfig:
+    # Local SQLite cache of artist/album/track metadata (external ids like
+    # MusicBrainz mbids, and "claims" like cover art URLs or artist photos)
+    # so the music enrichers (musicbrainz, fanarttv, discogs, lastfm) query
+    # this first instead of repeating the same external API lookup for the
+    # same artist/album/song across plays and process restarts.
+    db_path: str = "./library/library.db"
+    # How long a cached claim (e.g. a cover art URL, or "no cover art
+    # found") stays valid before it's looked up again.
+    max_age_days: int = 30
+
+
+@dataclasses.dataclass
 class CacheConfig:
     dir: str = "./cache"
     max_age_days: int = 30
@@ -407,6 +420,7 @@ class Config:
     enrichers: dict[str, Any]
     idle: dict[str, Any]
     cache: CacheConfig
+    library: LibraryConfig
     logging: LoggingConfig
 
     @classmethod
@@ -463,5 +477,6 @@ class Config:
             enrichers=enrichers,
             idle=idle,
             cache=CacheConfig(**(raw.get("cache") or {})),
+            library=LibraryConfig(**(raw.get("library") or {})),
             logging=LoggingConfig(**(raw.get("logging") or {})),
         )

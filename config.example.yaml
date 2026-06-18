@@ -426,6 +426,18 @@ cache:
   # decorative and easily refetched rather than tied to a specific item.
   idle_max_age_hours: 48
 
+# Local SQLite database of artist/album/track metadata (MusicBrainz ids,
+# cached cover art URLs, artist photos) - queried before the musicbrainz,
+# fanarttv, discogs, and lastfm enrichers make an external API call, so
+# the same artist/album/song doesn't trigger a repeat lookup across plays
+# or process restarts. MusicBrainz is treated as the source of truth for
+# canonical ids.
+library:
+  db_path: ./library/library.db
+  # How long a cached result (e.g. a cover art URL, or "no cover art
+  # found") stays valid before it's looked up again.
+  max_age_days: 30
+
 
 # ---------------------------------------------------------------------------
 # Idle wallpapers  (shown when nothing is playing)

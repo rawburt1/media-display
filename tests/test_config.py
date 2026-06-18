@@ -47,6 +47,9 @@ def test_load_example_config():
     assert config.cache.dir == "./cache"
     assert config.cache.max_age_days == 30
 
+    assert config.library.db_path == "./library/library.db"
+    assert config.library.max_age_days == 30
+
 
 def test_load_missing_file_raises(tmp_path):
     missing = tmp_path / "does-not-exist.yaml"

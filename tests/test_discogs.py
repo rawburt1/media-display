@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, call, patch
 from mediainfo.config import DiscogsConfig
 from mediainfo.enrichers.discogs import DiscogsEnricher, _is_real_image
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.musiclibrary import MusicLibrary
 
 
 def _enricher(**kwargs) -> DiscogsEnricher:
@@ -228,3 +229,35 @@ def test_http_error_on_master_falls_through_to_release(mock_get):
     # The master search error is swallowed; release search still ran.
     assert len(np.images) == 1
     assert np.images[0].url == "https://i.discogs.com/rel.jpg"
+
+
+# ---------------------------------------------------------------------------
+# MusicLibrary caching
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.discogs.requests.get")
+def test_caches_result_in_library_and_skips_lookup_on_repeat(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"))
+    mock_get.return_value = _search_response([_master()])
+    enricher = DiscogsEnricher(DiscogsConfig(enabled=True, token="test-token"), library)
+
+    enricher.enrich(_song())
+    assert mock_get.call_count == 1
+
+    np2 = _song()
+    enricher.enrich(np2)
+    assert mock_get.call_count == 1  # no new network call
+    assert np2.images[0].url == "https://i.discogs.com/cover.jpg"
+
+
+@patch("mediainfo.enrichers.discogs.requests.get")
+def test_caches_negative_result_in_library(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"))
+    mock_get.return_value = _search_response([])
+    enricher = DiscogsEnricher(DiscogsConfig(enabled=True, token="test-token"), library)
+
+    enricher.enrich(_song())
+    assert mock_get.call_count == 2  # master + release search
+
+    enricher.enrich(_song())
+    assert mock_get.call_count == 2  # cached miss, no new calls

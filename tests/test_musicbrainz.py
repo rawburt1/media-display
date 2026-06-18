@@ -3,8 +3,9 @@
 from unittest.mock import patch
 
 from mediainfo.config import MusicBrainzConfig
-from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
+from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher, resolve_release_group_ids
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.musiclibrary import MusicLibrary
 
 
 def _config():
@@ -39,7 +40,11 @@ def test_resolves_mbid_by_artist_and_album(mock_head, mock_get):
     np = _music()
     mock_get.return_value.status_code = 200
     mock_get.return_value.json.return_value = {
-        "release-groups": [{"id": "resolved-mbid", "primary-type": "Album"}]
+        "release-groups": [{
+            "id": "resolved-mbid",
+            "primary-type": "Album",
+            "artist-credit": [{"artist": {"id": "artist-mbid"}}],
+        }]
     }
     mock_head.return_value.status_code = 200
     mock_head.return_value.url = "https://caa.example.com/resolved.jpg"
@@ -55,8 +60,16 @@ def test_prefers_album_type_over_compilation(mock_head, mock_get):
     np = _music()
     mock_get.return_value.json.return_value = {
         "release-groups": [
-            {"id": "compilation-mbid", "primary-type": "Compilation"},
-            {"id": "album-mbid", "primary-type": "Album"},
+            {
+                "id": "compilation-mbid",
+                "primary-type": "Compilation",
+                "artist-credit": [{"artist": {"id": "artist-mbid"}}],
+            },
+            {
+                "id": "album-mbid",
+                "primary-type": "Album",
+                "artist-credit": [{"artist": {"id": "artist-mbid"}}],
+            },
         ]
     }
     mock_head.return_value.status_code = 200
@@ -103,3 +116,56 @@ def test_no_duplicate_images(mock_head):
     MusicBrainzEnricher(_config()).enrich(np)
 
     assert len(np.images) == 1
+
+
+# ---------------------------------------------------------------------------
+# resolve_release_group_ids - shared MusicLibrary-backed resolution
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.musicbrainz.requests.get")
+def test_resolve_release_group_ids_caches_result_in_library(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"))
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = {
+        "release-groups": [{
+            "id": "resolved-mbid",
+            "primary-type": "Album",
+            "artist-credit": [{"artist": {"id": "artist-mbid"}}],
+        }]
+    }
+
+    first = resolve_release_group_ids(library, "Pink Floyd", "The Wall")
+    assert first == ("artist-mbid", "resolved-mbid")
+    assert mock_get.call_count == 1
+
+    second = resolve_release_group_ids(library, "Pink Floyd", "The Wall")
+    assert second == ("artist-mbid", "resolved-mbid")
+    assert mock_get.call_count == 1  # no new network call
+
+
+@patch("mediainfo.enrichers.musicbrainz.requests.get")
+def test_resolve_release_group_ids_caches_negative_result(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"))
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = {"release-groups": []}
+
+    assert resolve_release_group_ids(library, "Unknown Artist", "Unknown Album") is None
+    assert mock_get.call_count == 1
+
+    assert resolve_release_group_ids(library, "Unknown Artist", "Unknown Album") is None
+    assert mock_get.call_count == 1  # cached miss, no new call
+
+
+def test_resolve_release_group_ids_without_library_skips_caching():
+    with patch("mediainfo.enrichers.musicbrainz.requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            "release-groups": [{
+                "id": "resolved-mbid",
+                "primary-type": "Album",
+                "artist-credit": [{"artist": {"id": "artist-mbid"}}],
+            }]
+        }
+        resolve_release_group_ids(None, "Pink Floyd", "The Wall")
+        resolve_release_group_ids(None, "Pink Floyd", "The Wall")
+        assert mock_get.call_count == 2  # no library, so no caching

@@ -16,6 +16,7 @@ from typing import Optional
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config, LoggingConfig
+from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
 from mediainfo.enrichers.discogs import DiscogsEnricher
 from mediainfo.enrichers.fanarttv import FanartTvEnricher
@@ -93,6 +94,10 @@ IDLE_CLASSES = {
     "unsplash": UnsplashWallpaperSource,
 }
 
+# Enrichers that look up music metadata by artist/album name and so can use
+# the local MusicLibrary cache to avoid repeating the same external lookup.
+_LIBRARY_AWARE_ENRICHERS = {DiscogsEnricher, FanartTvEnricher, LastFmEnricher, MusicBrainzEnricher}
+
 # Reverse lookups: class → registry key, used when building health data.
 _OUTPUT_NAME_BY_CLASS = {cls: name for name, cls in OUTPUT_CLASSES.items()}
 _ENRICHER_NAME_BY_CLASS = {cls: name for name, cls in ENRICHER_CLASSES.items()}
@@ -148,7 +153,8 @@ def main() -> None:
         max_age_days=config.cache.max_age_days,
         idle_max_age_hours=config.cache.idle_max_age_hours,
     )
-    orch = _start_orchestrator(config, outputs, cache)
+    library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
+    orch = _start_orchestrator(config, outputs, cache, library)
     _wire_health_providers(outputs, orch, config)
 
     try:
@@ -168,6 +174,7 @@ def main() -> None:
                 continue
 
             _warn_output_changes(config, new_config)
+            library_config_changed = new_config.library != config.library
             config = new_config
 
             orch.stop()
@@ -177,7 +184,12 @@ def main() -> None:
                 max_age_days=config.cache.max_age_days,
                 idle_max_age_hours=config.cache.idle_max_age_hours,
             )
-            orch = _start_orchestrator(config, outputs, cache)
+            if library_config_changed:
+                library.close()
+                library = MusicLibrary(
+                    config.library.db_path, max_age_days=config.library.max_age_days
+                )
+            orch = _start_orchestrator(config, outputs, cache, library)
             _wire_health_providers(outputs, orch, config)
             logger.info("Config reloaded successfully")
     finally:
@@ -185,6 +197,7 @@ def main() -> None:
         orch.stop()
         orch.join()
         _shutdown_outputs(outputs)
+        library.close()
         logger.info("Shutdown complete")
 
 
@@ -285,7 +298,7 @@ def _build_sources(config: Config) -> list:
     return sources
 
 
-def _build_enrichers(config: Config) -> list:
+def _build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> list:
     enrichers = []
     for name, enricher_config in config.enrichers.items():
         if not enricher_config.enabled:
@@ -294,7 +307,10 @@ def _build_enrichers(config: Config) -> list:
         if enricher_cls is None:
             logger.warning("Unknown enricher: %s", name)
             continue
-        enrichers.append(enricher_cls(enricher_config))
+        if enricher_cls in _LIBRARY_AWARE_ENRICHERS:
+            enrichers.append(enricher_cls(enricher_config, library))
+        else:
+            enrichers.append(enricher_cls(enricher_config))
     return enrichers
 
 
@@ -310,10 +326,12 @@ def _build_idle_source(config: Config):
     return None
 
 
-def _start_orchestrator(config: Config, outputs: list, cache: ImageCache) -> Orchestrator:
+def _start_orchestrator(
+    config: Config, outputs: list, cache: ImageCache, library: Optional[MusicLibrary] = None
+) -> Orchestrator:
     orch = Orchestrator(
         sources=_build_sources(config),
-        enrichers=_build_enrichers(config),
+        enrichers=_build_enrichers(config, library),
         outputs=outputs,
         cache=cache,
         poll_interval_seconds=config.poll_interval_seconds,

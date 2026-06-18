@@ -3,26 +3,26 @@
 from __future__ import annotations
 
 import logging
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, Optional
 
 import requests
 
 from mediainfo.config import FanartTvConfig
 from mediainfo.enrichers.base import ArtworkEnricher
+from mediainfo.enrichers.musicbrainz import resolve_release_group_ids
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.musiclibrary import MusicLibrary
 
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://webservice.fanart.tv/v3"
 _PREFERRED_LANGS = {"en", "00", ""}
 
-_MUSICBRAINZ_URL = "https://musicbrainz.org/ws/2/release-group/"
-_MUSICBRAINZ_USER_AGENT = "mediainfo/1.0 (personal use)"
-
 
 class FanartTvEnricher(ArtworkEnricher):
-    def __init__(self, config: FanartTvConfig):
+    def __init__(self, config: FanartTvConfig, library: Optional[MusicLibrary] = None):
         self.config = config
+        self.library = library
 
     def enrich(self, now_playing: NowPlaying) -> None:
         try:
@@ -74,7 +74,9 @@ class FanartTvEnricher(ArtworkEnricher):
         album_id = now_playing.ids.get("musicbrainzalbum")
 
         if not artist_id or not album_id:
-            resolved = self._resolve_musicbrainz_ids(now_playing.subtitle, now_playing.album)
+            resolved = resolve_release_group_ids(
+                self.library, now_playing.subtitle, now_playing.album
+            )
             if resolved is None:
                 return
             artist_id, album_id = resolved
@@ -90,39 +92,6 @@ class FanartTvEnricher(ArtworkEnricher):
         # Prefer fanart.tv's album cover over the source's own album art by
         # putting it first in the rotation.
         self._prepend_best(now_playing, album.get("albumcover"), "Album (fanart.tv)")
-
-    @staticmethod
-    def _resolve_musicbrainz_ids(artist: str, album: str) -> Optional[Tuple[str, str]]:
-        """Look up an artist + album's MusicBrainz ids by name, for sources
-        (e.g. Sonos) that don't expose MusicBrainz ids directly.
-        """
-        if not artist or not album:
-            return None
-
-        query = f'artist:"{artist}" AND release:"{album}"'
-        try:
-            response = requests.get(
-                _MUSICBRAINZ_URL,
-                params={"query": query, "fmt": "json", "limit": 5},
-                headers={"User-Agent": _MUSICBRAINZ_USER_AGENT},
-                timeout=10,
-            )
-            response.raise_for_status()
-            groups = response.json().get("release-groups") or []
-        except Exception:
-            logger.exception("MusicBrainz lookup failed for %r - %r", artist, album)
-            return None
-
-        if not groups:
-            return None
-
-        # Prefer an actual studio album over compilations/live recordings/etc.
-        group = next((g for g in groups if g.get("primary-type") == "Album"), groups[0])
-        artist_credit = group.get("artist-credit") or []
-        if not artist_credit:
-            return None
-
-        return artist_credit[0]["artist"]["id"], group["id"]
 
     def _get(self, path: str) -> Optional[dict]:
         try:

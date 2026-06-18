@@ -17,6 +17,7 @@ import requests
 from mediainfo.config import LastFmConfig
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.musiclibrary import MusicLibrary
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,9 @@ _SIZE_PREFERENCE = ("mega", "extralarge", "large", "medium", "small")
 
 
 class LastFmEnricher(ArtworkEnricher):
-    def __init__(self, config: LastFmConfig):
+    def __init__(self, config: LastFmConfig, library: Optional[MusicLibrary] = None):
         self._api_key = config.api_key
+        self.library = library
 
     def enrich(self, now_playing: NowPlaying) -> None:
         if now_playing.media_type != "music":
@@ -39,7 +41,7 @@ class LastFmEnricher(ArtworkEnricher):
             return
 
         try:
-            url = self._fetch_artist_image(artist)
+            url = self._image_for(artist)
         except Exception:
             logger.exception("Last.fm enrichment error for %r", artist)
             return
@@ -48,6 +50,19 @@ class LastFmEnricher(ArtworkEnricher):
             now_playing.images.append(
                 Artwork(url=url, label=f"Artist photo (Last.fm): {artist}")
             )
+
+    def _image_for(self, artist: str) -> Optional[str]:
+        if self.library is None:
+            return self._fetch_artist_image(artist)
+
+        artist_id = self.library.get_or_create_artist(artist)
+        cached = self.library.get_claim("artist", artist_id, "photo_url", "lastfm")
+        if cached is not None:
+            return cached or None
+
+        url = self._fetch_artist_image(artist)
+        self.library.set_claim("artist", artist_id, "photo_url", "lastfm", url or "")
+        return url
 
     def _fetch_artist_image(self, artist: str) -> Optional[str]:
         try:

@@ -21,6 +21,7 @@ services:
       # disabled and you only ever edit config.yaml by hand.
       - ./config:/app/config
       - ./cache:/app/cache
+      - ./library:/app/library
       - ./logs:/app/logs
       - ./adb_keys:/app/adb_keys
       - ./artwork:/app/artwork

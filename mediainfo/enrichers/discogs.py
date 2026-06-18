@@ -17,6 +17,7 @@ import requests
 from mediainfo.config import DiscogsConfig
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.musiclibrary import MusicLibrary
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,9 @@ _USER_AGENT = "mediainfo/1.0 (personal use)"
 
 
 class DiscogsEnricher(ArtworkEnricher):
-    def __init__(self, config: DiscogsConfig) -> None:
+    def __init__(self, config: DiscogsConfig, library: Optional[MusicLibrary] = None) -> None:
         self.config = config
+        self.library = library
 
     def enrich(self, now_playing: NowPlaying) -> None:
         if now_playing.media_type != "music":
@@ -38,11 +40,26 @@ class DiscogsEnricher(ArtworkEnricher):
             return
 
         try:
-            url = self._find_cover(artist, album)
+            url = self._cover_for(artist, album)
             if url and not any(img.url == url for img in now_playing.images):
                 now_playing.images.append(Artwork(url=url, label="Album art (Discogs)"))
         except Exception:
             logger.exception("Discogs enrichment error")
+
+    def _cover_for(self, artist: str, album: str) -> Optional[str]:
+        if self.library is None:
+            return self._find_cover(artist, album)
+
+        artist_id = self.library.get_or_create_artist(artist)
+        album_id = self.library.get_or_create_album(artist_id, album)
+
+        cached = self.library.get_claim("album", album_id, "cover_art_url", "discogs")
+        if cached is not None:
+            return cached or None
+
+        url = self._find_cover(artist, album)
+        self.library.set_claim("album", album_id, "cover_art_url", "discogs", url or "")
+        return url
 
     def _find_cover(self, artist: str, album: str) -> Optional[str]:
         # Masters represent canonical releases and have better, deduplicated artwork.

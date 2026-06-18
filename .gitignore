@@ -11,6 +11,9 @@ config/config.yaml
 # Downloaded artwork cache
 cache/
 
+# Local music metadata cache (artist/album/track ids and claims)
+library/
+
 # Log files
 logs/
 

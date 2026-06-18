@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Local SQLite metadata cache (`library.db_path`, new `mediainfo.musiclibrary`
+  module) of artist/album/track ids and "claims" (cover art URLs, artist
+  photos), queried by the musicbrainz, fanarttv, discogs, and lastfm
+  enrichers before they make an external API call. Previously
+  musicbrainz.py and fanarttv.py each independently re-resolved the same
+  artist+album to MusicBrainz ids on every play, and nothing persisted
+  across restarts; now the resolution (and each enricher's own
+  artwork/photo result, including a cached "nothing found") happens once
+  per artist/album/song and is reused from then on. MusicBrainz is
+  treated as the source of truth for canonical ids.
 - `logging.level` config option (`DEBUG`/`INFO`/`WARNING`/`ERROR`/
   `CRITICAL`, default `INFO`) to control verbosity without code changes -
   switch to `DEBUG` to see things like every Sonos coordinator

@@ -7,6 +7,7 @@ import pytest
 from mediainfo.config import LastFmConfig
 from mediainfo.enrichers.lastfm import LastFmEnricher, _PLACEHOLDER_HASH
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.musiclibrary import MusicLibrary
 
 
 def _config(api_key="TEST_KEY"):
@@ -198,3 +199,35 @@ def test_passes_api_key(mock_get):
 
     _, kwargs = mock_get.call_args
     assert kwargs["params"]["api_key"] == "MY_KEY"
+
+
+# ---------------------------------------------------------------------------
+# MusicLibrary caching
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.lastfm.requests.get")
+def test_caches_result_in_library_and_skips_lookup_on_repeat(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"))
+    mock_get.return_value = _mock_get(_api_response([_image("mega", REAL_URL)]))
+    enricher = LastFmEnricher(_config(), library)
+
+    enricher.enrich(_music())
+    assert mock_get.call_count == 1
+
+    np2 = _music()
+    enricher.enrich(np2)
+    assert mock_get.call_count == 1  # no new network call
+    assert np2.images[0].url == REAL_URL
+
+
+@patch("mediainfo.enrichers.lastfm.requests.get")
+def test_caches_negative_result_in_library(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"))
+    mock_get.return_value = _mock_get(_api_response([]))
+    enricher = LastFmEnricher(_config(), library)
+
+    enricher.enrich(_music())
+    assert mock_get.call_count == 1
+
+    enricher.enrich(_music())
+    assert mock_get.call_count == 1  # cached miss, no new call
