@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - CHANGELOG.md, CODEOWNERS, SECURITY.md, and GitHub pull request/issue
   templates.
 - `.editorconfig`.
+- Branch protection on `master`: requires the `test` CI check to pass and
+  1 approving PR review before merging (repo admins are exempt).
 
 ### Notes
 - Going forward, CHANGELOG.md updates accompanying a change are folded
