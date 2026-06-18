@@ -123,10 +123,14 @@ _CONFIG_POLL_INTERVAL = 2
 
 
 def main() -> None:
-    # 'auth' is a special subcommand; check for it before the normal parser so
-    # the existing `--config` flag keeps working unchanged.
+    # 'auth' and 'import-lidarr' are special subcommands; check for them
+    # before the normal parser so the existing `--config` flag keeps
+    # working unchanged.
     if len(sys.argv) >= 2 and sys.argv[1] == "auth":
         _auth_main(sys.argv[2:])
+        return
+    if len(sys.argv) >= 2 and sys.argv[1] == "import-lidarr":
+        _import_lidarr_main(sys.argv[2:])
         return
 
     parser = argparse.ArgumentParser(description="Pixoo64 / web media art display")
@@ -475,6 +479,39 @@ def _wire_health_providers(outputs: list, orch: Orchestrator, config: Config) ->
     for output in outputs:
         if isinstance(output, WebOutput):
             output.set_health_provider(provider)
+
+
+# ---------------------------------------------------------------------------
+# import-lidarr subcommand
+# ---------------------------------------------------------------------------
+
+def _import_lidarr_main(argv: list) -> None:
+    parser = argparse.ArgumentParser(
+        prog="python -m mediainfo import-lidarr",
+        description="Populate the local music library from a Lidarr instance",
+    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
+    parser.add_argument("--url", required=True, help="Lidarr base URL, e.g. http://192.168.1.122:6003")
+    parser.add_argument("--api-key", required=True, help="Lidarr API key")
+    args = parser.parse_args(argv)
+
+    from mediainfo.lidarr_import import import_from_lidarr
+
+    config = Config.load(args.config)
+    _setup_logging(config.logging)
+    library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
+    try:
+        print(f"Importing from Lidarr at {args.url} ...")
+        stats = import_from_lidarr(library, args.url, args.api_key)
+    finally:
+        library.close()
+
+    print(
+        f"Done: {stats.artists} artist(s), {stats.albums} album(s), "
+        f"{stats.tracks} track(s) imported into {config.library.db_path}"
+    )
+    if stats.failed_artists:
+        print(f"Warning: {stats.failed_artists} artist(s) failed to import (see logs above)")
 
 
 # ---------------------------------------------------------------------------

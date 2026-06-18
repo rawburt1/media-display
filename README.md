@@ -272,7 +272,14 @@ See `config.example.yaml` for all options. Key things to fill in:
   process restarts. MusicBrainz is treated as the source of truth for
   canonical ids; other sources' results are cached (including a "nothing
   found" result, to avoid retrying known dead ends) for `max_age_days`
-  (default 30) before being looked up again.
+  (default 30) before being looked up again. If you run
+  [Lidarr](https://lidarr.audio/), `python -m mediainfo import-lidarr
+  --config config.yaml --url http://lidarr-host:8686 --api-key
+  YOUR_LIDARR_API_KEY` (or the `docker compose run` equivalent, with
+  `--config config/config.yaml`) imports its already-verified
+  artist/album/track MusicBrainz ids in bulk, so the enrichers have
+  everything cached up front instead of discovering it one play at a
+  time.
 - **`logging.level`**: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`, or
   `CRITICAL`. Switch to `DEBUG` when troubleshooting why a source isn't
   detecting playback - it logs things like each Sonos coordinator

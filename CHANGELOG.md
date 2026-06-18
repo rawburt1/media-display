@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `python -m mediainfo import-lidarr --url <lidarr-url> --api-key <key>`
+  bulk-imports a [Lidarr](https://lidarr.audio/) library's already-verified
+  artist/album/track MusicBrainz ids into the local music library cache
+  (see below), so enrichers have everything cached up front instead of
+  discovering it one play at a time.
 - Local SQLite metadata cache (`library.db_path`, new `mediainfo.musiclibrary`
   module) of artist/album/track ids and "claims" (cover art URLs, artist
   photos), queried by the musicbrainz, fanarttv, discogs, and lastfm
