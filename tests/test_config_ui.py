@@ -848,3 +848,92 @@ def test_auth_not_required_for_private_address_when_enabled(config_path):
     out = ConfigUiOutput(_config(), config_path, auth)
     resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Dashboard UI (ui: dashboard)
+# ---------------------------------------------------------------------------
+
+def test_form_ui_is_default_index_page(config_path):
+    out = ConfigUiOutput(_config(), config_path)
+    resp = out.app.test_client().get("/")
+    assert b"configuration" in resp.data
+    assert b"mediainfo status" not in resp.data
+
+
+def test_dashboard_ui_serves_dashboard_page(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    resp = out.app.test_client().get("/")
+    assert resp.status_code == 200
+    assert b"mediainfo status" in resp.data
+
+
+def test_api_status_returns_empty_lists_without_health_provider(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    resp = out.app.test_client().get("/api/status")
+    assert resp.get_json() == {"sources": [], "outputs": [], "enrichers": []}
+
+
+def test_api_status_returns_health_provider_data(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    out.set_health_provider(lambda: {
+        "sources": [{"name": "kodi", "status": "active"}],
+        "outputs": [{"type": "web", "status": "ok", "port": 8090}],
+        "enrichers": [{"name": "musicbrainz", "status": "ok"}],
+        "now_playing": None,
+    })
+
+    resp = out.app.test_client().get("/api/status")
+    data = resp.get_json()
+
+    assert data["sources"] == [{"name": "kodi", "status": "active"}]
+    assert data["outputs"] == [{"type": "web", "status": "ok", "port": 8090}]
+    assert data["enrichers"] == [{"name": "musicbrainz", "status": "ok"}]
+    assert "now_playing" not in data  # only sources/outputs/enrichers are exposed
+
+
+def test_api_test_source_route_dispatches(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    with patch("mediainfo.outputs.config_ui.test_source", return_value=(True, "ok")) as mock_test:
+        resp = out.app.test_client().post("/api/test/source/kodi")
+
+    assert resp.get_json() == {"ok": True, "message": "ok"}
+    name_arg, config_arg = mock_test.call_args.args
+    assert name_arg == "kodi"
+
+
+def test_api_test_enricher_route_dispatches(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    with patch(
+        "mediainfo.outputs.config_ui.test_enricher", return_value=(False, "no")
+    ) as mock_test:
+        resp = out.app.test_client().post("/api/test/enricher/thetvdb")
+
+    assert resp.get_json() == {"ok": False, "message": "no"}
+    name_arg, _ = mock_test.call_args.args
+    assert name_arg == "thetvdb"
+
+
+def test_api_test_output_route_dispatches(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    with patch(
+        "mediainfo.outputs.config_ui.test_output", return_value=(True, "reached")
+    ) as mock_test:
+        resp = out.app.test_client().post(
+            "/api/test/output",
+            json={"type": "pixoo", "ip": "192.168.1.32"},
+        )
+
+    assert resp.get_json() == {"ok": True, "message": "reached"}
+    mock_test.assert_called_once_with("pixoo", {"type": "pixoo", "ip": "192.168.1.32"})
+
+
+def test_api_test_output_route_handles_missing_body(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    with patch(
+        "mediainfo.outputs.config_ui.test_output", return_value=(False, "No connection test")
+    ):
+        resp = out.app.test_client().post("/api/test/output")
+
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is False

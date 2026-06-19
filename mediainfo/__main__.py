@@ -553,12 +553,15 @@ def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
 
 
 def _wire_health_providers(outputs: list, orch: Orchestrator, config: Config) -> None:
-    """Register the health provider on every WebOutput instance."""
+    """Register the health provider on every WebOutput and ConfigUiOutput
+    instance (the latter uses it for the dashboard UI's status overview -
+    see config_dashboard.py)."""
+    from mediainfo.outputs.config_ui import ConfigUiOutput
     from mediainfo.outputs.web import WebOutput
 
     provider = _make_health_provider(orch, config, outputs)
     for output in outputs:
-        if isinstance(output, WebOutput):
+        if isinstance(output, (WebOutput, ConfigUiOutput)):
             output.set_health_provider(provider)
 
 

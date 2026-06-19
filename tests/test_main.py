@@ -488,3 +488,39 @@ def test_setup_logging_is_case_insensitive():
 def test_setup_logging_falls_back_to_info_for_invalid_level():
     _setup_logging(LoggingConfig(level="NOT_A_LEVEL"))
     assert logging.getLogger().level == logging.INFO
+
+
+# ---------------------------------------------------------------------------
+# _wire_health_providers
+# ---------------------------------------------------------------------------
+
+def test_wire_health_providers_wires_web_and_config_ui_outputs():
+    from mediainfo.__main__ import _wire_health_providers
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+    from mediainfo.outputs.web import WebOutput
+
+    web_output = MagicMock(spec=WebOutput)
+    config_output = MagicMock(spec=ConfigUiOutput)
+    other_output = MagicMock()
+
+    orch = MagicMock()
+    orch.get_health.return_value = {
+        "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
+        "source_backoff_seconds": {}, "uptime_seconds": 0, "poll_interval_seconds": 5,
+        "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0,
+    }
+    orch.sources = []
+    orch.enrichers = []
+    orch.idle_source = None
+
+    cfg = MagicMock()
+    cfg.sources = {}
+    cfg.outputs = {}
+    cfg.enrichers = {}
+    cfg.idle = {}
+
+    _wire_health_providers([web_output, config_output, other_output], orch, cfg)
+
+    web_output.set_health_provider.assert_called_once()
+    config_output.set_health_provider.assert_called_once()
+    assert not other_output.set_health_provider.called

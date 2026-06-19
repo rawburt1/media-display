@@ -21,6 +21,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `auth.enabled: true` with a blank username/password - the latter means
   *any* request presenting empty credentials authenticates successfully,
   which is no real protection.
+- `outputs.config[].ui: dashboard` (default `form`): a second mode for the
+  config UI output, meant for running a second instance dedicated to "is
+  everything working" rather than editing. Shows every source/output/
+  enricher as a status card (active, idle, enabled, disabled, error),
+  filterable by status, with a per-card "Test connection" button -
+  sources are polled once via `get_now_playing()`, enrichers via their own
+  internal lookup against a stable real item, outputs via a passive
+  TCP/HTTP reachability check that never sends an update to a physical
+  display. Has no write access to config.yaml.
 
 ### Fixed
 - `enrichers.thetvdb`'s title-based series resolution (for sources that

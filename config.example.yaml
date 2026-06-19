@@ -196,8 +196,13 @@ outputs:
     enabled: true
     host: 0.0.0.0
     port: 8094
+    # "form" (default): the full editable form above. "dashboard": a
+    # read-only status overview of sources/outputs/enrichers instead -
+    # filterable by status, with a per-item "Test connection" button. No
+    # write access to config.yaml, so it's a lower-risk port to expose.
+    ui: form
 
-  # Multiple config UI instances (e.g. a second one on another port):
+  # A second config UI instance on another port, in dashboard mode:
   # config:
   #   - enabled: true
   #     host: 0.0.0.0
@@ -205,6 +210,7 @@ outputs:
   #   - enabled: true
   #     host: 0.0.0.0
   #     port: 8095
+  #     ui: dashboard
 
   # RSS/Atom feed — "now playing" history as a machine-readable feed.
   # Subscribe with any feed reader or home-automation tool (Home Assistant,

@@ -161,6 +161,12 @@ class ConfigUiConfig:
     enabled: bool = False
     host: str = "0.0.0.0"
     port: int = 8094
+    # "form" (default): the full editable config.yaml form + raw YAML
+    # editor. "dashboard": a read-focused status overview of sources/
+    # outputs/enrichers with filtering and a per-item connection test -
+    # useful for running a second instance on another port dedicated to
+    # "is everything working", without write access to config.yaml.
+    ui: str = "form"
 
 
 @dataclasses.dataclass

@@ -82,6 +82,7 @@ from mediainfo.config import (
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.base import Output
+from mediainfo.outputs.config_dashboard import test_enricher, test_output, test_source
 from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
@@ -201,8 +202,14 @@ class ConfigUiOutput(Output):
         self._appletv_session: Optional[_AppleTvSession] = None
         self._library: Optional[MusicLibrary] = None
         self._library_db_path: Optional[str] = None
+        self._health_fn = None
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
+
+    def set_health_provider(self, fn) -> None:
+        """Register a callable that returns the health JSON dict - used by
+        the dashboard UI (ui: dashboard) for its status overview."""
+        self._health_fn = fn
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         pass
@@ -520,7 +527,7 @@ class ConfigUiOutput(Output):
 
         @app.get("/")
         def index():
-            return _INDEX_HTML
+            return _DASHBOARD_HTML if self.config.ui == "dashboard" else _INDEX_HTML
 
         @app.get("/api/schema")
         def schema():
@@ -619,6 +626,38 @@ class ConfigUiOutput(Output):
                 "albums": [{"id": i, "title": t, "mbid": m} for i, t, m in albums],
                 "tracks": [{"id": i, "title": t, "mbid": m} for i, t, m in tracks],
             })
+
+        @app.get("/api/status")
+        def status():
+            if self._health_fn is None:
+                return jsonify({"sources": [], "outputs": [], "enrichers": []})
+            data = self._health_fn()
+            return jsonify({
+                "sources": data.get("sources", []),
+                "outputs": data.get("outputs", []),
+                "enrichers": data.get("enrichers", []),
+            })
+
+        @app.post("/api/test/source/<name>")
+        def test_source_route(name: str):
+            config = Config.load(self.config_path)
+            source_config = config.sources.get(name)
+            ok, message = test_source(name, source_config)
+            return jsonify({"ok": ok, "message": message})
+
+        @app.post("/api/test/enricher/<name>")
+        def test_enricher_route(name: str):
+            config = Config.load(self.config_path)
+            enricher_config = config.enrichers.get(name)
+            ok, message = test_enricher(name, enricher_config)
+            return jsonify({"ok": ok, "message": message})
+
+        @app.post("/api/test/output")
+        def test_output_route():
+            body = request.get_json(silent=True) or {}
+            type_name = body.get("type", "")
+            ok, message = test_output(type_name, body)
+            return jsonify({"ok": ok, "message": message})
 
         install_auth(app, self.auth_config)
         return app
@@ -1125,6 +1164,238 @@ document.getElementById('search').addEventListener('input', function(e) {
 });
 
 loadStats();
+</script>
+</body>
+</html>
+"""
+
+_DASHBOARD_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mediainfo &middot; status</title>
+<style>
+  :root {
+    --bg: #080d1a; --card: #0d1629; --border: #1a2540; --text: #c0ccdf; --bright: #e8f0ff;
+    --muted: #6b7fa8; --muted2: #4a5f7a; --accent: #2563eb; --accent-hover: #1d4ed8;
+    --chip-bg: #0d1629; --mono-bg: #050810;
+  }
+  html[data-theme="light"] {
+    --bg: #f3f5fa; --card: #ffffff; --border: #dde3ee; --text: #2a3550; --bright: #0f172a;
+    --muted: #5b6a85; --muted2: #6b7fa8; --accent: #2563eb; --accent-hover: #1d4ed8;
+    --chip-bg: #eef1f8; --mono-bg: #0f172a;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; min-height: 100vh; padding: 24px 20px 60px;
+    max-width: 1200px; margin: 0 auto;
+  }
+  .hdr { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  h1 { font-size: 17px; font-weight: 700; color: var(--bright); }
+  .nav-link { color: var(--muted); font-size: 12px; text-decoration: none; }
+  .nav-link:hover { color: var(--bright); }
+  #theme-toggle { margin-left: auto; background: var(--chip-bg); border: 1px solid var(--border);
+                  color: var(--text); border-radius: 8px; padding: 6px 12px; font-size: 12px;
+                  cursor: pointer; }
+  #theme-toggle:hover { border-color: var(--accent); }
+  .filters { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  .chip { background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
+          border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+          cursor: pointer; user-select: none; }
+  .chip:hover { border-color: var(--accent); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+       color: var(--muted); margin: 26px 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+          padding: 14px 16px; }
+  .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .card-name { font-size: 13px; font-weight: 600; color: var(--bright); flex: 1;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase;
+           padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .b-active, .b-ok { background: #052012; color: #22c55e; }
+  .b-idle { background: #051a2e; color: #60a5fa; }
+  .b-disabled { background: #1c1505; color: #f59e0b; }
+  .b-not_configured { background: #15171f; color: #8a93a6; }
+  .b-error { background: #1c0808; color: #f87171; }
+  .card-detail { font-size: 11px; color: var(--muted2); font-family: ui-monospace, monospace;
+                 margin-bottom: 10px; min-height: 14px; }
+  .card-actions { display: flex; align-items: center; gap: 8px; }
+  button.test-btn { background: var(--accent); color: #fff; border: none; border-radius: 7px;
+                     padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  button.test-btn:hover { background: var(--accent-hover); }
+  button.test-btn:disabled { opacity: 0.6; cursor: default; }
+  .test-result { font-size: 11px; font-family: ui-monospace, monospace; margin-top: 8px;
+                 padding: 8px 10px; border-radius: 6px; background: var(--mono-bg);
+                 color: #9fb3cc; white-space: pre-wrap; word-break: break-word; display: none; }
+  .test-result.show { display: block; }
+  .test-result.ok { color: #4ade80; }
+  .test-result.fail { color: #f87171; }
+  #empty { font-size: 12px; color: var(--muted2); padding: 10px 0; }
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>mediainfo status</h1>
+  <a class="nav-link" href="/">&larr; Configuration</a>
+  <button id="theme-toggle" onclick="toggleTheme()">&#9728; / &#9790;</button>
+</div>
+
+<div class="filters" id="filters">
+  <div class="chip active" data-filter="all">All</div>
+  <div class="chip" data-filter="active">Active</div>
+  <div class="chip" data-filter="idle">Idle</div>
+  <div class="chip" data-filter="enabled">Enabled</div>
+  <div class="chip" data-filter="disabled">Disabled</div>
+  <div class="chip" data-filter="error">Error</div>
+</div>
+
+<h2>Sources</h2>
+<div class="grid" id="sources-grid"></div>
+
+<h2>Outputs</h2>
+<div class="grid" id="outputs-grid"></div>
+
+<h2>Enrichers</h2>
+<div class="grid" id="enrichers-grid"></div>
+
+<script>
+let statusData = { sources: [], outputs: [], enrichers: [] };
+let currentFilter = 'all';
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('mediainfo-theme', theme);
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  applyTheme(current === 'light' ? 'dark' : 'light');
+}
+applyTheme(localStorage.getItem('mediainfo-theme') || 'dark');
+
+function badgeClass(status) { return 'badge b-' + (status || 'not_configured'); }
+
+function matchesFilter(status) {
+  if (currentFilter === 'all') return true;
+  if (currentFilter === 'enabled') return status !== 'disabled' && status !== 'not_configured';
+  return status === currentFilter;
+}
+
+function detailText(item, fields) {
+  return fields.map(function(f) { return item[f]; }).filter(Boolean).join(' \xb7 ');
+}
+
+function renderGrid(containerId, items, fields, kind) {
+  const el = document.getElementById(containerId);
+  const visible = items.filter(function(it) { return matchesFilter(it.status); });
+  if (visible.length === 0) {
+    el.innerHTML = '<div id="empty">No items match this filter.</div>';
+    return;
+  }
+  el.innerHTML = '';
+  visible.forEach(function(item, idx) {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const top = document.createElement('div');
+    top.className = 'card-top';
+    const name = document.createElement('div');
+    name.className = 'card-name';
+    name.textContent = item.name || item.type;
+    const badge = document.createElement('span');
+    badge.className = badgeClass(item.status);
+    badge.textContent = item.status;
+    top.appendChild(name);
+    top.appendChild(badge);
+    card.appendChild(top);
+
+    const detail = document.createElement('div');
+    detail.className = 'card-detail';
+    detail.textContent = detailText(item, fields) || ' ';
+    card.appendChild(detail);
+
+    const actions = document.createElement('div');
+    actions.className = 'card-actions';
+    const btn = document.createElement('button');
+    btn.className = 'test-btn';
+    btn.textContent = 'Test connection';
+    const result = document.createElement('div');
+    result.className = 'test-result';
+    btn.addEventListener('click', function() { runTest(kind, item, btn, result); });
+    actions.appendChild(btn);
+    card.appendChild(actions);
+    card.appendChild(result);
+
+    el.appendChild(card);
+  });
+}
+
+function runTest(kind, item, btn, resultEl) {
+  btn.disabled = true;
+  btn.textContent = 'Testing...';
+  resultEl.className = 'test-result show';
+  resultEl.textContent = 'Running...';
+
+  let request;
+  if (kind === 'source') {
+    request = fetch('/api/test/source/' + encodeURIComponent(item.name), { method: 'POST' });
+  } else if (kind === 'enricher') {
+    request = fetch('/api/test/enricher/' + encodeURIComponent(item.name), { method: 'POST' });
+  } else {
+    request = fetch('/api/test/output', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item),
+    });
+  }
+
+  request
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      resultEl.classList.add(d.ok ? 'ok' : 'fail');
+      resultEl.textContent = d.message;
+    })
+    .catch(function() {
+      resultEl.classList.add('fail');
+      resultEl.textContent = 'Request failed.';
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Test connection';
+    });
+}
+
+function render() {
+  document.querySelectorAll('.chip').forEach(function(chip) {
+    chip.classList.toggle('active', chip.dataset.filter === currentFilter);
+  });
+  renderGrid('sources-grid', statusData.sources, ['last_polled_ago_seconds', 'retry_in_seconds'], 'source');
+  renderGrid('outputs-grid', statusData.outputs, ['ip', 'device_ip', 'host', 'port', 'dir', 'topic', 'last_error'], 'output');
+  renderGrid('enrichers-grid', statusData.enrichers, [], 'enricher');
+}
+
+document.getElementById('filters').addEventListener('click', function(e) {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  currentFilter = chip.dataset.filter;
+  render();
+});
+
+function load() {
+  fetch('/api/status')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      statusData = d;
+      render();
+    });
+}
+
+load();
+setInterval(load, 10000);
 </script>
 </body>
 </html>

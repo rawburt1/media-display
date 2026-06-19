@@ -190,6 +190,20 @@ See `config.example.yaml` for all options. Key things to fill in:
   `python -m mediainfo auth appletv` (scan, begin pairing, enter the PIN
   or confirm one shown on screen, finish) and saves the resulting
   credentials directly - no shell/docker-exec access needed.
+  `ui: dashboard` (default `form`) switches this instance from the
+  editable form to a read-only status overview instead - every
+  source/output/enricher as a card with a live status badge (active,
+  idle, enabled, disabled, error), filter chips per status, and a
+  "Test connection" button on each card. Sources are tested by
+  constructing them from the live config and polling once via
+  `get_now_playing()` - the same call the orchestrator itself makes;
+  enrichers by calling their own internal lookup method against a
+  stable real item (e.g. "Queen"); outputs by a plain TCP/HTTP
+  reachability check against the host/port already shown, which never
+  sends an update to physical displays. With no write access to
+  config.yaml, it's a lower-risk port to expose than the form UI - run
+  it as a second `config` instance on its own port (see the commented
+  multi-instance example in config.example.yaml).
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page. Each browser/screen
