@@ -189,12 +189,22 @@ outputs:
   # Saved changes are picked up by the running process within a few seconds
   # (same hot-reload used for manual edits) — no restart needed.
   # SECURITY: this output can read AND write config.yaml, including any
-  # credentials in it, and has no authentication of its own. Only enable it
-  # on a trusted local network — see SECURITY.md.
+  # credentials in it. Only enable it on a trusted local network, or set
+  # `auth.enabled: true` (see below) before exposing it beyond one —
+  # see SECURITY.md.
   config:
     enabled: true
     host: 0.0.0.0
     port: 8094
+
+  # Multiple config UI instances (e.g. a second one on another port):
+  # config:
+  #   - enabled: true
+  #     host: 0.0.0.0
+  #     port: 8094
+  #   - enabled: true
+  #     host: 0.0.0.0
+  #     port: 8095
 
   # RSS/Atom feed — "now playing" history as a machine-readable feed.
   # Subscribe with any feed reader or home-automation tool (Home Assistant,
