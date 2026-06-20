@@ -7,6 +7,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import random
+import re
 import threading
 import time
 from typing import Dict, List, Optional, Tuple
@@ -33,6 +34,19 @@ _CACHE_PURGE_INTERVAL_SECONDS = 24 * 60 * 60
 # backoff_max_seconds) so operators can tune how aggressively to retry a
 # flaky device vs. how much log/network noise that produces.
 _BACKOFF_MULTIPLIER = 2
+
+# Matches one or more consecutive "(...)" groups trailing a song title,
+# e.g. "(Live)", "(Remastered 2011) (Mono Mix)" - stripped from every
+# source's title uniformly here, rather than per-source, so every output
+# shows the same clean title regardless of which source produced it.
+# Anchored to the end so a leading or mid-title "(...)" that's actually
+# part of the song's real name (e.g. "(I Can't Get No) Satisfaction")
+# is left alone.
+_PARENTHETICAL_RE = re.compile(r"(?:\s*\([^)]*\))+\s*$")
+
+
+def _strip_parenthetical(title: str) -> str:
+    return re.sub(r"\s{2,}", " ", _PARENTHETICAL_RE.sub("", title)).strip()
 
 
 @dataclasses.dataclass
@@ -121,6 +135,9 @@ class Orchestrator:
                 self._rotation_state = {}
             self._show_idle_wallpaper()
             return
+
+        if now_playing.media_type == "music":
+            now_playing.title = _strip_parenthetical(now_playing.title)
 
         # Clear idle state only when real artwork is available again.
         if now_playing.images and self._idle_images:

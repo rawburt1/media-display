@@ -437,6 +437,75 @@ def test_new_item_calls_on_new_item_with_full_image_list():
     output.on_new_item.assert_called_once_with(now_playing, cache)
 
 
+def _tick_with_now_playing(now_playing):
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/art.jpg" if now_playing.images else None
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+    return orchestrator
+
+
+def test_strips_parenthetical_from_music_title():
+    now_playing = NowPlaying(source="kodi", media_type="music", title="Money (Live)")
+
+    orchestrator = _tick_with_now_playing(now_playing)
+
+    assert orchestrator._current.title == "Money"
+
+
+def test_strips_multiple_parenthetical_groups_from_music_title():
+    now_playing = NowPlaying(
+        source="kodi", media_type="music", title="Imagine (Remastered 2010) (Mono Mix)"
+    )
+
+    orchestrator = _tick_with_now_playing(now_playing)
+
+    assert orchestrator._current.title == "Imagine"
+
+
+def test_does_not_strip_parenthetical_from_movie_title():
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Alien (1979)")
+
+    orchestrator = _tick_with_now_playing(now_playing)
+
+    assert orchestrator._current.title == "Alien (1979)"
+
+
+def test_music_title_without_parenthetical_is_unchanged():
+    now_playing = NowPlaying(source="kodi", media_type="music", title="Hey Jude")
+
+    orchestrator = _tick_with_now_playing(now_playing)
+
+    assert orchestrator._current.title == "Hey Jude"
+
+
+def test_does_not_strip_leading_parenthetical_that_is_part_of_the_real_title():
+    now_playing = NowPlaying(
+        source="kodi", media_type="music", title="(I Can't Get No) Satisfaction"
+    )
+
+    orchestrator = _tick_with_now_playing(now_playing)
+
+    assert orchestrator._current.title == "(I Can't Get No) Satisfaction"
+
+
+def test_does_not_strip_mid_title_parenthetical_followed_by_more_text():
+    now_playing = NowPlaying(source="kodi", media_type="music", title="Money (Live) - Edit")
+
+    orchestrator = _tick_with_now_playing(now_playing)
+
+    assert orchestrator._current.title == "Money (Live) - Edit"
+
+
 def _multi_image_now_playing():
     artworks = [Artwork(url=f"https://example.com/{i}.jpg", label=f"Image {i}") for i in range(3)]
     return NowPlaying(source="kodi", media_type="movie", title="Inception", images=artworks)
