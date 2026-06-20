@@ -32,6 +32,10 @@ backoff_max_seconds: 300
 priority:
   - kodi
   - appletv
+  # Right after appletv: a fallback for whatever appletv's pyatv-based
+  # polling can't see playing on that same device (see homeassistant's
+  # comment under sources: below), not a primary source in its own right.
+  - homeassistant
   - youtube
   - shield
   - plex
@@ -58,6 +62,24 @@ sources:
     # For older hardware or tvOS < 15:
     # mrp_credentials: ""
     # airplay_credentials: ""       # Rarely needed for now-playing
+
+  # Home Assistant — polls a single media_player entity's state via HA's
+  # REST API. Mainly useful as a fallback for a device a more specific
+  # source can't read "now playing" from directly - e.g. a tvOS app (like
+  # SVT Play) that doesn't populate Apple's own now-playing API, which
+  # leaves `appletv` above only ever seeing it as idle, but HA's own Apple
+  # TV integration can somehow still see. Not Apple-TV-specific: works for
+  # any media_player entity HA tracks.
+  # Get a long-lived access token: your profile (bottom-left in the HA UI)
+  # → Security → Long-lived access tokens → Create Token. Find the entity
+  # id under Settings → Devices & Services → Entities.
+  homeassistant:
+    enabled: true
+    host: 192.168.1.11
+    port: 8123
+    use_ssl: false
+    token: YOUR_HA_LONG_LIVED_ACCESS_TOKEN
+    entity_id: media_player.apple_tv_4k
 
   # Kodi / XBMC media centre.
   # Provides title, artwork, and metadata for movies, TV episodes, and music.

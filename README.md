@@ -18,7 +18,10 @@ Currently implemented:
   protocols), YouTube on Android TV (via ADB, reports a song only when the
   video looks like one - see "Extending" below), Android TV / Nvidia Shield
   (via ADB, generic "now playing" from any other app), vinyl turntable
-  (audio recognition via [vinyl_recognizer](vinyl_recognizer/) + AudD)
+  (audio recognition via [vinyl_recognizer](vinyl_recognizer/) + AudD),
+  Home Assistant (polls a single media_player entity via HA's REST API -
+  a fallback for devices a more specific source can't read directly, e.g.
+  a tvOS app that doesn't populate Apple's own now-playing API)
 - **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
   movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
   Discogs also add (and prefer) album covers for music, matched via
@@ -123,7 +126,24 @@ See `config.example.yaml` for all options. Key things to fill in:
   `config` output's web page (see below), which drives the same flow
   and saves the credentials for you, no shell/docker-exec access needed.
   Reports whatever's playing in any app (TV+, Plex, Infuse, music apps,
-  etc.) via the Companion/MRP/AirPlay protocols.
+  etc.) via the Companion/MRP/AirPlay protocols. Limitation: this only
+  works for apps that populate Apple's own now-playing API - some
+  third-party tvOS apps (SVT Play, notably) never do, so pyatv can only
+  ever see the device as idle while they're actually playing something.
+  `sources.homeassistant` below is a workaround for exactly that case.
+- **`sources.homeassistant`**: polls a single `media_player` entity via
+  Home Assistant's REST API - `host`/`port`/`use_ssl` point at HA itself,
+  `token` is a long-lived access token (HA UI: your profile → Security →
+  Long-lived access tokens → Create Token), and `entity_id` is the entity
+  to read (HA UI: Settings → Devices & Services → Entities). Not specific
+  to Apple TV - this works for any device HA tracks - but its main use is
+  as a fallback for `sources.appletv`: list it right after `appletv` in
+  `priority` so it only gets polled once appletv has confirmed pyatv
+  itself sees nothing playing, for an app like SVT Play that HA's own
+  Apple TV integration can apparently still see (likely via an MRP
+  pairing made back when the device still advertised that protocol -
+  pairing fresh today only offers Companion/AirPlay, which expose far
+  less now-playing metadata to third-party clients).
 - **`sources.shield`**: IP address of an Android TV device (e.g. Nvidia
   Shield) - can be the same device as `sources.kodi`, since this reads the
   Android-level "now playing" media session (Spotify, YouTube Music, SVT

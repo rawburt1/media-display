@@ -17,7 +17,7 @@ def test_load_example_config():
     assert config.backoff_initial_seconds == 30
     assert config.backoff_max_seconds == 300
     assert config.priority == [
-        "kodi", "appletv", "youtube", "shield", "plex", "sonos", "spotify", "vinyl",
+        "kodi", "appletv", "homeassistant", "youtube", "shield", "plex", "sonos", "spotify", "vinyl",
     ]
 
     assert config.sources["kodi"].enabled is True

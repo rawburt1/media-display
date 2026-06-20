@@ -125,6 +125,24 @@ class PlexConfig:
 
 
 @dataclasses.dataclass
+class HomeAssistantConfig:
+    enabled: bool = False
+    host: str = ""
+    port: int = 8123
+    use_ssl: bool = False
+    # Long-lived access token: your profile (bottom-left in the HA UI) →
+    # Security → Long-lived access tokens → Create Token.
+    token: str = ""
+    # The media_player entity to poll, e.g. "media_player.apple_tv_4k". Find
+    # it under Settings → Devices & Services → Entities in the HA UI. Useful
+    # for any device HA already tracks but that this codebase otherwise
+    # can't read "now playing" from directly (e.g. a tvOS app, such as SVT
+    # Play, that doesn't populate Apple's own now-playing API - pyatv (see
+    # sources.appletv) can then only ever see it as idle).
+    entity_id: str = ""
+
+
+@dataclasses.dataclass
 class PixooConfig:
     enabled: bool = False
     ip: str = ""
@@ -439,6 +457,7 @@ class LoggingConfig:
 SOURCE_CONFIG_TYPES: dict[str, type] = {
     "appletv": AppleTvConfig,
     "emby": EmbyConfig,
+    "homeassistant": HomeAssistantConfig,
     "jellyfin": JellyfinConfig,
     "kodi": KodiConfig,
     "plex": PlexConfig,

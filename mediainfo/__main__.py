@@ -43,6 +43,7 @@ from mediainfo.outputs.ulanzi import UlanziOutput
 from mediainfo.outputs.video import VideoOutput
 from mediainfo.outputs.web import WebOutput
 from mediainfo.sources.appletv import AppleTvSource
+from mediainfo.sources.homeassistant import HomeAssistantSource
 from mediainfo.sources.jellyfin import EmbySource, JellyfinSource
 from mediainfo.sources.kodi import KodiSource
 from mediainfo.sources.plex import PlexSource
@@ -57,6 +58,7 @@ from mediainfo.sources.youtube import YoutubeSource
 SOURCE_CLASSES = {
     "appletv": AppleTvSource,
     "emby": EmbySource,
+    "homeassistant": HomeAssistantSource,
     "jellyfin": JellyfinSource,
     "kodi": KodiSource,
     "plex": PlexSource,
@@ -277,6 +279,7 @@ def _warn_output_changes(old: Config, new: Config) -> None:
 _REQUIRED_CREDENTIAL_FIELDS: dict[tuple, list] = {
     ("sources", "plex"): ["token"],
     ("sources", "emby"): ["api_key"],
+    ("sources", "homeassistant"): ["token", "entity_id"],
     ("sources", "jellyfin"): ["api_key"],
     ("sources", "spotify"): ["client_id", "client_secret"],
     ("enrichers", "fanarttv"): ["api_key"],
