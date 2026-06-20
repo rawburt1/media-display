@@ -29,6 +29,8 @@ from mediainfo.enrichers.radarr import RadarrEnricher
 from mediainfo.enrichers.sonarr import SonarrEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
 from mediainfo.enrichers.wikipedia import WikipediaEnricher
+from mediainfo.idle.base import IdleWallpaperSource
+from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.idle.lastfm import LastFmWallpaperSource
 from mediainfo.idle.library import LibraryWallpaperSource
 from mediainfo.idle.unsplash import UnsplashWallpaperSource
@@ -414,6 +416,13 @@ def _build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> 
 
 
 def _build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
+    """Build the configured idle wallpaper source(s).
+
+    Multiple sources can be enabled at once - their wallpapers are merged
+    into a single pool (see CompositeIdleWallpaperSource), each refetched
+    on its own configured rotation_interval_seconds.
+    """
+    instances: list[IdleWallpaperSource] = []
     for name, idle_config in config.idle.items():
         if not idle_config.enabled:
             continue
@@ -422,9 +431,15 @@ def _build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
             logger.warning("Unknown idle wallpaper source: %s", name)
             continue
         if idle_cls in _LIBRARY_AWARE_IDLE_CLASSES:
-            return idle_cls(idle_config, library)
-        return idle_cls(idle_config)
-    return None
+            instances.append(idle_cls(idle_config, library))
+        else:
+            instances.append(idle_cls(idle_config))
+
+    if not instances:
+        return None
+    if len(instances) == 1:
+        return instances[0]
+    return CompositeIdleWallpaperSource(instances)
 
 
 def _start_orchestrator(
@@ -559,19 +574,27 @@ def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
         # Idle sources — list of all known idle sources with their status.
         idle_sources = []
 
-        # Traditional wallpaper idle sources (IDLE_CLASSES registry).
-        active_idle_name: Optional[str] = None
-        if orch.idle_source:
-            active_idle_name = (
-                type(orch.idle_source).__name__.removesuffix("WallpaperSource").lower()
-            )
+        # Traditional wallpaper idle sources (IDLE_CLASSES registry). When
+        # several are enabled at once, orch.idle_source is a
+        # CompositeIdleWallpaperSource wrapping all of them.
+        if isinstance(orch.idle_source, CompositeIdleWallpaperSource):
+            active_idle_instances = orch.idle_source.sources
+        elif orch.idle_source is not None:
+            active_idle_instances = [orch.idle_source]
+        else:
+            active_idle_instances = []
+
+        active_idle_names: set = set()
+        for instance in active_idle_instances:
+            name = type(instance).__name__.removesuffix("WallpaperSource").lower()
+            active_idle_names.add(name)
             idle_sources.append({
-                "type": active_idle_name,
+                "type": name,
                 "status": "ok",
                 "wallpapers_loaded": data["idle_wallpapers_loaded"],
             })
         for name in IDLE_CLASSES:
-            if name == active_idle_name:
+            if name in active_idle_names:
                 continue
             idle_cfg = config.idle.get(name)
             if idle_cfg is not None:

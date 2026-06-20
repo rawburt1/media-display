@@ -413,6 +413,28 @@ def test_build_idle_source_returns_none_for_empty():
     assert _build_idle_source(cfg) is None
 
 
+def test_build_idle_source_merges_multiple_enabled_sources():
+    from mediainfo.idle.composite import CompositeIdleWallpaperSource
+
+    unsplash_cfg = MagicMock()
+    unsplash_cfg.enabled = True
+    lastfm_cfg = MagicMock()
+    lastfm_cfg.enabled = True
+
+    fake_unsplash_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    fake_lastfm_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    cfg = _minimal_config(idle={"unsplash": unsplash_cfg, "lastfm": lastfm_cfg})
+
+    with patch(
+        "mediainfo.__main__.IDLE_CLASSES",
+        {"unsplash": fake_unsplash_cls, "lastfm": fake_lastfm_cls},
+    ):
+        result = _build_idle_source(cfg)
+
+    assert isinstance(result, CompositeIdleWallpaperSource)
+    assert result.sources == [fake_unsplash_cls.return_value, fake_lastfm_cls.return_value]
+
+
 def test_build_idle_source_passes_library_to_library_aware_classes():
     idle_cfg = MagicMock()
     idle_cfg.enabled = True

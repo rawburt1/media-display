@@ -52,12 +52,13 @@ Currently implemented:
   above (sources, outputs, enrichers, idle sources, polling intervals)
   without hand-editing YAML - saved changes are hot-reloaded within a
   few seconds
-- **Idle wallpapers**: Unsplash, or Last.fm scrobble history (album art from
-  your recent scrobbles) - while nothing is playing, downloads a fresh batch
-  of wallpapers every `rotation_interval_seconds`, and each output
+- **Idle wallpapers**: Unsplash, Last.fm scrobble history (album art from
+  your recent scrobbles), and/or your own library (random covers from
+  imported albums) - while nothing is playing, downloads a fresh batch of
+  wallpapers every `rotation_interval_seconds`, and each output
   independently rotates through that batch on its own randomized schedule
-  (same as the now-playing artwork rotation above). Only one idle source
-  can be active at a time.
+  (same as the now-playing artwork rotation above). Multiple idle sources
+  can be enabled at once - their wallpapers are merged into a single pool.
 - Disk cache for downloaded artwork (each image is only fetched once,
   and unused files are purged after `cache.max_age_days`)
 - `/health` endpoint (on the web output) reports uptime, the current

@@ -553,9 +553,9 @@ library:
 
 idle:
 
-  # Only one idle source can be active at a time - if more than one is
-  # enabled, the first one listed here wins (same rule as `priority` for
-  # sources).
+  # Multiple idle sources can be enabled at once - their wallpapers are
+  # merged into a single pool, with each source refetched on its own
+  # rotation_interval_seconds below.
 
   # Unsplash — high-resolution photography.
   # Create a free app at https://unsplash.com/oauth/applications and use the

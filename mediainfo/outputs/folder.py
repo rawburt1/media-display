@@ -55,7 +55,7 @@ class FolderOutput(Output):
                 logger.exception("Failed to fetch artwork %s", artwork.url)
                 continue
 
-            dest = self.dir / self._filename(artwork, src.suffix)
+            dest = self.dir / self._filename(artwork, src.suffix, idle=idle)
             try:
                 shutil.copyfile(src, dest)
             except OSError:
@@ -70,6 +70,7 @@ class FolderOutput(Output):
                     logger.exception("Failed to remove %s", path)
 
     @staticmethod
-    def _filename(artwork: Artwork, extension: str) -> str:
+    def _filename(artwork: Artwork, extension: str, idle: bool = False) -> str:
         name = _INVALID_CHARS.sub("_", artwork.label or "image").strip()
-        return f"{name}{extension}"
+        prefix = "idle_" if idle else ""
+        return f"{prefix}{name}{extension}"

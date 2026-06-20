@@ -121,8 +121,8 @@ def test_on_new_item_with_idle_batch_copies_all_wallpapers(tmp_path):
     )
     output.on_new_item(idle_now_playing, cache)
 
-    assert (out_dir / "A.jpg").read_bytes() == b"wallpaper-a"
-    assert (out_dir / "B.jpg").read_bytes() == b"wallpaper-b"
+    assert (out_dir / "idle_A.jpg").read_bytes() == b"wallpaper-a"
+    assert (out_dir / "idle_B.jpg").read_bytes() == b"wallpaper-b"
     cache.get_path.assert_any_call(wallpapers[0], idle=True)
     cache.get_path.assert_any_call(wallpapers[1], idle=True)
 
