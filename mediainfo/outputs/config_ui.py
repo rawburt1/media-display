@@ -1307,6 +1307,10 @@ let statusData = { sources: [], outputs: [], enrichers: [] };
 let currentFilter = 'all';
 let testResults = {};  // kind + ':' + id -> {ok, message} - survives the 10s auto-refresh
 let statusOverrides = {};  // 'source:' + name -> 'unavailable', set when a manual test fails
+// kind + ':' + id -> the open edit card's DOM element, kept across the 10s
+// auto-refresh so a card mid-edit isn't blown away (and any text already
+// typed into it lost) the moment a refresh happens to land while it's open.
+let editingCards = {};
 
 function restartDashboard() {
   if (!confirm('Restart mediainfo now? Every output goes offline until it comes back up.')) return;
@@ -1373,6 +1377,15 @@ function renderGrid(containerId, items, kind) {
   }
   el.innerHTML = '';
   visible.forEach(function(item) {
+    const editKey = kind + ':' + itemId(item);
+    if (editingCards[editKey]) {
+      // Re-mount the same element rather than rebuilding it, so an
+      // in-progress edit (and anything already typed into it) survives
+      // this refresh untouched.
+      el.appendChild(editingCards[editKey]);
+      return;
+    }
+
     const status = effectiveStatus(kind, item);
     const card = document.createElement('div');
     card.className = 'card';
@@ -1499,6 +1512,10 @@ function fieldInputHtml(id, field, value) {
 function startEdit(kind, item, card) {
   const category = categoryFor(kind);
   const typeName = item.name || item.type;
+  // Registered immediately (not after the fetch below resolves) so a
+  // refresh landing while the schema/config request is still in flight
+  // re-mounts this same card instead of replacing it out from under it.
+  editingCards[kind + ':' + itemId(item)] = card;
 
   Promise.all([loadSchema(), fetch('/api/config').then(function(r) { return r.json(); })])
     .then(function(results) {
@@ -1557,7 +1574,10 @@ function renderEditCard(kind, item, card, fields, currentValues) {
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'test-btn secondary';
   cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', function() { render(); });
+  cancelBtn.addEventListener('click', function() {
+    delete editingCards[kind + ':' + itemId(item)];
+    render();
+  });
   saveBtn.addEventListener('click', function() { saveEdit(kind, item, fields, saveBtn, resultEl); });
   actions.appendChild(saveBtn);
   actions.appendChild(cancelBtn);
@@ -1609,6 +1629,7 @@ function saveEdit(kind, item, fields, btn, resultEl) {
       if (d.ok) {
         resultEl.classList.add('ok');
         resultEl.textContent = 'Saved.';
+        delete editingCards[kind + ':' + itemId(item)];
         load();
       } else {
         resultEl.classList.add('fail');
