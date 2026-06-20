@@ -191,30 +191,33 @@ See `config.example.yaml` for all options. Key things to fill in:
   or confirm one shown on screen, finish) and saves the resulting
   credentials directly - no shell/docker-exec access needed.
   `ui: dashboard` (default `form`) switches this instance from the
-  editable form to a read-only status overview instead - every
-  source/output/enricher as a card with a live status badge (active,
-  idle, enabled, disabled, error), filter chips per status, and a
-  "Test connection" button on each card. Sources are tested by
-  constructing them from the live config and polling once via
-  `get_now_playing()` - the same call the orchestrator itself makes;
-  enrichers by calling their own internal lookup method against a
-  stable real item (e.g. "Queen"); outputs by a plain TCP/HTTP
-  reachability check against the host/port already shown, which never
-  sends an update to physical displays. With no write access to
-  config.yaml, it's a lower-risk port to expose than the form UI - run
-  it as a second `config` instance on its own port (see the commented
-  multi-instance example in config.example.yaml). Each card also shows
-  its non-secret config values (host, port, etc. - never api keys/
-  tokens/passwords/credentials), and a source that's currently failing
-  to connect (in backoff after `last_poll_failed`) shows that failure
-  inline next to its badge automatically, without needing to click
-  "Test connection" first. A manual test result also survives the
-  page's 10-second auto-refresh instead of being silently cleared
-  mid-test. Both views (`/form` and `/dashboard`) are always reachable
-  on every instance regardless of its `ui` setting - only the page
-  served at `/` (the instance's default) differs - with a nav link on
-  each page to the other, so a single instance on one port gives full
-  access to both the editable form and the status dashboard.
+  editable form to a status overview instead - every source/output/
+  enricher as a card with a live status badge (active, idle, enabled,
+  disabled, error), filter chips per status, a "Test connection" button,
+  and an "Edit" button on each card. Sources are tested by constructing
+  them from the live config and polling once via `get_now_playing()` -
+  the same call the orchestrator itself makes; enrichers by calling
+  their own internal lookup method against a stable real item (e.g.
+  "Queen"); outputs by a plain TCP/HTTP reachability check against the
+  host/port already shown, which never sends an update to physical
+  displays. "Edit" turns a card's detail line into input fields (using
+  the same `/api/schema` and `/api/config/form` the editable form uses)
+  for that one source/enricher/output instance, with Save/Cancel
+  buttons - so it can read AND write config.yaml just like the form,
+  including credentials; it's not a lower-risk port to expose just
+  because it defaults to the status view - see SECURITY.md before
+  exposing either view beyond a trusted local network. Each card also
+  shows its non-secret config values (host, port, etc.) even without
+  editing, and a source that's currently failing to connect (in backoff
+  after `last_poll_failed`) shows that failure inline next to its badge
+  automatically, without needing to click "Test connection" first. A
+  manual test result also survives the page's 10-second auto-refresh
+  instead of being silently cleared mid-test. Both views (`/form` and
+  `/dashboard`) are always reachable on every instance regardless of
+  its `ui` setting - only the page served at `/` (the instance's
+  default) differs - with a nav link on each page to the other, so a
+  single instance on one port gives full access to both the editable
+  form and the status dashboard.
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page. Each browser/screen

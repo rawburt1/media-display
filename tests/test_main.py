@@ -597,3 +597,37 @@ def test_health_provider_includes_config_fields_and_error_message_for_backed_off
     assert kodi_entry["host"] == "192.168.1.21"
     assert kodi_entry["port"] == 8080
     assert "retrying in 30.0s" in kodi_entry["last_error"]
+
+
+def test_health_provider_assigns_per_type_instance_index_to_outputs():
+    from mediainfo.__main__ import _make_health_provider
+    from mediainfo.config import UlanziConfig
+    from mediainfo.outputs.ulanzi import UlanziOutput
+
+    output1 = UlanziOutput(UlanziConfig(enabled=True, device_ip="1.1.1.1"))
+    output2 = UlanziOutput(UlanziConfig(enabled=True, device_ip="2.2.2.2"))
+
+    orch = MagicMock()
+    orch.sources = []
+    orch.enrichers = []
+    orch.idle_source = None
+    orch.get_health.return_value = {
+        "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
+        "source_backoff_seconds": {}, "uptime_seconds": 0, "poll_interval_seconds": 5,
+        "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0,
+    }
+
+    cfg = MagicMock()
+    cfg.sources = {}
+    cfg.outputs = {}
+    cfg.enrichers = {}
+    cfg.idle = {}
+
+    health = _make_health_provider(orch, cfg, [output1, output2])()
+    ulanzi_entries = [o for o in health["outputs"] if o["type"] == "ulanzi"]
+
+    assert len(ulanzi_entries) == 2
+    assert {e["instance_index"] for e in ulanzi_entries} == {0, 1}
+    by_index = {e["instance_index"]: e for e in ulanzi_entries}
+    assert by_index[0]["device_ip"] == "1.1.1.1"
+    assert by_index[1]["device_ip"] == "2.2.2.2"

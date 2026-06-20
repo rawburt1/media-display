@@ -487,13 +487,20 @@ def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
 
         # Outputs
         active_output_types: set = set()
+        output_type_counts: dict = {}
         output_list = []
         for i, output in enumerate(outputs):
             cls = type(output)
             type_name = _OUTPUT_NAME_BY_CLASS.get(cls, cls.__name__)
             active_output_types.add(type_name)
+            instance_index = output_type_counts.get(type_name, 0)
+            output_type_counts[type_name] = instance_index + 1
             err = output_errors.get(i)
-            entry = {"type": type_name, "status": "error" if err else "ok"}
+            entry = {
+                "type": type_name,
+                "status": "error" if err else "ok",
+                "instance_index": instance_index,
+            }
             if err:
                 entry["last_error"] = err["message"]
                 entry["last_error_ago_seconds"] = err["ago_seconds"]
@@ -508,9 +515,9 @@ def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
             if type_name in active_output_types:
                 continue
             if config.outputs.get(type_name):
-                output_list.append({"type": type_name, "status": "disabled"})
+                output_list.append({"type": type_name, "status": "disabled", "instance_index": 0})
             else:
-                output_list.append({"type": type_name, "status": "not_configured"})
+                output_list.append({"type": type_name, "status": "not_configured", "instance_index": 0})
 
         # Enrichers
         active_enricher_names: set = set()

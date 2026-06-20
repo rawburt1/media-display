@@ -894,6 +894,39 @@ def test_dashboard_page_links_to_form(config_path):
     assert b'href="/form"' in resp.data
 
 
+def test_dashboard_page_has_inline_edit_controls(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    resp = out.app.test_client().get("/dashboard")
+    assert b"startEdit" in resp.data
+    assert b"saveEdit" in resp.data
+    assert b"editBtn.textContent = 'Edit'" in resp.data
+
+
+def test_dashboard_instance_can_read_schema_and_config_for_editing(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    client = out.app.test_client()
+
+    schema = client.get("/api/schema").get_json()
+    assert "kodi" in schema["sources"]
+
+    config = client.get("/api/config").get_json()
+    assert config["values"]["sources.kodi.host"] == "192.168.1.21"
+
+
+def test_dashboard_instance_can_save_form_edits(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    client = out.app.test_client()
+
+    resp = client.post(
+        "/api/config/form",
+        json={"values": {"sources.kodi.host": "192.168.50.50"}},
+    )
+    assert resp.get_json() == {"ok": True}
+
+    config = client.get("/api/config").get_json()
+    assert config["values"]["sources.kodi.host"] == "192.168.50.50"
+
+
 def test_api_status_returns_empty_lists_without_health_provider(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = out.app.test_client().get("/api/status")

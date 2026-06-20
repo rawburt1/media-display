@@ -22,24 +22,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   *any* request presenting empty credentials authenticates successfully,
   which is no real protection.
 - `outputs.config[].ui: dashboard` (default `form`): a second mode for the
-  config UI output, meant for running a second instance dedicated to "is
-  everything working" rather than editing. Shows every source/output/
-  enricher as a status card (active, idle, enabled, disabled, error),
-  filterable by status, with a per-card "Test connection" button -
-  sources are polled once via `get_now_playing()`, enrichers via their own
-  internal lookup against a stable real item, outputs via a passive
-  TCP/HTTP reachability check that never sends an update to a physical
-  display. Has no write access to config.yaml. Each card also shows its
-  non-secret config values (host, port, etc.), and a source currently
-  failing to connect shows that error inline next to its badge
-  automatically (previously only a bare retry countdown, easy to miss -
-  e.g. the `appletv` source gave no visible indication when it couldn't
-  connect). A manual "Test connection" result now also survives the
-  dashboard's 10-second auto-refresh instead of disappearing mid-test.
-  The form and dashboard pages (`/form`, `/dashboard`) are now both
-  reachable on every config UI instance regardless of its `ui` setting,
-  with a nav link between them, so one instance gives full access to
-  both instead of needing a second instance for the other mode.
+  config UI output - a status overview instead of the full form. Shows
+  every source/output/enricher as a status card (active, idle, enabled,
+  disabled, error), filterable by status, with a per-card "Test
+  connection" button - sources are polled once via `get_now_playing()`,
+  enrichers via their own internal lookup against a stable real item,
+  outputs via a passive TCP/HTTP reachability check that never sends an
+  update to a physical display. Each card also shows its non-secret
+  config values (host, port, etc.), and a source currently failing to
+  connect shows that error inline next to its badge automatically
+  (previously only a bare retry countdown, easy to miss - e.g. the
+  `appletv` source gave no visible indication when it couldn't connect).
+  A manual "Test connection" result now also survives the dashboard's
+  10-second auto-refresh instead of disappearing mid-test. The form and
+  dashboard pages (`/form`, `/dashboard`) are both reachable on every
+  config UI instance regardless of its `ui` setting, with a nav link
+  between them, so one instance gives full access to both instead of
+  needing a second instance for the other mode.
+- Dashboard cards also have an "Edit" button: turns a card's detail line
+  into input fields (reusing the same `/api/schema` and
+  `/api/config/form` endpoints the editable form already uses) with
+  Save/Cancel, so a source/output/enricher can be reconfigured directly
+  from its status card - including enabling/disabling it - without
+  switching to the form view. Has the same read/write access to
+  config.yaml as the form (not a read-only view).
 
 ### Fixed
 - `enrichers.thetvdb`'s title-based series resolution (for sources that

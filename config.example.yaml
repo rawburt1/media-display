@@ -197,9 +197,12 @@ outputs:
     host: 0.0.0.0
     port: 8094
     # "form" (default): the full editable form above. "dashboard": a
-    # read-only status overview of sources/outputs/enrichers instead -
-    # filterable by status, with a per-item "Test connection" button. No
-    # write access to config.yaml, so it's a lower-risk port to expose.
+    # status overview of sources/outputs/enrichers instead - filterable
+    # by status, with a per-item "Test connection" button and an "Edit"
+    # button (same read/write access to config.yaml as the form, just a
+    # different layout) - the same SECURITY warning above applies to
+    # both. /form and /dashboard are both reachable on every instance
+    # regardless of this setting; this just picks the default for "/".
     ui: form
 
   # A second config UI instance on another port, in dashboard mode:

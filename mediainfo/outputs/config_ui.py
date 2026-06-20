@@ -1248,6 +1248,18 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   .test-result.show { display: block; }
   .test-result.ok { color: #4ade80; }
   .test-result.fail { color: #f87171; }
+  button.test-btn.secondary { background: var(--chip-bg); color: var(--text);
+                               border: 1px solid var(--border); }
+  button.test-btn.secondary:hover { border-color: var(--accent); }
+  .edit-form { margin-bottom: 10px; }
+  .edit-row { display: flex; align-items: center; justify-content: space-between;
+              gap: 8px; margin-bottom: 6px; }
+  .edit-row label { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace;
+                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .edit-row input[type="text"], .edit-row input[type="password"], .edit-row input[type="number"] {
+    flex: 1; max-width: 150px; background: var(--mono-bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--bright); padding: 4px 8px; font-size: 12px;
+  }
   #empty { font-size: 12px; color: var(--muted2); padding: 10px 0; }
 </style>
 </head>
@@ -1299,7 +1311,7 @@ function matchesFilter(status) {
   return status === currentFilter;
 }
 
-const _DETAIL_OMIT = ['name', 'type', 'status', 'last_error', 'last_error_ago_seconds'];
+const _DETAIL_OMIT = ['name', 'type', 'status', 'last_error', 'last_error_ago_seconds', 'instance_index'];
 
 function detailText(item) {
   return Object.keys(item)
@@ -1351,6 +1363,9 @@ function renderGrid(containerId, items, kind) {
     const btn = document.createElement('button');
     btn.className = 'test-btn';
     btn.textContent = 'Test connection';
+    const editBtn = document.createElement('button');
+    editBtn.className = 'test-btn secondary';
+    editBtn.textContent = 'Edit';
     const result = document.createElement('div');
     result.className = 'test-result';
     const key = kind + ':' + itemId(item);
@@ -1360,7 +1375,9 @@ function renderGrid(containerId, items, kind) {
       result.textContent = prior.message;
     }
     btn.addEventListener('click', function() { runTest(kind, item, btn, result); });
+    editBtn.addEventListener('click', function() { startEdit(kind, item, card); });
     actions.appendChild(btn);
+    actions.appendChild(editBtn);
     card.appendChild(actions);
     card.appendChild(result);
 
@@ -1404,6 +1421,154 @@ function runTest(kind, item, btn, resultEl) {
     .finally(function() {
       btn.disabled = false;
       btn.textContent = 'Test connection';
+    });
+}
+
+let schemaPromise = null;
+function loadSchema() {
+  if (!schemaPromise) schemaPromise = fetch('/api/schema').then(function(r) { return r.json(); });
+  return schemaPromise;
+}
+
+function categoryFor(kind) {
+  return kind === 'source' ? 'sources' : (kind === 'enricher' ? 'enrichers' : 'outputs');
+}
+
+function fieldInputHtml(id, field, value) {
+  if (field.type === 'bool') {
+    return '<input type="checkbox" id="' + id + '"' + (value ? ' checked' : '') + '>';
+  }
+  const inputType = field.secret ? 'password' : (field.type === 'int' ? 'number' : 'text');
+  const v = (value === undefined || value === null) ? '' : String(value).replace(/"/g, '&quot;');
+  return '<input type="' + inputType + '" id="' + id + '" value="' + v + '">';
+}
+
+function startEdit(kind, item, card) {
+  const category = categoryFor(kind);
+  const typeName = item.name || item.type;
+
+  Promise.all([loadSchema(), fetch('/api/config').then(function(r) { return r.json(); })])
+    .then(function(results) {
+      const schemaData = results[0];
+      const config = results[1];
+      const fields = (category === 'outputs') ? schemaData.outputs[typeName] : schemaData[category][typeName];
+      let currentValues = {};
+      if (category === 'outputs') {
+        const idx = item.instance_index || 0;
+        const instances = config.outputs[typeName] || [{}];
+        currentValues = instances[idx] || {};
+      } else {
+        fields.forEach(function(f) {
+          currentValues[f.name] = config.values[category + '.' + typeName + '.' + f.name];
+        });
+      }
+      renderEditCard(kind, item, card, fields, currentValues);
+    });
+}
+
+function renderEditCard(kind, item, card, fields, currentValues) {
+  card.innerHTML = '';
+
+  const top = document.createElement('div');
+  top.className = 'card-top';
+  const name = document.createElement('div');
+  name.className = 'card-name';
+  name.textContent = item.name || item.type;
+  top.appendChild(name);
+  card.appendChild(top);
+
+  const formEl = document.createElement('div');
+  formEl.className = 'edit-form';
+  fields.forEach(function(f) {
+    const row = document.createElement('div');
+    row.className = 'edit-row';
+    const label = document.createElement('label');
+    label.textContent = f.name;
+    label.setAttribute('for', 'edit-' + f.name);
+    row.appendChild(label);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = fieldInputHtml('edit-' + f.name, f, currentValues[f.name]);
+    row.appendChild(wrapper.firstChild);
+    formEl.appendChild(row);
+  });
+  card.appendChild(formEl);
+
+  const resultEl = document.createElement('div');
+  resultEl.className = 'test-result';
+
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'test-btn';
+  saveBtn.textContent = 'Save';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'test-btn secondary';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', function() { render(); });
+  saveBtn.addEventListener('click', function() { saveEdit(kind, item, fields, saveBtn, resultEl); });
+  actions.appendChild(saveBtn);
+  actions.appendChild(cancelBtn);
+  card.appendChild(actions);
+  card.appendChild(resultEl);
+}
+
+function saveEdit(kind, item, fields, btn, resultEl) {
+  const category = categoryFor(kind);
+  const typeName = item.name || item.type;
+  const edited = {};
+  fields.forEach(function(f) {
+    const el = document.getElementById('edit-' + f.name);
+    edited[f.name] = (f.type === 'bool') ? el.checked : (f.type === 'int' ? Number(el.value || 0) : el.value);
+  });
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  resultEl.className = 'test-result show';
+  resultEl.textContent = 'Saving...';
+
+  let request;
+  if (category === 'outputs') {
+    const idx = item.instance_index || 0;
+    request = fetch('/api/config').then(function(r) { return r.json(); }).then(function(config) {
+      const instances = (config.outputs[typeName] || [{}]).slice();
+      instances[idx] = edited;
+      const outputsBody = {};
+      outputsBody[typeName] = instances;
+      return fetch('/api/config/form', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outputs: outputsBody }),
+      });
+    });
+  } else {
+    const values = {};
+    Object.keys(edited).forEach(function(k) { values[category + '.' + typeName + '.' + k] = edited[k]; });
+    request = fetch('/api/config/form', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: values }),
+    });
+  }
+
+  request
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        resultEl.classList.add('ok');
+        resultEl.textContent = 'Saved.';
+        load();
+      } else {
+        resultEl.classList.add('fail');
+        resultEl.textContent = d.error || 'Save failed.';
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      }
+    })
+    .catch(function() {
+      resultEl.classList.add('fail');
+      resultEl.textContent = 'Request failed.';
+      btn.disabled = false;
+      btn.textContent = 'Save';
     });
 }
 
