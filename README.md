@@ -79,11 +79,23 @@ python -m mediainfo --config config.yaml
 
 The web page is then available at `http://<this-machine>:8090/`.
 
-Running via `docker compose` instead (see `docker-compose.yml`)? Put
-config.yaml in `./config/config.yaml` rather than the project root - it's
-bind-mounted as a directory there (`cp config.example.yaml
-config/config.yaml`), so editors/tools that save by replacing the file
-(rather than writing in place) don't orphan the mount.
+Running via `docker compose` instead (see `docker-compose.yml`)? Run
+`./setup.sh` first - it creates all the bind-mounted directories
+(`config/`, `cache/`, `library/`, `logs/`, `adb_keys/`, `artwork/`,
+`spotify_cache/`) and copies `config.example.yaml` to
+`config/config.yaml` if it isn't there yet. Doing this yourself before
+`docker compose up` matters: Docker otherwise creates any missing mount
+target itself as root, which the container's non-root app user can't
+write into. config.yaml lives in `./config/config.yaml` rather than the
+project root because it's bind-mounted as a directory, so editors/tools
+that save by replacing the file (rather than writing in place) don't
+orphan the mount.
+
+```bash
+./setup.sh
+# edit config/config.yaml with your devices' IPs/credentials
+docker compose up -d
+```
 
 ## Configuration
 

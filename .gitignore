@@ -23,6 +23,9 @@ artwork/
 # ADB keys for the Shield source (private key material)
 adb_keys/
 
+# Spotify OAuth token
+spotify_cache/
+
 # Local Claude Code settings
 .claude/settings.local.json
 
