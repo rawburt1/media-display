@@ -45,6 +45,10 @@ class NowPlaying:
     # Other albums/songs by the playing artist, e.g. from the Lidarr
     # enricher - "<album> - <track>" pairs, in no particular order.
     discography: List[str] = field(default_factory=list)
+    # Lyrics for the playing track, e.g. from the lyrics enricher.
+    lyrics: str = ""
+    # Audience rating (0-10), e.g. from the TMDb enricher.
+    rating: Optional[float] = None
 
     @property
     def identity(self) -> tuple:

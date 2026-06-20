@@ -116,6 +116,25 @@ class YoutubeConfig:
 
 
 @dataclasses.dataclass
+class ChromecastConfig:
+    enabled: bool = False
+    # IP addresses of Cast devices to poll (Chromecasts, Google/Android TVs,
+    # smart speakers, or any other Cast-compatible receiver) - connected to
+    # directly, like sources.sonos's speaker_ips, rather than via zeroconf
+    # discovery. Find a device's IP in your router's client list or the
+    # Google Home app (device settings -> Wi-Fi).
+    device_ips: list = dataclasses.field(default_factory=list)
+    # Cast app display names to ignore, e.g. screensaver/backdrop apps that
+    # are "playing" something but aren't real now-playing content. Also list
+    # any Nest Hub used by outputs.nest_hub here, to avoid it detecting the
+    # artwork that output casts to it as something "now playing" (a feedback
+    # loop).
+    ignore_apps: list = dataclasses.field(
+        default_factory=lambda: ["Backdrop", "Default Media Receiver"]
+    )
+
+
+@dataclasses.dataclass
 class PlexConfig:
     enabled: bool = False
     host: str = ""
@@ -376,6 +395,21 @@ class WikipediaConfig:
 
 
 @dataclasses.dataclass
+class LyricsConfig:
+    enabled: bool = False
+    # No API key required; uses the free lyrics.ovh API. (Genius's official
+    # API deliberately doesn't return lyrics text - only a link to their
+    # lyrics page - so it can't be used for this.)
+
+
+@dataclasses.dataclass
+class TmdbConfig:
+    enabled: bool = False
+    # Free API key (v3 auth) from https://www.themoviedb.org/settings/api
+    api_key: str = ""
+
+
+@dataclasses.dataclass
 class SonarrConfig:
     enabled: bool = False
     host: str = ""
@@ -466,6 +500,7 @@ class LoggingConfig:
 # new source or output starts here.
 SOURCE_CONFIG_TYPES: dict[str, type] = {
     "appletv": AppleTvConfig,
+    "chromecast": ChromecastConfig,
     "emby": EmbyConfig,
     "homeassistant": HomeAssistantConfig,
     "jellyfin": JellyfinConfig,
@@ -498,10 +533,12 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "lastfm": LastFmConfig,
     "library": LibraryEnricherConfig,
     "lidarr": LidarrConfig,
+    "lyrics": LyricsConfig,
     "musicbrainz": MusicBrainzConfig,
     "radarr": RadarrConfig,
     "sonarr": SonarrConfig,
     "thetvdb": TheTvDbConfig,
+    "tmdb": TmdbConfig,
     "wikipedia": WikipediaConfig,
 }
 

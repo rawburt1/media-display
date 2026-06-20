@@ -49,7 +49,10 @@ _INDEX_HTML = """<!DOCTYPE html>
     #panel.hidden { display: none; }
     #title { font-size: 2em; font-weight: 600; }
     #subtitle { font-size: 1.3em; opacity: 0.8; margin-top: 0.2em; }
+    #rating { font-size: 1.1em; margin-top: 0.4em; opacity: 0.9; }
+    #rating:empty { display: none; }
     #summary { font-size: 1.1em; line-height: 1.5; margin-top: 1em; opacity: 0.95; }
+    #lyrics { font-size: 1em; line-height: 1.6; margin-top: 1em; opacity: 0.9; white-space: pre-line; }
   </style>
 </head>
 <body>
@@ -61,7 +64,9 @@ _INDEX_HTML = """<!DOCTYPE html>
     <div id="panel">
       <div id="title"></div>
       <div id="subtitle"></div>
+      <div id="rating"></div>
       <div id="summary"></div>
+      <div id="lyrics"></div>
     </div>
   </div>
   <script>
@@ -81,7 +86,9 @@ _INDEX_HTML = """<!DOCTYPE html>
     function applyState(data) {
       const title = document.getElementById("title");
       const subtitle = document.getElementById("subtitle");
+      const rating = document.getElementById("rating");
       const summary = document.getElementById("summary");
+      const lyrics = document.getElementById("lyrics");
       const artContainer = document.getElementById("art-container");
       const panel = document.getElementById("panel");
 
@@ -102,7 +109,9 @@ _INDEX_HTML = """<!DOCTYPE html>
 
       title.textContent = data.title || "";
       subtitle.textContent = data.subtitle || "";
+      rating.textContent = data.rating ? "★ " + data.rating + "/10" : "";
       summary.textContent = data.summary || "";
+      lyrics.textContent = data.lyrics || "";
     }
 
     function connect() {
@@ -170,6 +179,8 @@ class InfoOutput(Output):
             "title": now_playing.title,
             "subtitle": now_playing.subtitle,
             "summary": now_playing.summary,
+            "lyrics": now_playing.lyrics,
+            "rating": now_playing.rating,
             "art_label": artwork.label if artwork else "",
         }
         if image_path is not None:

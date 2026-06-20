@@ -24,10 +24,12 @@ from mediainfo.enrichers.fanarttv import FanartTvEnricher
 from mediainfo.enrichers.lastfm import LastFmEnricher
 from mediainfo.enrichers.library import LibraryEnricher
 from mediainfo.enrichers.lidarr import LidarrEnricher
+from mediainfo.enrichers.lyrics import LyricsEnricher
 from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
 from mediainfo.enrichers.radarr import RadarrEnricher
 from mediainfo.enrichers.sonarr import SonarrEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
+from mediainfo.enrichers.tmdb import TmdbEnricher
 from mediainfo.enrichers.wikipedia import WikipediaEnricher
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
@@ -45,6 +47,7 @@ from mediainfo.outputs.ulanzi import UlanziOutput
 from mediainfo.outputs.video import VideoOutput
 from mediainfo.outputs.web import WebOutput
 from mediainfo.sources.appletv import AppleTvSource
+from mediainfo.sources.chromecast import ChromecastSource
 from mediainfo.sources.homeassistant import HomeAssistantSource
 from mediainfo.sources.jellyfin import EmbySource, JellyfinSource
 from mediainfo.sources.kodi import KodiSource
@@ -60,6 +63,7 @@ from mediainfo.sources.youtube import YoutubeSource
 # output, or enricher starts here (and in mediainfo/config.py).
 SOURCE_CLASSES = {
     "appletv": AppleTvSource,
+    "chromecast": ChromecastSource,
     "emby": EmbySource,
     "homeassistant": HomeAssistantSource,
     "jellyfin": JellyfinSource,
@@ -111,10 +115,12 @@ ENRICHER_CLASSES = {
     "lastfm": LastFmEnricher,
     "library": LibraryEnricher,
     "lidarr": LidarrEnricher,
+    "lyrics": LyricsEnricher,
     "musicbrainz": MusicBrainzEnricher,
     "radarr": RadarrEnricher,
     "sonarr": SonarrEnricher,
     "thetvdb": TheTvDbEnricher,
+    "tmdb": TmdbEnricher,
     "wikipedia": WikipediaEnricher,
 }
 

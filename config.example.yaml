@@ -43,6 +43,7 @@ priority:
   - spotify
   - vinyl
   - ps5
+  - chromecast
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +184,23 @@ sources:
   ps5:
     enabled: true
     npsso: YOUR_NPSSO_COOKIE
+
+  # Generic Chromecast/Cast source - polls Cast devices' media status
+  # directly, so anything cast to them (Netflix, Disney+, YouTube, Spotify
+  # Connect, etc.) is picked up regardless of which app is casting, unlike
+  # `shield` which only sees apps running locally on an Android TV device.
+  chromecast:
+    enabled: true
+    device_ips:
+      - 192.168.1.90
+    # App display names to ignore, e.g. screensaver/backdrop apps that are
+    # "playing" something but aren't real now-playing content. If you also
+    # use outputs.nest_hub, list that Nest Hub's own friendly app name here
+    # too (it shows as whatever app this output's own pushed image plays
+    # through) so it doesn't see its own artwork as something "now playing".
+    ignore_apps:
+      - Backdrop
+      - Default Media Receiver
 
 
 # ---------------------------------------------------------------------------
@@ -515,6 +533,20 @@ enrichers:
   # entries) and adds a thumbnail photo to the image rotation.
   wikipedia:
     enabled: true
+
+  # Lyrics — fills in NowPlaying.lyrics (shown by the `info` output) for the
+  # currently playing track. No API key required; uses the free lyrics.ovh
+  # API. (Genius's official API only returns a link to their lyrics page,
+  # not the lyrics text itself, so it can't be used here.)
+  lyrics:
+    enabled: true
+
+  # TMDb — audience rating (0-10) for movies and TV shows, shown by the
+  # `info` output. Free API key (v3 auth) from
+  # https://www.themoviedb.org/settings/api
+  tmdb:
+    enabled: true
+    api_key: YOUR_TMDB_API_KEY
 
 
 # ---------------------------------------------------------------------------

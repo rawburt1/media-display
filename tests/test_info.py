@@ -13,13 +13,15 @@ def _config(**kwargs):
     return InfoConfig(enabled=True, host="127.0.0.1", port=8093, **kwargs)
 
 
-def _music(title="Bohemian Rhapsody", artist="Queen", summary=""):
+def _music(title="Bohemian Rhapsody", artist="Queen", summary="", lyrics="", rating=None):
     return NowPlaying(
         source="kodi",
         media_type="music",
         title=title,
         subtitle=artist,
         summary=summary,
+        lyrics=lyrics,
+        rating=rating,
         images=[],
     )
 
@@ -69,6 +71,14 @@ def test_payload_when_playing_without_image():
     assert payload["subtitle"] == "Queen"
     assert payload["summary"] == "A British rock band."
     assert "image" not in payload
+
+
+def test_payload_includes_lyrics_and_rating():
+    out = _output()
+    out.on_new_item(_music(lyrics="Is this the real life?", rating=8.5), MagicMock())
+    payload = out._get_payload()
+    assert payload["lyrics"] == "Is this the real life?"
+    assert payload["rating"] == 8.5
 
 
 def test_payload_when_playing_with_image(tmp_path):

@@ -23,7 +23,11 @@ Currently implemented:
   a fallback for devices a more specific source can't read directly, e.g.
   a tvOS app that doesn't populate Apple's own now-playing API), PlayStation
   5 (via PSNAWP, reads your account's own PSN presence for the game poster -
-  no console pairing needed)
+  no console pairing needed), generic Chromecast/Cast (polls any configured
+  Cast device's media status directly, so anything cast to it - Netflix,
+  Disney+, YouTube, Spotify Connect, etc. - is picked up regardless of which
+  app is casting, unlike the Shield source which only sees apps running
+  locally on that device)
 - **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
   movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
   Discogs also add (and prefer) album covers for music, matched via
@@ -33,7 +37,9 @@ Currently implemented:
   summary plus a photo, for the `info` output and RSS/Atom feeds below;
   Sonarr/Radarr/Lidarr each match against your own library (rather than a
   public catalog) and add a studio/genres/discography plus poster/fanart/
-  album art - see below
+  album art - see below; lyrics adds the playing track's lyrics (via the
+  free lyrics.ovh API) for the `info` output; TMDb adds a 0-10 audience
+  rating for movies/TV shows, also for the `info` output
 - **Outputs**: Pixoo64 (local HTTP API), web page (`http://<host>:8090/`),
   and Google Nest Hub (Cast) each rotate between all available poster/fanart
   images for the current item on their own randomized schedule - each one
