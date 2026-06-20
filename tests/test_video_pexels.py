@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from mediainfo.video.pexels import PexelsVideoSource, _best_mp4_url
 

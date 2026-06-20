@@ -78,7 +78,7 @@ class Resize(Transform):
         self.height = int(height)
 
     def apply(self, image: Image.Image) -> Image.Image:
-        return image.convert("RGB").resize((self.width, self.height), Image.LANCZOS)
+        return image.convert("RGB").resize((self.width, self.height), Image.Resampling.LANCZOS)
 
     def spec(self):
         return {"resize": [self.width, self.height]}

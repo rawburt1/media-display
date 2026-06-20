@@ -1,6 +1,6 @@
 """Tests for the Spotify now-playing source."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from mediainfo.config import SpotifyConfig
 from mediainfo.sources.spotify import SpotifySource

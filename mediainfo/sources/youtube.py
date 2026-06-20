@@ -218,7 +218,8 @@ class YoutubeSource(MediaSource):
     def _parse_description(description: str) -> Tuple[str, str, str]:
         parts = [p.strip() for p in description.split(",", 2)]
         parts += [""] * (3 - len(parts))
-        return tuple("" if p == "null" else p for p in parts[:3])
+        a, b, c = ("" if p == "null" else p for p in parts[:3])
+        return a, b, c
 
     @classmethod
     def _detect_song_artist(cls, video_title: str, channel: str) -> Tuple[str, str]:

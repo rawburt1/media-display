@@ -15,6 +15,13 @@ poll_interval_seconds: 5
 # before cycling to the next. Rounded up to the nearest poll_interval_seconds.
 rotation_interval_seconds: 30
 
+# Backoff for sources whose device/service couldn't be reached (last_poll_failed).
+# Delay starts at backoff_initial_seconds, doubles after each consecutive
+# failure, and is capped at backoff_max_seconds. Sources that are simply idle
+# (no error, nothing playing) are unaffected and keep polling every tick.
+backoff_initial_seconds: 30
+backoff_max_seconds: 300
+
 
 # ---------------------------------------------------------------------------
 # Source priority
@@ -418,6 +425,24 @@ enrichers:
     enabled: true
     api_key: YOUR_FANART_TV_API_KEY
 
+  # Sonarr — TV network/studio and poster/fanart, matched against your own
+  # Sonarr library (the shows you actually track) rather than a public
+  # catalog. Get the api_key from Sonarr's Settings → General → Security.
+  sonarr:
+    enabled: true
+    host: 192.168.1.50
+    port: 8989
+    api_key: YOUR_SONARR_API_KEY
+
+  # Radarr — movie studio, genres, and poster/fanart, matched against your
+  # own Radarr library. Get the api_key from Radarr's Settings → General →
+  # Security.
+  radarr:
+    enabled: true
+    host: 192.168.1.50
+    port: 7878
+    api_key: YOUR_RADARR_API_KEY
+
   # Last.fm — artist photos for music tracks.
   # Get a free API key at https://www.last.fm/api/account/create
   # Note: Last.fm removed most artist images from their API in 2019–2020.
@@ -434,6 +459,18 @@ enrichers:
   # provides scanned physical album covers.
   musicbrainz:
     enabled: true
+
+  # Lidarr — other albums/songs by the playing artist (NowPlaying.discography)
+  # and album art, matched against your own Lidarr library. Get the api_key
+  # from Lidarr's Settings → General → Security. Distinct from
+  # `python -m mediainfo import-lidarr` (see `library:` below), which is a
+  # one-off bulk import rather than a live per-play lookup.
+  lidarr:
+    enabled: true
+    host: 192.168.1.50
+    port: 8686
+    api_key: YOUR_LIDARR_API_KEY
+    max_discography_items: 50
 
   # Wikipedia — artist bio / movie info / TV show info, plus a photo.
   # No API key required; uses the free Wikipedia REST API. Fills in

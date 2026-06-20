@@ -48,7 +48,7 @@ class KodiSource(MediaSource):
         self._auth = (config.username, config.password) if config.username else None
 
     def _rpc(self, method: str, params: Optional[dict] = None):
-        payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
+        payload: dict = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
         response = requests.post(self._url, json=payload, auth=self._auth, timeout=5)
         response.raise_for_status()
         data = response.json()

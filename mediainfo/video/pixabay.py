@@ -27,17 +27,14 @@ class PixabayVideoSource(VideoSource):
             return []
         query = random.choice(self._queries)
         try:
-            resp = requests.get(
-                _PIXABAY_API,
-                params={
-                    "key": self._api_key,
-                    "q": query,
-                    "video_type": "film",
-                    "orientation": "vertical",
-                    "per_page": self._batch_size,
-                },
-                timeout=15,
-            )
+            params: dict = {
+                "key": self._api_key,
+                "q": query,
+                "video_type": "film",
+                "orientation": "vertical",
+                "per_page": self._batch_size,
+            }
+            resp = requests.get(_PIXABAY_API, params=params, timeout=15)
             resp.raise_for_status()
         except Exception:
             logger.exception("Pixabay video API error (query=%r)", query)

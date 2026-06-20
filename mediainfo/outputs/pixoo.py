@@ -82,7 +82,7 @@ def _prepare_for_led(image: Image.Image) -> Image.Image:
     image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=120, threshold=3))
 
     # 4. Downsample
-    image = image.resize((_SIZE, _SIZE), Image.LANCZOS)
+    image = image.resize((_SIZE, _SIZE), Image.Resampling.LANCZOS)
 
     # 5. Palette reduction → bold colour blocks
     image = image.quantize(colors=_PALETTE_COLORS).convert("RGB")
@@ -94,6 +94,6 @@ def _save_preview(image: Image.Image, path: Path) -> None:
     """Save a 512×512 nearest-neighbour upscale — shows exactly what the LED sees."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        image.resize((512, 512), Image.NEAREST).save(path, format="PNG")
+        image.resize((512, 512), Image.Resampling.NEAREST).save(path, format="PNG")
     except Exception:
         logger.warning("Could not save Pixoo preview to %s", path)

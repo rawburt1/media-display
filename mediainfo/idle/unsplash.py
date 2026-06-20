@@ -29,7 +29,7 @@ class UnsplashWallpaperSource(IdleWallpaperSource):
         self.queries = [q.strip() for q in config.queries.split(",") if q.strip()]
 
     def get_wallpapers(self) -> List[Artwork]:
-        params = {"count": self.config.batch_size}
+        params: dict = {"count": self.config.batch_size}
         if self.queries:
             params["query"] = random.choice(self.queries)
 

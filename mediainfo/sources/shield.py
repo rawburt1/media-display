@@ -139,7 +139,7 @@ class ShieldSource(MediaSource):
                 header_indent = indent
 
             if indent <= header_indent:
-                if is_match():
+                if is_match() and description is not None:
                     return description, package
                 if not _SESSION_HEADER_RE.search(stripped):
                     break  # end of the "Sessions Stack" section
@@ -166,12 +166,11 @@ class ShieldSource(MediaSource):
                 package = match.group(1)
                 continue
 
-        return (description, package) if is_match() else None
-
-        return description if is_match() else None
+        return (description, package) if is_match() and description is not None else None
 
     @staticmethod
     def _parse_description(description: str) -> Tuple[str, str, str]:
         parts = [p.strip() for p in description.split(",", 2)]
         parts += [""] * (3 - len(parts))
-        return tuple("" if p == "null" else p for p in parts[:3])
+        a, b, c = ("" if p == "null" else p for p in parts[:3])
+        return a, b, c

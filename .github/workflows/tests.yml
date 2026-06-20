@@ -6,6 +6,17 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check mediainfo vinyl_recognizer tests
+      - run: mypy mediainfo
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -14,6 +25,5 @@ jobs:
         with:
           python-version: "3.10"
       - run: sudo apt-get update && sudo apt-get install -y libportaudio2
-      - run: pip install -r requirements.txt -r vinyl_recognizer/requirements.txt
-      - run: pip install pytest
+      - run: pip install -r requirements.txt -r vinyl_recognizer/requirements.txt -r requirements-dev.txt
       - run: pytest

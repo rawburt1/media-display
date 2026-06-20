@@ -294,7 +294,6 @@ class VideoOutput(Output):
             with self._lock:
                 is_idle = self._is_idle
                 now_playing = self._now_playing
-                artwork = self._artwork
                 image_path = self._image_path
 
             if is_idle:

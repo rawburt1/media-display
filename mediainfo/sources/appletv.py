@@ -57,7 +57,7 @@ class AppleTvSource(MediaSource):
 
     def __init__(self, config: AppleTvConfig):
         self._config = config
-        self._atv = None
+        self._atv: Optional[pyatv.interface.AppleTV] = None
         self._loop = asyncio.new_event_loop()
         _ART_DIR.mkdir(exist_ok=True)
         threading.Thread(
@@ -119,6 +119,8 @@ class AppleTvSource(MediaSource):
         )
 
     async def _fetch_artwork(self) -> Optional[Path]:
+        if self._atv is None:
+            return None
         try:
             art = await self._atv.metadata.artwork(width=600, height=600)
             if art is None or not art.bytes:

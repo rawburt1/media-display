@@ -3,7 +3,6 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from mediainfo.config import MqttConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -97,7 +96,7 @@ def test_retain_and_qos_passed_to_publish(MockClient):
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_credentials_set_when_username_provided(MockClient):
     mock_client = MockClient.return_value
-    output = MqttOutput(_config(username="user", password="secret"))
+    MqttOutput(_config(username="user", password="secret"))
 
     mock_client.username_pw_set.assert_called_once_with("user", "secret")
 
@@ -105,7 +104,7 @@ def test_credentials_set_when_username_provided(MockClient):
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_no_credentials_when_username_blank(MockClient):
     mock_client = MockClient.return_value
-    output = MqttOutput(_config(username="", password=""))
+    MqttOutput(_config(username="", password=""))
 
     mock_client.username_pw_set.assert_not_called()
 
@@ -145,6 +144,6 @@ def test_connect_failure_does_not_prevent_loop_start(MockClient):
     mock_client = MockClient.return_value
     mock_client.connect_async.side_effect = OSError("connection refused")
 
-    output = MqttOutput(_config())
+    MqttOutput(_config())
 
     mock_client.loop_start.assert_called_once()

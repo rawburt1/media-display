@@ -110,7 +110,7 @@ class WikipediaEnricher(ArtworkEnricher):
         return []
 
     def _search(self, query: str) -> Optional[str]:
-        params = {
+        params: dict = {
             "action": "query",
             "list": "search",
             "srsearch": query,

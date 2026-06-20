@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import patch
 
-import pytest
 from PIL import Image
 
 from mediainfo.config import PixooConfig

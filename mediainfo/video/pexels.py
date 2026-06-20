@@ -25,14 +25,15 @@ class PexelsVideoSource(VideoSource):
             return []
         query = random.choice(self._queries)
         try:
+            params: dict = {
+                "query": query,
+                "orientation": "portrait",
+                "per_page": self._batch_size,
+            }
             resp = requests.get(
                 _PEXELS_SEARCH,
                 headers={"Authorization": self._api_key},
-                params={
-                    "query": query,
-                    "orientation": "portrait",
-                    "per_page": self._batch_size,
-                },
+                params=params,
                 timeout=15,
             )
             resp.raise_for_status()

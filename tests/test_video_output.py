@@ -3,7 +3,6 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from mediainfo.config import VideoOutputConfig
 from mediainfo.models import Artwork, NowPlaying

@@ -736,8 +736,6 @@ def test_backoff_delay_doubles_on_repeated_failures():
 
 
 def test_backoff_delay_caps_at_max():
-    from mediainfo.orchestrator import _BACKOFF_MAX_SECONDS
-
     source = _FailingSource()
     clock = _FakeClock()
     with patch("mediainfo.orchestrator.time.monotonic", clock):
@@ -747,7 +745,30 @@ def test_backoff_delay_caps_at_max():
             orch._poll_sources()
             clock.now += orch._source_backoff["failing"].delay + 1
 
-        assert orch._source_backoff["failing"].delay == _BACKOFF_MAX_SECONDS
+        assert orch._source_backoff["failing"].delay == orch.backoff_max_seconds
+
+
+def test_custom_backoff_initial_and_max_seconds():
+    source = _FailingSource()
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orch = Orchestrator(
+            sources=[source],
+            enrichers=[],
+            outputs=[MagicMock()],
+            cache=MagicMock(),
+            poll_interval_seconds=1,
+            rotation_interval_seconds=30,
+            backoff_initial_seconds=5,
+            backoff_max_seconds=10,
+        )
+
+        orch._poll_sources()
+        assert orch._source_backoff["failing"].delay == 5
+
+        clock.now += 6
+        orch._poll_sources()
+        assert orch._source_backoff["failing"].delay == 10
 
 
 def test_successful_poll_clears_backoff():

@@ -1,6 +1,5 @@
 """Tests for the RSS/Atom feed output."""
 
-from datetime import datetime, timezone
 from unittest.mock import MagicMock
 from xml.etree import ElementTree as ET
 
@@ -358,7 +357,7 @@ def test_atom_entry_enclosure_link():
     with out.app.test_client() as client:
         root = ET.fromstring(client.get("/atom").data)
     links = root.find(_a("entry")).findall(_a("link"))
-    enclosures = [l for l in links if l.get("rel") == "enclosure"]
+    enclosures = [link for link in links if link.get("rel") == "enclosure"]
     assert len(enclosures) == 1
     assert enclosures[0].get("href") == "https://fanart.tv/cover.png"
     assert enclosures[0].get("type") == "image/png"

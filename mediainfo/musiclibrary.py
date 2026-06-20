@@ -172,6 +172,7 @@ class MusicLibrary:
                 list(insert.values()) + [time.time()],
             )
             self._conn.commit()
+            assert cursor.lastrowid is not None  # guaranteed after a successful INSERT
             return cursor.lastrowid
 
     def find_artist(self, name: str) -> Optional[int]:

@@ -1,6 +1,6 @@
 """Tests for the Discogs artwork enricher."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from mediainfo.config import DiscogsConfig
 from mediainfo.enrichers.discogs import DiscogsEnricher, _is_real_image

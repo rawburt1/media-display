@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import socket
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 import requests
 
@@ -121,12 +121,26 @@ def test_enricher(name: str, enricher_config: Any) -> Tuple[bool, str]:
         if name == "wikipedia":
             from mediainfo.enrichers.wikipedia import WikipediaEnricher
 
-            result = WikipediaEnricher(enricher_config)._lookup(["Queen (band)", "Queen"])
-            return (result is not None, "Found summary for test query" if result else
+            summary = WikipediaEnricher(enricher_config)._lookup(["Queen (band)", "Queen"])
+            return (summary is not None, "Found summary for test query" if summary else
                     "No match for test query (en.wikipedia.org may be unreachable)")
 
         if name == "library":
             return True, "Local library - no network connection to test"
+
+        if name in ("sonarr", "radarr", "lidarr"):
+            path = {
+                "sonarr": "/api/v3/system/status",
+                "radarr": "/api/v3/system/status",
+                "lidarr": "/api/v1/system/status",
+            }[name]
+            response = requests.get(
+                f"http://{enricher_config.host}:{enricher_config.port}{path}",
+                headers={"X-Api-Key": enricher_config.api_key},
+                timeout=5,
+            )
+            response.raise_for_status()
+            return True, "Connected successfully"
     except Exception as exc:
         return False, f"Error: {exc}"
 

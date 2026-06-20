@@ -23,7 +23,10 @@ from mediainfo.enrichers.discogs import DiscogsEnricher
 from mediainfo.enrichers.fanarttv import FanartTvEnricher
 from mediainfo.enrichers.lastfm import LastFmEnricher
 from mediainfo.enrichers.library import LibraryEnricher
+from mediainfo.enrichers.lidarr import LidarrEnricher
 from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
+from mediainfo.enrichers.radarr import RadarrEnricher
+from mediainfo.enrichers.sonarr import SonarrEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
 from mediainfo.enrichers.wikipedia import WikipediaEnricher
 from mediainfo.idle.lastfm import LastFmWallpaperSource
@@ -64,7 +67,7 @@ SOURCE_CLASSES = {
     "youtube": YoutubeSource,
 }
 
-OUTPUT_CLASSES = {
+OUTPUT_CLASSES: dict[str, type] = {
     "config": ConfigUiOutput,
     "feed": FeedOutput,
     "folder": FolderOutput,
@@ -101,7 +104,10 @@ ENRICHER_CLASSES = {
     "fanarttv": FanartTvEnricher,
     "lastfm": LastFmEnricher,
     "library": LibraryEnricher,
+    "lidarr": LidarrEnricher,
     "musicbrainz": MusicBrainzEnricher,
+    "radarr": RadarrEnricher,
+    "sonarr": SonarrEnricher,
     "thetvdb": TheTvDbEnricher,
     "wikipedia": WikipediaEnricher,
 }
@@ -277,6 +283,9 @@ _REQUIRED_CREDENTIAL_FIELDS: dict[tuple, list] = {
     ("enrichers", "thetvdb"): ["api_key"],
     ("enrichers", "discogs"): ["token"],
     ("enrichers", "lastfm"): ["api_key"],
+    ("enrichers", "sonarr"): ["api_key"],
+    ("enrichers", "radarr"): ["api_key"],
+    ("enrichers", "lidarr"): ["api_key"],
     ("idle", "unsplash"): ["access_key"],
     ("idle", "lastfm"): ["api_key"],
 }
@@ -423,6 +432,8 @@ def _start_orchestrator(
         poll_interval_seconds=config.poll_interval_seconds,
         rotation_interval_seconds=config.rotation_interval_seconds,
         idle_source=_build_idle_source(config, library),
+        backoff_initial_seconds=config.backoff_initial_seconds,
+        backoff_max_seconds=config.backoff_max_seconds,
     )
     orch.start()
     return orch
@@ -730,8 +741,8 @@ async def _pair_appletv(host: str) -> None:
 
             if pairing.has_paired:
                 creds = pairing.service.credentials
-                print(f"\nPairing successful!")
-                print(f"Add to config.yaml under sources.appletv:")
+                print("\nPairing successful!")
+                print("Add to config.yaml under sources.appletv:")
                 print(f"  {proto_name}_credentials: {creds}")
                 await pairing.close()
                 return

@@ -107,9 +107,9 @@ def _import_artist(
         if track_mbid:
             library.set_mbid("track", track_id, track_mbid)
 
-        album_id = albums_by_lidarr_id.get(track.get("albumId"))
-        if album_id is not None:
-            library.link_track_album(track_id, album_id)
+        linked_album_id = albums_by_lidarr_id.get(track.get("albumId"))
+        if linked_album_id is not None:
+            library.link_track_album(track_id, linked_album_id)
 
         track_count += 1
 

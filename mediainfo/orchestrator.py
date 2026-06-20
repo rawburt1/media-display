@@ -9,7 +9,7 @@ import logging
 import random
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from mediainfo.cache import ImageCache
 from mediainfo.enrichers.base import ArtworkEnricher
@@ -24,13 +24,14 @@ _CACHE_PURGE_INTERVAL_SECONDS = 24 * 60 * 60
 
 # Backoff for sources whose device/service couldn't be reached (see
 # MediaSource.last_poll_failed) - doubles after each consecutive failure,
-# capped at _BACKOFF_MAX_SECONDS, and resets the moment a poll succeeds
+# capped at backoff_max_seconds, and resets the moment a poll succeeds
 # (connects fine, whether or not anything's playing). Sources that are
 # simply idle - no error, nothing playing - are polled every tick as usual;
 # only unreachable ones get backed off, so detection isn't delayed for
-# devices that are just sitting there idle but reachable.
-_BACKOFF_INITIAL_SECONDS = 30
-_BACKOFF_MAX_SECONDS = 300
+# devices that are just sitting there idle but reachable. The starting
+# delay and cap are configurable (Config.backoff_initial_seconds/
+# backoff_max_seconds) so operators can tune how aggressively to retry a
+# flaky device vs. how much log/network noise that produces.
 _BACKOFF_MULTIPLIER = 2
 
 
@@ -60,6 +61,8 @@ class Orchestrator:
         poll_interval_seconds: float,
         rotation_interval_seconds: float,
         idle_source: Optional[IdleWallpaperSource] = None,
+        backoff_initial_seconds: float = 30,
+        backoff_max_seconds: float = 300,
     ):
         self.sources = sources
         self.enrichers = enrichers
@@ -68,6 +71,8 @@ class Orchestrator:
         self.poll_interval_seconds = poll_interval_seconds
         self.rotation_interval_seconds = rotation_interval_seconds
         self.idle_source = idle_source
+        self.backoff_initial_seconds = backoff_initial_seconds
+        self.backoff_max_seconds = backoff_max_seconds
         self._current: Optional[NowPlaying] = None
         # Each output independently cycles through `self._current.images` in
         # its own randomized order, keyed by its index in `self.outputs`.
@@ -210,6 +215,7 @@ class Orchestrator:
             self._show_image_for_output(index, output)
 
     def _show_image_for_output(self, index: int, output: Output) -> None:
+        assert self._current is not None  # only called while something is playing
         state = self._rotation_state[index]
         artwork = self._current.images[state.order[state.position]]
         try:
@@ -320,12 +326,11 @@ class Orchestrator:
         self._active_source_name = None
         return None
 
-    @staticmethod
-    def _next_backoff(previous: Optional["_BackoffState"], now: float) -> "_BackoffState":
+    def _next_backoff(self, previous: Optional["_BackoffState"], now: float) -> "_BackoffState":
         if previous is None:
-            delay = _BACKOFF_INITIAL_SECONDS
+            delay = self.backoff_initial_seconds
         else:
-            delay = min(previous.delay * _BACKOFF_MULTIPLIER, _BACKOFF_MAX_SECONDS)
+            delay = min(previous.delay * _BACKOFF_MULTIPLIER, self.backoff_max_seconds)
         return _BackoffState(delay=delay, next_attempt=now + delay)
 
     def _call_output(self, index: int, func, *args) -> None:

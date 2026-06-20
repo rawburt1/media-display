@@ -1,10 +1,6 @@
 """Tests for the image transform pipeline."""
 
-import io
-from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 from PIL import Image
 
 from mediainfo.transforms import (

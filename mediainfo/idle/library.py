@@ -41,17 +41,18 @@ class LibraryWallpaperSource(IdleWallpaperSource):
 
         artworks = []
         for album_id, artist, title, mbid in albums:
-            url = self._cover_url(album_id, mbid)
+            url = self._cover_url(self.library, album_id, mbid)
             if url:
                 artworks.append(Artwork(url=url, label=f"Library: {artist} – {title}"))
 
         return artworks
 
-    def _cover_url(self, album_id: int, mbid: str) -> Optional[str]:
-        cached = self.library.get_claim("album", album_id, "cover_art_url", "musicbrainz")
+    @staticmethod
+    def _cover_url(library: MusicLibrary, album_id: int, mbid: str) -> Optional[str]:
+        cached = library.get_claim("album", album_id, "cover_art_url", "musicbrainz")
         if cached is not None:
             return cached or None
 
         url = fetch_front_cover(mbid)
-        self.library.set_claim("album", album_id, "cover_art_url", "musicbrainz", url or "")
+        library.set_claim("album", album_id, "cover_art_url", "musicbrainz", url or "")
         return url

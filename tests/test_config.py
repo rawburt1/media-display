@@ -14,6 +14,8 @@ def test_load_example_config():
 
     assert config.poll_interval_seconds == 5
     assert config.rotation_interval_seconds == 30
+    assert config.backoff_initial_seconds == 30
+    assert config.backoff_max_seconds == 300
     assert config.priority == [
         "kodi", "appletv", "youtube", "shield", "plex", "sonos", "spotify", "vinyl",
     ]
@@ -107,6 +109,8 @@ def test_from_dict_empty_dict_uses_defaults():
     config = Config.from_dict({})
     assert config.poll_interval_seconds == 5
     assert config.rotation_interval_seconds == 30
+    assert config.backoff_initial_seconds == 30
+    assert config.backoff_max_seconds == 300
     assert config.priority == []
     assert config.sources == {}
     assert config.outputs == {}

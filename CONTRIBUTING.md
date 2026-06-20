@@ -5,8 +5,7 @@
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt -r vinyl_recognizer/requirements.txt
-pip install pytest
+pip install -r requirements.txt -r vinyl_recognizer/requirements.txt -r requirements-dev.txt
 ```
 
 ## Running tests
@@ -19,6 +18,15 @@ This runs both the main `tests/` suite and `vinyl_recognizer/tests/`. All
 tests must pass before a PR can be merged - CI runs the same command on
 every push and pull request (see `.github/workflows/tests.yml`), and the
 `test` check is required on `master`.
+
+## Linting and type checking
+
+```bash
+ruff check mediainfo vinyl_recognizer tests
+mypy mediainfo
+```
+
+Both run in CI as the `lint` job and are required on `master`.
 
 ## Adding a new source/output/idle wallpaper source/enricher
 

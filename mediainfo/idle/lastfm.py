@@ -34,17 +34,14 @@ class LastFmWallpaperSource(IdleWallpaperSource):
 
     def get_wallpapers(self) -> List[Artwork]:
         try:
-            response = requests.get(
-                _API_URL,
-                params={
-                    "method": "user.getrecenttracks",
-                    "user": self.config.username,
-                    "api_key": self.config.api_key,
-                    "limit": self.config.batch_size,
-                    "format": "json",
-                },
-                timeout=10,
-            )
+            params: dict = {
+                "method": "user.getrecenttracks",
+                "user": self.config.username,
+                "api_key": self.config.api_key,
+                "limit": self.config.batch_size,
+                "format": "json",
+            }
+            response = requests.get(_API_URL, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
         except Exception:

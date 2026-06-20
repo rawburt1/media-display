@@ -348,6 +348,36 @@ class WikipediaConfig:
 
 
 @dataclasses.dataclass
+class SonarrConfig:
+    enabled: bool = False
+    host: str = ""
+    port: int = 8989
+    # API key from Sonarr's Settings → General → Security.
+    api_key: str = ""
+
+
+@dataclasses.dataclass
+class RadarrConfig:
+    enabled: bool = False
+    host: str = ""
+    port: int = 7878
+    # API key from Radarr's Settings → General → Security.
+    api_key: str = ""
+
+
+@dataclasses.dataclass
+class LidarrConfig:
+    enabled: bool = False
+    host: str = ""
+    port: int = 8686
+    # API key from Lidarr's Settings → General → Security.
+    api_key: str = ""
+    # Cap on how many "<album> – <track>" entries to list in
+    # NowPlaying.discography for a prolific artist.
+    max_discography_items: int = 50
+
+
+@dataclasses.dataclass
 class UnsplashWallpaperConfig:
     enabled: bool = False
     # Comma-separated list of search queries to pick wallpapers from while
@@ -437,7 +467,10 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "fanarttv": FanartTvConfig,
     "lastfm": LastFmConfig,
     "library": LibraryEnricherConfig,
+    "lidarr": LidarrConfig,
     "musicbrainz": MusicBrainzConfig,
+    "radarr": RadarrConfig,
+    "sonarr": SonarrConfig,
     "thetvdb": TheTvDbConfig,
     "wikipedia": WikipediaConfig,
 }
@@ -470,6 +503,12 @@ class Config:
     library: LibraryConfig
     logging: LoggingConfig
     auth: AuthConfig
+    # Backoff for sources whose device/service couldn't be reached - see
+    # MediaSource.last_poll_failed. Delay starts at backoff_initial_seconds,
+    # doubles after each consecutive failure, and is capped at
+    # backoff_max_seconds.
+    backoff_initial_seconds: int = 30
+    backoff_max_seconds: int = 300
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "Config":
@@ -528,4 +567,6 @@ class Config:
             library=LibraryConfig(**(raw.get("library") or {})),
             logging=LoggingConfig(**(raw.get("logging") or {})),
             auth=AuthConfig(**(raw.get("auth") or {})),
+            backoff_initial_seconds=raw.get("backoff_initial_seconds", 30),
+            backoff_max_seconds=raw.get("backoff_max_seconds", 300),
         )

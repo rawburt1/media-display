@@ -25,7 +25,10 @@ Currently implemented:
   MusicBrainz ids or, failing that, by looking up the artist/album name
   (e.g. for Sonos) via the MusicBrainz API or Discogs' search; Last.fm adds
   artist photos; Wikipedia adds an artist bio / movie info / TV show info
-  summary plus a photo, for the `info` output and RSS/Atom feeds below
+  summary plus a photo, for the `info` output and RSS/Atom feeds below;
+  Sonarr/Radarr/Lidarr each match against your own library (rather than a
+  public catalog) and add a studio/genres/discography plus poster/fanart/
+  album art - see below
 - **Outputs**: Pixoo64 (local HTTP API), web page (`http://<host>:8090/`),
   and Google Nest Hub (Cast) each rotate between all available poster/fanart
   images for the current item on their own randomized schedule - each one
@@ -322,6 +325,24 @@ See `config.example.yaml` for all options. Key things to fill in:
   controls how many search results get checked this way before giving
   up; raise it to catch a correct match thetvdb's search ranks further
   down, at the cost of more API calls for generic titles.
+- **`enrichers.sonarr`**: matches the playing episode against your own
+  [Sonarr](https://sonarr.tv/) library (by tvdb id, falling back to an
+  exact title match) and adds its network as `NowPlaying.studio`, plus a
+  poster/fanart. Get the `api_key` from Sonarr's Settings → General →
+  Security.
+- **`enrichers.radarr`**: matches the playing movie against your own
+  [Radarr](https://radarr.video/) library (by tmdb id, falling back to an
+  exact title match) and adds its studio (`NowPlaying.studio`) and genres
+  (`NowPlaying.genres`), plus a poster/fanart. Get the `api_key` from
+  Radarr's Settings → General → Security.
+- **`enrichers.lidarr`**: matches the playing artist against your own
+  [Lidarr](https://lidarr.audio/) library (by exact name match) and adds
+  album art for the playing album, plus a list of the artist's other
+  albums/songs (`NowPlaying.discography`, capped at
+  `max_discography_items`). Get the `api_key` from Lidarr's Settings →
+  General → Security. This is a live per-play lookup, distinct from
+  `python -m mediainfo import-lidarr` (see `library.db_path` below), which
+  bulk-imports Lidarr's MusicBrainz ids once into the local cache.
 - **`enrichers.discogs`**: free personal access `token` from
   https://www.discogs.com/settings/developers. Adds album cover art for
   music by searching Discogs by artist + album name; only runs when both
@@ -406,13 +427,22 @@ return `None` rather than raising, so one unreachable source never breaks
 the polling loop. Set `self.last_poll_failed = True` when that `None` was
 caused by a connection failure (device unreachable), and `False` when it
 connected fine and simply found nothing playing - the orchestrator uses
-this to back off polling frequency (starting at 30s, doubling up to 5
-minutes) for sources whose device is unreachable, without delaying
-detection for sources that are just legitimately idle.
+this to back off polling frequency (starting at `backoff_initial_seconds`
+[default 30s], doubling up to `backoff_max_seconds` [default 5 minutes] -
+both configurable at the top level of `config.yaml`) for sources whose
+device is unreachable, without delaying detection for sources that are
+just legitimately idle.
 
 ## Running tests
 
 ```bash
-pip install pytest
+pip install -r requirements-dev.txt
 pytest
+```
+
+## Linting and type checking
+
+```bash
+ruff check mediainfo vinyl_recognizer tests
+mypy mediainfo
 ```

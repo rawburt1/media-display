@@ -37,6 +37,14 @@ class NowPlaying:
     year: Optional[int] = None
     # Bio/plot summary text, e.g. from the Wikipedia enricher.
     summary: str = ""
+    # Studio/network that produced the movie or TV series, e.g. from the
+    # Radarr/Sonarr enrichers.
+    studio: str = ""
+    # Genres, e.g. from the Radarr enricher.
+    genres: List[str] = field(default_factory=list)
+    # Other albums/songs by the playing artist, e.g. from the Lidarr
+    # enricher - "<album> - <track>" pairs, in no particular order.
+    discography: List[str] = field(default_factory=list)
 
     @property
     def identity(self) -> tuple:

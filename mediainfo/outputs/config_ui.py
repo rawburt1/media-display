@@ -296,27 +296,7 @@ class ConfigUiOutput(Output):
         with self._lock:
             data = _read_config(self.config_path)
 
-            for key, value in values.items():
-                parts = key.split(".")
-
-                if len(parts) == 2 and parts[0] == "general":
-                    data[parts[1]] = value
-                    continue
-
-                if len(parts) != 3:
-                    continue
-                category, type_name, field_name = parts
-                if (
-                    category not in _SINGLE_INSTANCE_CATEGORIES
-                    or type_name not in _SINGLE_INSTANCE_CATEGORIES[category]
-                ):
-                    continue
-
-                section = data.setdefault(category, {})
-                entry = section.get(type_name)
-                entry = entry if isinstance(entry, dict) else {}
-                entry[field_name] = value
-                section[type_name] = entry
+            self._merge_single_instance_fields(data, values)
 
             for type_name, instances in outputs.items():
                 if type_name not in OUTPUT_CONFIG_TYPES:
@@ -333,6 +313,34 @@ class ConfigUiOutput(Output):
             with self.config_path.open("w", encoding="utf-8") as f:
                 f.write(_dump_config(data))
         return None
+
+    @staticmethod
+    def _merge_single_instance_fields(data: Any, values: Dict[str, Any]) -> None:
+        """Write posted "general"/single-instance (sources, enrichers, idle)
+        field values - keys of the form "general.<field>" or
+        "<category>.<type_name>.<field_name>" - into `data` in place.
+        """
+        for key, value in values.items():
+            parts = key.split(".")
+
+            if len(parts) == 2 and parts[0] == "general":
+                data[parts[1]] = value
+                continue
+
+            if len(parts) != 3:
+                continue
+            category, type_name, field_name = parts
+            if (
+                category not in _SINGLE_INSTANCE_CATEGORIES
+                or type_name not in _SINGLE_INSTANCE_CATEGORIES[category]
+            ):
+                continue
+
+            section = data.setdefault(category, {})
+            entry = section.get(type_name)
+            entry = entry if isinstance(entry, dict) else {}
+            entry[field_name] = value
+            section[type_name] = entry
 
     @staticmethod
     def _merge_output_instances(
@@ -1282,7 +1290,6 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="chip" data-filter="idle">Idle</div>
   <div class="chip" data-filter="enabled">Enabled</div>
   <div class="chip" data-filter="disabled">Disabled</div>
-  <div class="chip" data-filter="error">Error</div>
   <div class="chip" data-filter="unavailable">Unavailable</div>
 </div>
 
@@ -1320,18 +1327,33 @@ applyTheme(localStorage.getItem('mediainfo-theme') || 'dark');
 
 function badgeClass(status) { return 'badge b-' + (status || 'not_configured'); }
 
+// "error" (automatic - the orchestrator's own polling backed off after a
+// failed connection) and "unavailable" (manual - a "Test connection" click
+// failed) are deliberately separate internally - see the "Add restart
+// button and unavailable status..." commit - but both just mean "this
+// isn't working" to someone reading the dashboard, so they're shown and
+// filtered identically.
+function statusLabel(status) { return status === 'error' ? 'unavailable' : status; }
+
 function matchesFilter(status) {
   if (currentFilter === 'all') return true;
   if (currentFilter === 'enabled') return status !== 'disabled' && status !== 'not_configured';
+  if (currentFilter === 'unavailable') return status === 'error' || status === 'unavailable';
   return status === currentFilter;
 }
 
-const _DETAIL_OMIT = ['name', 'type', 'status', 'last_error', 'last_error_ago_seconds', 'instance_index'];
+// Raw config fields (host, port, ip, dir, api_key, max_search_candidates,
+// ...) are deliberately not shown here - the dashboard is a status
+// overview, not a config dump (that's what /form is for), and a blocklist
+// of config field names is a losing game across every source/output/
+// enricher's own config dataclass. Only this fixed set of *computed*
+// (non-config) fields is ever worth showing on a card.
+const _DETAIL_ALLOW = ['wallpapers_loaded', 'videos_loaded'];
 
 function detailText(item) {
   return Object.keys(item)
-    .filter(function(k) { return _DETAIL_OMIT.indexOf(k) === -1 && item[k] !== null && item[k] !== '' && item[k] !== undefined; })
-    .map(function(k) { return k + ': ' + item[k]; })
+    .filter(function(k) { return _DETAIL_ALLOW.indexOf(k) !== -1 && item[k] !== null && item[k] !== '' && item[k] !== undefined; })
+    .map(function(k) { return k.replace(/_/g, ' ') + ': ' + item[k]; })
     .join(' \xb7 ');
 }
 
@@ -1362,7 +1384,7 @@ function renderGrid(containerId, items, kind) {
     name.textContent = item.name || item.type;
     const badge = document.createElement('span');
     badge.className = badgeClass(status);
-    badge.textContent = status;
+    badge.textContent = statusLabel(status);
     top.appendChild(name);
     top.appendChild(badge);
     card.appendChild(top);

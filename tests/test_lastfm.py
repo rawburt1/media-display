@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from mediainfo.config import LastFmConfig
 from mediainfo.enrichers.lastfm import LastFmEnricher, _PLACEHOLDER_HASH

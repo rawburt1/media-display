@@ -83,9 +83,10 @@ def fetch_front_cover(mbid: str) -> Optional[str]:
 def _query_musicbrainz(artist: str, album: str) -> Optional[Tuple[str, str]]:
     query = f'artist:"{artist}" AND release:"{album}"'
     try:
+        params: dict = {"query": query, "fmt": "json", "limit": 5}
         response = requests.get(
             _MB_SEARCH_URL,
-            params={"query": query, "fmt": "json", "limit": 5},
+            params=params,
             headers={"User-Agent": _USER_AGENT},
             timeout=10,
         )

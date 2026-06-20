@@ -5,8 +5,7 @@ from __future__ import annotations
 import signal
 import threading
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -82,7 +81,7 @@ def test_make_stop_handler_independent_events():
     ev1 = threading.Event()
     ev2 = threading.Event()
     h1 = _make_stop_handler(ev1)
-    h2 = _make_stop_handler(ev2)
+    _make_stop_handler(ev2)
     h1(signal.SIGTERM, None)
     assert ev1.is_set()
     assert not ev2.is_set()
