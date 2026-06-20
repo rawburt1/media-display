@@ -36,6 +36,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   e.g. the `appletv` source gave no visible indication when it couldn't
   connect). A manual "Test connection" result now also survives the
   dashboard's 10-second auto-refresh instead of disappearing mid-test.
+  The form and dashboard pages (`/form`, `/dashboard`) are now both
+  reachable on every config UI instance regardless of its `ui` setting,
+  with a nav link between them, so one instance gives full access to
+  both instead of needing a second instance for the other mode.
 
 ### Fixed
 - `enrichers.thetvdb`'s title-based series resolution (for sources that

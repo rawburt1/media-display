@@ -868,6 +868,32 @@ def test_dashboard_ui_serves_dashboard_page(config_path):
     assert b"mediainfo status" in resp.data
 
 
+def test_form_page_reachable_on_dashboard_instance(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    resp = out.app.test_client().get("/form")
+    assert resp.status_code == 200
+    assert b"mediainfo configuration" in resp.data
+
+
+def test_dashboard_page_reachable_on_form_instance(config_path):
+    out = ConfigUiOutput(_config(), config_path)
+    resp = out.app.test_client().get("/dashboard")
+    assert resp.status_code == 200
+    assert b"mediainfo status" in resp.data
+
+
+def test_form_page_links_to_dashboard(config_path):
+    out = ConfigUiOutput(_config(), config_path)
+    resp = out.app.test_client().get("/form")
+    assert b'href="/dashboard"' in resp.data
+
+
+def test_dashboard_page_links_to_form(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    resp = out.app.test_client().get("/dashboard")
+    assert b'href="/form"' in resp.data
+
+
 def test_api_status_returns_empty_lists_without_health_provider(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = out.app.test_client().get("/api/status")

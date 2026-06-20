@@ -529,6 +529,18 @@ class ConfigUiOutput(Output):
         def index():
             return _DASHBOARD_HTML if self.config.ui == "dashboard" else _INDEX_HTML
 
+        # Both views are always reachable on every instance, regardless of
+        # `ui` - only the page served at "/" (the instance's default)
+        # differs. This lets a dashboard instance reach the full editable
+        # form (and vice versa) without running a second output instance.
+        @app.get("/form")
+        def form_page():
+            return _INDEX_HTML
+
+        @app.get("/dashboard")
+        def dashboard_page():
+            return _DASHBOARD_HTML
+
         @app.get("/api/schema")
         def schema():
             return jsonify(_build_schema())
@@ -712,12 +724,13 @@ _INDEX_HTML = """<!DOCTYPE html>
                  border: 1px solid #1a2540; border-radius: 8px; padding: 12px;
                  font-family: ui-monospace, monospace; font-size: 13px; }
   details summary { cursor: pointer; color: #6b7fa8; font-size: 12px; margin: 30px 0 10px; }
-  .nav-link { float: right; color: #6b7fa8; font-size: 12px; text-decoration: none; }
+  .nav-link { float: right; color: #6b7fa8; font-size: 12px; text-decoration: none; margin-left: 16px; }
   .nav-link:hover { color: #dce8ff; }
 </style>
 </head>
 <body>
 <a class="nav-link" href="/library">Library &rarr;</a>
+<a class="nav-link" href="/dashboard">Status &rarr;</a>
 <h1>mediainfo configuration</h1>
 <div id="form"></div>
 
@@ -1086,7 +1099,7 @@ _LIBRARY_HTML = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<a class="nav-link" href="/">&larr; Configuration</a>
+<a class="nav-link" href="/form">&larr; Configuration</a>
 <h1>Music library</h1>
 <div id="stats">Loading...</div>
 <input id="search" type="text" placeholder="Search artists..." autofocus>
@@ -1241,7 +1254,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <body>
 <div class="hdr">
   <h1>mediainfo status</h1>
-  <a class="nav-link" href="/">&larr; Configuration</a>
+  <a class="nav-link" href="/form">&larr; Configuration</a>
   <button id="theme-toggle" onclick="toggleTheme()">&#9728; / &#9790;</button>
 </div>
 

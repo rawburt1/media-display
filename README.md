@@ -210,7 +210,11 @@ See `config.example.yaml` for all options. Key things to fill in:
   inline next to its badge automatically, without needing to click
   "Test connection" first. A manual test result also survives the
   page's 10-second auto-refresh instead of being silently cleared
-  mid-test.
+  mid-test. Both views (`/form` and `/dashboard`) are always reachable
+  on every instance regardless of its `ui` setting - only the page
+  served at `/` (the instance's default) differs - with a nav link on
+  each page to the other, so a single instance on one port gives full
+  access to both the editable form and the status dashboard.
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page. Each browser/screen
