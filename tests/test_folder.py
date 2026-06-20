@@ -86,7 +86,7 @@ def test_on_idle_clears_folder(tmp_path):
     assert list(out_dir.iterdir()) == []
 
 
-def test_update_with_idle_now_playing_clears_folder(tmp_path):
+def test_update_with_idle_now_playing_does_not_modify_folder(tmp_path):
     out_dir = tmp_path / "artwork"
     out_dir.mkdir()
     (out_dir / "old.jpg").write_bytes(b"old")
@@ -95,7 +95,36 @@ def test_update_with_idle_now_playing_clears_folder(tmp_path):
     idle_now_playing = NowPlaying(source="idle", media_type="wallpaper", title="", subtitle="")
     output.update(idle_now_playing, Artwork(url="https://example.com/w.jpg"), tmp_path / "w.jpg")
 
-    assert list(out_dir.iterdir()) == []
+    assert (out_dir / "old.jpg").read_bytes() == b"old"
+
+
+def test_on_new_item_with_idle_batch_copies_all_wallpapers(tmp_path):
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    wallpaper_a = src_dir / "a.jpg"
+    wallpaper_a.write_bytes(b"wallpaper-a")
+    wallpaper_b = src_dir / "b.jpg"
+    wallpaper_b.write_bytes(b"wallpaper-b")
+
+    wallpapers = [
+        Artwork(url="https://example.com/a.jpg", label="A"),
+        Artwork(url="https://example.com/b.jpg", label="B"),
+    ]
+    cache = MagicMock()
+    cache.get_path.side_effect = [wallpaper_a, wallpaper_b]
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    out_dir = tmp_path / "artwork"
+    output = FolderOutput(FolderConfig(enabled=True, dir=str(out_dir)))
+    idle_now_playing = NowPlaying(
+        source="idle", media_type="wallpaper", title="", subtitle="", images=wallpapers
+    )
+    output.on_new_item(idle_now_playing, cache)
+
+    assert (out_dir / "A.jpg").read_bytes() == b"wallpaper-a"
+    assert (out_dir / "B.jpg").read_bytes() == b"wallpaper-b"
+    cache.get_path.assert_any_call(wallpapers[0], idle=True)
+    cache.get_path.assert_any_call(wallpapers[1], idle=True)
 
 
 def test_update_with_non_idle_now_playing_does_not_modify_folder(tmp_path):

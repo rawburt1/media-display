@@ -288,6 +288,8 @@ class Orchestrator:
             self._last_idle_batch_fetch = now
             self._idle_rotation_state = self._build_rotation_states(len(images), len(self.outputs))
             for index, output in enumerate(self.outputs):
+                self._call_output(index, output.on_new_item, self._idle_now_playing, self.cache)
+            for index, output in enumerate(self.outputs):
                 self._show_idle_image_for_output(index, output)
             return
 

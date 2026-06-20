@@ -24,7 +24,9 @@ class FolderOutput(Output):
     other tool that just reads "whatever's in this folder".
 
     The folder always reflects only the current item: its contents are
-    replaced whenever the item changes, and cleared while idle.
+    replaced whenever the item changes. While idle, it instead mirrors the
+    whole batch of idle wallpapers, replaced whenever a new batch is
+    fetched; it's cleared only when no idle wallpapers are available.
     """
 
     def __init__(self, config: FolderConfig):
@@ -34,18 +36,18 @@ class FolderOutput(Output):
         self.transform_pipeline = parse_pipeline(config.transforms)
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
-        if now_playing.source == "idle":
-            self._clear()
+        pass
 
     def on_idle(self) -> None:
         self._clear()
 
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
         self._clear()
+        idle = now_playing.source == "idle"
 
         for artwork in now_playing.images:
             try:
-                src = cache.get_path(artwork)
+                src = cache.get_path(artwork, idle=idle)
                 if src is None:
                     continue
                 src = cache.get_transformed_path(src, self.transform_pipeline)
