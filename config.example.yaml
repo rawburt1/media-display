@@ -201,19 +201,11 @@ outputs:
     # by status, with a per-item "Test connection" button and an "Edit"
     # button (same read/write access to config.yaml as the form, just a
     # different layout) - the same SECURITY warning above applies to
-    # both. /form and /dashboard are both reachable on every instance
-    # regardless of this setting; this just picks the default for "/".
+    # both. /form and /dashboard are both reachable on this one instance
+    # regardless of this setting (with a nav link between them); this
+    # just picks the default for "/" - no need to run a second instance
+    # on another port to get both.
     ui: form
-
-  # A second config UI instance on another port, in dashboard mode:
-  # config:
-  #   - enabled: true
-  #     host: 0.0.0.0
-  #     port: 8094
-  #   - enabled: true
-  #     host: 0.0.0.0
-  #     port: 8095
-  #     ui: dashboard
 
   # RSS/Atom feed — "now playing" history as a machine-readable feed.
   # Subscribe with any feed reader or home-automation tool (Home Assistant,

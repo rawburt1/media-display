@@ -1257,7 +1257,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   .edit-row label { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace;
                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .edit-row input[type="text"], .edit-row input[type="password"], .edit-row input[type="number"] {
-    flex: 1; max-width: 150px; background: var(--mono-bg); border: 1px solid var(--border);
+    flex: 1; max-width: 150px; background: var(--card); border: 1px solid var(--border);
     border-radius: 6px; color: var(--bright); padding: 4px 8px; font-size: 12px;
   }
   #empty { font-size: 12px; color: var(--muted2); padding: 10px 0; }

@@ -47,7 +47,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   switching to the form view. Has the same read/write access to
   config.yaml as the form (not a read-only view).
 
+### Changed
+- Since a single config UI instance now reaches both `/form` and
+  `/dashboard`, the example/docker-compose setup runs just one (port
+  8094 by default) instead of two - drop a second instance you may have
+  added on another port (e.g. 8095) and its `docker-compose.yml` port
+  mapping unless you specifically want it on a separate port/network
+  exposure from the first.
+
 ### Fixed
+- Dashboard "Edit" input fields used the always-dark `--mono-bg` color
+  (meant for the terminal-style test-result box) for their background,
+  which made them unreadable (dark text on a dark background) under the
+  light theme. They now use the theme-aware `--card` color instead.
 - `enrichers.thetvdb`'s title-based series resolution (for sources that
   only know a show's name, not its tvdb id) trusted the first search
   result, which is wrong for common titles matching several unrelated
