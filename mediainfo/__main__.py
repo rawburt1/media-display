@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import logging
 import signal
 import sys
 import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config, LoggingConfig
@@ -28,7 +29,7 @@ from mediainfo.enrichers.wikipedia import WikipediaEnricher
 from mediainfo.idle.lastfm import LastFmWallpaperSource
 from mediainfo.idle.library import LibraryWallpaperSource
 from mediainfo.idle.unsplash import UnsplashWallpaperSource
-from mediainfo.outputs.config_ui import ConfigUiOutput
+from mediainfo.outputs.config_ui import ConfigUiOutput, _is_secret
 from mediainfo.outputs.feeds import FeedOutput
 from mediainfo.outputs.folder import FolderOutput
 from mediainfo.outputs.info import InfoOutput
@@ -431,6 +432,21 @@ def _start_orchestrator(
 # Health endpoint
 # ---------------------------------------------------------------------------
 
+def _config_detail_fields(cfg: Any) -> dict:
+    """Non-secret str/int/bool config fields with a non-empty value - shown
+    on a source/enricher's dashboard card alongside its status."""
+    if cfg is None:
+        return {}
+    detail = {}
+    for f in dataclasses.fields(type(cfg)):
+        if f.name == "enabled" or f.type not in ("bool", "int", "str") or _is_secret(f.name):
+            continue
+        val = getattr(cfg, f.name, None)
+        if val not in (None, ""):
+            detail[f.name] = val
+    return detail
+
+
 def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
     """Return a callable that builds the full /health JSON dict."""
 
@@ -453,14 +469,19 @@ def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
             if source.name in polled_ago:
                 entry["last_polled_ago_seconds"] = polled_ago[source.name]
             if source.name in backoff_seconds:
-                entry["retry_in_seconds"] = backoff_seconds[source.name]
+                retry = backoff_seconds[source.name]
+                entry["retry_in_seconds"] = retry
+                entry["last_error"] = f"Could not connect - retrying in {retry}s"
+            entry.update(_config_detail_fields(config.sources.get(source.name)))
             sources.append(entry)
         for name in SOURCE_CLASSES:
             if name in active_source_names:
                 continue
             src_cfg = config.sources.get(name)
             if src_cfg is not None:
-                sources.append({"name": name, "status": "disabled"})
+                entry = {"name": name, "status": "disabled"}
+                entry.update(_config_detail_fields(src_cfg))
+                sources.append(entry)
             else:
                 sources.append({"name": name, "status": "not_configured"})
 
@@ -497,13 +518,17 @@ def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
         for enricher in orch.enrichers:
             name = _ENRICHER_NAME_BY_CLASS.get(type(enricher), type(enricher).__name__)
             active_enricher_names.add(name)
-            enrichers.append({"name": name, "status": "ok"})
+            entry = {"name": name, "status": "ok"}
+            entry.update(_config_detail_fields(config.enrichers.get(name)))
+            enrichers.append(entry)
         for name in ENRICHER_CLASSES:
             if name in active_enricher_names:
                 continue
             enc_cfg = config.enrichers.get(name)
             if enc_cfg is not None:
-                enrichers.append({"name": name, "status": "disabled"})
+                entry = {"name": name, "status": "disabled"}
+                entry.update(_config_detail_fields(enc_cfg))
+                enrichers.append(entry)
             else:
                 enrichers.append({"name": name, "status": "not_configured"})
 

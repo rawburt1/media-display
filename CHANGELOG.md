@@ -29,7 +29,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   sources are polled once via `get_now_playing()`, enrichers via their own
   internal lookup against a stable real item, outputs via a passive
   TCP/HTTP reachability check that never sends an update to a physical
-  display. Has no write access to config.yaml.
+  display. Has no write access to config.yaml. Each card also shows its
+  non-secret config values (host, port, etc.), and a source currently
+  failing to connect shows that error inline next to its badge
+  automatically (previously only a bare retry countdown, easy to miss -
+  e.g. the `appletv` source gave no visible indication when it couldn't
+  connect). A manual "Test connection" result now also survives the
+  dashboard's 10-second auto-refresh instead of disappearing mid-test.
 
 ### Fixed
 - `enrichers.thetvdb`'s title-based series resolution (for sources that

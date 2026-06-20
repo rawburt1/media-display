@@ -203,7 +203,14 @@ See `config.example.yaml` for all options. Key things to fill in:
   sends an update to physical displays. With no write access to
   config.yaml, it's a lower-risk port to expose than the form UI - run
   it as a second `config` instance on its own port (see the commented
-  multi-instance example in config.example.yaml).
+  multi-instance example in config.example.yaml). Each card also shows
+  its non-secret config values (host, port, etc. - never api keys/
+  tokens/passwords/credentials), and a source that's currently failing
+  to connect (in backoff after `last_poll_failed`) shows that failure
+  inline next to its badge automatically, without needing to click
+  "Test connection" first. A manual test result also survives the
+  page's 10-second auto-refresh instead of being silently cleared
+  mid-test.
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page. Each browser/screen

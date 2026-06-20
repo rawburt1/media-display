@@ -1266,6 +1266,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <script>
 let statusData = { sources: [], outputs: [], enrichers: [] };
 let currentFilter = 'all';
+let testResults = {};  // kind + ':' + id -> {ok, message} - survives the 10s auto-refresh
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -1285,11 +1286,18 @@ function matchesFilter(status) {
   return status === currentFilter;
 }
 
-function detailText(item, fields) {
-  return fields.map(function(f) { return item[f]; }).filter(Boolean).join(' \xb7 ');
+const _DETAIL_OMIT = ['name', 'type', 'status', 'last_error', 'last_error_ago_seconds'];
+
+function detailText(item) {
+  return Object.keys(item)
+    .filter(function(k) { return _DETAIL_OMIT.indexOf(k) === -1 && item[k] !== null && item[k] !== '' && item[k] !== undefined; })
+    .map(function(k) { return k + ': ' + item[k]; })
+    .join(' \xb7 ');
 }
 
-function renderGrid(containerId, items, fields, kind) {
+function itemId(item) { return item.name || item.type; }
+
+function renderGrid(containerId, items, kind) {
   const el = document.getElementById(containerId);
   const visible = items.filter(function(it) { return matchesFilter(it.status); });
   if (visible.length === 0) {
@@ -1297,7 +1305,7 @@ function renderGrid(containerId, items, fields, kind) {
     return;
   }
   el.innerHTML = '';
-  visible.forEach(function(item, idx) {
+  visible.forEach(function(item) {
     const card = document.createElement('div');
     card.className = 'card';
 
@@ -1315,8 +1323,15 @@ function renderGrid(containerId, items, fields, kind) {
 
     const detail = document.createElement('div');
     detail.className = 'card-detail';
-    detail.textContent = detailText(item, fields) || ' ';
+    detail.textContent = detailText(item) || ' ';
     card.appendChild(detail);
+
+    if (item.last_error) {
+      const autoError = document.createElement('div');
+      autoError.className = 'test-result show fail';
+      autoError.textContent = '⚠ ' + item.last_error;
+      card.appendChild(autoError);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'card-actions';
@@ -1325,6 +1340,12 @@ function renderGrid(containerId, items, fields, kind) {
     btn.textContent = 'Test connection';
     const result = document.createElement('div');
     result.className = 'test-result';
+    const key = kind + ':' + itemId(item);
+    const prior = testResults[key];
+    if (prior) {
+      result.classList.add('show', prior.ok ? 'ok' : 'fail');
+      result.textContent = prior.message;
+    }
     btn.addEventListener('click', function() { runTest(kind, item, btn, result); });
     actions.appendChild(btn);
     card.appendChild(actions);
@@ -1335,6 +1356,7 @@ function renderGrid(containerId, items, fields, kind) {
 }
 
 function runTest(kind, item, btn, resultEl) {
+  const key = kind + ':' + itemId(item);
   btn.disabled = true;
   btn.textContent = 'Testing...';
   resultEl.className = 'test-result show';
@@ -1356,12 +1378,15 @@ function runTest(kind, item, btn, resultEl) {
   request
     .then(function(r) { return r.json(); })
     .then(function(d) {
+      testResults[key] = d;
       resultEl.classList.add(d.ok ? 'ok' : 'fail');
       resultEl.textContent = d.message;
     })
     .catch(function() {
+      const failed = { ok: false, message: 'Request failed.' };
+      testResults[key] = failed;
       resultEl.classList.add('fail');
-      resultEl.textContent = 'Request failed.';
+      resultEl.textContent = failed.message;
     })
     .finally(function() {
       btn.disabled = false;
@@ -1373,9 +1398,9 @@ function render() {
   document.querySelectorAll('.chip').forEach(function(chip) {
     chip.classList.toggle('active', chip.dataset.filter === currentFilter);
   });
-  renderGrid('sources-grid', statusData.sources, ['last_polled_ago_seconds', 'retry_in_seconds'], 'source');
-  renderGrid('outputs-grid', statusData.outputs, ['ip', 'device_ip', 'host', 'port', 'dir', 'topic', 'last_error'], 'output');
-  renderGrid('enrichers-grid', statusData.enrichers, [], 'enricher');
+  renderGrid('sources-grid', statusData.sources, 'source');
+  renderGrid('outputs-grid', statusData.outputs, 'output');
+  renderGrid('enrichers-grid', statusData.enrichers, 'enricher');
 }
 
 document.getElementById('filters').addEventListener('click', function(e) {
