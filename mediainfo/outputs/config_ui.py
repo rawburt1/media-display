@@ -87,7 +87,7 @@ from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
-_SECRET_HINTS = ("password", "token", "secret", "api_key", "key", "credentials", "pin")
+_SECRET_HINTS = ("password", "token", "secret", "api_key", "key", "credentials", "pin", "npsso")
 
 # Categories where each type has exactly one configured instance.
 _SINGLE_INSTANCE_CATEGORIES: Dict[str, Dict[str, type]] = {

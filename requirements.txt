@@ -10,3 +10,4 @@ paho-mqtt~=2.1.0
 flask-sock~=0.7.0
 pyatv~=0.17.0
 ruamel.yaml~=0.19.1
+PSNAWP~=3.0.3

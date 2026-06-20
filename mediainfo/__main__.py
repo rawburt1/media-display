@@ -47,6 +47,7 @@ from mediainfo.sources.homeassistant import HomeAssistantSource
 from mediainfo.sources.jellyfin import EmbySource, JellyfinSource
 from mediainfo.sources.kodi import KodiSource
 from mediainfo.sources.plex import PlexSource
+from mediainfo.sources.ps5 import Ps5Source
 from mediainfo.sources.shield import ShieldSource
 from mediainfo.sources.sonos import SonosSource
 from mediainfo.sources.spotify import SpotifySource
@@ -62,6 +63,7 @@ SOURCE_CLASSES = {
     "jellyfin": JellyfinSource,
     "kodi": KodiSource,
     "plex": PlexSource,
+    "ps5": Ps5Source,
     "shield": ShieldSource,
     "sonos": SonosSource,
     "spotify": SpotifySource,
@@ -281,6 +283,7 @@ _REQUIRED_CREDENTIAL_FIELDS: dict[tuple, list] = {
     ("sources", "emby"): ["api_key"],
     ("sources", "homeassistant"): ["token", "entity_id"],
     ("sources", "jellyfin"): ["api_key"],
+    ("sources", "ps5"): ["npsso"],
     ("sources", "spotify"): ["client_id", "client_secret"],
     ("enrichers", "fanarttv"): ["api_key"],
     ("enrichers", "thetvdb"): ["api_key"],

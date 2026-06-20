@@ -21,7 +21,9 @@ Currently implemented:
   (audio recognition via [vinyl_recognizer](vinyl_recognizer/) + AudD),
   Home Assistant (polls a single media_player entity via HA's REST API -
   a fallback for devices a more specific source can't read directly, e.g.
-  a tvOS app that doesn't populate Apple's own now-playing API)
+  a tvOS app that doesn't populate Apple's own now-playing API), PlayStation
+  5 (via PSNAWP, reads your account's own PSN presence for the game poster -
+  no console pairing needed)
 - **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
   movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
   Discogs also add (and prefer) album covers for music, matched via
@@ -181,6 +183,18 @@ See `config.example.yaml` for all options. Key things to fill in:
   (or similar USB audio interface) is connected to, listens to a turntable's
   output, and identifies the playing track via [AudD](https://audd.io/). See
   `vinyl_recognizer/README.md` for setup.
+- **`sources.ps5`**: `npsso` is a long-lived PSN auth cookie - log into
+  https://www.playstation.com in a browser, then visit
+  https://ca.account.sony.com/api/v1/ssocookie and copy the `npsso` value
+  from the JSON response (expires after ~2 months; repeat to get a fresh
+  one if this source starts failing). Reads your own account's PSN
+  presence - the same "currently playing `<game>`" shown to friends - via
+  [PSNAWP](https://github.com/isFakeAccount/psnawp), so no pairing with or
+  network access to the console itself is needed. Reports `media_type:
+  "game"` (not music/movie/episode); outputs without game-specific
+  formatting just fall back to showing the title plain. Only games
+  launched on PS5 itself are reported - if the same account also plays on
+  PS4/PSPC, those are ignored.
 - Any entry under `outputs` can be a single config (as below) or a list of
   configs, to run multiple instances of that output at once - e.g. several
   Ulanzi displays in different rooms, or web servers on different ports. If

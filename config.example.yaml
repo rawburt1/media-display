@@ -42,6 +42,7 @@ priority:
   - sonos
   - spotify
   - vinyl
+  - ps5
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +170,19 @@ sources:
     enabled: true
     host: 192.168.1.40       # Machine the UCA202 is connected to
     port: 8091               # Port the vinyl_recognizer service listens on
+
+  # PlayStation 5 - shows the poster of whatever game is currently being
+  # played, via PSNAWP reading your account's own PSN presence (the same
+  # "currently playing <game>" shown to friends). No console pairing or
+  # network access to the console needed.
+  # Get an npsso cookie: log into https://www.playstation.com in a
+  # browser, then visit https://ca.account.sony.com/api/v1/ssocookie and
+  # copy the "npsso" value from the JSON response. Expires after ~2
+  # months; repeat these steps for a fresh one if this source starts
+  # failing.
+  ps5:
+    enabled: true
+    npsso: YOUR_NPSSO_COOKIE
 
 
 # ---------------------------------------------------------------------------
