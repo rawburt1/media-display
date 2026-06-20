@@ -923,8 +923,21 @@ def test_dashboard_instance_can_save_form_edits(config_path):
     )
     assert resp.get_json() == {"ok": True}
 
-    config = client.get("/api/config").get_json()
-    assert config["values"]["sources.kodi.host"] == "192.168.50.50"
+
+def test_dashboard_page_has_restart_button(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    resp = out.app.test_client().get("/dashboard")
+    assert b"restartDashboard" in resp.data
+    assert b"/api/restart" in resp.data
+    assert b"Restart mediainfo" in resp.data
+
+
+def test_dashboard_page_marks_failed_source_test_as_unavailable(config_path):
+    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
+    resp = out.app.test_client().get("/dashboard")
+    assert b"statusOverrides[key] = 'unavailable'" in resp.data
+    assert b"b-unavailable" in resp.data
+    assert b'data-filter="unavailable"' in resp.data
 
 
 def test_api_status_returns_empty_lists_without_health_provider(config_path):

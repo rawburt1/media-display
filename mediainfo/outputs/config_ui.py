@@ -1214,6 +1214,10 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                   color: var(--text); border-radius: 8px; padding: 6px 12px; font-size: 12px;
                   cursor: pointer; }
   #theme-toggle:hover { border-color: var(--accent); }
+  button.danger { background: #dc2626; color: #fff; border: none; border-radius: 8px;
+                  padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  button.danger:hover { background: #b91c1c; }
+  #restart-status { font-size: 12px; color: var(--muted); }
   .filters { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
   .chip { background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
           border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600;
@@ -1234,7 +1238,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   .b-idle { background: #051a2e; color: #60a5fa; }
   .b-disabled { background: #1c1505; color: #f59e0b; }
   .b-not_configured { background: #15171f; color: #8a93a6; }
-  .b-error { background: #1c0808; color: #f87171; }
+  .b-error, .b-unavailable { background: #1c0808; color: #f87171; }
   .card-detail { font-size: 11px; color: var(--muted2); font-family: ui-monospace, monospace;
                  margin-bottom: 10px; min-height: 14px; }
   .card-actions { display: flex; align-items: center; gap: 8px; }
@@ -1267,6 +1271,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <div class="hdr">
   <h1>mediainfo status</h1>
   <a class="nav-link" href="/form">&larr; Configuration</a>
+  <button class="danger" onclick="restartDashboard()">Restart mediainfo</button>
+  <span id="restart-status"></span>
   <button id="theme-toggle" onclick="toggleTheme()">&#9728; / &#9790;</button>
 </div>
 
@@ -1277,6 +1283,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="chip" data-filter="enabled">Enabled</div>
   <div class="chip" data-filter="disabled">Disabled</div>
   <div class="chip" data-filter="error">Error</div>
+  <div class="chip" data-filter="unavailable">Unavailable</div>
 </div>
 
 <h2>Sources</h2>
@@ -1292,6 +1299,14 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 let statusData = { sources: [], outputs: [], enrichers: [] };
 let currentFilter = 'all';
 let testResults = {};  // kind + ':' + id -> {ok, message} - survives the 10s auto-refresh
+let statusOverrides = {};  // 'source:' + name -> 'unavailable', set when a manual test fails
+
+function restartDashboard() {
+  if (!confirm('Restart mediainfo now? Every output goes offline until it comes back up.')) return;
+  const statusEl = document.getElementById('restart-status');
+  fetch('/api/restart', { method: 'POST' }).catch(function() {});
+  statusEl.textContent = 'Restarting...';
+}
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -1322,15 +1337,21 @@ function detailText(item) {
 
 function itemId(item) { return item.name || item.type; }
 
+function effectiveStatus(kind, item) {
+  const key = kind + ':' + itemId(item);
+  return statusOverrides[key] || item.status;
+}
+
 function renderGrid(containerId, items, kind) {
   const el = document.getElementById(containerId);
-  const visible = items.filter(function(it) { return matchesFilter(it.status); });
+  const visible = items.filter(function(it) { return matchesFilter(effectiveStatus(kind, it)); });
   if (visible.length === 0) {
     el.innerHTML = '<div id="empty">No items match this filter.</div>';
     return;
   }
   el.innerHTML = '';
   visible.forEach(function(item) {
+    const status = effectiveStatus(kind, item);
     const card = document.createElement('div');
     card.className = 'card';
 
@@ -1340,8 +1361,8 @@ function renderGrid(containerId, items, kind) {
     name.className = 'card-name';
     name.textContent = item.name || item.type;
     const badge = document.createElement('span');
-    badge.className = badgeClass(item.status);
-    badge.textContent = item.status;
+    badge.className = badgeClass(status);
+    badge.textContent = status;
     top.appendChild(name);
     top.appendChild(badge);
     card.appendChild(top);
@@ -1409,12 +1430,22 @@ function runTest(kind, item, btn, resultEl) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
       testResults[key] = d;
+      if (kind === 'source') {
+        if (d.ok) delete statusOverrides[key]; else statusOverrides[key] = 'unavailable';
+        render();
+        return;
+      }
       resultEl.classList.add(d.ok ? 'ok' : 'fail');
       resultEl.textContent = d.message;
     })
     .catch(function() {
       const failed = { ok: false, message: 'Request failed.' };
       testResults[key] = failed;
+      if (kind === 'source') {
+        statusOverrides[key] = 'unavailable';
+        render();
+        return;
+      }
       resultEl.classList.add('fail');
       resultEl.textContent = failed.message;
     })
@@ -1588,11 +1619,21 @@ document.getElementById('filters').addEventListener('click', function(e) {
   render();
 });
 
+function pruneStatusOverrides(data) {
+  (data.sources || []).forEach(function(item) {
+    const key = 'source:' + itemId(item);
+    if (statusOverrides[key] && item.status !== 'idle') {
+      delete statusOverrides[key];
+    }
+  });
+}
+
 function load() {
   fetch('/api/status')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       statusData = d;
+      pruneStatusOverrides(d);
       render();
     });
 }

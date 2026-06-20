@@ -193,19 +193,30 @@ See `config.example.yaml` for all options. Key things to fill in:
   `ui: dashboard` (default `form`) switches this instance from the
   editable form to a status overview instead - every source/output/
   enricher as a card with a live status badge (active, idle, enabled,
-  disabled, error), filter chips per status, a "Test connection" button,
-  and an "Edit" button on each card. Sources are tested by constructing
-  them from the live config and polling once via `get_now_playing()` -
-  the same call the orchestrator itself makes; enrichers by calling
-  their own internal lookup method against a stable real item (e.g.
-  "Queen"); outputs by a plain TCP/HTTP reachability check against the
-  host/port already shown, which never sends an update to physical
-  displays. "Edit" turns a card's detail line into input fields (using
-  the same `/api/schema` and `/api/config/form` the editable form uses)
-  for that one source/enricher/output instance, with Save/Cancel
-  buttons - so it can read AND write config.yaml just like the form,
-  including credentials; it's not a lower-risk port to expose just
-  because it defaults to the status view - see SECURITY.md before
+  disabled, error, unavailable), filter chips per status, a "Test
+  connection" button, and an "Edit" button on each card, plus a
+  "Restart mediainfo" button in the header (same `/api/restart` the
+  form's Restart button uses). Sources are tested by constructing them
+  from the live config and polling once via `get_now_playing()` - the
+  same call the orchestrator itself makes; enrichers by calling their
+  own internal lookup method against a stable real item (e.g. "Queen");
+  outputs by a plain TCP/HTTP reachability check against the host/port
+  already shown, which never sends an update to physical displays.
+  Manually testing a source that's configured but not responding (e.g.
+  `appletv` when the device is unreachable) flips its badge to
+  "unavailable" - this is separate from the automatic `error` status
+  (which only appears once the orchestrator's own background polling has
+  actually attempted and backed off that source - a source can sit idle
+  without ever being polled if a higher-priority source is active, so
+  manually testing it is the only way to know it's unreachable before
+  it's ever your turn). The override clears on a successful retest, or
+  once the orchestrator's own polling reports a concrete status (active
+  or error) for that source. "Edit" turns a card's detail line into
+  input fields (using the same `/api/schema` and `/api/config/form` the
+  editable form uses) for that one source/enricher/output instance, with
+  Save/Cancel buttons - so it can read AND write config.yaml just like
+  the form, including credentials; it's not a lower-risk port to expose
+  just because it defaults to the status view - see SECURITY.md before
   exposing either view beyond a trusted local network. Each card also
   shows its non-secret config values (host, port, etc.) even without
   editing, and a source that's currently failing to connect (in backoff

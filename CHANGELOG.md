@@ -46,6 +46,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   from its status card - including enabling/disabling it - without
   switching to the form view. Has the same read/write access to
   config.yaml as the form (not a read-only view).
+- Dashboard header now also has a "Restart mediainfo" button (same
+  `/api/restart` the form's Restart button already used), so a `ui:
+  dashboard` instance doesn't need a trip to `/form` just to restart.
+- Manually testing a source via its "Test connection" button now flips
+  its badge to a new `unavailable` status (with a matching filter chip)
+  when the test fails, instead of leaving it showing `idle` with no
+  visible indication. This is independent of the automatic `error`
+  status, which only appears once the orchestrator's own background
+  polling has actually attempted and backed off that source - a
+  lower-priority source can sit at `idle` indefinitely without ever
+  being polled while a higher-priority one is active, so a manual test
+  is the only way to surface that it's unreachable. The override clears
+  on a successful retest, or once the orchestrator reports a concrete
+  status (`active` or `error`) for that source on its own.
 
 ### Changed
 - Since a single config UI instance now reaches both `/form` and
