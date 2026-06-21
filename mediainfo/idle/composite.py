@@ -18,7 +18,11 @@ class CompositeIdleWallpaperSource(IdleWallpaperSource):
     def __init__(self, sources: List[IdleWallpaperSource]):
         self.sources = sources
         self.rotation_interval_seconds = min(s.rotation_interval_seconds for s in sources)
-        self._last_fetch = [0.0] * len(sources)
+        # -inf, not 0.0: time.monotonic()'s zero point is unspecified (often
+        # system boot on Linux) - seeding with 0.0 would skip the first
+        # fetch whenever monotonic() happens to read less than a source's
+        # rotation_interval_seconds (e.g. a freshly booted CI runner).
+        self._last_fetch = [float("-inf")] * len(sources)
         self._cached: List[List[Artwork]] = [[] for _ in sources]
 
     def get_wallpapers(self) -> List[Artwork]:
