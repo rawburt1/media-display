@@ -1,7 +1,7 @@
 """Registry-completeness checks.
 
 Every source/output/enricher/idle-source plugin needs a matching entry in
-two places: a config dataclass registered in mediainfo/config.py's
+two places: a config dataclass registered in mediainfo/config/'s
 `*_CONFIG_TYPES`, and an implementation class registered in
 mediainfo/registries.py's `*_CLASSES`. A key present in one but not the
 other doesn't fail loudly - it just makes that plugin silently show up as

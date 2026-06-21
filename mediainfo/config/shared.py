@@ -1,0 +1,55 @@
+"""Config dataclasses shared across plugin families (not tied to a single
+source/output/enricher/idle plugin)."""
+
+from __future__ import annotations
+
+import dataclasses
+
+
+@dataclasses.dataclass
+class LibraryConfig:
+    # Local SQLite cache of artist/album/track metadata (external ids like
+    # MusicBrainz mbids, and "claims" like cover art URLs or artist photos)
+    # so the music enrichers (musicbrainz, fanarttv, discogs, lastfm) query
+    # this first instead of repeating the same external API lookup for the
+    # same artist/album/song across plays and process restarts.
+    db_path: str = "./library/library.db"
+    # How long a cached claim (e.g. a cover art URL, or "no cover art
+    # found") stays valid before it's looked up again.
+    max_age_days: int = 30
+
+
+@dataclasses.dataclass
+class AuthConfig:
+    # Off by default. When enabled, HTTP Basic Auth is required for the
+    # web/config/info/feed/video/nest_hub outputs - but only for requests
+    # whose source address is *not* an RFC1918 private-use (or loopback)
+    # address, so your own LAN keeps working without a login prompt. The
+    # common reason to turn this on is exposing one of these outputs
+    # beyond your LAN (port-forwarding, a reverse proxy, a VPN you don't
+    # fully trust, ...).
+    enabled: bool = False
+    username: str = ""
+    password: str = ""
+
+
+@dataclasses.dataclass
+class CacheConfig:
+    dir: str = "./cache"
+    max_age_days: int = 30
+    # Idle wallpapers (Unsplash, Last.fm scrobble history, etc.) are purged
+    # on a much shorter schedule than now-playing artwork, since they're
+    # decorative and easily refetched rather than tied to a specific item.
+    idle_max_age_hours: int = 48
+
+
+@dataclasses.dataclass
+class LoggingConfig:
+    # Python logging level name: DEBUG, INFO, WARNING, ERROR, or CRITICAL.
+    level: str = "INFO"
+    # Path to a log file. Empty (the default) means console-only logging.
+    file: str = ""
+    # Rotate the log file once it reaches this size (bytes).
+    max_bytes: int = 1_000_000
+    # Number of rotated backup files to keep.
+    backup_count: int = 3

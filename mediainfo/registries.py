@@ -9,7 +9,7 @@ adb_shell, ...) just to build this file's dicts would be wasted work for
 any process that never actually uses most of them.
 
 Adding a new source, output, or enricher starts here (and in
-mediainfo/config.py, where the matching `*_CONFIG_TYPES` dict lives) -
+mediainfo/config/, where the matching `*_CONFIG_TYPES` dict lives) -
 keep both registries' keys in sync, since a key present in one but not
 the other silently produces a "not configured"/"unknown" plugin instead
 of an error (see tests/test_registries.py).
