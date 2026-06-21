@@ -7,7 +7,7 @@ import re
 import shutil
 from pathlib import Path
 
-from mediainfo.cache import ImageCache
+from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.config import FolderConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
@@ -44,11 +44,11 @@ class FolderOutput(Output):
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
         self._clear()
         idle = now_playing.source == "idle"
-        permanent = now_playing.media_type == "music"
+        tier: CacheTier = "idle" if idle else "music" if now_playing.media_type == "music" else "default"
 
         for artwork in now_playing.images:
             try:
-                src = cache.get_path(artwork, idle=idle, permanent=permanent)
+                src = cache.get_path(artwork, tier=tier)
                 if src is None:
                     continue
                 src = cache.get_transformed_path(src, self.transform_pipeline)

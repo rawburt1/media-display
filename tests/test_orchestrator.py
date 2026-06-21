@@ -265,7 +265,7 @@ def test_idle_wallpaper_fetched_with_idle_flag_for_separate_cache_purging():
     orchestrator._tick()
 
     _, kwargs = cache.get_path.call_args
-    assert kwargs.get("idle") is True
+    assert kwargs.get("tier") == "idle"
 
 
 def test_idle_rotation_state_staggers_initial_last_rotation_per_output():
@@ -457,7 +457,7 @@ def test_music_artwork_is_fetched_as_permanent():
     )
     orchestrator._tick()
 
-    cache.get_path.assert_called_once_with(artwork, permanent=True)
+    cache.get_path.assert_called_once_with(artwork, tier="music")
 
 
 def test_movie_artwork_is_not_fetched_as_permanent():
@@ -480,7 +480,7 @@ def test_movie_artwork_is_not_fetched_as_permanent():
     )
     orchestrator._tick()
 
-    cache.get_path.assert_called_once_with(artwork, permanent=False)
+    cache.get_path.assert_called_once_with(artwork, tier="default")
 
 
 def _tick_with_now_playing(now_playing):
@@ -802,8 +802,8 @@ def test_failed_poll_schedules_backoff():
 
     orch._poll_sources()
 
-    assert "failing" in orch._source_backoff
-    assert orch._source_backoff["failing"].delay > 0
+    assert "failing" in orch._health.source_backoff
+    assert orch._health.source_backoff["failing"].delay > 0
 
 
 def test_backed_off_source_is_skipped_until_next_attempt():
@@ -827,7 +827,7 @@ def test_backed_off_source_is_retried_after_delay_elapses():
         orch = _orchestrator_with_sources([source])
 
         orch._poll_sources()
-        delay = orch._source_backoff["failing"].delay
+        delay = orch._health.source_backoff["failing"].delay
 
         clock.now += delay + 1
         orch._poll_sources()
@@ -841,11 +841,11 @@ def test_backoff_delay_doubles_on_repeated_failures():
         orch = _orchestrator_with_sources([source])
 
         orch._poll_sources()
-        first_delay = orch._source_backoff["failing"].delay
+        first_delay = orch._health.source_backoff["failing"].delay
 
         clock.now += first_delay + 1
         orch._poll_sources()
-        second_delay = orch._source_backoff["failing"].delay
+        second_delay = orch._health.source_backoff["failing"].delay
 
         assert second_delay == first_delay * 2
 
@@ -858,9 +858,9 @@ def test_backoff_delay_caps_at_max():
 
         for _ in range(15):
             orch._poll_sources()
-            clock.now += orch._source_backoff["failing"].delay + 1
+            clock.now += orch._health.source_backoff["failing"].delay + 1
 
-        assert orch._source_backoff["failing"].delay == orch.backoff_max_seconds
+        assert orch._health.source_backoff["failing"].delay == orch.backoff_max_seconds
 
 
 def test_custom_backoff_initial_and_max_seconds():
@@ -879,11 +879,11 @@ def test_custom_backoff_initial_and_max_seconds():
         )
 
         orch._poll_sources()
-        assert orch._source_backoff["failing"].delay == 5
+        assert orch._health.source_backoff["failing"].delay == 5
 
         clock.now += 6
         orch._poll_sources()
-        assert orch._source_backoff["failing"].delay == 10
+        assert orch._health.source_backoff["failing"].delay == 10
 
 
 def test_successful_poll_clears_backoff():
@@ -893,13 +893,13 @@ def test_successful_poll_clears_backoff():
         orch = _orchestrator_with_sources([source])
 
         orch._poll_sources()
-        delay = orch._source_backoff["failing"].delay
+        delay = orch._health.source_backoff["failing"].delay
         clock.now += delay + 1
 
         source.fail = False  # device reachable again
         orch._poll_sources()
 
-        assert "failing" not in orch._source_backoff
+        assert "failing" not in orch._health.source_backoff
 
 
 def test_idle_source_without_last_poll_failed_is_never_backed_off():
@@ -910,7 +910,7 @@ def test_idle_source_without_last_poll_failed_is_never_backed_off():
 
     orch._poll_sources()
 
-    assert "fake" not in orch._source_backoff
+    assert "fake" not in orch._health.source_backoff
 
 
 def test_lower_priority_source_is_polled_when_higher_priority_is_backed_off():

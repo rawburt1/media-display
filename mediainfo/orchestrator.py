@@ -13,7 +13,7 @@ import threading
 import time
 from typing import Dict, List, Optional, Tuple
 
-from mediainfo.cache import ImageCache
+from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import Artwork, NowPlaying
@@ -80,6 +80,56 @@ class _Transition(enum.Enum):
     NEW_ITEM = enum.auto()
 
 
+class _HealthTracker:
+    """Runtime state backing Orchestrator.get_health() - source polling/
+    backoff and output error bookkeeping, grouped here instead of as five
+    separate Orchestrator attributes, so get_health() has one thing to
+    query and Orchestrator.__init__ has one thing to set up.
+    """
+
+    def __init__(self) -> None:
+        self.start_time = time.monotonic()
+        self.active_source_name: Optional[str] = None
+        self.source_polled: Dict[str, float] = {}
+        self.source_backoff: Dict[str, _BackoffState] = {}
+        self.output_errors: Dict[int, Tuple[str, float]] = {}
+
+    def record_poll(self, name: str, now: float) -> None:
+        self.source_polled[name] = now
+
+    def set_active_source(self, name: Optional[str]) -> None:
+        self.active_source_name = name
+
+    def record_backoff(self, name: str, state: _BackoffState) -> None:
+        self.source_backoff[name] = state
+
+    def clear_backoff(self, name: str) -> None:
+        self.source_backoff.pop(name, None)
+
+    def record_output_success(self, index: int) -> None:
+        self.output_errors.pop(index, None)
+
+    def record_output_error(self, index: int, message: str, now: float) -> None:
+        self.output_errors[index] = (message[:300], now)
+
+    def as_dict(self, now: float) -> dict:
+        return {
+            "uptime_seconds": round(now - self.start_time, 1),
+            "active_source": self.active_source_name,
+            "source_last_polled_ago": {
+                name: round(now - ts, 1) for name, ts in self.source_polled.items()
+            },
+            "source_backoff_seconds": {
+                name: round(max(state.next_attempt - now, 0), 1)
+                for name, state in self.source_backoff.items()
+            },
+            "output_errors": {
+                i: {"message": msg, "ago_seconds": round(now - ts, 1)}
+                for i, (msg, ts) in self.output_errors.items()
+            },
+        }
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -123,12 +173,7 @@ class Orchestrator:
         self._hitster_safe_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
-        # Health tracking
-        self._start_time = time.monotonic()
-        self._active_source_name: Optional[str] = None
-        self._source_polled: Dict[str, float] = {}
-        self._source_backoff: Dict[str, _BackoffState] = {}
-        self._output_errors: Dict[int, Tuple[str, float]] = {}
+        self._health = _HealthTracker()
 
     def get_hitster_safe(self) -> bool:
         with self._hitster_safe_lock:
@@ -303,7 +348,8 @@ class Orchestrator:
         state = self._rotation_state[index]
         artwork = self._current.images[state.order[state.position]]
         try:
-            image_path = self.cache.get_path(artwork, permanent=self._current.media_type == "music")
+            tier: CacheTier = "music" if self._current.media_type == "music" else "default"
+            image_path = self.cache.get_path(artwork, tier=tier)
             if image_path is None:
                 return
             image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
@@ -378,7 +424,7 @@ class Orchestrator:
         state = self._idle_rotation_state[index]
         artwork = self._idle_images[state.order[state.position]]
         try:
-            image_path = self.cache.get_path(artwork, idle=True)
+            image_path = self.cache.get_path(artwork, tier="idle")
             if image_path is None:
                 return
             image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
@@ -394,22 +440,22 @@ class Orchestrator:
         for source in self.sources:
             name = getattr(source, "name", type(source).__name__)
 
-            backoff = self._source_backoff.get(name)
+            backoff = self._health.source_backoff.get(name)
             if backoff is not None and now < backoff.next_attempt:
                 continue  # backing off: skip polling this source this tick
 
-            self._source_polled[name] = now
+            self._health.record_poll(name, now)
             result = source.get_now_playing()
 
             if getattr(source, "last_poll_failed", False):
-                self._source_backoff[name] = self._next_backoff(backoff, now)
+                self._health.record_backoff(name, self._next_backoff(backoff, now))
             elif backoff is not None:
-                del self._source_backoff[name]
+                self._health.clear_backoff(name)
 
             if result is not None:
-                self._active_source_name = name
+                self._health.set_active_source(name)
                 return result
-        self._active_source_name = None
+        self._health.set_active_source(None)
         return None
 
     def _next_backoff(self, previous: Optional["_BackoffState"], now: float) -> "_BackoffState":
@@ -423,10 +469,10 @@ class Orchestrator:
         """Call an output method, recording any exception for health reporting."""
         try:
             func(*args)
-            self._output_errors.pop(index, None)
+            self._health.record_output_success(index)
         except Exception as exc:
             logger.exception("Output error in %s", func)
-            self._output_errors[index] = (str(exc)[:300], time.monotonic())
+            self._health.record_output_error(index, str(exc), time.monotonic())
 
     @staticmethod
     def _safe_call(func, *args) -> None:
@@ -439,29 +485,16 @@ class Orchestrator:
         """Return runtime health data for the /health endpoint."""
         now = time.monotonic()
         np = self._current
-        return {
-            "uptime_seconds": round(now - self._start_time, 1),
-            "poll_interval_seconds": self.poll_interval_seconds,
-            "rotation_interval_seconds": self.rotation_interval_seconds,
-            "now_playing": {
-                "source": np.source,
-                "media_type": np.media_type,
-                "title": np.title,
-                "subtitle": np.subtitle,
-                "images": [a.label or a.url for a in np.images],
-            } if np else None,
-            "active_source": self._active_source_name,
-            "source_last_polled_ago": {
-                name: round(now - ts, 1) for name, ts in self._source_polled.items()
-            },
-            "source_backoff_seconds": {
-                name: round(max(state.next_attempt - now, 0), 1)
-                for name, state in self._source_backoff.items()
-            },
-            "output_errors": {
-                i: {"message": msg, "ago_seconds": round(now - ts, 1)}
-                for i, (msg, ts) in self._output_errors.items()
-            },
-            "idle_wallpapers_loaded": len(self._idle_images),
-            "hitster_safe": self.get_hitster_safe(),
-        }
+        data = self._health.as_dict(now)
+        data["poll_interval_seconds"] = self.poll_interval_seconds
+        data["rotation_interval_seconds"] = self.rotation_interval_seconds
+        data["now_playing"] = {
+            "source": np.source,
+            "media_type": np.media_type,
+            "title": np.title,
+            "subtitle": np.subtitle,
+            "images": [a.label or a.url for a in np.images],
+        } if np else None
+        data["idle_wallpapers_loaded"] = len(self._idle_images)
+        data["hitster_safe"] = self.get_hitster_safe()
+        return data

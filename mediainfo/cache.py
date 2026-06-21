@@ -6,7 +6,7 @@ import hashlib
 import logging
 import time
 from pathlib import Path
-from typing import Optional, Union
+from typing import Dict, Literal, Optional, Union
 from urllib.parse import urlparse
 
 import requests
@@ -15,6 +15,11 @@ from PIL import Image
 from mediainfo.models import Artwork
 
 logger = logging.getLogger(__name__)
+
+# Which cache subdirectory an image belongs in - "idle" and "music" get
+# their own retention rules (see ImageCache.__init__); "default" is
+# everything else (movie/TV posters and fanart).
+CacheTier = Literal["default", "idle", "music"]
 
 _EXTENSIONS = {
     "image/jpeg": ".jpg",
@@ -57,15 +62,21 @@ class ImageCache:
         self.music_dir.mkdir(parents=True, exist_ok=True)
         self.max_age_seconds = max_age_days * 86400
         self.idle_max_age_seconds = idle_max_age_hours * 3600
+        self._tier_dirs: Dict[CacheTier, Path] = {
+            "default": self.cache_dir,
+            "idle": self.idle_dir,
+            "music": self.music_dir,
+        }
 
     def get_path(
-        self, artwork: Optional[Artwork], idle: bool = False, permanent: bool = False
+        self, artwork: Optional[Artwork], tier: CacheTier = "default"
     ) -> Optional[Path]:
         """Return a local file path for the artwork, downloading it if needed.
 
-        Returns None if there is no artwork (or its URL is empty).
-        `permanent` routes the file to a cache subdirectory that's never
-        purged (see `music_dir`) - pass it for music artwork.
+        Returns None if there is no artwork (or its URL is empty). `tier`
+        picks which cache subdirectory (and retention rule) it belongs to -
+        "idle" for idle wallpapers, "music" for album art/artist photos
+        (never purged - see `music_dir`), "default" for everything else.
         """
         if artwork is None or not artwork.url:
             return None
@@ -75,7 +86,7 @@ class ImageCache:
             path = Path(urlparse(artwork.url).path)
             return path if path.exists() else None
 
-        base_dir = self.idle_dir if idle else self.music_dir if permanent else self.cache_dir
+        base_dir = self._tier_dirs[tier]
         key = hashlib.sha256(artwork.url.encode("utf-8")).hexdigest()
         existing = self._find_existing(key, base_dir)
         if existing is not None:

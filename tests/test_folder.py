@@ -123,8 +123,8 @@ def test_on_new_item_with_idle_batch_copies_all_wallpapers(tmp_path):
 
     assert (out_dir / "idle_A.jpg").read_bytes() == b"wallpaper-a"
     assert (out_dir / "idle_B.jpg").read_bytes() == b"wallpaper-b"
-    cache.get_path.assert_any_call(wallpapers[0], idle=True, permanent=False)
-    cache.get_path.assert_any_call(wallpapers[1], idle=True, permanent=False)
+    cache.get_path.assert_any_call(wallpapers[0], tier="idle")
+    cache.get_path.assert_any_call(wallpapers[1], tier="idle")
 
 
 def test_on_new_item_fetches_music_artwork_as_permanent(tmp_path):
@@ -144,7 +144,7 @@ def test_on_new_item_fetches_music_artwork_as_permanent(tmp_path):
     )
     output.on_new_item(now_playing, cache)
 
-    cache.get_path.assert_called_once_with(artwork, idle=False, permanent=True)
+    cache.get_path.assert_called_once_with(artwork, tier="music")
 
 
 def test_update_with_non_idle_now_playing_does_not_modify_folder(tmp_path):

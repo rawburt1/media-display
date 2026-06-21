@@ -86,7 +86,7 @@ def test_idle_artwork_is_stored_in_idle_subdir(mock_get, tmp_path):
     mock_get.return_value = mock_response
 
     cache = ImageCache(tmp_path)
-    path = cache.get_path(Artwork(url="http://example.com/wallpaper.jpg"), idle=True)
+    path = cache.get_path(Artwork(url="http://example.com/wallpaper.jpg"), tier="idle")
 
     assert path.parent == cache.idle_dir
     assert path.parent != cache.cache_dir
@@ -118,7 +118,7 @@ def test_idle_and_non_idle_caches_for_same_url_are_independent(mock_get, tmp_pat
     artwork = Artwork(url="http://example.com/same-url.jpg")
 
     non_idle_path = cache.get_path(artwork)
-    idle_path = cache.get_path(artwork, idle=True)
+    idle_path = cache.get_path(artwork, tier="idle")
 
     assert non_idle_path != idle_path
     assert mock_get.call_count == 2  # each fetched independently, not cross-cached
@@ -173,7 +173,7 @@ def test_get_transformed_path_for_idle_image_stays_in_idle_dir(mock_get, tmp_pat
     mock_get.return_value = mock_response
 
     cache = ImageCache(tmp_path)
-    original_path = cache.get_path(Artwork(url="http://example.com/wallpaper.jpg"), idle=True)
+    original_path = cache.get_path(Artwork(url="http://example.com/wallpaper.jpg"), tier="idle")
 
     from mediainfo.transforms import Resize
     transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])
@@ -194,7 +194,7 @@ def test_permanent_artwork_is_stored_in_music_subdir(mock_get, tmp_path):
     mock_get.return_value = mock_response
 
     cache = ImageCache(tmp_path)
-    path = cache.get_path(Artwork(url="http://example.com/album.jpg"), permanent=True)
+    path = cache.get_path(Artwork(url="http://example.com/album.jpg"), tier="music")
 
     assert path.parent == cache.music_dir
     assert path.parent != cache.cache_dir
@@ -212,7 +212,7 @@ def test_permanent_and_non_permanent_caches_for_same_url_are_independent(mock_ge
     artwork = Artwork(url="http://example.com/same-url.jpg")
 
     non_permanent_path = cache.get_path(artwork)
-    permanent_path = cache.get_path(artwork, permanent=True)
+    permanent_path = cache.get_path(artwork, tier="music")
 
     assert non_permanent_path != permanent_path
     assert mock_get.call_count == 2
@@ -251,7 +251,7 @@ def test_get_transformed_path_for_music_image_stays_in_music_dir(mock_get, tmp_p
     mock_get.return_value = mock_response
 
     cache = ImageCache(tmp_path)
-    original_path = cache.get_path(Artwork(url="http://example.com/album.jpg"), permanent=True)
+    original_path = cache.get_path(Artwork(url="http://example.com/album.jpg"), tier="music")
 
     from mediainfo.transforms import Resize
     transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])

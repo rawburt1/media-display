@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from flask import Flask, jsonify, request, send_file
 from flask_sock import Sock
 
-from mediainfo.cache import ImageCache
+from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.config import AuthConfig, WebConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
@@ -551,11 +551,14 @@ class WebOutput(Output):
         if state is not None and images:
             artwork = images[state.order[state.position]]
             payload["art_label"] = artwork.label
-            path = self._resolve_artwork_path(
-                cache, artwork,
-                idle=(now_playing.source == "idle"),
-                permanent=(now_playing.media_type == "music"),
-            )
+            tier: CacheTier
+            if now_playing.source == "idle":
+                tier = "idle"
+            elif now_playing.media_type == "music":
+                tier = "music"
+            else:
+                tier = "default"
+            path = self._resolve_artwork_path(cache, artwork, tier)
             if path is not None:
                 with self._lock:
                     self._known_images[path.stem] = path
@@ -563,12 +566,12 @@ class WebOutput(Output):
         return payload
 
     def _resolve_artwork_path(
-        self, cache: Optional[ImageCache], artwork: Artwork, idle: bool, permanent: bool = False
+        self, cache: Optional[ImageCache], artwork: Artwork, tier: CacheTier = "default"
     ) -> Optional[Path]:
         if cache is None:
             return None
         try:
-            path = cache.get_path(artwork, idle=idle, permanent=permanent)
+            path = cache.get_path(artwork, tier=tier)
             if path is None:
                 return None
             return cache.get_transformed_path(path, self.transform_pipeline)

@@ -238,16 +238,16 @@ def test_each_client_gets_a_distinct_starting_image(tmp_path):
     assert payload_x["art_label"] != payload_y["art_label"]
 
 
-def test_resolve_artwork_path_marks_music_as_permanent(tmp_path):
+def test_resolve_artwork_path_passes_through_tier(tmp_path):
     out = _output()
     art = _art("cover")
     path = tmp_path / "cover.jpg"
     path.write_bytes(b"x")
     cache = MagicMock(get_path=MagicMock(return_value=path), get_transformed_path=lambda p, _: p)
 
-    out._resolve_artwork_path(cache, art, idle=False, permanent=True)
+    out._resolve_artwork_path(cache, art, tier="music")
 
-    cache.get_path.assert_called_once_with(art, idle=False, permanent=True)
+    cache.get_path.assert_called_once_with(art, tier="music")
 
 
 def test_client_connecting_after_pool_established_gets_assigned_rotation(tmp_path):
