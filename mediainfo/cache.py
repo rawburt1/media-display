@@ -49,13 +49,23 @@ class ImageCache:
         # refetched, unlike artwork tied to a specific item.
         self.idle_dir = self.cache_dir / "idle"
         self.idle_dir.mkdir(parents=True, exist_ok=True)
+        # Music artwork (album art, artist photos) lives here instead and is
+        # never purged - re-fetching the same handful of albums/artists
+        # every time they're replayed isn't worth it the way it is for the
+        # much larger, ever-changing set of movie/TV posters and fanart.
+        self.music_dir = self.cache_dir / "music"
+        self.music_dir.mkdir(parents=True, exist_ok=True)
         self.max_age_seconds = max_age_days * 86400
         self.idle_max_age_seconds = idle_max_age_hours * 3600
 
-    def get_path(self, artwork: Optional[Artwork], idle: bool = False) -> Optional[Path]:
+    def get_path(
+        self, artwork: Optional[Artwork], idle: bool = False, permanent: bool = False
+    ) -> Optional[Path]:
         """Return a local file path for the artwork, downloading it if needed.
 
         Returns None if there is no artwork (or its URL is empty).
+        `permanent` routes the file to a cache subdirectory that's never
+        purged (see `music_dir`) - pass it for music artwork.
         """
         if artwork is None or not artwork.url:
             return None
@@ -65,7 +75,7 @@ class ImageCache:
             path = Path(urlparse(artwork.url).path)
             return path if path.exists() else None
 
-        base_dir = self.idle_dir if idle else self.cache_dir
+        base_dir = self.idle_dir if idle else self.music_dir if permanent else self.cache_dir
         key = hashlib.sha256(artwork.url.encode("utf-8")).hexdigest()
         existing = self._find_existing(key, base_dir)
         if existing is not None:
@@ -94,8 +104,8 @@ class ImageCache:
         The result is cached on disk keyed by (original stem, pipeline hash)
         so the pipeline is only applied once per unique image+transform combo.
         Returns the original path unchanged when the pipeline is empty. The
-        transformed copy is written alongside the original (idle or not), so
-        it's purged on the same schedule.
+        transformed copy is written alongside the original (idle, music, or
+        regular), so it shares the same retention as the original.
         """
         if not transforms:
             return original_path
@@ -120,6 +130,8 @@ class ImageCache:
         """Delete cached files past their retention window. Anything still
         in regular use is re-fetched on its next access, which refreshes its
         mtime, so this only ever removes genuinely stale files.
+
+        music_dir is deliberately not purged here - see its docstring above.
         """
         self._purge_dir(self.cache_dir, self.max_age_seconds)
         self._purge_dir(self.idle_dir, self.idle_max_age_seconds)

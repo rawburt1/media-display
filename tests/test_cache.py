@@ -179,3 +179,81 @@ def test_get_transformed_path_for_idle_image_stays_in_idle_dir(mock_get, tmp_pat
     transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])
 
     assert transformed_path.parent == cache.idle_dir
+
+
+# ---------------------------------------------------------------------------
+# Music artwork: separate subdirectory, never purged
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.cache.requests.get")
+def test_permanent_artwork_is_stored_in_music_subdir(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"fake-image-bytes"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/album.jpg"), permanent=True)
+
+    assert path.parent == cache.music_dir
+    assert path.parent != cache.cache_dir
+
+
+@patch("mediainfo.cache.requests.get")
+def test_permanent_and_non_permanent_caches_for_same_url_are_independent(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"fake-image-bytes"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    artwork = Artwork(url="http://example.com/same-url.jpg")
+
+    non_permanent_path = cache.get_path(artwork)
+    permanent_path = cache.get_path(artwork, permanent=True)
+
+    assert non_permanent_path != permanent_path
+    assert mock_get.call_count == 2
+
+
+def test_purge_expired_never_removes_music_files(tmp_path):
+    cache = ImageCache(tmp_path, max_age_days=30, idle_max_age_hours=48)
+
+    old_music_file = cache.music_dir / "old_album.jpg"
+    old_music_file.write_bytes(b"x")
+    ancient = time.time() - 365 * 86400
+    os.utime(old_music_file, (ancient, ancient))
+
+    cache.purge_expired()
+
+    assert old_music_file.exists()
+
+
+def test_music_dir_created_on_init(tmp_path):
+    cache = ImageCache(tmp_path)
+    assert cache.music_dir.is_dir()
+
+
+@patch("mediainfo.cache.requests.get")
+def test_get_transformed_path_for_music_image_stays_in_music_dir(mock_get, tmp_path):
+    import io
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 10), color="red").save(buf, format="JPEG")
+
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = buf.getvalue()
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    original_path = cache.get_path(Artwork(url="http://example.com/album.jpg"), permanent=True)
+
+    from mediainfo.transforms import Resize
+    transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])
+
+    assert transformed_path.parent == cache.music_dir

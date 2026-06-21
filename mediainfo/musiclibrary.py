@@ -299,11 +299,22 @@ class MusicLibrary:
 
     # -- source claims (artwork urls, bios, ...) --------------------------
 
-    def get_claim(self, entity_type: str, entity_id: int, field: str, source: str) -> Optional[str]:
+    def get_claim(
+        self,
+        entity_type: str,
+        entity_id: int,
+        field: str,
+        source: str,
+        max_age_seconds: Optional[float] = None,
+    ) -> Optional[str]:
         """Return the cached value, or None if there isn't one or it's stale.
 
         An empty string is a valid return value - it means "looked up
         before from this source, nothing found".
+
+        `max_age_seconds` overrides the library-wide default for this one
+        lookup - pass float("inf") for a claim that should never expire
+        (e.g. lyrics, which don't change for a given recording).
         """
         with self._lock:
             row = self._conn.execute(
@@ -314,7 +325,8 @@ class MusicLibrary:
         if row is None:
             return None
         value, fetched_at = row
-        if time.time() - fetched_at > self.max_age_seconds:
+        max_age = self.max_age_seconds if max_age_seconds is None else max_age_seconds
+        if time.time() - fetched_at > max_age:
             return None
         return value
 

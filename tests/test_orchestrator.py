@@ -295,7 +295,7 @@ def test_rotation_state_staggers_initial_last_rotation_per_output():
     output_a = MagicMock()
     output_b = MagicMock()
     cache = MagicMock()
-    cache.get_path.side_effect = lambda artwork: f"/cache/{artwork.label}"
+    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
 
     orchestrator = Orchestrator(
         sources=[_StaticSource(now_playing)],
@@ -437,6 +437,52 @@ def test_new_item_calls_on_new_item_with_full_image_list():
     output.on_new_item.assert_called_once_with(now_playing, cache)
 
 
+def test_music_artwork_is_fetched_as_permanent():
+    artwork = Artwork(url="https://example.com/cover.jpg", label="Cover")
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Song", subtitle="Artist", images=[artwork]
+    )
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/cover.jpg"
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    cache.get_path.assert_called_once_with(artwork, permanent=True)
+
+
+def test_movie_artwork_is_not_fetched_as_permanent():
+    artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
+    now_playing = NowPlaying(
+        source="kodi", media_type="movie", title="Inception", images=[artwork]
+    )
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/poster.jpg"
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    cache.get_path.assert_called_once_with(artwork, permanent=False)
+
+
 def _tick_with_now_playing(now_playing):
     output = MagicMock()
     cache = MagicMock()
@@ -519,7 +565,7 @@ def test_each_output_starts_on_a_different_picture():
     output_a = MagicMock()
     output_b = MagicMock()
     cache = MagicMock()
-    cache.get_path.side_effect = lambda artwork: f"/cache/{artwork.label}"
+    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
     cache.get_transformed_path.side_effect = lambda path, _: path
 
     orchestrator = Orchestrator(
@@ -551,7 +597,7 @@ def test_rotation_advances_each_output_independently():
     output_a = MagicMock()
     output_b = MagicMock()
     cache = MagicMock()
-    cache.get_path.side_effect = lambda artwork: f"/cache/{artwork.label}"
+    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
 
     orchestrator = Orchestrator(
         sources=[_StaticSource(now_playing)],

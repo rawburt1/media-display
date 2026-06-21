@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from mediainfo.config import LyricsConfig
 from mediainfo.enrichers.lyrics import LyricsEnricher
 from mediainfo.models import NowPlaying
+from mediainfo.musiclibrary import MusicLibrary
 
 
 def _enricher() -> LyricsEnricher:
@@ -88,3 +89,49 @@ def test_missing_artist_or_title_is_skipped():
     np = NowPlaying(source="kodi", media_type="music", title="Money", subtitle="")
     enricher.enrich(np)
     assert np.lyrics == ""
+
+
+# ---------------------------------------------------------------------------
+# MusicLibrary persistence (forever, never re-fetched)
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.lyrics.requests.get")
+def test_caches_result_in_library_and_skips_lookup_on_repeat(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"))
+    mock_get.return_value = _response(json_data={"lyrics": "Is this the real life?"})
+    enricher = LyricsEnricher(LyricsConfig(enabled=True), library)
+
+    enricher.enrich(_music())
+    assert mock_get.call_count == 1
+
+    np2 = _music()
+    enricher.enrich(np2)
+    assert mock_get.call_count == 1  # no new network call
+    assert np2.lyrics == "Is this the real life?"
+
+
+@patch("mediainfo.enrichers.lyrics.requests.get")
+def test_caches_negative_result_in_library(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"))
+    mock_get.return_value = _response(status_code=404)
+    enricher = LyricsEnricher(LyricsConfig(enabled=True), library)
+
+    enricher.enrich(_music())
+    assert mock_get.call_count == 1
+
+    enricher.enrich(_music())
+    assert mock_get.call_count == 1  # cached miss, no new call
+
+
+@patch("mediainfo.enrichers.lyrics.requests.get")
+def test_library_cached_lyrics_never_expire(mock_get, tmp_path):
+    library = MusicLibrary(str(tmp_path / "library.db"), max_age_days=0)
+    mock_get.return_value = _response(json_data={"lyrics": "Hello"})
+    enricher = LyricsEnricher(LyricsConfig(enabled=True), library)
+
+    enricher.enrich(_music())
+    # max_age_days=0 would make every other claim type stale immediately -
+    # lyrics must still be served from cache regardless.
+    enricher.enrich(_music())
+
+    assert mock_get.call_count == 1

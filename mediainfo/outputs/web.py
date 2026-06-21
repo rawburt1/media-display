@@ -551,7 +551,11 @@ class WebOutput(Output):
         if state is not None and images:
             artwork = images[state.order[state.position]]
             payload["art_label"] = artwork.label
-            path = self._resolve_artwork_path(cache, artwork, idle=(now_playing.source == "idle"))
+            path = self._resolve_artwork_path(
+                cache, artwork,
+                idle=(now_playing.source == "idle"),
+                permanent=(now_playing.media_type == "music"),
+            )
             if path is not None:
                 with self._lock:
                     self._known_images[path.stem] = path
@@ -559,12 +563,12 @@ class WebOutput(Output):
         return payload
 
     def _resolve_artwork_path(
-        self, cache: Optional[ImageCache], artwork: Artwork, idle: bool
+        self, cache: Optional[ImageCache], artwork: Artwork, idle: bool, permanent: bool = False
     ) -> Optional[Path]:
         if cache is None:
             return None
         try:
-            path = cache.get_path(artwork, idle=idle)
+            path = cache.get_path(artwork, idle=idle, permanent=permanent)
             if path is None:
                 return None
             return cache.get_transformed_path(path, self.transform_pipeline)

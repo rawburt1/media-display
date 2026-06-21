@@ -475,16 +475,22 @@ See `config.example.yaml` for all options. Key things to fill in:
   (Unsplash, Last.fm scrobble history) are kept before being deleted
   (default 48) - much shorter than `max_age_days`, since they're
   decorative and easily refetched rather than tied to a specific item.
-  Stored separately under `<cache.dir>/idle`.
+  Stored separately under `<cache.dir>/idle`. Music artwork (album art,
+  artist photos) is stored separately too, under `<cache.dir>/music` -
+  unlike movie/TV posters and fanart, it's never purged at all, since the
+  same handful of albums/artists tend to get replayed indefinitely and
+  re-fetching them is just wasted API calls.
 - **`library.db_path`** / **`library.max_age_days`**: a local SQLite
   database of artist/album/track metadata (MusicBrainz ids, cached cover
-  art URLs, artist photos), queried before the `musicbrainz`, `fanarttv`,
-  `discogs`, and `lastfm` enrichers make an external API call - so the
-  same artist/album/song doesn't trigger a repeat lookup across plays or
-  process restarts. MusicBrainz is treated as the source of truth for
-  canonical ids; other sources' results are cached (including a "nothing
-  found" result, to avoid retrying known dead ends) for `max_age_days`
-  (default 30) before being looked up again. If you run
+  art URLs, artist photos, lyrics), queried before the `musicbrainz`,
+  `fanarttv`, `discogs`, `lastfm`, and `lyrics` enrichers make an external
+  API call - so the same artist/album/song doesn't trigger a repeat lookup
+  across plays or process restarts. MusicBrainz is treated as the source
+  of truth for canonical ids; other sources' results are cached (including
+  a "nothing found" result, to avoid retrying known dead ends) for
+  `max_age_days` (default 30) before being looked up again - except
+  lyrics, which are cached forever, since a recording's lyrics don't
+  change. If you run
   [Lidarr](https://lidarr.audio/), `python -m mediainfo import-lidarr
   --config config.yaml --url http://lidarr-host:8686 --api-key
   YOUR_LIDARR_API_KEY` (or the `docker compose run` equivalent, with

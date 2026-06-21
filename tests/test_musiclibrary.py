@@ -381,3 +381,25 @@ def test_stale_claim_returns_none(tmp_path):
     lib.set_claim("artist", artist_id, "photo_url", "lastfm", "https://example.com/pf.jpg")
     time.sleep(0.01)
     assert lib.get_claim("artist", artist_id, "photo_url", "lastfm") is None
+
+
+def test_get_claim_max_age_override_widens_the_default(tmp_path):
+    lib = _library(tmp_path, max_age_days=0)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    lib.set_claim("artist", artist_id, "photo_url", "lastfm", "https://example.com/pf.jpg")
+    time.sleep(0.01)
+
+    assert lib.get_claim("artist", artist_id, "photo_url", "lastfm") is None
+    assert lib.get_claim(
+        "artist", artist_id, "photo_url", "lastfm", max_age_seconds=float("inf")
+    ) == "https://example.com/pf.jpg"
+
+
+def test_get_claim_max_age_override_narrows_the_default(tmp_path):
+    lib = _library(tmp_path, max_age_days=30)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    lib.set_claim("artist", artist_id, "photo_url", "lastfm", "https://example.com/pf.jpg")
+    time.sleep(0.01)
+
+    assert lib.get_claim("artist", artist_id, "photo_url", "lastfm") == "https://example.com/pf.jpg"
+    assert lib.get_claim("artist", artist_id, "photo_url", "lastfm", max_age_seconds=0) is None

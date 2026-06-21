@@ -123,8 +123,28 @@ def test_on_new_item_with_idle_batch_copies_all_wallpapers(tmp_path):
 
     assert (out_dir / "idle_A.jpg").read_bytes() == b"wallpaper-a"
     assert (out_dir / "idle_B.jpg").read_bytes() == b"wallpaper-b"
-    cache.get_path.assert_any_call(wallpapers[0], idle=True)
-    cache.get_path.assert_any_call(wallpapers[1], idle=True)
+    cache.get_path.assert_any_call(wallpapers[0], idle=True, permanent=False)
+    cache.get_path.assert_any_call(wallpapers[1], idle=True, permanent=False)
+
+
+def test_on_new_item_fetches_music_artwork_as_permanent(tmp_path):
+    src = tmp_path / "src" / "cover.jpg"
+    src.parent.mkdir()
+    src.write_bytes(b"cover-bytes")
+
+    artwork = Artwork(url="https://example.com/cover.jpg", label="Cover")
+    cache = MagicMock()
+    cache.get_path.return_value = src
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    out_dir = tmp_path / "artwork"
+    output = FolderOutput(FolderConfig(enabled=True, dir=str(out_dir)))
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Song", subtitle="Artist", images=[artwork]
+    )
+    output.on_new_item(now_playing, cache)
+
+    cache.get_path.assert_called_once_with(artwork, idle=False, permanent=True)
 
 
 def test_update_with_non_idle_now_playing_does_not_modify_folder(tmp_path):

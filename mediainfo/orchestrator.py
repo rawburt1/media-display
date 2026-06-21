@@ -257,7 +257,7 @@ class Orchestrator:
         state = self._rotation_state[index]
         artwork = self._current.images[state.order[state.position]]
         try:
-            image_path = self.cache.get_path(artwork)
+            image_path = self.cache.get_path(artwork, permanent=self._current.media_type == "music")
             if image_path is None:
                 return
             image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)

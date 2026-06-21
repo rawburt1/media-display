@@ -44,10 +44,11 @@ class FolderOutput(Output):
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
         self._clear()
         idle = now_playing.source == "idle"
+        permanent = now_playing.media_type == "music"
 
         for artwork in now_playing.images:
             try:
-                src = cache.get_path(artwork, idle=idle)
+                src = cache.get_path(artwork, idle=idle, permanent=permanent)
                 if src is None:
                     continue
                 src = cache.get_transformed_path(src, self.transform_pipeline)
