@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mediainfo.models import Artwork, NowPlaying
-from mediainfo.orchestrator import Orchestrator
+from mediainfo.orchestrator import _NOTHING_PLAYING_GRACE_SECONDS, Orchestrator
 
 
 class _FakeSource:
@@ -97,6 +97,93 @@ def test_no_idle_source_calls_on_idle():
 
     output.on_idle.assert_called_once()
     output.update.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Nothing-playing grace period (tolerate a flaky source's brief gap)
+# ---------------------------------------------------------------------------
+
+def test_brief_gap_while_playing_does_not_trigger_idle():
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[
+        Artwork(url="https://example.com/poster.jpg", label="Poster"),
+    ])
+
+    class _FlakySource:
+        name = "flaky"
+
+        def __init__(self):
+            self.calls = 0
+
+        def get_now_playing(self):
+            self.calls += 1
+            # Plays, then a single missed poll, then resumes.
+            return None if self.calls == 2 else now_playing
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/poster.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_FlakySource()],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orchestrator._tick()  # playing
+        orchestrator._tick()  # one missed poll, within grace period
+        orchestrator._tick()  # resumes before grace period elapses
+
+    output.on_idle.assert_not_called()
+    assert orchestrator._current is not None
+    assert orchestrator._current.title == "Inception"
+
+
+def test_gap_longer_than_grace_period_still_goes_idle():
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[
+        Artwork(url="https://example.com/poster.jpg", label="Poster"),
+    ])
+
+    class _StoppedSource:
+        name = "stopped"
+
+        def __init__(self):
+            self.calls = 0
+
+        def get_now_playing(self):
+            self.calls += 1
+            return now_playing if self.calls == 1 else None
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/poster.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StoppedSource()],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orchestrator._tick()  # playing
+        orchestrator._tick()  # nothing playing: grace period starts
+        output.on_idle.assert_not_called()
+
+        clock.now += _NOTHING_PLAYING_GRACE_SECONDS + 1
+        orchestrator._tick()  # grace period elapsed: now truly idle
+
+    output.on_idle.assert_called_once()
+    assert orchestrator._current is None
 
 
 def test_idle_source_shows_wallpaper():
@@ -196,11 +283,17 @@ def test_non_image_output_does_not_get_on_idle_when_playing_without_artwork():
         idle_source=idle_source,
     )
 
-    orchestrator._tick()  # playing without artwork: on_idle must NOT be called
-    output.on_idle.assert_not_called()
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orchestrator._tick()  # playing without artwork: on_idle must NOT be called
+        output.on_idle.assert_not_called()
 
-    orchestrator._tick()  # back to idle: on_idle IS called
-    output.on_idle.assert_called_once()
+        orchestrator._tick()  # source goes quiet, but within the grace period
+        output.on_idle.assert_not_called()
+
+        clock.now += _NOTHING_PLAYING_GRACE_SECONDS + 1
+        orchestrator._tick()  # grace period elapsed: now truly idle
+        output.on_idle.assert_called_once()
 
 
 def _idle_wallpapers(count=3):
@@ -237,6 +330,32 @@ def test_idle_batch_each_output_starts_on_a_different_picture():
     assert path_b == "/cache/Wallpaper 0"
     assert artwork_a.label != artwork_b.label
     assert idle_source.calls == 1
+
+
+def test_idle_batch_falls_through_pool_when_first_pick_fails_to_fetch():
+    idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=300)
+    output = MagicMock()
+    cache = MagicMock()
+
+    def get_path(artwork, **kwargs):
+        if artwork.label == "Wallpaper 2":
+            return None  # rejected
+        return f"/cache/{artwork.label}"
+
+    cache.get_path.side_effect = get_path
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
+
+    with patch(
+        "mediainfo.orchestrator.random.shuffle",
+        side_effect=_fake_shuffle([[2, 0, 1]]),
+    ):
+        orchestrator._tick()
+
+    _, artwork, path = output.update.call_args[0]
+    assert artwork.label == "Wallpaper 0"  # skipped the rejected "Wallpaper 2"
+    assert path == "/cache/Wallpaper 0"
 
 
 def test_idle_batch_no_two_outputs_share_a_picture_when_enough_images():
@@ -591,6 +710,63 @@ def test_each_output_starts_on_a_different_picture():
     assert artwork_b.label == "Image 0"  # shared order [2, 0, 1], position 1
     assert path_b == "/cache/Image 0"
     assert artwork_a.label != artwork_b.label
+
+
+def test_falls_through_pool_when_first_pick_fails_to_fetch():
+    # An output's rotation position can land on an image the cache rejects
+    # (e.g. below the minimum size) or fails to download - it should fall
+    # through to the next image in its rotation order rather than showing
+    # nothing until the next scheduled rotation.
+    now_playing = _multi_image_now_playing()
+    output = MagicMock()
+    cache = MagicMock()
+
+    def get_path(artwork, **kwargs):
+        if artwork.label == "Image 2":
+            return None  # rejected
+        return f"/cache/{artwork.label}"
+
+    cache.get_path.side_effect = get_path
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+
+    with patch(
+        "mediainfo.orchestrator.random.shuffle",
+        side_effect=_fake_shuffle([[2, 0, 1]]),
+    ):
+        orchestrator._tick()
+
+    _, artwork, path = output.update.call_args[0]
+    assert artwork.label == "Image 0"  # skipped the rejected "Image 2"
+    assert path == "/cache/Image 0"
+
+
+def test_logs_warning_when_every_candidate_fails_to_fetch():
+    now_playing = _multi_image_now_playing()
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = None  # every candidate rejected
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+
+    orchestrator._tick()
+
+    output.update.assert_not_called()
 
 
 def test_rotation_advances_each_output_independently():

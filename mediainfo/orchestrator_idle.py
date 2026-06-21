@@ -132,18 +132,27 @@ class _IdleBatchManager:
             self._show_image_for_output(index, output)
 
     def _show_image_for_output(self, index: int, output: Output) -> None:
+        """Resolve and push the output's current rotation pick - falling
+        through the rest of the batch (in rotation order) if that pick
+        fails to fetch (e.g. rejected by the cache's minimum-size filter),
+        rather than leaving the output showing nothing until its next
+        scheduled rotation.
+        """
         if not output.handles_images:
             return
         state = self.rotation_state[index]
-        artwork = self.images[state.order[state.position]]
-        try:
-            image_path = self.cache.get_path(artwork, tier="idle")
-            if image_path is None:
-                return
-            image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
-        except Exception:
-            logger.exception("Failed to fetch idle wallpaper %s", artwork.url)
-            return
 
-        logger.info("Idle wallpaper: %s", artwork.label)
-        self._call_output(index, output.update, self.now_playing, artwork, image_path)
+        for attempt in range(len(self.images)):
+            artwork = self.images[state.order[(state.position + attempt) % len(state.order)]]
+            try:
+                image_path = self.cache.get_path(artwork, tier="idle")
+                if image_path is None:
+                    continue
+                image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
+            except Exception:
+                logger.exception("Failed to fetch idle wallpaper %s", artwork.url)
+                continue
+
+            logger.info("Idle wallpaper: %s", artwork.label)
+            self._call_output(index, output.update, self.now_playing, artwork, image_path)
+            return

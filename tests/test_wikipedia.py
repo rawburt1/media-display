@@ -42,10 +42,14 @@ def _search_response(title="Queen (band)"):
     return _mock_response({"query": {"search": [{"title": title}]}})
 
 
-def _summary_response(extract="A British rock band.", thumbnail="https://example.com/t.jpg"):
+def _summary_response(
+    extract="A British rock band.", thumbnail="https://example.com/t.jpg", originalimage=None
+):
     data = {"extract": extract}
     if thumbnail:
         data["thumbnail"] = {"source": thumbnail}
+    if originalimage:
+        data["originalimage"] = {"source": originalimage}
     return _mock_response(data)
 
 
@@ -152,6 +156,34 @@ def test_no_thumbnail_does_not_add_image(mock_get):
 
     assert np.summary == "A British rock band."
     assert np.images == []
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_prefers_originalimage_over_thumbnail(mock_get):
+    # The REST summary's thumbnail is always downsized (~320px wide), which
+    # the cache's 640x480 minimum-size filter then rejects on every fetch -
+    # the full-resolution originalimage in the same response should win.
+    mock_get.side_effect = [
+        _search_response(),
+        _summary_response(originalimage="https://example.com/original.jpg"),
+    ]
+    enricher = WikipediaEnricher(_config())
+    np = _music()
+
+    enricher.enrich(np)
+
+    assert np.images[0].url == "https://example.com/original.jpg"
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_falls_back_to_thumbnail_when_no_originalimage(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response(originalimage=None)]
+    enricher = WikipediaEnricher(_config())
+    np = _music()
+
+    enricher.enrich(np)
+
+    assert np.images[0].url == "https://example.com/t.jpg"
 
 
 @patch("mediainfo.enrichers.wikipedia.requests.get")

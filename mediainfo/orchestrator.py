@@ -26,6 +26,17 @@ logger = logging.getLogger(__name__)
 
 _CACHE_PURGE_INTERVAL_SECONDS = 24 * 60 * 60
 
+# How long to tolerate a source reporting "nothing playing" before actually
+# switching outputs to idle, while something was already playing. Some
+# sources briefly report no active session for a single poll or two during
+# normal playback (e.g. Kodi's active-player list can momentarily come back
+# empty around a chapter/scene transition) - without this grace period, that
+# one missed poll flashes every output to idle and back, including a full
+# re-enrichment cycle, even though playback never actually stopped. A source
+# that's cold (nothing has played yet this run) is unaffected - this only
+# applies once something is already showing.
+_NOTHING_PLAYING_GRACE_SECONDS = 10
+
 # Backoff for sources whose device/service couldn't be reached (see
 # MediaSource.last_poll_failed) - doubles after each consecutive failure,
 # capped at backoff_max_seconds, and resets the moment a poll succeeds
@@ -103,6 +114,10 @@ class Orchestrator:
         # its own randomized order, keyed by its index in `self.outputs`.
         self._rotation_state: Dict[int, _RotationState] = {}
         self._last_cache_purge: Optional[float] = None
+        # When the time it was first seen since `self._current` was set;
+        # None means either nothing is playing or the source just resumed.
+        # See _NOTHING_PLAYING_GRACE_SECONDS above.
+        self._nothing_playing_since: Optional[float] = None
         # "Hitster-safe" mode: while enabled, music now-playing (songs,
         # artists, albums) is treated as if nothing were playing on every
         # output - so the title/artist never leaks on screen during a game
@@ -158,6 +173,7 @@ class Orchestrator:
             self._handle_nothing_playing()
             return
 
+        self._nothing_playing_since = None
         if now_playing.media_type == "music":
             now_playing.title = _strip_parenthetical(now_playing.title)
         self._maybe_clear_stale_idle_state(now_playing)
@@ -205,9 +221,17 @@ class Orchestrator:
 
     def _handle_nothing_playing(self) -> None:
         if self._current is not None:
+            now = time.monotonic()
+            if self._nothing_playing_since is None:
+                self._nothing_playing_since = now
+            if now - self._nothing_playing_since < _NOTHING_PLAYING_GRACE_SECONDS:
+                # Tolerate a brief gap without touching outputs at all - see
+                # _NOTHING_PLAYING_GRACE_SECONDS above.
+                return
             logger.info("Nothing playing; switching outputs to idle")
             self._current = None
             self._rotation_state = {}
+            self._nothing_playing_since = None
         self._show_idle_wallpaper()
 
     def _handle_new_item(self, now_playing: NowPlaying) -> None:
@@ -289,20 +313,36 @@ class Orchestrator:
             self._show_image_for_output(index, output)
 
     def _show_image_for_output(self, index: int, output: Output) -> None:
+        """Resolve and push the output's current rotation pick - falling
+        through the rest of the pool (in rotation order) if that pick fails
+        to fetch (e.g. rejected by the cache's minimum-size filter, or a
+        download error), rather than leaving the output showing nothing
+        until its next scheduled rotation, up to rotation_interval_seconds
+        later.
+        """
         assert self._current is not None  # only called while something is playing
         state = self._rotation_state[index]
-        artwork = self._current.images[state.order[state.position]]
-        try:
-            tier: CacheTier = "music" if self._current.media_type == "music" else "default"
-            image_path = self.cache.get_path(artwork, tier=tier)
-            if image_path is None:
-                return
-            image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
-        except Exception:
-            logger.exception("Failed to fetch artwork %s", artwork.url)
+        images = self._current.images
+        tier: CacheTier = "music" if self._current.media_type == "music" else "default"
+
+        for attempt in range(len(images)):
+            artwork = images[state.order[(state.position + attempt) % len(state.order)]]
+            try:
+                image_path = self.cache.get_path(artwork, tier=tier)
+                if image_path is None:
+                    continue
+                image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
+            except Exception:
+                logger.exception("Failed to fetch artwork %s", artwork.url)
+                continue
+
+            self._call_output(index, output.update, self._current, artwork, image_path)
             return
 
-        self._call_output(index, output.update, self._current, artwork, image_path)
+        logger.warning(
+            "No fetchable artwork for %s (%d candidate(s) all failed)",
+            self._current.title, len(images),
+        )
 
     def _show_idle_wallpaper(self, notify_idle: bool = True) -> None:
         """Show idle wallpapers on image-capable outputs.
