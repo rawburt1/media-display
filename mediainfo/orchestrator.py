@@ -97,6 +97,15 @@ class Orchestrator:
         self._idle_now_playing: Optional[NowPlaying] = None
         self._last_idle_batch_fetch = 0.0
         self._last_cache_purge: Optional[float] = None
+        # "Hitster-safe" mode: while enabled, music now-playing (songs,
+        # artists, albums) is treated as if nothing were playing on every
+        # output - so the title/artist never leaks on screen during a game
+        # of Hitster (or similar music-guessing games). Toggled cross-thread
+        # via the web output's UI, so it's guarded by its own lock rather
+        # than relying on the orchestrator thread being the only
+        # reader/writer.
+        self._hitster_safe = False
+        self._hitster_safe_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         # Health tracking
@@ -105,6 +114,15 @@ class Orchestrator:
         self._source_polled: Dict[str, float] = {}
         self._source_backoff: Dict[str, _BackoffState] = {}
         self._output_errors: Dict[int, Tuple[str, float]] = {}
+
+    def get_hitster_safe(self) -> bool:
+        with self._hitster_safe_lock:
+            return self._hitster_safe
+
+    def set_hitster_safe(self, enabled: bool) -> None:
+        with self._hitster_safe_lock:
+            self._hitster_safe = enabled
+        logger.info("Hitster-safe mode %s", "enabled" if enabled else "disabled")
 
     def start(self) -> None:
         self._thread.start()
@@ -127,6 +145,9 @@ class Orchestrator:
         self._maybe_purge_cache()
 
         now_playing = self._poll_sources()
+
+        if now_playing is not None and now_playing.media_type == "music" and self.get_hitster_safe():
+            now_playing = None
 
         if now_playing is None:
             if self._current is not None:
@@ -396,4 +417,5 @@ class Orchestrator:
                 for i, (msg, ts) in self._output_errors.items()
             },
             "idle_wallpapers_loaded": len(self._idle_images),
+            "hitster_safe": self.get_hitster_safe(),
         }

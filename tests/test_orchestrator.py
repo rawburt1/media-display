@@ -904,3 +904,85 @@ def test_get_health_includes_source_backoff_seconds():
     backoff = orch.get_health()["source_backoff_seconds"]
     assert "failing" in backoff
     assert backoff["failing"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Hitster-safe mode
+# ---------------------------------------------------------------------------
+
+def _music_item(title="Comfortably Numb"):
+    return NowPlaying(source="static", media_type="music", title=title, subtitle="Pink Floyd")
+
+
+def _movie_item(title="The Matrix"):
+    return NowPlaying(source="static", media_type="movie", title=title)
+
+
+def test_hitster_safe_defaults_to_disabled():
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock())
+    assert orch.get_hitster_safe() is False
+
+
+def test_hitster_safe_suppresses_music_like_nothing_playing():
+    output = MagicMock()
+    source = _StaticSource(_music_item())
+    orch = Orchestrator(
+        sources=[source],
+        enrichers=[],
+        outputs=[output],
+        cache=MagicMock(),
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orch.set_hitster_safe(True)
+
+    orch._tick()
+
+    output.on_idle.assert_called_once()
+    output.on_new_item.assert_not_called()
+    output.update.assert_not_called()
+
+
+def test_hitster_safe_does_not_suppress_movies():
+    output = MagicMock()
+    source = _StaticSource(_movie_item())
+    orch = Orchestrator(
+        sources=[source],
+        enrichers=[],
+        outputs=[output],
+        cache=MagicMock(),
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orch.set_hitster_safe(True)
+
+    orch._tick()
+
+    output.on_new_item.assert_called_once()
+
+
+def test_disabling_hitster_safe_resumes_music_display():
+    output = MagicMock()
+    source = _StaticSource(_music_item())
+    orch = Orchestrator(
+        sources=[source],
+        enrichers=[],
+        outputs=[output],
+        cache=MagicMock(),
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orch.set_hitster_safe(True)
+    orch._tick()
+    output.reset_mock()
+
+    orch.set_hitster_safe(False)
+    orch._tick()
+
+    output.on_new_item.assert_called_once()
+
+
+def test_get_health_includes_hitster_safe_state():
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock())
+    orch.set_hitster_safe(True)
+    assert orch.get_health()["hitster_safe"] is True

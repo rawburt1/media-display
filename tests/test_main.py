@@ -528,7 +528,7 @@ def test_wire_health_providers_wires_web_and_config_ui_outputs():
     orch.get_health.return_value = {
         "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
         "source_backoff_seconds": {}, "uptime_seconds": 0, "poll_interval_seconds": 5,
-        "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0,
+        "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0, "hitster_safe": False,
     }
     orch.sources = []
     orch.enrichers = []
@@ -545,6 +545,34 @@ def test_wire_health_providers_wires_web_and_config_ui_outputs():
     web_output.set_health_provider.assert_called_once()
     config_output.set_health_provider.assert_called_once()
     assert not other_output.set_health_provider.called
+
+
+# ---------------------------------------------------------------------------
+# _wire_hitster_safe
+# ---------------------------------------------------------------------------
+
+def test_wire_hitster_safe_wires_web_output_only():
+    from mediainfo.__main__ import _wire_hitster_safe
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+    from mediainfo.outputs.web import WebOutput
+
+    web_output = MagicMock(spec=WebOutput)
+    config_output = MagicMock(spec=ConfigUiOutput)
+    other_output = MagicMock()
+
+    orch = MagicMock()
+    orch.get_hitster_safe = MagicMock()
+    orch.set_hitster_safe = MagicMock()
+
+    _wire_hitster_safe([web_output, config_output, other_output], orch)
+
+    web_output.set_hitster_safe_handlers.assert_called_once_with(
+        orch.get_hitster_safe, orch.set_hitster_safe
+    )
+    # ConfigUiOutput has no set_hitster_safe_handlers method at all (its spec
+    # mock would raise AttributeError if code tried to call it) - confirming
+    # only WebOutput got wired.
+    assert not other_output.set_hitster_safe_handlers.called
 
 
 # ---------------------------------------------------------------------------
@@ -602,7 +630,7 @@ def test_health_provider_includes_config_fields_and_error_message_for_backed_off
         "poll_interval_seconds": 5,
         "rotation_interval_seconds": 30,
         "now_playing": None,
-        "idle_wallpapers_loaded": 0,
+        "idle_wallpapers_loaded": 0, "hitster_safe": False,
     }
 
     cfg = MagicMock()
@@ -635,7 +663,7 @@ def test_health_provider_assigns_per_type_instance_index_to_outputs():
     orch.get_health.return_value = {
         "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
         "source_backoff_seconds": {}, "uptime_seconds": 0, "poll_interval_seconds": 5,
-        "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0,
+        "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0, "hitster_safe": False,
     }
 
     cfg = MagicMock()

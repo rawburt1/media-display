@@ -57,7 +57,11 @@ Currently implemented:
   (`http://<host>:8094/`) is a web page for editing every config option
   above (sources, outputs, enrichers, idle sources, polling intervals)
   without hand-editing YAML - saved changes are hot-reloaded within a
-  few seconds
+  few seconds; the web output's page also has a "Hitster-safe" button that
+  suppresses song/artist/album display across *every* output (falling back
+  to idle wallpapers/text instead) while it's on, so a song's title/artist
+  never leaks onto a screen mid-round of Hitster or similar music-guessing
+  games
 - **Idle wallpapers**: Unsplash, Last.fm scrobble history (album art from
   your recent scrobbles), and/or your own library (random covers from
   imported albums) - while nothing is playing, downloads a fresh batch of
@@ -73,36 +77,81 @@ Currently implemented:
 
 ## Setup
 
+### Requirements
+
+- **Docker + Docker Compose** (recommended - no Python setup needed), **or**
+  Python 3.10+ if you'd rather run it directly on the host.
+- At least one supported media source reachable on your network (see
+  "Sources" above) and its IP/credentials. You don't need all of them - one
+  source and one output is enough to get something on screen; add more
+  later by re-editing config.yaml - most changes hot-reload within a few
+  seconds (see "Configuration" below for the exceptions).
+
+### Quick start (Docker - recommended)
+
 ```bash
+git clone https://github.com/rawburt1/media-display.git
+cd media-display
+
+./setup.sh                     # creates config/, cache/, etc. and config/config.yaml
+nano config/config.yaml        # fill in your devices' IPs/credentials
+
+docker compose up -d
+```
+
+`./setup.sh` creates every directory `docker-compose.yml` bind-mounts
+(`config/`, `cache/`, `library/`, `logs/`, `adb_keys/`, `artwork/`,
+`spotify_cache/`) and copies `config.example.yaml` to `config/config.yaml`
+if it isn't there yet. Running it yourself first matters: Docker otherwise
+creates any missing mount target itself as root, which the container's
+non-root app user can't then write into. config.yaml lives in
+`./config/config.yaml` rather than the project root because it's
+bind-mounted as a directory, so editors/tools that save by replacing the
+file (rather than writing in place) don't orphan the mount.
+
+Open `http://<this-machine>:8090/` - if you enabled at least one source and
+output in config.yaml, you should see either its artwork or an idle
+wallpaper within a few seconds. Check `docker compose logs -f` if not (see
+"Troubleshooting" below).
+
+To update later: `git pull && docker compose up -d --build`.
+
+### Manual install (no Docker)
+
+```bash
+git clone https://github.com/rawburt1/media-display.git
+cd media-display
+
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
 cp config.example.yaml config.yaml
-# edit config.yaml with your devices' IPs/credentials
+nano config.yaml               # fill in your devices' IPs/credentials
 
 python -m mediainfo --config config.yaml
 ```
 
 The web page is then available at `http://<this-machine>:8090/`.
 
-Running via `docker compose` instead (see `docker-compose.yml`)? Run
-`./setup.sh` first - it creates all the bind-mounted directories
-(`config/`, `cache/`, `library/`, `logs/`, `adb_keys/`, `artwork/`,
-`spotify_cache/`) and copies `config.example.yaml` to
-`config/config.yaml` if it isn't there yet. Doing this yourself before
-`docker compose up` matters: Docker otherwise creates any missing mount
-target itself as root, which the container's non-root app user can't
-write into. config.yaml lives in `./config/config.yaml` rather than the
-project root because it's bind-mounted as a directory, so editors/tools
-that save by replacing the file (rather than writing in place) don't
-orphan the mount.
+To update later: `git pull && pip install -r requirements.txt`.
 
-```bash
-./setup.sh
-# edit config/config.yaml with your devices' IPs/credentials
-docker compose up -d
-```
+### Troubleshooting
+
+- **Nothing shows up / `/health` reports sources as `not_configured`**: a
+  source needs both `enabled: true` *and* to be listed in the top-level
+  `priority:` list in config.yaml - being enabled isn't enough on its own.
+- **Container restarts in a loop**: `docker compose logs` will show a
+  traceback from `Config.load()` if config.yaml has a YAML syntax error or
+  a field of the wrong type - compare against config.example.yaml.
+- **A source connects but never shows artwork**: check `/health` (e.g.
+  `http://<this-machine>:8090/health`, or with `Accept: text/html` in a
+  browser for a dashboard view) - it reports each source/output/enricher's
+  live status, including the last error for anything that's failing.
+- **Spotify/Apple TV need a one-time interactive login**: see their entries
+  under "Configuration" below (`python -m mediainfo auth spotify` /
+  `auth appletv`) - run via `docker compose run --rm mediainfo python -m
+  mediainfo auth spotify --config config/config.yaml` if using Docker.
 
 ## Configuration
 

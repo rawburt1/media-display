@@ -203,6 +203,7 @@ def main() -> None:
     library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
     orch = _start_orchestrator(config, outputs, cache, library)
     _wire_health_providers(outputs, orch, config)
+    _wire_hitster_safe(outputs, orch)
 
     try:
         # Main loop: sleep until a stop signal or a config-file change.
@@ -239,6 +240,7 @@ def main() -> None:
                 )
             orch = _start_orchestrator(config, outputs, cache, library)
             _wire_health_providers(outputs, orch, config)
+            _wire_hitster_safe(outputs, orch)
             logger.info("Config reloaded successfully")
     finally:
         logger.info("Shutting down ...")
@@ -621,6 +623,7 @@ def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
             "poll_interval_seconds": data["poll_interval_seconds"],
             "rotation_interval_seconds": data["rotation_interval_seconds"],
             "now_playing": data["now_playing"],
+            "hitster_safe": data["hitster_safe"],
             "sources": sources,
             "outputs": output_list,
             "enrichers": enrichers,
@@ -641,6 +644,16 @@ def _wire_health_providers(outputs: list, orch: Orchestrator, config: Config) ->
     for output in outputs:
         if isinstance(output, (WebOutput, ConfigUiOutput)):
             output.set_health_provider(provider)
+
+
+def _wire_hitster_safe(outputs: list, orch: Orchestrator) -> None:
+    """Register the orchestrator's Hitster-safe get/set on every WebOutput
+    instance, so its button can read and toggle it."""
+    from mediainfo.outputs.web import WebOutput
+
+    for output in outputs:
+        if isinstance(output, WebOutput):
+            output.set_hitster_safe_handlers(orch.get_hitster_safe, orch.set_hitster_safe)
 
 
 # ---------------------------------------------------------------------------
