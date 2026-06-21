@@ -94,8 +94,8 @@ def _make_source(tmp_path, shell_return=None, shell_side_effect=None):
     key_path = tmp_path / "youtube"
     key_path.write_text("fake-key")
 
-    with patch("mediainfo.sources.youtube.PythonRSASigner") as mock_signer_cls, patch(
-        "mediainfo.sources.youtube.AdbDeviceTcp"
+    with patch("mediainfo.sources.adb_base.PythonRSASigner") as mock_signer_cls, patch(
+        "mediainfo.sources.adb_base.AdbDeviceTcp"
     ) as mock_device_cls:
         mock_signer_cls.FromRSAKeyPath.return_value = MagicMock()
         mock_device = MagicMock()

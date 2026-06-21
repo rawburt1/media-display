@@ -1,0 +1,174 @@
+"""HTML/CSS/JS template for the video output's page (_INDEX_HTML).
+
+Split out from video.py - returned verbatim (modulo the transitions CSS/JS
+placeholder substitution done once in VideoOutput.__init__) by the `/` route.
+"""
+
+from __future__ import annotations
+
+_INDEX_HTML = """<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Display</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
+                  color: #fff; font-family: sans-serif; }
+    .hidden { display: none !important; }
+
+    #video-container {
+      position: fixed; inset: 0; background: #000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #player { width: 100%; height: 100%; object-fit: cover; }
+
+    #art-container {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    #art-wrap { position: relative; width: 100vw; height: 85vh; }
+    #art-wrap img {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: contain; opacity: 0;
+      transition: opacity 1s ease-in-out, transform 1s ease-in-out;
+    }
+    /* __TRANSITIONS_CSS__ */
+    #meta { padding: 0.5em; text-align: center; }
+    #title { font-size: 1.5em; }
+    #subtitle { font-size: 1em; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div id="video-container" class="hidden">
+    <video id="player" autoplay muted playsinline></video>
+  </div>
+  <div id="art-container" class="hidden">
+    <div id="art-wrap">
+      <img id="art-a" alt="">
+      <img id="art-b" alt="">
+    </div>
+    <div id="meta">
+      <div id="title"></div>
+      <div id="subtitle"></div>
+    </div>
+  </div>
+
+  <script>
+    /* __TRANSITIONS_JS__ */
+
+    const player = document.getElementById('player');
+    const videoContainer = document.getElementById('video-container');
+    const artContainer = document.getElementById('art-container');
+    let activeImg = document.getElementById('art-a');
+    let standbyImg = document.getElementById('art-b');
+
+    // --- Video playlist ---
+    let playlist = [];
+    let videoIndex = 0;
+    let loadingVideos = false;
+
+    function shuffled(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function playNext() {
+      if (!playlist.length) return;
+      player.src = playlist[videoIndex % playlist.length];
+      videoIndex = (videoIndex + 1) % playlist.length;
+      player.play().catch(() => {});
+    }
+
+    player.addEventListener('ended', playNext);
+    player.addEventListener('error', () => setTimeout(playNext, 2000));
+
+    async function loadVideos() {
+      if (loadingVideos) return;
+      loadingVideos = true;
+      try {
+        const res = await fetch('/api/videos');
+        const vids = await res.json();
+        if (vids.length) {
+          playlist = shuffled(vids.map(v => v.url));
+          videoIndex = 0;
+          if (!player.src || player.paused) playNext();
+        }
+      } catch (e) {
+        // network error; will retry on next poll
+      } finally {
+        loadingVideos = false;
+      }
+    }
+
+    // --- Now-playing crossfade ---
+    let lastImage = null;
+
+    function showImage(src) {
+      prepareForTransition(standbyImg);
+      standbyImg.onload = standbyImg.onerror = () => {
+        activeImg.classList.remove('visible');
+        standbyImg.classList.add('visible');
+        [activeImg, standbyImg] = [standbyImg, activeImg];
+      };
+      standbyImg.src = src;
+    }
+
+    // --- State polling ---
+    let currentState = null;
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/state');
+        const data = await res.json();
+
+        if (data.state === 'idle') {
+          if (currentState !== 'idle') {
+            videoContainer.classList.remove('hidden');
+            artContainer.classList.add('hidden');
+            currentState = 'idle';
+            if (playlist.length && player.paused) {
+              player.play().catch(() => {});
+            }
+          }
+          if (!playlist.length) loadVideos();
+
+        } else {
+          if (currentState !== 'playing') {
+            artContainer.classList.remove('hidden');
+            videoContainer.classList.add('hidden');
+            if (player.src) player.pause();
+          }
+          currentState = 'playing';
+
+          document.getElementById('title').textContent = data.title || '';
+          document.getElementById('subtitle').textContent = data.subtitle || '';
+
+          if (data.image && data.image !== lastImage) {
+            artContainer.classList.remove('hidden');
+            showImage(data.image);
+            lastImage = data.image;
+          } else if (!data.image) {
+            activeImg.classList.remove('visible');
+            standbyImg.classList.remove('visible');
+            lastImage = null;
+          }
+        }
+      } catch (e) {
+        // Ignore transient errors.
+      } finally {
+        setTimeout(poll, 5000);
+      }
+    }
+
+    poll();
+  </script>
+</body>
+</html>
+"""
