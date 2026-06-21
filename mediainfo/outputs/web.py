@@ -210,6 +210,13 @@ class WebOutput(Output):
         )
 
     def _personalized_payload(self, conn: Any) -> dict:
+        """Build this client's payload - falling through the rest of its
+        rotation order (in position order, wrapping around) if its current
+        pick fails to resolve (e.g. rejected by the cache's minimum-size
+        filter), rather than sending a payload with no image at all and
+        leaving the client's display blank until its next scheduled
+        rotation, up to rotation_interval_seconds later.
+        """
         with self._lock:
             now_playing = self._now_playing
             cache = self._cache
@@ -227,8 +234,6 @@ class WebOutput(Output):
         }
         images = now_playing.images
         if state is not None and images:
-            artwork = images[state.order[state.position]]
-            payload["art_label"] = artwork.label
             tier: CacheTier
             if now_playing.source == "idle":
                 tier = "idle"
@@ -236,11 +241,17 @@ class WebOutput(Output):
                 tier = "music"
             else:
                 tier = "default"
-            path = self._resolve_artwork_path(cache, artwork, tier)
-            if path is not None:
+
+            for attempt in range(len(images)):
+                artwork = images[state.order[(state.position + attempt) % len(state.order)]]
+                path = self._resolve_artwork_path(cache, artwork, tier)
+                if path is None:
+                    continue
+                payload["art_label"] = artwork.label
                 with self._lock:
                     self._known_images[path.stem] = path
                 payload["image"] = f"/image/current?v={path.stem}"
+                break
         return payload
 
     def _resolve_artwork_path(

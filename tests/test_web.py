@@ -238,6 +238,46 @@ def test_each_client_gets_a_distinct_starting_image(tmp_path):
     assert payload_x["art_label"] != payload_y["art_label"]
 
 
+def test_personalized_payload_falls_through_pool_when_first_pick_fails(tmp_path):
+    # A client's rotation position can land on an image the cache rejects
+    # (e.g. below the minimum size) or fails to download - the payload
+    # should fall through to the next image in that client's own rotation
+    # order rather than coming back with no image at all.
+    out = _output()
+    images = [_art("a"), _art("b"), _art("c")]
+    out._cache = _cache_for(tmp_path, images)
+    # "a" fails to resolve; everything else succeeds.
+    out._cache.get_path = lambda artwork, **kwargs: (
+        None if artwork.label == "a" else tmp_path / f"{artwork.label}.jpg"
+    )
+    conn = _connect(out)
+
+    with patch("mediainfo.outputs.web.random.shuffle", side_effect=lambda lst: None):
+        out.update(_music(images=images), images[0], tmp_path / "a.jpg")
+    out._client_rotation[conn].position = 0  # lands on "a", the rejected one
+
+    payload = out._personalized_payload(conn)
+
+    assert payload["art_label"] == "b"
+    assert "image" in payload
+
+
+def test_personalized_payload_has_no_image_when_every_candidate_fails(tmp_path):
+    out = _output()
+    images = [_art("a"), _art("b")]
+    out._cache = _cache_for(tmp_path, images)
+    out._cache.get_path = lambda artwork, **kwargs: None  # every candidate rejected
+    conn = _connect(out)
+
+    with out._lock:
+        out._now_playing = _music(images=images)
+
+    payload = out._personalized_payload(conn)
+
+    assert "image" not in payload
+    assert "art_label" not in payload
+
+
 def test_resolve_artwork_path_passes_through_tier(tmp_path):
     out = _output()
     art = _art("cover")
