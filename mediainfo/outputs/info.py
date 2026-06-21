@@ -21,6 +21,7 @@ from flask_sock import Sock
 from mediainfo.cache import ImageCache
 from mediainfo.config import AuthConfig, InfoConfig
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
 from mediainfo.transforms import parse_pipeline
 from mediainfo.web_auth import install_auth
@@ -40,10 +41,11 @@ _INDEX_HTML = """<!DOCTYPE html>
     #art-container.fullscreen { flex: 1 1 100%; }
     #art-container img {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      object-fit: contain; opacity: 0; transition: opacity 1s ease-in-out;
+      object-fit: contain; opacity: 0;
+      transition: opacity 1s ease-in-out, transform 1s ease-in-out;
     }
     #art-container.fullscreen img { object-fit: cover; }
-    #art-container img.visible { opacity: 1; }
+    /* __TRANSITIONS_CSS__ */
     #panel { flex: 0 0 40%; padding: 2em; box-sizing: border-box;
              display: flex; flex-direction: column; overflow-y: auto; }
     #panel.hidden { display: none; }
@@ -70,11 +72,14 @@ _INDEX_HTML = """<!DOCTYPE html>
     </div>
   </div>
   <script>
+    /* __TRANSITIONS_JS__ */
+
     let lastImage = null;
     let activeImg = document.getElementById("art-a");
     let standbyImg = document.getElementById("art-b");
 
     function showImage(src) {
+      prepareForTransition(standbyImg);
       standbyImg.onload = standbyImg.onerror = () => {
         activeImg.classList.remove("visible");
         standbyImg.classList.add("visible");
@@ -133,6 +138,11 @@ class InfoOutput(Output):
         self.config = config
         self.auth_config = auth_config
         self.transform_pipeline = parse_pipeline(config.transforms)
+        self._index_html = (
+            _INDEX_HTML
+            .replace("/* __TRANSITIONS_CSS__ */", transitions.transitions_css())
+            .replace("/* __TRANSITIONS_JS__ */", transitions.transitions_js(config.transition_exclude))
+        )
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         self._artwork: Optional[Artwork] = None
@@ -225,7 +235,7 @@ class InfoOutput(Output):
 
         @app.get("/")
         def index():
-            return _INDEX_HTML
+            return self._index_html
 
         @app.get("/api/now-playing")
         def now_playing_json():

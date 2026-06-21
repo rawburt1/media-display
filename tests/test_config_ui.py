@@ -480,6 +480,49 @@ def test_restart_process_sends_sigterm_to_self(mock_kill):
 
 
 # ---------------------------------------------------------------------------
+# /api/hitster-safe
+# ---------------------------------------------------------------------------
+
+def test_hitster_safe_status_defaults_to_disabled_when_unwired(config_path):
+    out = _output(config_path)
+    resp = out.app.test_client().get("/api/hitster-safe")
+    assert resp.get_json() == {"enabled": False}
+
+
+def test_hitster_safe_status_reflects_get_handler(config_path):
+    out = _output(config_path)
+    out.set_hitster_safe_handlers(lambda: True, MagicMock())
+    resp = out.app.test_client().get("/api/hitster-safe")
+    assert resp.get_json() == {"enabled": True}
+
+
+def test_hitster_safe_toggle_calls_set_handler(config_path):
+    out = _output(config_path)
+    set_fn = MagicMock()
+    out.set_hitster_safe_handlers(lambda: False, set_fn)
+
+    resp = out.app.test_client().post(
+        "/api/hitster-safe", json={"enabled": True},
+    )
+
+    assert resp.get_json() == {"enabled": True}
+    set_fn.assert_called_once_with(True)
+
+
+def test_hitster_safe_toggle_unavailable_when_unwired(config_path):
+    out = _output(config_path)
+    resp = out.app.test_client().post("/api/hitster-safe", json={"enabled": True})
+    assert resp.status_code == 503
+
+
+def test_hitster_safe_button_present_on_form_and_dashboard_pages(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    assert b"hitster-safe-btn" in client.get("/form").data
+    assert b"hitster-safe-btn" in client.get("/dashboard").data
+
+
+# ---------------------------------------------------------------------------
 # Apple TV pairing
 # ---------------------------------------------------------------------------
 

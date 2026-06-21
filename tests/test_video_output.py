@@ -152,3 +152,19 @@ def test_index_page_returns_html():
     resp = _client(output).get("/")
     assert resp.status_code == 200
     assert b"<video" in resp.data
+
+
+def test_index_page_includes_all_transitions_by_default():
+    output = _make_output()
+    body = _client(output).get("/").data.decode()
+    assert "t-slide-left" in body
+    assert "#art-wrap img.t-zoom" in body
+    assert "prepareForTransition" in body
+
+
+def test_index_page_excludes_configured_transitions():
+    output = _make_output(transition_exclude=["slide-left", "zoom"])
+    body = _client(output).get("/").data.decode()
+    variants_section = body.split("TRANSITION_VARIANTS = ")[1].split(";")[0]
+    assert "t-slide-left" not in variants_section
+    assert "t-zoom" not in variants_section

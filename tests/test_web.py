@@ -440,43 +440,22 @@ def test_health_content_type_is_json():
 
 
 # ---------------------------------------------------------------------------
-# Hitster-safe
+# Image transitions
 # ---------------------------------------------------------------------------
 
-def test_hitster_safe_status_defaults_to_disabled_when_unwired():
+def test_index_page_includes_all_transitions_by_default():
     out = _output()
-    resp = out.app.test_client().get("/api/hitster-safe")
-    assert resp.get_json() == {"enabled": False}
+    body = out.app.test_client().get("/").data.decode()
+    assert "t-slide-left" in body
+    assert "prepareForTransition" in body
 
 
-def test_hitster_safe_status_reflects_get_handler():
-    out = _output()
-    out.set_hitster_safe_handlers(lambda: True, MagicMock())
-    resp = out.app.test_client().get("/api/hitster-safe")
-    assert resp.get_json() == {"enabled": True}
-
-
-def test_hitster_safe_toggle_calls_set_handler():
-    out = _output()
-    set_fn = MagicMock()
-    out.set_hitster_safe_handlers(lambda: False, set_fn)
-
-    resp = out.app.test_client().post(
-        "/api/hitster-safe", data=json.dumps({"enabled": True}),
-        content_type="application/json",
-    )
-
-    assert resp.get_json() == {"enabled": True}
-    set_fn.assert_called_once_with(True)
-
-
-def test_hitster_safe_toggle_unavailable_when_unwired():
-    out = _output()
-    resp = out.app.test_client().post(
-        "/api/hitster-safe", data=json.dumps({"enabled": True}),
-        content_type="application/json",
-    )
-    assert resp.status_code == 503
+def test_index_page_excludes_configured_transitions():
+    out = _output(_config(transition_exclude=["slide-left", "zoom"]))
+    body = out.app.test_client().get("/").data.decode()
+    variants_section = body.split("TRANSITION_VARIANTS = ")[1].split(";")[0]
+    assert "t-slide-left" not in variants_section
+    assert "t-zoom" not in variants_section
 
 
 # ---------------------------------------------------------------------------

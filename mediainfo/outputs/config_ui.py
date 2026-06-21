@@ -203,8 +203,17 @@ class ConfigUiOutput(Output):
         self._library: Optional[MusicLibrary] = None
         self._library_db_path: Optional[str] = None
         self._health_fn = None
+        self._hitster_safe_get = None
+        self._hitster_safe_set = None
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
+
+    def set_hitster_safe_handlers(self, get_fn, set_fn) -> None:
+        """Register the orchestrator's Hitster-safe get/set, so this
+        output's button can read and toggle it - see
+        Orchestrator.get_hitster_safe."""
+        self._hitster_safe_get = get_fn
+        self._hitster_safe_set = set_fn
 
     def set_health_provider(self, fn) -> None:
         """Register a callable that returns the health JSON dict - used by
@@ -586,6 +595,20 @@ class ConfigUiOutput(Output):
             threading.Timer(_RESTART_DELAY_SECONDS, _restart_process).start()
             return jsonify({"ok": True})
 
+        @app.get("/api/hitster-safe")
+        def hitster_safe_status():
+            enabled = self._hitster_safe_get() if self._hitster_safe_get else False
+            return jsonify({"enabled": enabled})
+
+        @app.post("/api/hitster-safe")
+        def hitster_safe_toggle():
+            if self._hitster_safe_set is None:
+                return jsonify({"error": "Hitster-safe is not available"}), 503
+            data = request.get_json(silent=True) or {}
+            enabled = bool(data.get("enabled"))
+            self._hitster_safe_set(enabled)
+            return jsonify({"enabled": enabled})
+
         @app.post("/api/appletv/pair/start")
         def appletv_pair_start():
             body = request.get_json(silent=True) or {}
@@ -723,6 +746,8 @@ _INDEX_HTML = """<!DOCTYPE html>
   button.danger { background: #7f1d1d; }
   button.danger:hover { background: #991b1b; }
   button.small { padding: 5px 12px; font-size: 12px; }
+  #hitster-safe-btn.active { background: #7c3aed; }
+  #hitster-safe-btn.active:hover { background: #6d28d9; }
   #toolbar { position: sticky; bottom: 0; background: #080d1a; padding: 14px 0;
              border-top: 1px solid #1a2540; display: flex; gap: 10px; align-items: center; }
   #status { font-size: 12px; color: #6b7fa8; }
@@ -755,6 +780,7 @@ _INDEX_HTML = """<!DOCTYPE html>
 <div id="toolbar">
   <button onclick="saveForm()">Save</button>
   <button class="danger" onclick="restart()">Restart mediainfo</button>
+  <button class="secondary" id="hitster-safe-btn" onclick="toggleHitsterSafe()">Hitster-safe</button>
   <span id="status"></span>
 </div>
 <p style="font-size: 11px; color: #3b5070; margin-top: 8px;">
@@ -1051,6 +1077,30 @@ function restart() {
   setStatus(status, true, 'Restarting...');
 }
 
+let hitsterSafeEnabled = false;
+
+function renderHitsterSafeButton() {
+  const btn = document.getElementById('hitster-safe-btn');
+  btn.textContent = hitsterSafeEnabled ? 'Hitster-safe: ON' : 'Hitster-safe';
+  btn.classList.toggle('active', hitsterSafeEnabled);
+}
+
+function toggleHitsterSafe() {
+  fetch('/api/hitster-safe', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({enabled: !hitsterSafeEnabled}),
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { hitsterSafeEnabled = !!d.enabled; renderHitsterSafeButton(); })
+    .catch(function() {});
+}
+
+fetch('/api/hitster-safe')
+  .then(function(r) { return r.json(); })
+  .then(function(d) { hitsterSafeEnabled = !!d.enabled; renderHitsterSafeButton(); })
+  .catch(function() {});
+
 function load() {
   Promise.all([
     fetch('/api/schema').then(function(r) { return r.json(); }),
@@ -1226,6 +1276,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                   padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
   button.danger:hover { background: #b91c1c; }
   #restart-status { font-size: 12px; color: var(--muted); }
+  #hitster-safe-btn { background: var(--chip-bg); border: 1px solid var(--border);
+                       color: var(--text); border-radius: 8px; padding: 6px 12px;
+                       font-size: 12px; font-weight: 600; cursor: pointer; }
+  #hitster-safe-btn:hover { border-color: var(--accent); }
+  #hitster-safe-btn.active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
   .filters { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
   .chip { background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
           border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600;
@@ -1281,6 +1336,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <a class="nav-link" href="/form">&larr; Configuration</a>
   <button class="danger" onclick="restartDashboard()">Restart mediainfo</button>
   <span id="restart-status"></span>
+  <button id="hitster-safe-btn" onclick="toggleHitsterSafe()">Hitster-safe</button>
   <button id="theme-toggle" onclick="toggleTheme()">&#9728; / &#9790;</button>
 </div>
 
@@ -1318,6 +1374,30 @@ function restartDashboard() {
   fetch('/api/restart', { method: 'POST' }).catch(function() {});
   statusEl.textContent = 'Restarting...';
 }
+
+let hitsterSafeEnabled = false;
+
+function renderHitsterSafeButton() {
+  const btn = document.getElementById('hitster-safe-btn');
+  btn.textContent = hitsterSafeEnabled ? 'Hitster-safe: ON' : 'Hitster-safe';
+  btn.classList.toggle('active', hitsterSafeEnabled);
+}
+
+function toggleHitsterSafe() {
+  fetch('/api/hitster-safe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: !hitsterSafeEnabled }),
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { hitsterSafeEnabled = !!d.enabled; renderHitsterSafeButton(); })
+    .catch(function() {});
+}
+
+fetch('/api/hitster-safe')
+  .then(function(r) { return r.json(); })
+  .then(function(d) { hitsterSafeEnabled = !!d.enabled; renderHitsterSafeButton(); })
+  .catch(function() {});
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);

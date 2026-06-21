@@ -190,6 +190,10 @@ class WebConfig:
     host: str = "0.0.0.0"
     port: int = 8090
     transforms: list = dataclasses.field(default_factory=list)
+    # Image-change transition variants to exclude, e.g. [slide-left, zoom].
+    # All variants (fade, slide-left, slide-right, slide-up, slide-down,
+    # zoom) are used by default, picked at random per image change.
+    transition_exclude: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -201,6 +205,8 @@ class InfoConfig:
     # this output shows artwork at its original (high) resolution, unlike
     # outputs aimed at small physical displays.
     transforms: list = dataclasses.field(default_factory=list)
+    # Image-change transition variants to exclude - see WebConfig above.
+    transition_exclude: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -298,6 +304,8 @@ class VideoOutputConfig:
     pexels_api_key: str = ""
     # API key for https://pixabay.com/api/docs/ (used when source = "pixabay")
     pixabay_api_key: str = ""
+    # Image-change transition variants to exclude - see WebConfig above.
+    transition_exclude: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass

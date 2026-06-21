@@ -305,6 +305,8 @@ outputs:
     enabled: true
     host: 0.0.0.0
     port: 8093
+    # See outputs.web's transition_exclude above.
+    transition_exclude: []
 
   # MQTT publish — sends now-playing metadata to an MQTT broker.
   # Useful for triggering home-automation flows (Home Assistant, Node-RED, …)
@@ -404,6 +406,8 @@ outputs:
     pexels_api_key: YOUR_PEXELS_API_KEY
     # API key from https://pixabay.com/api/docs/ (used when source = "pixabay")
     pixabay_api_key: ""
+    # See outputs.web's transition_exclude above.
+    transition_exclude: []
 
   # Multiple video outputs — living room TV on 8091, bedroom TV on 8093:
   # video:
@@ -426,6 +430,11 @@ outputs:
     enabled: true
     host: 0.0.0.0            # Listen on all network interfaces
     port: 8090
+    # Each image change picks a random transition: fade, slide-left,
+    # slide-right, slide-up, slide-down, or zoom. All are used by default;
+    # list any to skip here, e.g. [slide-up, slide-down]. Also available on
+    # `info` and `video` below.
+    transition_exclude: []
 
   # Multiple web outputs — e.g. different ports for different rooms:
   # web:

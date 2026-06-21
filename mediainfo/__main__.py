@@ -647,12 +647,12 @@ def _wire_health_providers(outputs: list, orch: Orchestrator, config: Config) ->
 
 
 def _wire_hitster_safe(outputs: list, orch: Orchestrator) -> None:
-    """Register the orchestrator's Hitster-safe get/set on every WebOutput
-    instance, so its button can read and toggle it."""
-    from mediainfo.outputs.web import WebOutput
+    """Register the orchestrator's Hitster-safe get/set on every
+    ConfigUiOutput instance, so its button can read and toggle it."""
+    from mediainfo.outputs.config_ui import ConfigUiOutput
 
     for output in outputs:
-        if isinstance(output, WebOutput):
+        if isinstance(output, ConfigUiOutput):
             output.set_hitster_safe_handlers(orch.get_hitster_safe, orch.set_hitster_safe)
 
 

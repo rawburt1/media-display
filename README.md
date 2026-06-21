@@ -56,12 +56,11 @@ Currently implemented:
   playing item, including the Wikipedia summary when available; config output
   (`http://<host>:8094/`) is a web page for editing every config option
   above (sources, outputs, enrichers, idle sources, polling intervals)
-  without hand-editing YAML - saved changes are hot-reloaded within a
-  few seconds; the web output's page also has a "Hitster-safe" button that
-  suppresses song/artist/album display across *every* output (falling back
-  to idle wallpapers/text instead) while it's on, so a song's title/artist
-  never leaks onto a screen mid-round of Hitster or similar music-guessing
-  games
+  without hand-editing YAML - saved changes are hot-reloaded within a few
+  seconds, and it has a "Hitster-safe" button that suppresses song/artist/
+  album display across *every* output (falling back to idle wallpapers/text
+  instead) while it's on, so a song's title/artist never leaks onto a
+  screen mid-round of Hitster or similar music-guessing games
 - **Idle wallpapers**: Unsplash, Last.fm scrobble history (album art from
   your recent scrobbles), and/or your own library (random covers from
   imported albums) - while nothing is playing, downloads a fresh batch of
@@ -341,7 +340,10 @@ See `config.example.yaml` for all options. Key things to fill in:
   through the available images - randomized order, randomized timing -
   rather than every screen seeing an identical broadcast, so multiple
   screens pointed at the same URL don't all show the same picture at the
-  same time.
+  same time. Each image change uses a randomly picked transition (fade,
+  slide from any side, or zoom); `transition_exclude` (a list of names)
+  drops any of them from the pool - this output, `info`, and `video` all
+  support it.
 - **`outputs.folder`**: `dir` is a local directory that mirrors all of the
   current item's artwork (album art, fanart, posters) as individual image
   files, named after each image's label (e.g. `Poster (fanart.tv).jpg`).

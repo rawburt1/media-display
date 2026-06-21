@@ -173,6 +173,21 @@ def test_default_transform_pipeline_is_empty():
 # HTTP endpoints
 # ---------------------------------------------------------------------------
 
+def test_index_page_includes_all_transitions_by_default():
+    out = _output()
+    body = out.app.test_client().get("/").data.decode()
+    assert "t-slide-left" in body
+    assert "prepareForTransition" in body
+
+
+def test_index_page_excludes_configured_transitions():
+    out = _output(_config(transition_exclude=["slide-left", "zoom"]))
+    body = out.app.test_client().get("/").data.decode()
+    variants_section = body.split("TRANSITION_VARIANTS = ")[1].split(";")[0]
+    assert "t-slide-left" not in variants_section
+    assert "t-zoom" not in variants_section
+
+
 def test_index_page_served():
     out = _output()
     client = out.app.test_client()

@@ -43,6 +43,7 @@ from flask_sock import Sock
 from mediainfo.cache import ImageCache
 from mediainfo.config import AuthConfig, WebConfig
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
 from mediainfo.transforms import parse_pipeline
 from mediainfo.web_auth import install_auth
@@ -79,21 +80,16 @@ _INDEX_HTML = """<!DOCTYPE html>
     #art-container.fullscreen { height: 100vh; }
     #art-container img {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      object-fit: contain; opacity: 0; transition: opacity 1s ease-in-out;
+      object-fit: contain; opacity: 0;
+      transition: opacity 1s ease-in-out, transform 1s ease-in-out;
     }
     #art-container.fullscreen img { object-fit: cover; }
-    #art-container img.visible { opacity: 1; }
+    /* __TRANSITIONS_CSS__ */
     #meta { text-align: center; padding: 0.5em; }
     #meta.hidden { display: none; }
     #title { font-size: 1.5em; }
     #subtitle { font-size: 1em; opacity: 0.8; }
     #art-label { font-size: 0.8em; opacity: 0.5; margin-top: 0.3em; }
-    #hitster-safe-btn {
-      position: fixed; bottom: 1em; right: 1em; z-index: 10;
-      background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.25);
-      border-radius: 999px; padding: 0.5em 1em; font-size: 0.85em; cursor: pointer;
-    }
-    #hitster-safe-btn.active { background: #7c3aed; border-color: #7c3aed; }
   </style>
 </head>
 <body>
@@ -106,13 +102,15 @@ _INDEX_HTML = """<!DOCTYPE html>
     <div id="subtitle"></div>
     <div id="art-label"></div>
   </div>
-  <button id="hitster-safe-btn" onclick="toggleHitsterSafe()">Hitster-safe</button>
   <script>
+    /* __TRANSITIONS_JS__ */
+
     let lastImage = null;
     let activeImg = document.getElementById("art-a");
     let standbyImg = document.getElementById("art-b");
 
     function showImage(src) {
+      prepareForTransition(standbyImg);
       standbyImg.onload = standbyImg.onerror = () => {
         activeImg.classList.remove("visible");
         standbyImg.classList.add("visible");
@@ -156,30 +154,6 @@ _INDEX_HTML = """<!DOCTYPE html>
     }
 
     connect();
-
-    let hitsterSafeEnabled = false;
-
-    function renderHitsterSafeButton() {
-      const btn = document.getElementById("hitster-safe-btn");
-      btn.textContent = hitsterSafeEnabled ? "Hitster-safe: ON" : "Hitster-safe";
-      btn.classList.toggle("active", hitsterSafeEnabled);
-    }
-
-    function toggleHitsterSafe() {
-      fetch("/api/hitster-safe", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({enabled: !hitsterSafeEnabled}),
-      })
-        .then((r) => r.json())
-        .then((data) => { hitsterSafeEnabled = !!data.enabled; renderHitsterSafeButton(); })
-        .catch(() => {});
-    }
-
-    fetch("/api/hitster-safe")
-      .then((r) => r.json())
-      .then((data) => { hitsterSafeEnabled = !!data.enabled; renderHitsterSafeButton(); })
-      .catch(() => {});
   </script>
 </body>
 </html>
@@ -429,6 +403,11 @@ class WebOutput(Output):
         self.auth_config = auth_config
         self.rotation_interval_seconds = rotation_interval_seconds
         self.transform_pipeline = parse_pipeline(config.transforms)
+        self._index_html = (
+            _INDEX_HTML
+            .replace("/* __TRANSITIONS_CSS__ */", transitions.transitions_css())
+            .replace("/* __TRANSITIONS_JS__ */", transitions.transitions_js(config.transition_exclude))
+        )
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         # Set at construction so idle wallpapers can resolve images even
@@ -449,8 +428,6 @@ class WebOutput(Output):
         self._images_pushed_for_pool = False
 
         self._health_fn = None
-        self._hitster_safe_get = None
-        self._hitster_safe_set = None
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
         threading.Thread(target=self._rotate_clients_loop, daemon=True).start()
@@ -458,13 +435,6 @@ class WebOutput(Output):
     def set_health_provider(self, fn) -> None:
         """Register a callable that returns the health JSON dict for /health."""
         self._health_fn = fn
-
-    def set_hitster_safe_handlers(self, get_fn, set_fn) -> None:
-        """Register the orchestrator's Hitster-safe get/set, so this
-        output's button can read and toggle it - see
-        Orchestrator.get_hitster_safe."""
-        self._hitster_safe_get = get_fn
-        self._hitster_safe_set = set_fn
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         with self._lock:
@@ -686,7 +656,7 @@ class WebOutput(Output):
 
         @app.get("/")
         def index():
-            return _INDEX_HTML
+            return self._index_html
 
         @app.get("/health")
         def health():
@@ -702,20 +672,6 @@ class WebOutput(Output):
         @app.get("/api/now-playing")
         def now_playing_json():
             return jsonify(self._get_payload())
-
-        @app.get("/api/hitster-safe")
-        def hitster_safe_status():
-            enabled = self._hitster_safe_get() if self._hitster_safe_get else False
-            return jsonify({"enabled": enabled})
-
-        @app.post("/api/hitster-safe")
-        def hitster_safe_toggle():
-            if self._hitster_safe_set is None:
-                return jsonify({"error": "Hitster-safe is not available"}), 503
-            data = request.get_json(silent=True) or {}
-            enabled = bool(data.get("enabled"))
-            self._hitster_safe_set(enabled)
-            return jsonify({"enabled": enabled})
 
         @app.get("/image/current")
         def current_image():

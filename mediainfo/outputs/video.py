@@ -13,6 +13,7 @@ from flask import Flask, jsonify, send_file
 from mediainfo.cache import ImageCache
 from mediainfo.config import AuthConfig, VideoOutputConfig
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
 from mediainfo.video.base import VideoClip, VideoSource
 from mediainfo.web_auth import install_auth
@@ -45,9 +46,10 @@ _INDEX_HTML = """<!DOCTYPE html>
     #art-wrap { position: relative; width: 100vw; height: 85vh; }
     #art-wrap img {
       position: absolute; inset: 0; width: 100%; height: 100%;
-      object-fit: contain; opacity: 0; transition: opacity 1s ease-in-out;
+      object-fit: contain; opacity: 0;
+      transition: opacity 1s ease-in-out, transform 1s ease-in-out;
     }
-    #art-wrap img.visible { opacity: 1; }
+    /* __TRANSITIONS_CSS__ */
     #meta { padding: 0.5em; text-align: center; }
     #title { font-size: 1.5em; }
     #subtitle { font-size: 1em; opacity: 0.8; }
@@ -69,6 +71,8 @@ _INDEX_HTML = """<!DOCTYPE html>
   </div>
 
   <script>
+    /* __TRANSITIONS_JS__ */
+
     const player = document.getElementById('player');
     const videoContainer = document.getElementById('video-container');
     const artContainer = document.getElementById('art-container');
@@ -121,6 +125,7 @@ _INDEX_HTML = """<!DOCTYPE html>
     let lastImage = null;
 
     function showImage(src) {
+      prepareForTransition(standbyImg);
       standbyImg.onload = standbyImg.onerror = () => {
         activeImg.classList.remove('visible');
         standbyImg.classList.add('visible');
@@ -209,6 +214,11 @@ class VideoOutput(Output):
     def __init__(self, config: VideoOutputConfig, auth_config: Optional[AuthConfig] = None):
         self.config = config
         self.auth_config = auth_config
+        self._index_html = (
+            _INDEX_HTML
+            .replace("/* __TRANSITIONS_CSS__ */", transitions.transitions_css("#art-wrap"))
+            .replace("/* __TRANSITIONS_JS__ */", transitions.transitions_js(config.transition_exclude))
+        )
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         self._artwork: Optional[Artwork] = None
@@ -287,7 +297,7 @@ class VideoOutput(Output):
 
         @app.get("/")
         def index():
-            return _INDEX_HTML
+            return self._index_html
 
         @app.get("/api/state")
         def state():

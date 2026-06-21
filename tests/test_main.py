@@ -551,7 +551,7 @@ def test_wire_health_providers_wires_web_and_config_ui_outputs():
 # _wire_hitster_safe
 # ---------------------------------------------------------------------------
 
-def test_wire_hitster_safe_wires_web_output_only():
+def test_wire_hitster_safe_wires_config_ui_output_only():
     from mediainfo.__main__ import _wire_hitster_safe
     from mediainfo.outputs.config_ui import ConfigUiOutput
     from mediainfo.outputs.web import WebOutput
@@ -566,12 +566,12 @@ def test_wire_hitster_safe_wires_web_output_only():
 
     _wire_hitster_safe([web_output, config_output, other_output], orch)
 
-    web_output.set_hitster_safe_handlers.assert_called_once_with(
+    config_output.set_hitster_safe_handlers.assert_called_once_with(
         orch.get_hitster_safe, orch.set_hitster_safe
     )
-    # ConfigUiOutput has no set_hitster_safe_handlers method at all (its spec
-    # mock would raise AttributeError if code tried to call it) - confirming
-    # only WebOutput got wired.
+    # WebOutput has no set_hitster_safe_handlers method at all (its spec mock
+    # would raise AttributeError if code tried to call it) - confirming only
+    # ConfigUiOutput got wired.
     assert not other_output.set_hitster_safe_handlers.called
 
 
