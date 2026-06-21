@@ -9,7 +9,6 @@ shown at its original resolution rather than scaled down for a small panel.
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from pathlib import Path
@@ -23,6 +22,7 @@ from mediainfo.config import AuthConfig, InfoConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
+from mediainfo.outputs.websocket_push import broadcast, register_websocket_route
 from mediainfo.transforms import parse_pipeline
 from mediainfo.web_auth import install_auth
 
@@ -198,18 +198,7 @@ class InfoOutput(Output):
         return payload
 
     def _push(self, payload: dict) -> None:
-        data = json.dumps(payload)
-        with self._clients_lock:
-            clients = list(self._clients)
-        dead: set[Any] = set()
-        for conn in clients:
-            try:
-                conn.send(data)
-            except Exception:
-                dead.add(conn)
-        if dead:
-            with self._clients_lock:
-                self._clients -= dead
+        broadcast(self._clients_lock, self._clients, payload)
 
     def _run_server(self) -> None:
         logger.info("Starting info server on %s:%s", self.config.host, self.config.port)
@@ -219,19 +208,10 @@ class InfoOutput(Output):
         app = Flask(__name__)
         sock = Sock(app)
 
-        @sock.route("/ws")
-        def websocket(conn):
-            with self._clients_lock:
-                self._clients.add(conn)
-            try:
-                conn.send(json.dumps(self._get_payload()))
-                while True:
-                    conn.receive()
-            except Exception:
-                pass
-            finally:
-                with self._clients_lock:
-                    self._clients.discard(conn)
+        register_websocket_route(
+            sock, "/ws", self._clients_lock, self._clients,
+            get_initial_payload=lambda conn: self._get_payload(),
+        )
 
         @app.get("/")
         def index():
