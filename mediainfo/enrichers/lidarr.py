@@ -10,21 +10,18 @@ MusicBrainz ids into the local MusicLibrary cache.
 from __future__ import annotations
 
 import logging
-from typing import Any, List, Optional
-
-import requests
+from typing import List, Optional
 
 from mediainfo.config import LidarrConfig
-from mediainfo.enrichers.base import ArtworkEnricher
-from mediainfo.models import Artwork, NowPlaying
+from mediainfo.enrichers.arr_base import ArrEnricher
+from mediainfo.models import NowPlaying
 
 logger = logging.getLogger(__name__)
 
 
-class LidarrEnricher(ArtworkEnricher):
+class LidarrEnricher(ArrEnricher):
     def __init__(self, config: LidarrConfig):
-        self.config = config
-        self._base = f"http://{config.host}:{config.port}"
+        super().__init__(config)
 
     def enrich(self, now_playing: NowPlaying) -> None:
         if now_playing.media_type != "music" or not now_playing.subtitle:
@@ -46,27 +43,12 @@ class LidarrEnricher(ArtworkEnricher):
 
     def _find_artist(self, name: str) -> Optional[dict]:
         artists = self._get("/api/v1/artist") or []
-        target = name.strip().casefold()
-        for artist in artists:
-            if (artist.get("artistName") or "").strip().casefold() == target:
-                return artist
-        return None
+        return self._find_by_exact_title(artists, name, "artistName")
 
     def _append_album_art(self, now_playing: NowPlaying, albums: list) -> None:
-        album_title = now_playing.album.strip().casefold() if now_playing.album else ""
-        match = next(
-            (a for a in albums if (a.get("title") or "").strip().casefold() == album_title),
-            None,
-        ) if album_title else None
-
+        match = self._find_by_exact_title(albums, now_playing.album, "title")
         images = (match or {}).get("images") or []
-        url = next(
-            (img.get("remoteUrl") or img.get("url")
-             for img in images if img.get("coverType") == "cover"),
-            None,
-        )
-        if url and not any(image.url == url for image in now_playing.images):
-            now_playing.images.append(Artwork(url=url, label="Album (Lidarr)"))
+        self._append_image(now_playing, images, "cover", "Album (Lidarr)")
 
     def _build_discography(self, artist_id: int, albums: list) -> List[str]:
         entries: List[str] = []
@@ -84,13 +66,3 @@ class LidarrEnricher(ArtworkEnricher):
             entries.append(f"{album_title} – {title}" if album_title else title)
 
         return entries
-
-    def _get(self, path: str, params: Optional[dict] = None) -> Optional[Any]:
-        response = requests.get(
-            f"{self._base}{path}",
-            params=params,
-            headers={"X-Api-Key": self.config.api_key},
-            timeout=10,
-        )
-        response.raise_for_status()
-        return response.json()

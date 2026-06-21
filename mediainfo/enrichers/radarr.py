@@ -6,21 +6,18 @@ for movies, by matching the playing title against Radarr's own library
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
-
-import requests
+from typing import Optional
 
 from mediainfo.config import RadarrConfig
-from mediainfo.enrichers.base import ArtworkEnricher
-from mediainfo.models import Artwork, NowPlaying
+from mediainfo.enrichers.arr_base import ArrEnricher
+from mediainfo.models import NowPlaying
 
 logger = logging.getLogger(__name__)
 
 
-class RadarrEnricher(ArtworkEnricher):
+class RadarrEnricher(ArrEnricher):
     def __init__(self, config: RadarrConfig):
-        self.config = config
-        self._base = f"http://{config.host}:{config.port}"
+        super().__init__(config)
 
     def enrich(self, now_playing: NowPlaying) -> None:
         if now_playing.media_type != "movie":
@@ -36,7 +33,9 @@ class RadarrEnricher(ArtworkEnricher):
             if movie.get("genres") and not now_playing.genres:
                 now_playing.genres = list(movie["genres"])
 
-            self._append_images(now_playing, movie.get("images") or [])
+            images = movie.get("images") or []
+            self._append_image(now_playing, images, "poster", "Poster (Radarr)")
+            self._append_image(now_playing, images, "fanart", "Fanart (Radarr)")
         except Exception:
             logger.exception("Radarr enrichment error")
 
@@ -47,32 +46,5 @@ class RadarrEnricher(ArtworkEnricher):
             if results:
                 return results[0]
 
-        if not now_playing.title:
-            return None
         results = self._get("/api/v3/movie") or []
-        title = now_playing.title.strip().casefold()
-        for movie in results:
-            if (movie.get("title") or "").strip().casefold() == title:
-                return movie
-        return None
-
-    @staticmethod
-    def _append_images(now_playing: NowPlaying, images: list) -> None:
-        for cover_type, label in (("poster", "Poster (Radarr)"), ("fanart", "Fanart (Radarr)")):
-            url = next(
-                (img.get("remoteUrl") or img.get("url")
-                 for img in images if img.get("coverType") == cover_type),
-                None,
-            )
-            if url and not any(image.url == url for image in now_playing.images):
-                now_playing.images.append(Artwork(url=url, label=label))
-
-    def _get(self, path: str, params: Optional[dict] = None) -> Optional[Any]:
-        response = requests.get(
-            f"{self._base}{path}",
-            params=params,
-            headers={"X-Api-Key": self.config.api_key},
-            timeout=10,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._find_by_exact_title(results, now_playing.title, "title")

@@ -48,7 +48,7 @@ _TRACKS = [
 ]
 
 
-@patch("mediainfo.enrichers.lidarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_matches_artist_and_sets_album_art_and_discography(mock_get):
     mock_get.side_effect = [_response(_ARTISTS), _response(_ALBUMS), _response(_TRACKS)]
 
@@ -69,7 +69,7 @@ def test_matches_artist_and_sets_album_art_and_discography(mock_get):
     assert album_call.kwargs["params"] == {"artistId": 1}
 
 
-@patch("mediainfo.enrichers.lidarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_no_artist_match_does_nothing(mock_get):
     mock_get.return_value = _response([])
 
@@ -80,7 +80,7 @@ def test_no_artist_match_does_nothing(mock_get):
     assert now_playing.discography == []
 
 
-@patch("mediainfo.enrichers.lidarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_ignores_non_music_media_type(mock_get):
     now_playing = _song(media_type="movie")
     _enricher().enrich(now_playing)
@@ -88,7 +88,7 @@ def test_ignores_non_music_media_type(mock_get):
     mock_get.assert_not_called()
 
 
-@patch("mediainfo.enrichers.lidarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_without_subtitle_does_nothing(mock_get):
     now_playing = _song(subtitle="")
     _enricher().enrich(now_playing)
@@ -96,7 +96,7 @@ def test_without_subtitle_does_nothing(mock_get):
     mock_get.assert_not_called()
 
 
-@patch("mediainfo.enrichers.lidarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_discography_capped_at_max_items(mock_get):
     many_tracks = [{"title": f"Track {i}", "albumId": 10} for i in range(10)]
     mock_get.side_effect = [_response(_ARTISTS), _response(_ALBUMS), _response(many_tracks)]
@@ -107,7 +107,7 @@ def test_discography_capped_at_max_items(mock_get):
     assert len(now_playing.discography) == 3
 
 
-@patch("mediainfo.enrichers.lidarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_skips_duplicate_album_art_already_in_images(mock_get):
     mock_get.side_effect = [_response(_ARTISTS), _response(_ALBUMS), _response(_TRACKS)]
 
@@ -118,7 +118,7 @@ def test_skips_duplicate_album_art_already_in_images(mock_get):
     assert urls.count("https://lidarr/wall.jpg") == 1
 
 
-@patch("mediainfo.enrichers.lidarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_api_error_does_not_propagate(mock_get):
     mock_get.side_effect = RuntimeError("connection refused")
 

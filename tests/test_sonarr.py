@@ -43,7 +43,7 @@ def _response(data):
     return mock
 
 
-@patch("mediainfo.enrichers.sonarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_matches_by_tvdb_id_and_sets_studio_and_images(mock_get):
     mock_get.return_value = _response([_series()])
 
@@ -61,7 +61,7 @@ def test_matches_by_tvdb_id_and_sets_studio_and_images(mock_get):
     assert kwargs["headers"] == {"X-Api-Key": "key123"}
 
 
-@patch("mediainfo.enrichers.sonarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_falls_back_to_title_match_without_tvdb_id(mock_get):
     mock_get.return_value = _response([_series(title="Other Show"), _series()])
 
@@ -73,7 +73,7 @@ def test_falls_back_to_title_match_without_tvdb_id(mock_get):
     assert kwargs["params"] is None
 
 
-@patch("mediainfo.enrichers.sonarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_no_match_does_nothing(mock_get):
     mock_get.return_value = _response([])
 
@@ -84,7 +84,7 @@ def test_no_match_does_nothing(mock_get):
     assert now_playing.images == []
 
 
-@patch("mediainfo.enrichers.sonarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_ignores_non_episode_media_type(mock_get):
     now_playing = _episode(media_type="movie")
     _enricher().enrich(now_playing)
@@ -92,7 +92,7 @@ def test_ignores_non_episode_media_type(mock_get):
     mock_get.assert_not_called()
 
 
-@patch("mediainfo.enrichers.sonarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_skips_duplicate_already_in_images(mock_get):
     mock_get.return_value = _response([_series()])
 
@@ -103,7 +103,7 @@ def test_skips_duplicate_already_in_images(mock_get):
     assert urls.count("https://sonarr/poster.jpg") == 1
 
 
-@patch("mediainfo.enrichers.sonarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_does_not_overwrite_existing_studio(mock_get):
     mock_get.return_value = _response([_series()])
 
@@ -113,7 +113,7 @@ def test_does_not_overwrite_existing_studio(mock_get):
     assert now_playing.studio == "Existing Network"
 
 
-@patch("mediainfo.enrichers.sonarr.requests.get")
+@patch("mediainfo.enrichers.arr_base.requests.get")
 def test_api_error_does_not_propagate(mock_get):
     mock_get.side_effect = RuntimeError("connection refused")
 
