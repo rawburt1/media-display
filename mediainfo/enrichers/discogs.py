@@ -52,14 +52,9 @@ class DiscogsEnricher(ArtworkEnricher):
 
         artist_id = self.library.get_or_create_artist(artist)
         album_id = self.library.get_or_create_album(artist_id, album)
-
-        cached = self.library.get_claim("album", album_id, "cover_art_url", "discogs")
-        if cached is not None:
-            return cached or None
-
-        url = self._find_cover(artist, album)
-        self.library.set_claim("album", album_id, "cover_art_url", "discogs", url or "")
-        return url
+        return self.library.get_or_fetch(
+            "album", album_id, "cover_art_url", "discogs", lambda: self._find_cover(artist, album)
+        )
 
     def _find_cover(self, artist: str, album: str) -> Optional[str]:
         # Masters represent canonical releases and have better, deduplicated artwork.

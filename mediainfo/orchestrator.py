@@ -369,43 +369,62 @@ class Orchestrator:
         # Non-image outputs (e.g. Ulanzi text, video player) always manage
         # their own idle display; notify them regardless of idle_source.
         if notify_idle:
-            for i, output in enumerate(self.outputs):
-                if not output.handles_images:
-                    self._call_output(i, output.on_idle)
+            self._notify_outputs_idle(handles_images=False)
 
         if self.idle_source is None:
             if notify_idle:
-                for i, output in enumerate(self.outputs):
-                    if output.handles_images:
-                        self._call_output(i, output.on_idle)
+                self._notify_outputs_idle(handles_images=True)
             return
 
         now = time.monotonic()
-        if (
-            not self._idle_images
-            or now - self._last_idle_batch_fetch >= self.idle_source.rotation_interval_seconds
-        ):
-            images = self.idle_source.get_wallpapers()
-            if not images:
-                if not self._idle_images and notify_idle:
-                    for i, output in enumerate(self.outputs):
-                        if output.handles_images:
-                            self._call_output(i, output.on_idle)
-                return
-
-            logger.info("Fetched %d idle wallpaper(s)", len(images))
-            self._idle_images = images
-            self._idle_now_playing = NowPlaying(
-                source="idle", media_type="wallpaper", title="", subtitle="", images=images
-            )
-            self._last_idle_batch_fetch = now
-            self._idle_rotation_state = self._build_rotation_states(len(images), len(self.outputs))
-            for index, output in enumerate(self.outputs):
-                self._call_output(index, output.on_new_item, self._idle_now_playing, self.cache)
-            for index, output in enumerate(self.outputs):
-                self._show_idle_image_for_output(index, output)
+        if self._idle_batch_needs_refetch(now):
+            fetched = self._refetch_idle_batch(now)
+            if not fetched and not self._idle_images and notify_idle:
+                self._notify_outputs_idle(handles_images=True)
             return
 
+        self._rotate_idle_images(now)
+
+    def _idle_batch_needs_refetch(self, now: float) -> bool:
+        """Pure: is it time to ask the idle source for a fresh batch -
+        because we don't have one at all, or because the configured
+        rotation_interval_seconds has elapsed since the last fetch?
+        """
+        assert self.idle_source is not None
+        return (
+            not self._idle_images
+            or now - self._last_idle_batch_fetch >= self.idle_source.rotation_interval_seconds
+        )
+
+    def _notify_outputs_idle(self, handles_images: bool) -> None:
+        for i, output in enumerate(self.outputs):
+            if bool(output.handles_images) == handles_images:
+                self._call_output(i, output.on_idle)
+
+    def _refetch_idle_batch(self, now: float) -> bool:
+        """Fetch a fresh idle wallpaper batch and show it on every
+        image-capable output. Returns False, leaving any existing batch
+        untouched, if the idle source had nothing to offer.
+        """
+        assert self.idle_source is not None
+        images = self.idle_source.get_wallpapers()
+        if not images:
+            return False
+
+        logger.info("Fetched %d idle wallpaper(s)", len(images))
+        self._idle_images = images
+        self._idle_now_playing = NowPlaying(
+            source="idle", media_type="wallpaper", title="", subtitle="", images=images
+        )
+        self._last_idle_batch_fetch = now
+        self._idle_rotation_state = self._build_rotation_states(len(images), len(self.outputs))
+        for index, output in enumerate(self.outputs):
+            self._call_output(index, output.on_new_item, self._idle_now_playing, self.cache)
+        for index, output in enumerate(self.outputs):
+            self._show_idle_image_for_output(index, output)
+        return True
+
+    def _rotate_idle_images(self, now: float) -> None:
         if len(self._idle_images) <= 1:
             return
 

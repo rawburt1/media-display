@@ -56,13 +56,9 @@ class LastFmEnricher(ArtworkEnricher):
             return self._fetch_artist_image(artist)
 
         artist_id = self.library.get_or_create_artist(artist)
-        cached = self.library.get_claim("artist", artist_id, "photo_url", "lastfm")
-        if cached is not None:
-            return cached or None
-
-        url = self._fetch_artist_image(artist)
-        self.library.set_claim("artist", artist_id, "photo_url", "lastfm", url or "")
-        return url
+        return self.library.get_or_fetch(
+            "artist", artist_id, "photo_url", "lastfm", lambda: self._fetch_artist_image(artist)
+        )
 
     def _fetch_artist_image(self, artist: str) -> Optional[str]:
         try:

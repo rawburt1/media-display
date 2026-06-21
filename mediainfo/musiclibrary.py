@@ -23,7 +23,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS artists (
@@ -340,3 +340,27 @@ class MusicLibrary:
                 (entity_type, entity_id, field, source, value, time.time()),
             )
             self._conn.commit()
+
+    def get_or_fetch(
+        self,
+        entity_type: str,
+        entity_id: int,
+        field: str,
+        source: str,
+        fetch_fn: Callable[[], Optional[str]],
+        max_age_seconds: Optional[float] = None,
+    ) -> Optional[str]:
+        """Return a cached claim, or call `fetch_fn()` on a miss and cache
+        whatever it returns (including None, stored as "" - a negative
+        cache, same as a manual get_claim/set_claim pair would).
+
+        Collapses the get_claim → fetch-on-miss → set_claim shape shared
+        by several music enrichers (lastfm, lyrics, discogs) into one call.
+        """
+        cached = self.get_claim(entity_type, entity_id, field, source, max_age_seconds)
+        if cached is not None:
+            return cached or None
+
+        value = fetch_fn()
+        self.set_claim(entity_type, entity_id, field, source, value or "")
+        return value

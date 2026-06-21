@@ -60,15 +60,11 @@ class LyricsEnricher(ArtworkEnricher):
 
         artist_id = self.library.get_or_create_artist(artist)
         track_id = self.library.get_or_create_track(artist_id, title)
-        cached = self.library.get_claim(
-            "track", track_id, "lyrics", "lyrics.ovh", max_age_seconds=float("inf")
+        return self.library.get_or_fetch(
+            "track", track_id, "lyrics", "lyrics.ovh",
+            lambda: self._fetch(artist, title),
+            max_age_seconds=float("inf"),
         )
-        if cached is not None:
-            return cached or None
-
-        lyrics = self._fetch(artist, title)
-        self.library.set_claim("track", track_id, "lyrics", "lyrics.ovh", lyrics or "")
-        return lyrics
 
     def _fetch(self, artist: str, title: str) -> Optional[str]:
         url = _API_URL.format(artist=quote(artist), title=quote(title))

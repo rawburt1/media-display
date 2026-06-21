@@ -1,5 +1,6 @@
 """Tests for Orchestrator idle wallpaper handling."""
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1110,3 +1111,70 @@ def test_resolve_now_playing_ignores_hitster_safe_for_movies():
     orch.sources = [_StaticSource(_movie_item())]
     orch.set_hitster_safe(True)
     assert orch._resolve_now_playing() is not None
+
+
+# ---------------------------------------------------------------------------
+# _idle_batch_needs_refetch (pure) / _refetch_idle_batch / _rotate_idle_images
+# ---------------------------------------------------------------------------
+
+def test_idle_batch_needs_refetch_when_no_batch_yet():
+    idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
+    assert orch._idle_batch_needs_refetch(time.monotonic()) is True
+
+
+def test_idle_batch_does_not_need_refetch_before_interval_elapses():
+    idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=1000)
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
+    orch._idle_images = _idle_wallpapers()
+    orch._last_idle_batch_fetch = time.monotonic()
+    assert orch._idle_batch_needs_refetch(time.monotonic()) is False
+
+
+def test_idle_batch_needs_refetch_once_interval_elapses():
+    idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=10)
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
+    orch._idle_images = _idle_wallpapers()
+    orch._last_idle_batch_fetch = 1000.0
+    assert orch._idle_batch_needs_refetch(1011.0) is True
+
+
+def test_idle_batch_needs_refetch_does_not_mutate_state():
+    idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=1000)
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
+    orch._idle_images = _idle_wallpapers()
+    orch._last_idle_batch_fetch = time.monotonic()
+    before = orch._idle_images
+
+    orch._idle_batch_needs_refetch(time.monotonic())
+
+    assert orch._idle_images is before  # unchanged - read-only
+    assert idle_source.calls == 0  # never asked the source for anything
+
+
+def test_refetch_idle_batch_returns_false_and_leaves_state_when_source_empty():
+    idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
+    orch._idle_images = _idle_wallpapers(count=1)
+
+    result = orch._refetch_idle_batch(time.monotonic())
+
+    assert result is False
+    assert orch._idle_images == _idle_wallpapers(count=1)  # untouched
+
+
+def test_refetch_idle_batch_returns_true_and_updates_state():
+    images = _idle_wallpapers()
+    idle_source = _FakeIdleSource(images, rotation_interval_seconds=300)
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+    orch = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
+
+    result = orch._refetch_idle_batch(time.monotonic())
+
+    assert result is True
+    assert orch._idle_images == images
+    output.on_new_item.assert_called_once()
+    output.update.assert_called_once()

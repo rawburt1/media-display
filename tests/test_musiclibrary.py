@@ -2,6 +2,7 @@
 
 import sqlite3
 import time
+from unittest.mock import MagicMock
 
 from mediainfo.musiclibrary import MusicLibrary, normalize
 
@@ -403,3 +404,58 @@ def test_get_claim_max_age_override_narrows_the_default(tmp_path):
 
     assert lib.get_claim("artist", artist_id, "photo_url", "lastfm") == "https://example.com/pf.jpg"
     assert lib.get_claim("artist", artist_id, "photo_url", "lastfm", max_age_seconds=0) is None
+
+
+# ---------------------------------------------------------------------------
+# get_or_fetch
+# ---------------------------------------------------------------------------
+
+def test_get_or_fetch_calls_fetch_fn_on_cache_miss(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    fetch_fn = MagicMock(return_value="https://example.com/pf.jpg")
+
+    result = lib.get_or_fetch("artist", artist_id, "photo_url", "lastfm", fetch_fn)
+
+    assert result == "https://example.com/pf.jpg"
+    fetch_fn.assert_called_once()
+
+
+def test_get_or_fetch_caches_the_fetched_value(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    fetch_fn = MagicMock(return_value="https://example.com/pf.jpg")
+
+    lib.get_or_fetch("artist", artist_id, "photo_url", "lastfm", fetch_fn)
+    result = lib.get_or_fetch("artist", artist_id, "photo_url", "lastfm", fetch_fn)
+
+    assert result == "https://example.com/pf.jpg"
+    fetch_fn.assert_called_once()  # second call was a cache hit
+
+
+def test_get_or_fetch_caches_a_negative_result(tmp_path):
+    lib = _library(tmp_path)
+    artist_id = lib.get_or_create_artist("Pink Floyd")
+    fetch_fn = MagicMock(return_value=None)
+
+    first = lib.get_or_fetch("artist", artist_id, "photo_url", "lastfm", fetch_fn)
+    second = lib.get_or_fetch("artist", artist_id, "photo_url", "lastfm", fetch_fn)
+
+    assert first is None
+    assert second is None
+    fetch_fn.assert_called_once()  # second call was a cached miss, not a re-fetch
+
+
+def test_get_or_fetch_respects_max_age_seconds_override(tmp_path):
+    lib = _library(tmp_path, max_age_days=0)
+    track_id = lib.get_or_create_track(lib.get_or_create_artist("Pink Floyd"), "Money")
+    fetch_fn = MagicMock(return_value="lyrics text")
+
+    lib.get_or_fetch("track", track_id, "lyrics", "lyrics.ovh", fetch_fn, max_age_seconds=float("inf"))
+    time.sleep(0.01)
+    result = lib.get_or_fetch(
+        "track", track_id, "lyrics", "lyrics.ovh", fetch_fn, max_age_seconds=float("inf")
+    )
+
+    assert result == "lyrics text"
+    fetch_fn.assert_called_once()  # not re-fetched despite max_age_days=0 on the library
