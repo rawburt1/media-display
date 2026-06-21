@@ -5,6 +5,7 @@ extra artwork, and rotates through the available images on enabled outputs.
 from __future__ import annotations
 
 import dataclasses
+import enum
 import logging
 import random
 import re
@@ -63,6 +64,20 @@ class _RotationState:
 class _BackoffState:
     delay: float
     next_attempt: float
+
+
+class _Transition(enum.Enum):
+    """What kind of tick this is, decided purely from the current poll
+    result and the orchestrator's existing state - before any enrichment,
+    cache access, or output call happens. Keeping this decision free of
+    side effects means it can be reasoned about (and tested) on its own,
+    independently of mocking outputs/cache/enrichers.
+    """
+
+    NOTHING_PLAYING = enum.auto()
+    SAME_ITEM_ROTATE = enum.auto()
+    SAME_ITEM_NO_ARTWORK = enum.auto()
+    NEW_ITEM = enum.auto()
 
 
 class Orchestrator:
@@ -144,37 +159,68 @@ class Orchestrator:
     def _tick(self) -> None:
         self._maybe_purge_cache()
 
-        now_playing = self._poll_sources()
-
-        if now_playing is not None and now_playing.media_type == "music" and self.get_hitster_safe():
-            now_playing = None
-
+        now_playing = self._resolve_now_playing()
         if now_playing is None:
-            if self._current is not None:
-                logger.info("Nothing playing; switching outputs to idle")
-                self._current = None
-                self._rotation_state = {}
-            self._show_idle_wallpaper()
+            self._handle_nothing_playing()
             return
 
         if now_playing.media_type == "music":
             now_playing.title = _strip_parenthetical(now_playing.title)
+        self._maybe_clear_stale_idle_state(now_playing)
 
+        transition = self._classify(now_playing)
+        if transition is _Transition.SAME_ITEM_ROTATE:
+            self._maybe_rotate()
+        elif transition is _Transition.SAME_ITEM_NO_ARTWORK:
+            # Same no-artwork item: keep idle wallpapers running on image
+            # outputs without notifying text-only outputs to go idle.
+            self._show_idle_wallpaper(notify_idle=False)
+        else:
+            self._handle_new_item(now_playing)
+
+    def _resolve_now_playing(self) -> Optional[NowPlaying]:
+        """Poll sources and apply the Hitster-safe filter - the one
+        decision that has to happen before we can compare against
+        self._current, since it can turn a real poll result into "nothing
+        playing".
+        """
+        now_playing = self._poll_sources()
+        if (
+            now_playing is not None
+            and now_playing.media_type == "music"
+            and self.get_hitster_safe()
+        ):
+            return None
+        return now_playing
+
+    def _maybe_clear_stale_idle_state(self, now_playing: NowPlaying) -> None:
         # Clear idle state only when real artwork is available again.
         if now_playing.images and self._idle_images:
             self._idle_images = []
             self._idle_rotation_state = {}
             self._last_idle_batch_fetch = 0.0
 
+    def _classify(self, now_playing: NowPlaying) -> _Transition:
+        """Pure: decide what kind of tick this is from `now_playing` and
+        `self._current` alone - no enrichment, no cache access, no output
+        calls.
+        """
         if self._current is not None and now_playing.identity == self._current.identity:
-            if self._current.images:
-                self._maybe_rotate()
-            else:
-                # Same no-artwork item: keep idle wallpapers running on image
-                # outputs without notifying text-only outputs to go idle.
-                self._show_idle_wallpaper(notify_idle=False)
-            return
+            return (
+                _Transition.SAME_ITEM_ROTATE
+                if self._current.images
+                else _Transition.SAME_ITEM_NO_ARTWORK
+            )
+        return _Transition.NEW_ITEM
 
+    def _handle_nothing_playing(self) -> None:
+        if self._current is not None:
+            logger.info("Nothing playing; switching outputs to idle")
+            self._current = None
+            self._rotation_state = {}
+        self._show_idle_wallpaper()
+
+    def _handle_new_item(self, now_playing: NowPlaying) -> None:
         for enricher in self.enrichers:
             self._safe_call(enricher.enrich, now_playing)
 

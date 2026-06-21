@@ -1032,3 +1032,81 @@ def test_get_health_includes_hitster_safe_state():
     orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock())
     orch.set_hitster_safe(True)
     assert orch.get_health()["hitster_safe"] is True
+
+
+# ---------------------------------------------------------------------------
+# _classify / _resolve_now_playing (pure decision logic, no mocked outputs)
+# ---------------------------------------------------------------------------
+
+def _orch_with_current(current):
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock())
+    orch._current = current
+    return orch
+
+
+def test_classify_new_item_when_nothing_was_playing():
+    from mediainfo.orchestrator import _Transition
+
+    orch = _orch_with_current(None)
+    now_playing = _movie_item()
+    assert orch._classify(now_playing) is _Transition.NEW_ITEM
+
+
+def test_classify_new_item_when_identity_differs():
+    orch = _orch_with_current(_movie_item(title="Old Movie"))
+    now_playing = _movie_item(title="New Movie")
+    from mediainfo.orchestrator import _Transition
+    assert orch._classify(now_playing) is _Transition.NEW_ITEM
+
+
+def test_classify_same_item_rotate_when_identity_matches_and_has_images():
+    from mediainfo.orchestrator import _Transition
+
+    current = NowPlaying(
+        source="kodi", media_type="movie", title="Inception",
+        images=[Artwork(url="https://example.com/p.jpg")],
+    )
+    orch = _orch_with_current(current)
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception")
+
+    assert orch._classify(now_playing) is _Transition.SAME_ITEM_ROTATE
+
+
+def test_classify_same_item_no_artwork_when_identity_matches_and_no_images():
+    from mediainfo.orchestrator import _Transition
+
+    current = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[])
+    orch = _orch_with_current(current)
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception")
+
+    assert orch._classify(now_playing) is _Transition.SAME_ITEM_NO_ARTWORK
+
+
+def test_classify_does_not_mutate_state():
+    current = _movie_item(title="Inception")
+    orch = _orch_with_current(current)
+    now_playing = _movie_item(title="Inception")
+
+    orch._classify(now_playing)
+
+    assert orch._current is current  # unchanged - classify is read-only
+
+
+def test_resolve_now_playing_passes_through_when_hitster_safe_disabled():
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock())
+    orch.sources = [_StaticSource(_music_item())]
+    assert orch._resolve_now_playing() is not None
+
+
+def test_resolve_now_playing_returns_none_for_music_when_hitster_safe_enabled():
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock())
+    orch.sources = [_StaticSource(_music_item())]
+    orch.set_hitster_safe(True)
+    assert orch._resolve_now_playing() is None
+
+
+def test_resolve_now_playing_ignores_hitster_safe_for_movies():
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock())
+    orch.sources = [_StaticSource(_movie_item())]
+    orch.set_hitster_safe(True)
+    assert orch._resolve_now_playing() is not None
