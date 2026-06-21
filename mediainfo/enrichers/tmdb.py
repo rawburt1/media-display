@@ -64,20 +64,28 @@ class TmdbEnricher(ArtworkEnricher):
             return None
 
     def _search(self, endpoint: str, params: dict) -> list:
-        response = requests.get(
-            f"{_BASE_URL}/search/{endpoint}",
-            params={**params, "api_key": self.config.api_key},
-            timeout=8,
-        )
+        response = self._get(f"{_BASE_URL}/search/{endpoint}", params)
         response.raise_for_status()
         return response.json().get("results", [])
 
     def _fetch_rating(self, url: str) -> Optional[float]:
-        response = requests.get(url, params={"api_key": self.config.api_key}, timeout=8)
+        response = self._get(url)
         if response.status_code == 404:
             return None
         response.raise_for_status()
         return self._round(response.json().get("vote_average"))
+
+    def _get(self, url: str, params: Optional[dict] = None):
+        # TMDb's dashboard hands out two different kinds of credential for
+        # the same account: a short v3 "API Key" (passed as an ?api_key=
+        # query param) and a long v4 "API Read Access Token" (a JWT, passed
+        # as a Bearer header instead) - support whichever the user has,
+        # since it's easy to grab the wrong one from their settings page.
+        key = self.config.api_key
+        if key.count(".") == 2:
+            headers = {"Authorization": f"Bearer {key}"}
+            return requests.get(url, params=params, headers=headers, timeout=8)
+        return requests.get(url, params={**(params or {}), "api_key": key}, timeout=8)
 
     @staticmethod
     def _round(value) -> Optional[float]:

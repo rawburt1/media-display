@@ -125,6 +125,16 @@ def test_enricher(name: str, enricher_config: Any) -> Tuple[bool, str]:
             return (summary is not None, "Found summary for test query" if summary else
                     "No match for test query (en.wikipedia.org may be unreachable)")
 
+        if name == "tmdb":
+            from mediainfo.enrichers import tmdb as tmdb_module
+
+            rating = tmdb_module.TmdbEnricher(enricher_config)._fetch_rating(
+                f"{tmdb_module._BASE_URL}/movie/603"
+            )
+            ok = rating is not None
+            return ok, (f"API reachable - The Matrix rated {rating}/10" if ok
+                        else "No response - check api_key")
+
         if name == "library":
             return True, "Local library - no network connection to test"
 

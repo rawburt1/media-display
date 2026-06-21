@@ -411,7 +411,10 @@ class LyricsConfig:
 @dataclasses.dataclass
 class TmdbConfig:
     enabled: bool = False
-    # Free API key (v3 auth) from https://www.themoviedb.org/settings/api
+    # Free credential from https://www.themoviedb.org/settings/api - either
+    # kind works: the short v3 "API Key", or the long v4 "API Read Access
+    # Token" (a JWT - detected automatically by its two dots and sent as a
+    # Bearer header instead of a query param).
     api_key: str = ""
 
 

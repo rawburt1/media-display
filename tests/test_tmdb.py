@@ -104,3 +104,32 @@ def test_network_error_leaves_rating_none(mock_get):
     _enricher().enrich(np)
 
     assert np.rating is None
+
+
+# ---------------------------------------------------------------------------
+# Auth: v3 api_key (query param) vs v4 API Read Access Token (Bearer header)
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.tmdb.requests.get")
+def test_v3_api_key_sent_as_query_param(mock_get):
+    mock_get.return_value = _response(json_data={"vote_average": 8.0})
+    enricher = TmdbEnricher(TmdbConfig(enabled=True, api_key="abcd1234"))
+
+    enricher.enrich(_movie(ids={"tmdb": "603"}))
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["api_key"] == "abcd1234"
+    assert "headers" not in kwargs
+
+
+@patch("mediainfo.enrichers.tmdb.requests.get")
+def test_v4_jwt_token_sent_as_bearer_header(mock_get):
+    mock_get.return_value = _response(json_data={"vote_average": 8.0})
+    jwt_token = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJ4eXoifQ.signature"
+    enricher = TmdbEnricher(TmdbConfig(enabled=True, api_key=jwt_token))
+
+    enricher.enrich(_movie(ids={"tmdb": "603"}))
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["headers"]["Authorization"] == f"Bearer {jwt_token}"
+    assert "api_key" not in (kwargs.get("params") or {})

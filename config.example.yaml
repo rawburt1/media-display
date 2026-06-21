@@ -550,11 +550,12 @@ enrichers:
     enabled: true
 
   # TMDb — audience rating (0-10) for movies and TV shows, shown by the
-  # `info` output. Free API key (v3 auth) from
-  # https://www.themoviedb.org/settings/api
+  # `info` output. Free credential from
+  # https://www.themoviedb.org/settings/api - either the short v3 "API Key"
+  # or the long v4 "API Read Access Token" works.
   tmdb:
     enabled: true
-    api_key: YOUR_TMDB_API_KEY
+    api_key: YOUR_TMDB_API_KEY_OR_READ_ACCESS_TOKEN
 
 
 # ---------------------------------------------------------------------------
