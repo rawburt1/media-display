@@ -6,158 +6,23 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import dataclasses
 import logging
 import signal
 import sys
 import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config, LoggingConfig
 from mediainfo.musiclibrary import MusicLibrary
-from mediainfo.orchestrator import Orchestrator
-from mediainfo.enrichers.discogs import DiscogsEnricher
-from mediainfo.enrichers.fanarttv import FanartTvEnricher
-from mediainfo.enrichers.lastfm import LastFmEnricher
-from mediainfo.enrichers.library import LibraryEnricher
-from mediainfo.enrichers.lidarr import LidarrEnricher
-from mediainfo.enrichers.lyrics import LyricsEnricher
-from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
-from mediainfo.enrichers.omdb import OmdbEnricher
-from mediainfo.enrichers.radarr import RadarrEnricher
-from mediainfo.enrichers.sonarr import SonarrEnricher
-from mediainfo.enrichers.thetvdb import TheTvDbEnricher
-from mediainfo.enrichers.tmdb import TmdbEnricher
-from mediainfo.enrichers.wikipedia import WikipediaEnricher
-from mediainfo.idle.base import IdleWallpaperSource
-from mediainfo.idle.composite import CompositeIdleWallpaperSource
-from mediainfo.idle.lastfm import LastFmWallpaperSource
-from mediainfo.idle.library import LibraryWallpaperSource
-from mediainfo.idle.unsplash import UnsplashWallpaperSource
-from mediainfo.outputs.config_ui import ConfigUiOutput, _is_secret
-from mediainfo.outputs.feeds import FeedOutput
-from mediainfo.outputs.folder import FolderOutput
-from mediainfo.outputs.info import InfoOutput
-from mediainfo.outputs.mqtt import MqttOutput
-from mediainfo.outputs.nest_hub import NestHubOutput
-from mediainfo.outputs.pixoo import PixooOutput
-from mediainfo.outputs.ulanzi import UlanziOutput
-from mediainfo.outputs.video import VideoOutput
-from mediainfo.outputs.web import WebOutput
-from mediainfo.sources.appletv import AppleTvSource
-from mediainfo.sources.chromecast import ChromecastSource
-from mediainfo.sources.homeassistant import HomeAssistantSource
-from mediainfo.sources.jellyfin import EmbySource, JellyfinSource
-from mediainfo.sources.kodi import KodiSource
-from mediainfo.sources.plex import PlexSource
-from mediainfo.sources.ps5 import Ps5Source
-from mediainfo.sources.shield import ShieldSource
-from mediainfo.sources.sonos import SonosSource
-from mediainfo.sources.spotify import SpotifySource
-from mediainfo.sources.vinyl import VinylSource
-from mediainfo.sources.youtube import YoutubeSource
-
-# Registries mapping config names to plugin classes. Adding a new source,
-# output, or enricher starts here (and in mediainfo/config.py).
-SOURCE_CLASSES = {
-    "appletv": AppleTvSource,
-    "chromecast": ChromecastSource,
-    "emby": EmbySource,
-    "homeassistant": HomeAssistantSource,
-    "jellyfin": JellyfinSource,
-    "kodi": KodiSource,
-    "plex": PlexSource,
-    "ps5": Ps5Source,
-    "shield": ShieldSource,
-    "sonos": SonosSource,
-    "spotify": SpotifySource,
-    "vinyl": VinylSource,
-    "youtube": YoutubeSource,
-}
-
-OUTPUT_CLASSES: dict[str, type] = {
-    "config": ConfigUiOutput,
-    "feed": FeedOutput,
-    "folder": FolderOutput,
-    "info": InfoOutput,
-    "mqtt": MqttOutput,
-    "nest_hub": NestHubOutput,
-    "pixoo": PixooOutput,
-    "ulanzi": UlanziOutput,
-    "video": VideoOutput,
-    "web": WebOutput,
-}
-
-# Outputs that need extra constructor arguments beyond their own config
-# (e.g. ConfigUiOutput needs the path to config.yaml to read/write it; web
-# needs the global rotation interval and the ImageCache up front, to drive
-# its own per-client rotation before the first on_new_item() call ever
-# arrives (e.g. idle wallpapers shown at startup, before anything plays) -
-# see WebOutput's docstring for why it can't just reuse the orchestrator's
-# rotation like other outputs do). Every Flask-based output also takes
-# config.auth, to optionally require HTTP Basic Auth - see web_auth.py.
-_OUTPUT_EXTRA_ARGS = {
-    "config": lambda config, config_path, cache: (config_path, config.auth),
-    "web": lambda config, config_path, cache: (
-        config.rotation_interval_seconds, cache, config.auth,
-    ),
-    "info": lambda config, config_path, cache: (config.auth,),
-    "feed": lambda config, config_path, cache: (config.auth,),
-    "video": lambda config, config_path, cache: (config.auth,),
-    "nest_hub": lambda config, config_path, cache: (config.auth,),
-}
-
-ENRICHER_CLASSES = {
-    "discogs": DiscogsEnricher,
-    "fanarttv": FanartTvEnricher,
-    "lastfm": LastFmEnricher,
-    "library": LibraryEnricher,
-    "lidarr": LidarrEnricher,
-    "lyrics": LyricsEnricher,
-    "musicbrainz": MusicBrainzEnricher,
-    "omdb": OmdbEnricher,
-    "radarr": RadarrEnricher,
-    "sonarr": SonarrEnricher,
-    "thetvdb": TheTvDbEnricher,
-    "tmdb": TmdbEnricher,
-    "wikipedia": WikipediaEnricher,
-}
-
-IDLE_CLASSES = {
-    "lastfm": LastFmWallpaperSource,
-    "library": LibraryWallpaperSource,
-    "unsplash": UnsplashWallpaperSource,
-}
-
-# Idle wallpaper sources that need the local MusicLibrary cache.
-_LIBRARY_AWARE_IDLE_CLASSES = {LibraryWallpaperSource}
-
-# Enrichers that look up music metadata by artist/album name and so can use
-# the local MusicLibrary cache to avoid repeating the same external lookup.
-_LIBRARY_AWARE_ENRICHERS = {
-    DiscogsEnricher, FanartTvEnricher, LastFmEnricher, LibraryEnricher, MusicBrainzEnricher,
-}
-
-# Reverse lookups: class → registry key, used when building health data.
-_OUTPUT_NAME_BY_CLASS = {cls: name for name, cls in OUTPUT_CLASSES.items()}
-_ENRICHER_NAME_BY_CLASS = {cls: name for name, cls in ENRICHER_CLASSES.items()}
-
-# Config attributes to include per output type in the /health response.
-_OUTPUT_DETAIL_FIELDS: dict = {
-    "config":   ["port"],
-    "feed":     ["port"],
-    "folder":   ["dir"],
-    "info":     ["port"],
-    "mqtt":     ["host", "port", "topic"],
-    "nest_hub": ["device_ip", "server_port"],
-    "pixoo":    ["ip"],
-    "ulanzi":   ["device_ip"],
-    "video":    ["port"],
-    "web":      ["port"],
-}
+from mediainfo.wiring import (
+    instantiate_outputs,
+    start_orchestrator,
+    wire_health_providers,
+    wire_hitster_safe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +59,7 @@ def main() -> None:
 
     # Outputs are created once and stay alive for the life of the process.
     # Their background servers (Flask, MQTT, etc.) keep running across reloads.
-    outputs = _instantiate_outputs(config, config_path, cache)
+    outputs = instantiate_outputs(config, config_path, cache)
 
     stop_event = threading.Event()
     stop_handler = _make_stop_handler(stop_event)
@@ -203,9 +68,9 @@ def main() -> None:
 
     config_mtime = _file_mtime(config_path)
     library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
-    orch = _start_orchestrator(config, outputs, cache, library)
-    _wire_health_providers(outputs, orch, config)
-    _wire_hitster_safe(outputs, orch)
+    orch = start_orchestrator(config, outputs, cache, library)
+    wire_health_providers(outputs, orch, config)
+    wire_hitster_safe(outputs, orch)
 
     try:
         # Main loop: sleep until a stop signal or a config-file change.
@@ -240,9 +105,9 @@ def main() -> None:
                 library = MusicLibrary(
                     config.library.db_path, max_age_days=config.library.max_age_days
                 )
-            orch = _start_orchestrator(config, outputs, cache, library)
-            _wire_health_providers(outputs, orch, config)
-            _wire_hitster_safe(outputs, orch)
+            orch = start_orchestrator(config, outputs, cache, library)
+            wire_health_providers(outputs, orch, config)
+            wire_hitster_safe(outputs, orch)
             logger.info("Config reloaded successfully")
     finally:
         logger.info("Shutting down ...")
@@ -372,290 +237,6 @@ def _setup_logging(log_config: LoggingConfig) -> None:
         handlers=handlers,
         force=True,
     )
-
-
-# ---------------------------------------------------------------------------
-# Plugin instantiation
-# ---------------------------------------------------------------------------
-
-def _instantiate_outputs(config: Config, config_path: Path, cache: ImageCache) -> list:
-    outputs = []
-    for name, output_configs in config.outputs.items():
-        output_cls = OUTPUT_CLASSES.get(name)
-        if output_cls is None:
-            logger.warning("Unknown output: %s", name)
-            continue
-        extra_args = _OUTPUT_EXTRA_ARGS.get(name, lambda _config, _path, _cache: ())(
-            config, config_path, cache
-        )
-        for output_config in output_configs:
-            if not output_config.enabled:
-                continue
-            outputs.append(output_cls(output_config, *extra_args))
-    return outputs
-
-
-def _build_sources(config: Config) -> list:
-    sources = []
-    for name in config.priority:
-        source_config = config.sources.get(name)
-        if source_config is None or not source_config.enabled:
-            continue
-        source_cls = SOURCE_CLASSES.get(name)
-        if source_cls is None:
-            logger.warning("Unknown source in priority list: %s", name)
-            continue
-        sources.append(source_cls(source_config))
-    return sources
-
-
-def _build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> list:
-    enrichers = []
-    for name, enricher_config in config.enrichers.items():
-        if not enricher_config.enabled:
-            continue
-        enricher_cls = ENRICHER_CLASSES.get(name)
-        if enricher_cls is None:
-            logger.warning("Unknown enricher: %s", name)
-            continue
-        if enricher_cls in _LIBRARY_AWARE_ENRICHERS:
-            enrichers.append(enricher_cls(enricher_config, library))
-        else:
-            enrichers.append(enricher_cls(enricher_config))
-    return enrichers
-
-
-def _build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
-    """Build the configured idle wallpaper source(s).
-
-    Multiple sources can be enabled at once - their wallpapers are merged
-    into a single pool (see CompositeIdleWallpaperSource), each refetched
-    on its own configured rotation_interval_seconds.
-    """
-    instances: list[IdleWallpaperSource] = []
-    for name, idle_config in config.idle.items():
-        if not idle_config.enabled:
-            continue
-        idle_cls = IDLE_CLASSES.get(name)
-        if idle_cls is None:
-            logger.warning("Unknown idle wallpaper source: %s", name)
-            continue
-        if idle_cls in _LIBRARY_AWARE_IDLE_CLASSES:
-            instances.append(idle_cls(idle_config, library))
-        else:
-            instances.append(idle_cls(idle_config))
-
-    if not instances:
-        return None
-    if len(instances) == 1:
-        return instances[0]
-    return CompositeIdleWallpaperSource(instances)
-
-
-def _start_orchestrator(
-    config: Config, outputs: list, cache: ImageCache, library: Optional[MusicLibrary] = None
-) -> Orchestrator:
-    orch = Orchestrator(
-        sources=_build_sources(config),
-        enrichers=_build_enrichers(config, library),
-        outputs=outputs,
-        cache=cache,
-        poll_interval_seconds=config.poll_interval_seconds,
-        rotation_interval_seconds=config.rotation_interval_seconds,
-        idle_source=_build_idle_source(config, library),
-        backoff_initial_seconds=config.backoff_initial_seconds,
-        backoff_max_seconds=config.backoff_max_seconds,
-    )
-    orch.start()
-    return orch
-
-
-# ---------------------------------------------------------------------------
-# Health endpoint
-# ---------------------------------------------------------------------------
-
-def _config_detail_fields(cfg: Any) -> dict:
-    """Non-secret str/int/bool config fields with a non-empty value - shown
-    on a source/enricher's dashboard card alongside its status."""
-    if cfg is None:
-        return {}
-    detail = {}
-    for f in dataclasses.fields(type(cfg)):
-        if f.name == "enabled" or f.type not in ("bool", "int", "str") or _is_secret(f.name):
-            continue
-        val = getattr(cfg, f.name, None)
-        if val not in (None, ""):
-            detail[f.name] = val
-    return detail
-
-
-def _make_health_provider(orch: Orchestrator, config: Config, outputs: list):
-    """Return a callable that builds the full /health JSON dict."""
-
-    def _health() -> dict:
-        data = orch.get_health()
-        active_source = data["active_source"]
-        polled_ago = data["source_last_polled_ago"]
-        output_errors = data["output_errors"]
-
-        # Sources — active/idle for those in the orchestrator; disabled /
-        # not_configured for everything else in the registry.
-        backoff_seconds = data["source_backoff_seconds"]
-        active_source_names = {s.name for s in orch.sources}
-        sources = []
-        for source in orch.sources:
-            status = "active" if source.name == active_source else "idle"
-            if source.name in backoff_seconds:
-                status = "error"
-            entry: dict = {"name": source.name, "status": status}
-            if source.name in polled_ago:
-                entry["last_polled_ago_seconds"] = polled_ago[source.name]
-            if source.name in backoff_seconds:
-                retry = backoff_seconds[source.name]
-                entry["retry_in_seconds"] = retry
-                entry["last_error"] = f"Could not connect - retrying in {retry}s"
-            entry.update(_config_detail_fields(config.sources.get(source.name)))
-            sources.append(entry)
-        for name in SOURCE_CLASSES:
-            if name in active_source_names:
-                continue
-            src_cfg = config.sources.get(name)
-            if src_cfg is not None:
-                entry = {"name": name, "status": "disabled"}
-                entry.update(_config_detail_fields(src_cfg))
-                sources.append(entry)
-            else:
-                sources.append({"name": name, "status": "not_configured"})
-
-        # Outputs
-        active_output_types: set = set()
-        output_type_counts: dict = {}
-        output_list = []
-        for i, output in enumerate(outputs):
-            cls = type(output)
-            type_name = _OUTPUT_NAME_BY_CLASS.get(cls, cls.__name__)
-            active_output_types.add(type_name)
-            instance_index = output_type_counts.get(type_name, 0)
-            output_type_counts[type_name] = instance_index + 1
-            err = output_errors.get(i)
-            entry = {
-                "type": type_name,
-                "status": "error" if err else "ok",
-                "instance_index": instance_index,
-            }
-            if err:
-                entry["last_error"] = err["message"]
-                entry["last_error_ago_seconds"] = err["ago_seconds"]
-            cfg = getattr(output, "config", None)
-            if cfg:
-                for field in _OUTPUT_DETAIL_FIELDS.get(type_name, []):
-                    val = getattr(cfg, field, None)
-                    if val not in (None, ""):
-                        entry[field] = val
-            output_list.append(entry)
-        for type_name in OUTPUT_CLASSES:
-            if type_name in active_output_types:
-                continue
-            if config.outputs.get(type_name):
-                output_list.append({"type": type_name, "status": "disabled", "instance_index": 0})
-            else:
-                output_list.append({"type": type_name, "status": "not_configured", "instance_index": 0})
-
-        # Enrichers
-        active_enricher_names: set = set()
-        enrichers = []
-        for enricher in orch.enrichers:
-            name = _ENRICHER_NAME_BY_CLASS.get(type(enricher), type(enricher).__name__)
-            active_enricher_names.add(name)
-            entry = {"name": name, "status": "ok"}
-            entry.update(_config_detail_fields(config.enrichers.get(name)))
-            enrichers.append(entry)
-        for name in ENRICHER_CLASSES:
-            if name in active_enricher_names:
-                continue
-            enc_cfg = config.enrichers.get(name)
-            if enc_cfg is not None:
-                entry = {"name": name, "status": "disabled"}
-                entry.update(_config_detail_fields(enc_cfg))
-                enrichers.append(entry)
-            else:
-                enrichers.append({"name": name, "status": "not_configured"})
-
-        # Idle sources — list of all known idle sources with their status.
-        idle_sources = []
-
-        # Traditional wallpaper idle sources (IDLE_CLASSES registry). When
-        # several are enabled at once, orch.idle_source is a
-        # CompositeIdleWallpaperSource wrapping all of them.
-        if isinstance(orch.idle_source, CompositeIdleWallpaperSource):
-            active_idle_instances = orch.idle_source.sources
-        elif orch.idle_source is not None:
-            active_idle_instances = [orch.idle_source]
-        else:
-            active_idle_instances = []
-
-        active_idle_names: set = set()
-        for instance in active_idle_instances:
-            name = type(instance).__name__.removesuffix("WallpaperSource").lower()
-            active_idle_names.add(name)
-            idle_sources.append({
-                "type": name,
-                "status": "ok",
-                "wallpapers_loaded": data["idle_wallpapers_loaded"],
-            })
-        for name in IDLE_CLASSES:
-            if name in active_idle_names:
-                continue
-            idle_cfg = config.idle.get(name)
-            if idle_cfg is not None:
-                status = "disabled" if not idle_cfg.enabled else "ok"
-            else:
-                status = "not_configured"
-            idle_sources.append({"type": name, "status": status})
-
-        # Video outputs expose their own idle video source (pexels/pixabay).
-        from mediainfo.outputs.video import VideoOutput
-        for output in outputs:
-            if isinstance(output, VideoOutput):
-                idle_sources.append(output.idle_health_entry())
-
-        return {
-            "status": "ok",
-            "uptime_seconds": data["uptime_seconds"],
-            "poll_interval_seconds": data["poll_interval_seconds"],
-            "rotation_interval_seconds": data["rotation_interval_seconds"],
-            "now_playing": data["now_playing"],
-            "hitster_safe": data["hitster_safe"],
-            "sources": sources,
-            "outputs": output_list,
-            "enrichers": enrichers,
-            "idle_sources": idle_sources,
-        }
-
-    return _health
-
-
-def _wire_health_providers(outputs: list, orch: Orchestrator, config: Config) -> None:
-    """Register the health provider on every WebOutput and ConfigUiOutput
-    instance (the latter uses it for the dashboard UI's status overview -
-    see config_dashboard.py)."""
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-    from mediainfo.outputs.web import WebOutput
-
-    provider = _make_health_provider(orch, config, outputs)
-    for output in outputs:
-        if isinstance(output, (WebOutput, ConfigUiOutput)):
-            output.set_health_provider(provider)
-
-
-def _wire_hitster_safe(outputs: list, orch: Orchestrator) -> None:
-    """Register the orchestrator's Hitster-safe get/set on every
-    ConfigUiOutput instance, so its button can read and toggle it."""
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-
-    for output in outputs:
-        if isinstance(output, ConfigUiOutput):
-            output.set_hitster_safe_handlers(orch.get_hitster_safe, orch.set_hitster_safe)
 
 
 # ---------------------------------------------------------------------------

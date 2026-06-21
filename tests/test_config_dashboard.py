@@ -32,7 +32,7 @@ def test_source_unknown_name_returns_false():
 
 
 def test_source_none_config_returns_false():
-    with patch("mediainfo.__main__.SOURCE_CLASSES", {"fake": _FakeSource}):
+    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _FakeSource}):
         ok, message = check_source("fake", None)
     assert ok is False
 
@@ -42,7 +42,7 @@ def test_source_connected_with_now_playing():
         def get_now_playing(self):
             return NowPlaying(source="fake", media_type="music", title="Bohemian Rhapsody")
 
-    with patch("mediainfo.__main__.SOURCE_CLASSES", {"fake": _Source}):
+    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _Source}):
         ok, message = check_source("fake", MagicMock())
 
     assert ok is True
@@ -50,7 +50,7 @@ def test_source_connected_with_now_playing():
 
 
 def test_source_connected_with_nothing_playing():
-    with patch("mediainfo.__main__.SOURCE_CLASSES", {"fake": _FakeSource}):
+    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _FakeSource}):
         ok, message = check_source("fake", MagicMock())
 
     assert ok is True
@@ -63,7 +63,7 @@ def test_source_reports_last_poll_failed():
             self.last_poll_failed = True
             return None
 
-    with patch("mediainfo.__main__.SOURCE_CLASSES", {"fake": _Source}):
+    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _Source}):
         ok, message = check_source("fake", MagicMock())
 
     assert ok is False
@@ -75,7 +75,7 @@ def test_source_exception_is_caught():
         def get_now_playing(self):
             raise RuntimeError("boom")
 
-    with patch("mediainfo.__main__.SOURCE_CLASSES", {"fake": _Source}):
+    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _Source}):
         ok, message = check_source("fake", MagicMock())
 
     assert ok is False
@@ -90,7 +90,7 @@ def test_source_cleans_up_background_loop():
             super().__init__(config)
             self._loop = fake_loop
 
-    with patch("mediainfo.__main__.SOURCE_CLASSES", {"fake": _Source}):
+    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _Source}):
         check_source("fake", MagicMock())
 
     fake_loop.call_soon_threadsafe.assert_called_once()

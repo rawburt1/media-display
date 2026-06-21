@@ -530,7 +530,7 @@ See `config.example.yaml` for all options. Key things to fill in:
    `IdleWallpaperSource.get_wallpapers()`), returning a
    `mediainfo.models.NowPlaying` (or a list of `Artwork`).
 3. Register the class in `SOURCE_CLASSES` (or `OUTPUT_CLASSES`, or
-   `IDLE_CLASSES`) in `mediainfo/__main__.py`.
+   `IDLE_CLASSES`) in `mediainfo/registries.py`.
 4. Add it to `priority` (sources), `outputs` (outputs), or `idle` (idle
    wallpaper sources) in your `config.yaml`.
 

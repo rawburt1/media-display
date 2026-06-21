@@ -45,7 +45,7 @@ _OUTPUT_ADDRESS_FIELDS = {
 
 
 def test_source(name: str, source_config: Any) -> Tuple[bool, str]:
-    from mediainfo.__main__ import SOURCE_CLASSES
+    from mediainfo.registries import SOURCE_CLASSES
 
     cls = SOURCE_CLASSES.get(name)
     if cls is None or source_config is None:
