@@ -135,6 +135,16 @@ def test_enricher(name: str, enricher_config: Any) -> Tuple[bool, str]:
             return ok, (f"API reachable - The Matrix rated {rating}/10" if ok
                         else "No response - check api_key")
 
+        if name == "omdb":
+            from mediainfo.enrichers.omdb import OmdbEnricher
+
+            # tt0133093 is The Matrix's IMDb id - same well-known test
+            # target used by the tmdb/fanarttv tests above.
+            rating = OmdbEnricher(enricher_config)._fetch({"i": "tt0133093"})
+            ok = rating is not None
+            return ok, (f"API reachable - The Matrix rated {rating}/10" if ok
+                        else "No response - check api_key")
+
         if name == "library":
             return True, "Local library - no network connection to test"
 

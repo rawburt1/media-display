@@ -557,6 +557,14 @@ enrichers:
     enabled: true
     api_key: YOUR_TMDB_API_KEY_OR_READ_ACCESS_TOKEN
 
+  # OMDb — IMDb rating (0-10) for movies and TV shows, also shown by the
+  # `info` output. Free API key from https://www.omdbapi.com/apikey.aspx
+  # Can be enabled alongside tmdb above - whichever finds a rating first
+  # wins, the other won't overwrite it.
+  omdb:
+    enabled: true
+    api_key: YOUR_OMDB_API_KEY
+
 
 # ---------------------------------------------------------------------------
 # Cache

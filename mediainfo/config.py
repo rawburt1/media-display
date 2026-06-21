@@ -419,6 +419,13 @@ class TmdbConfig:
 
 
 @dataclasses.dataclass
+class OmdbConfig:
+    enabled: bool = False
+    # Free API key from https://www.omdbapi.com/apikey.aspx
+    api_key: str = ""
+
+
+@dataclasses.dataclass
 class SonarrConfig:
     enabled: bool = False
     host: str = ""
@@ -544,6 +551,7 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "lidarr": LidarrConfig,
     "lyrics": LyricsConfig,
     "musicbrainz": MusicBrainzConfig,
+    "omdb": OmdbConfig,
     "radarr": RadarrConfig,
     "sonarr": SonarrConfig,
     "thetvdb": TheTvDbConfig,

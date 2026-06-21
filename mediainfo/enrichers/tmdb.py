@@ -3,6 +3,11 @@
 Uses ids["tmdb"] for a direct lookup when a more specific source/enricher
 (e.g. Kodi, Radarr/Sonarr) already provided one; otherwise falls back to a
 title search, same pattern as the Wikipedia enricher.
+
+Skips items that already have a rating (e.g. from the OMDb enricher) rather
+than overwriting it, and never clears an existing rating on a miss - so
+this and enrichers.omdb can both be enabled at once without one undoing
+the other's result depending on which happens to run first.
 """
 
 from __future__ import annotations
@@ -30,18 +35,21 @@ class TmdbEnricher(ArtworkEnricher):
     def enrich(self, now_playing: NowPlaying) -> None:
         if now_playing.media_type not in ("movie", "episode"):
             return
+        if now_playing.rating is not None:
+            return
 
         endpoint = "movie" if now_playing.media_type == "movie" else "tv"
         tmdb_id = now_playing.ids.get("tmdb")
         cache_key = (endpoint, tmdb_id or now_playing.title)
 
         if cache_key in self._cache:
-            now_playing.rating = self._cache[cache_key]
-            return
+            rating = self._cache[cache_key]
+        else:
+            rating = self._lookup(endpoint, tmdb_id, now_playing)
+            self._cache[cache_key] = rating
 
-        rating = self._lookup(endpoint, tmdb_id, now_playing)
-        self._cache[cache_key] = rating
-        now_playing.rating = rating
+        if rating is not None:
+            now_playing.rating = rating
 
     def _lookup(
         self, endpoint: str, tmdb_id: Optional[str], now_playing: NowPlaying

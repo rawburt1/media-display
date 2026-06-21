@@ -151,6 +151,20 @@ def test_enricher_tmdb_failure():
     assert "api_key" in message
 
 
+def test_enricher_omdb_success():
+    with patch("mediainfo.enrichers.omdb.OmdbEnricher._fetch", return_value=8.7):
+        ok, message = check_enricher("omdb", MagicMock())
+    assert ok is True
+    assert "8.7" in message
+
+
+def test_enricher_omdb_failure():
+    with patch("mediainfo.enrichers.omdb.OmdbEnricher._fetch", return_value=None):
+        ok, message = check_enricher("omdb", MagicMock())
+    assert ok is False
+    assert "api_key" in message
+
+
 def test_enricher_discogs_found():
     with patch(
         "mediainfo.enrichers.discogs.DiscogsEnricher._find_cover",

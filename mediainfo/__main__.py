@@ -26,6 +26,7 @@ from mediainfo.enrichers.library import LibraryEnricher
 from mediainfo.enrichers.lidarr import LidarrEnricher
 from mediainfo.enrichers.lyrics import LyricsEnricher
 from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher
+from mediainfo.enrichers.omdb import OmdbEnricher
 from mediainfo.enrichers.radarr import RadarrEnricher
 from mediainfo.enrichers.sonarr import SonarrEnricher
 from mediainfo.enrichers.thetvdb import TheTvDbEnricher
@@ -117,6 +118,7 @@ ENRICHER_CLASSES = {
     "lidarr": LidarrEnricher,
     "lyrics": LyricsEnricher,
     "musicbrainz": MusicBrainzEnricher,
+    "omdb": OmdbEnricher,
     "radarr": RadarrEnricher,
     "sonarr": SonarrEnricher,
     "thetvdb": TheTvDbEnricher,

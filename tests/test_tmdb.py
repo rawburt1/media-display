@@ -38,6 +38,15 @@ def test_music_is_skipped(mock_get):
 
 
 @patch("mediainfo.enrichers.tmdb.requests.get")
+def test_skips_lookup_when_rating_already_set(mock_get):
+    np = _movie()
+    np.rating = 9.9  # e.g. already filled in by enrichers.omdb
+    _enricher().enrich(np)
+    mock_get.assert_not_called()
+    assert np.rating == 9.9
+
+
+@patch("mediainfo.enrichers.tmdb.requests.get")
 def test_movie_search_sets_rating(mock_get):
     mock_get.return_value = _response(
         json_data={"results": [{"vote_average": 8.456}]}

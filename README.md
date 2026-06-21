@@ -38,8 +38,10 @@ Currently implemented:
   Sonarr/Radarr/Lidarr each match against your own library (rather than a
   public catalog) and add a studio/genres/discography plus poster/fanart/
   album art - see below; lyrics adds the playing track's lyrics (via the
-  free lyrics.ovh API) for the `info` output; TMDb adds a 0-10 audience
-  rating for movies/TV shows, also for the `info` output
+  free lyrics.ovh API) for the `info` output; TMDb and OMDb each add a 0-10
+  rating for movies/TV shows, also for the `info` output - both can be
+  enabled at once without conflict, since neither overwrites a rating the
+  other already found
 - **Outputs**: Pixoo64 (local HTTP API), web page (`http://<host>:8090/`),
   and Google Nest Hub (Cast) each rotate between all available poster/fanart
   images for the current item on their own randomized schedule - each one
