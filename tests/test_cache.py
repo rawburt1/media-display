@@ -164,7 +164,7 @@ def test_get_transformed_path_for_idle_image_stays_in_idle_dir(mock_get, tmp_pat
     from PIL import Image
 
     buf = io.BytesIO()
-    Image.new("RGB", (10, 10), color="red").save(buf, format="JPEG")
+    Image.new("RGB", (640, 480), color="red").save(buf, format="JPEG")
 
     mock_response = MagicMock()
     mock_response.headers = {"Content-Type": "image/jpeg"}
@@ -242,7 +242,7 @@ def test_get_transformed_path_for_music_image_stays_in_music_dir(mock_get, tmp_p
     from PIL import Image
 
     buf = io.BytesIO()
-    Image.new("RGB", (10, 10), color="red").save(buf, format="JPEG")
+    Image.new("RGB", (640, 480), color="red").save(buf, format="JPEG")
 
     mock_response = MagicMock()
     mock_response.headers = {"Content-Type": "image/jpeg"}
@@ -257,3 +257,107 @@ def test_get_transformed_path_for_music_image_stays_in_music_dir(mock_get, tmp_p
     transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])
 
     assert transformed_path.parent == cache.music_dir
+
+
+# ---------------------------------------------------------------------------
+# Minimum image size (reject low-res downloads)
+# ---------------------------------------------------------------------------
+
+def _jpeg_bytes(width, height):
+    import io as _io
+    from PIL import Image as _Image
+
+    buf = _io.BytesIO()
+    _Image.new("RGB", (width, height), color="blue").save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+@patch("mediainfo.cache.requests.get")
+def test_rejects_image_smaller_than_minimum(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(100, 100)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/thumb.jpg"))
+
+    assert path is None
+    assert list(cache.cache_dir.glob("*.jpg")) == []
+
+
+@patch("mediainfo.cache.requests.get")
+def test_rejects_image_narrower_than_minimum_even_if_tall_enough(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(200, 1000)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/tall-but-narrow.jpg"))
+
+    assert path is None
+
+
+@patch("mediainfo.cache.requests.get")
+def test_accepts_image_at_exactly_the_minimum_size(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(640, 480)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/exact.jpg"))
+
+    assert path is not None
+    assert path.exists()
+
+
+@patch("mediainfo.cache.requests.get")
+def test_accepts_image_larger_than_minimum(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(1920, 1080)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/hd.jpg"))
+
+    assert path is not None
+
+
+@patch("mediainfo.cache.requests.get")
+def test_unidentifiable_content_is_not_rejected_for_size(mock_get, tmp_path):
+    # Can't determine dimensions (e.g. an unrecognized/corrupt format) -
+    # don't block caching over something this check can't actually verify.
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"not a real image"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/weird.jpg"))
+
+    assert path is not None
+    assert path.exists()
+
+
+@patch("mediainfo.cache.requests.get")
+def test_rejected_image_is_not_cached_so_a_retry_hits_network_again(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(50, 50)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    artwork = Artwork(url="http://example.com/thumb.jpg")
+
+    assert cache.get_path(artwork) is None
+    assert cache.get_path(artwork) is None
+    assert mock_get.call_count == 2  # never cached as a "hit", so re-fetched every time

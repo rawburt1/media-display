@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import logging
 import time
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import Dict, Literal, Optional, Union
 from urllib.parse import urlparse
 
 import requests
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from mediainfo.models import Artwork
 
@@ -31,6 +32,12 @@ _DEFAULT_EXTENSION = ".jpg"
 # Some hosts (e.g. Wikimedia, used by the Wikipedia enricher) return 403 for
 # the default python-requests User-Agent and require a descriptive one.
 _HEADERS = {"User-Agent": "mediainfo/1.0 (+https://github.com/rawburt1/media-display)"}
+
+# Reject downloads smaller than this - low-res thumbnails (e.g. a fallback
+# icon some APIs return when they have no real artwork) aren't worth
+# displaying full-screen and aren't worth the disk space either.
+_MIN_WIDTH = 640
+_MIN_HEIGHT = 480
 
 
 class ImageCache:
@@ -95,6 +102,13 @@ class ImageCache:
         response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=_HEADERS)
         response.raise_for_status()
 
+        if not self._meets_minimum_size(response.content):
+            logger.info(
+                "Skipped artwork %r - smaller than %dx%d",
+                artwork.label or artwork.url, _MIN_WIDTH, _MIN_HEIGHT,
+            )
+            return None
+
         content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
         extension = _EXTENSIONS.get(content_type, _DEFAULT_EXTENSION)
 
@@ -102,6 +116,19 @@ class ImageCache:
         path.write_bytes(response.content)
         logger.info("Cached artwork %r -> %s", artwork.label or artwork.url, path.name)
         return path
+
+    @staticmethod
+    def _meets_minimum_size(content: bytes) -> bool:
+        """True if the image meets the minimum dimensions, or if its size
+        can't be determined (e.g. an unrecognized format) - this only ever
+        rejects images we can positively confirm are too small.
+        """
+        try:
+            with Image.open(io.BytesIO(content)) as img:
+                width, height = img.size
+        except (UnidentifiedImageError, OSError):
+            return True
+        return width >= _MIN_WIDTH and height >= _MIN_HEIGHT
 
     @staticmethod
     def _find_existing(key: str, base_dir: Path) -> Optional[Path]:
