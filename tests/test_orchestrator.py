@@ -286,8 +286,8 @@ def test_idle_rotation_state_staggers_initial_last_rotation_per_output():
     with patch("mediainfo.orchestrator.random.uniform", side_effect=[5.0, 12.0]):
         orchestrator._tick()
 
-    assert orchestrator._idle_rotation_state[0].last_rotation != orchestrator._idle_rotation_state[1].last_rotation
-    diff = orchestrator._idle_rotation_state[1].last_rotation - orchestrator._idle_rotation_state[0].last_rotation
+    assert orchestrator._idle.rotation_state[0].last_rotation != orchestrator._idle.rotation_state[1].last_rotation
+    diff = orchestrator._idle.rotation_state[1].last_rotation - orchestrator._idle.rotation_state[0].last_rotation
     assert diff == pytest.approx(5.0 - 12.0, abs=0.01)
 
 
@@ -1114,53 +1114,53 @@ def test_resolve_now_playing_ignores_hitster_safe_for_movies():
 
 
 # ---------------------------------------------------------------------------
-# _idle_batch_needs_refetch (pure) / _refetch_idle_batch / _rotate_idle_images
+# _idle.needs_refetch (pure) / _idle.refetch / _idle.rotate
 # ---------------------------------------------------------------------------
 
 def test_idle_batch_needs_refetch_when_no_batch_yet():
     idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
     orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
-    assert orch._idle_batch_needs_refetch(time.monotonic()) is True
+    assert orch._idle.needs_refetch(time.monotonic()) is True
 
 
 def test_idle_batch_does_not_need_refetch_before_interval_elapses():
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=1000)
     orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
-    orch._idle_images = _idle_wallpapers()
-    orch._last_idle_batch_fetch = time.monotonic()
-    assert orch._idle_batch_needs_refetch(time.monotonic()) is False
+    orch._idle.images = _idle_wallpapers()
+    orch._idle.last_batch_fetch = time.monotonic()
+    assert orch._idle.needs_refetch(time.monotonic()) is False
 
 
 def test_idle_batch_needs_refetch_once_interval_elapses():
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=10)
     orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
-    orch._idle_images = _idle_wallpapers()
-    orch._last_idle_batch_fetch = 1000.0
-    assert orch._idle_batch_needs_refetch(1011.0) is True
+    orch._idle.images = _idle_wallpapers()
+    orch._idle.last_batch_fetch = 1000.0
+    assert orch._idle.needs_refetch(1011.0) is True
 
 
 def test_idle_batch_needs_refetch_does_not_mutate_state():
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=1000)
     orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
-    orch._idle_images = _idle_wallpapers()
-    orch._last_idle_batch_fetch = time.monotonic()
-    before = orch._idle_images
+    orch._idle.images = _idle_wallpapers()
+    orch._idle.last_batch_fetch = time.monotonic()
+    before = orch._idle.images
 
-    orch._idle_batch_needs_refetch(time.monotonic())
+    orch._idle.needs_refetch(time.monotonic())
 
-    assert orch._idle_images is before  # unchanged - read-only
+    assert orch._idle.images is before  # unchanged - read-only
     assert idle_source.calls == 0  # never asked the source for anything
 
 
 def test_refetch_idle_batch_returns_false_and_leaves_state_when_source_empty():
     idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
     orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
-    orch._idle_images = _idle_wallpapers(count=1)
+    orch._idle.images = _idle_wallpapers(count=1)
 
-    result = orch._refetch_idle_batch(time.monotonic())
+    result = orch._idle.refetch(time.monotonic())
 
     assert result is False
-    assert orch._idle_images == _idle_wallpapers(count=1)  # untouched
+    assert orch._idle.images == _idle_wallpapers(count=1)  # untouched
 
 
 def test_refetch_idle_batch_returns_true_and_updates_state():
@@ -1172,9 +1172,9 @@ def test_refetch_idle_batch_returns_true_and_updates_state():
     cache.get_transformed_path.side_effect = lambda path, _: path
     orch = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
 
-    result = orch._refetch_idle_batch(time.monotonic())
+    result = orch._idle.refetch(time.monotonic())
 
     assert result is True
-    assert orch._idle_images == images
+    assert orch._idle.images == images
     output.on_new_item.assert_called_once()
     output.update.assert_called_once()
