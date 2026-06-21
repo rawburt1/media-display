@@ -104,3 +104,88 @@ def test_health_provider_assigns_per_type_instance_index_to_outputs():
     by_index = {e["instance_index"]: e for e in ulanzi_entries}
     assert by_index[0]["device_ip"] == "1.1.1.1"
     assert by_index[1]["device_ip"] == "2.2.2.2"
+
+
+# ---------------------------------------------------------------------------
+# _registered_but_inactive / _inactive_outputs / _inactive_idle_sources
+# ---------------------------------------------------------------------------
+
+def test_registered_but_inactive_disabled_when_configured():
+    from mediainfo.config import KodiConfig
+    from mediainfo.health import _registered_but_inactive
+
+    entries = _registered_but_inactive(
+        active_names=set(),
+        registry={"kodi": object()},
+        config_section={"kodi": KodiConfig(enabled=False, host="192.168.1.21")},
+    )
+
+    assert entries == [
+        {"name": "kodi", "status": "disabled", "host": "192.168.1.21", "port": 8080}
+    ]
+
+
+def test_registered_but_inactive_not_configured_when_no_config_section():
+    from mediainfo.health import _registered_but_inactive
+
+    entries = _registered_but_inactive(
+        active_names=set(), registry={"kodi": object()}, config_section={}
+    )
+
+    assert entries == [{"name": "kodi", "status": "not_configured"}]
+
+
+def test_registered_but_inactive_skips_active_names():
+    from mediainfo.health import _registered_but_inactive
+
+    entries = _registered_but_inactive(
+        active_names={"kodi"}, registry={"kodi": object()}, config_section={}
+    )
+
+    assert entries == []
+
+
+def test_inactive_outputs_disabled_when_config_list_present():
+    from mediainfo.health import _inactive_outputs
+
+    entries = _inactive_outputs(
+        active_types=set(), registry={"web": object()}, config_outputs={"web": [object()]}
+    )
+
+    assert entries == [{"type": "web", "status": "disabled", "instance_index": 0}]
+
+
+def test_inactive_outputs_not_configured_when_config_list_empty():
+    from mediainfo.health import _inactive_outputs
+
+    entries = _inactive_outputs(
+        active_types=set(), registry={"web": object()}, config_outputs={"web": []}
+    )
+
+    assert entries == [{"type": "web", "status": "not_configured", "instance_index": 0}]
+
+
+def test_inactive_idle_sources_status_matches_enabled_flag():
+    from mediainfo.health import _inactive_idle_sources
+
+    enabled = MagicMock(enabled=True)
+    disabled = MagicMock(enabled=False)
+    entries = _inactive_idle_sources(
+        active_names=set(),
+        registry={"unsplash": object(), "lastfm": object()},
+        config_idle={"unsplash": enabled, "lastfm": disabled},
+    )
+
+    by_type = {e["type"]: e["status"] for e in entries}
+    assert by_type["unsplash"] == "ok"
+    assert by_type["lastfm"] == "disabled"
+
+
+def test_inactive_idle_sources_not_configured_when_missing():
+    from mediainfo.health import _inactive_idle_sources
+
+    entries = _inactive_idle_sources(
+        active_names=set(), registry={"unsplash": object()}, config_idle={}
+    )
+
+    assert all(e["status"] == "not_configured" for e in entries)

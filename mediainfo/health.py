@@ -29,6 +29,55 @@ def config_detail_fields(cfg: Any) -> dict:
     return detail
 
 
+def _registered_but_inactive(active_names: set, registry: dict, config_section: dict) -> list:
+    """Entries for every key/source/enricher registry entry that isn't
+    already active: "disabled" (with its config detail fields) if it has
+    a config section at all, else "not_configured". Shared by sources and
+    enrichers, which key by "name" and have one config dataclass each."""
+    entries = []
+    for name in registry:
+        if name in active_names:
+            continue
+        cfg = config_section.get(name)
+        if cfg is not None:
+            entry = {"name": name, "status": "disabled"}
+            entry.update(config_detail_fields(cfg))
+            entries.append(entry)
+        else:
+            entries.append({"name": name, "status": "not_configured"})
+    return entries
+
+
+def _inactive_outputs(active_types: set, registry: dict, config_outputs: dict) -> list:
+    """Entries for every output type with no active instance - "disabled"
+    if it has a (possibly empty) config list, else "not_configured"."""
+    entries = []
+    for type_name in registry:
+        if type_name in active_types:
+            continue
+        status = "disabled" if config_outputs.get(type_name) else "not_configured"
+        entries.append({"type": type_name, "status": status, "instance_index": 0})
+    return entries
+
+
+def _inactive_idle_sources(active_names: set, registry: dict, config_idle: dict) -> list:
+    """Entries for every idle wallpaper source not already part of the
+    active pool - "ok"/"disabled" if configured (matching the config's own
+    enabled flag, since multiple idle sources can be enabled and merged at
+    once), else "not_configured"."""
+    entries = []
+    for name in registry:
+        if name in active_names:
+            continue
+        idle_cfg = config_idle.get(name)
+        if idle_cfg is not None:
+            status = "disabled" if not idle_cfg.enabled else "ok"
+        else:
+            status = "not_configured"
+        entries.append({"type": name, "status": status})
+    return entries
+
+
 def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
     """Return a callable that builds the full /health JSON dict."""
 
@@ -56,16 +105,9 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
                 entry["last_error"] = f"Could not connect - retrying in {retry}s"
             entry.update(config_detail_fields(config.sources.get(source.name)))
             sources.append(entry)
-        for name in registries.SOURCE_CLASSES:
-            if name in active_source_names:
-                continue
-            src_cfg = config.sources.get(name)
-            if src_cfg is not None:
-                entry = {"name": name, "status": "disabled"}
-                entry.update(config_detail_fields(src_cfg))
-                sources.append(entry)
-            else:
-                sources.append({"name": name, "status": "not_configured"})
+        sources.extend(
+            _registered_but_inactive(active_source_names, registries.SOURCE_CLASSES, config.sources)
+        )
 
         # Outputs
         active_output_types: set = set()
@@ -73,7 +115,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
         output_list = []
         for i, output in enumerate(outputs):
             cls = type(output)
-            type_name = registries.OUTPUT_NAME_BY_CLASS.get(cls, cls.__name__)
+            type_name = registries.output_name_for_class(cls) or cls.__name__
             active_output_types.add(type_name)
             instance_index = output_type_counts.get(type_name, 0)
             output_type_counts[type_name] = instance_index + 1
@@ -93,33 +135,22 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
                     if val not in (None, ""):
                         entry[field] = val
             output_list.append(entry)
-        for type_name in registries.OUTPUT_CLASSES:
-            if type_name in active_output_types:
-                continue
-            if config.outputs.get(type_name):
-                output_list.append({"type": type_name, "status": "disabled", "instance_index": 0})
-            else:
-                output_list.append({"type": type_name, "status": "not_configured", "instance_index": 0})
+        output_list.extend(
+            _inactive_outputs(active_output_types, registries.OUTPUT_CLASSES, config.outputs)
+        )
 
         # Enrichers
         active_enricher_names: set = set()
         enrichers = []
         for enricher in orch.enrichers:
-            name = registries.ENRICHER_NAME_BY_CLASS.get(type(enricher), type(enricher).__name__)
+            name = registries.enricher_name_for_class(type(enricher)) or type(enricher).__name__
             active_enricher_names.add(name)
             entry = {"name": name, "status": "ok"}
             entry.update(config_detail_fields(config.enrichers.get(name)))
             enrichers.append(entry)
-        for name in registries.ENRICHER_CLASSES:
-            if name in active_enricher_names:
-                continue
-            enc_cfg = config.enrichers.get(name)
-            if enc_cfg is not None:
-                entry = {"name": name, "status": "disabled"}
-                entry.update(config_detail_fields(enc_cfg))
-                enrichers.append(entry)
-            else:
-                enrichers.append({"name": name, "status": "not_configured"})
+        enrichers.extend(
+            _registered_but_inactive(active_enricher_names, registries.ENRICHER_CLASSES, config.enrichers)
+        )
 
         # Idle sources — list of all known idle sources with their status.
         idle_sources = []
@@ -143,15 +174,9 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
                 "status": "ok",
                 "wallpapers_loaded": data["idle_wallpapers_loaded"],
             })
-        for name in registries.IDLE_CLASSES:
-            if name in active_idle_names:
-                continue
-            idle_cfg = config.idle.get(name)
-            if idle_cfg is not None:
-                status = "disabled" if not idle_cfg.enabled else "ok"
-            else:
-                status = "not_configured"
-            idle_sources.append({"type": name, "status": status})
+        idle_sources.extend(
+            _inactive_idle_sources(active_idle_names, registries.IDLE_CLASSES, config.idle)
+        )
 
         # Video outputs expose their own idle video source (pexels/pixabay).
         from mediainfo.outputs.video import VideoOutput

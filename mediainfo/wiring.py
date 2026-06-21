@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def instantiate_outputs(config: Config, config_path: Path, cache: ImageCache) -> list:
     outputs = []
     for name, output_configs in config.outputs.items():
-        output_cls = registries.OUTPUT_CLASSES.get(name)
+        output_cls = registries.get_output_class(name)
         if output_cls is None:
             logger.warning("Unknown output: %s", name)
             continue
@@ -44,7 +44,7 @@ def build_sources(config: Config) -> list:
         source_config = config.sources.get(name)
         if source_config is None or not source_config.enabled:
             continue
-        source_cls = registries.SOURCE_CLASSES.get(name)
+        source_cls = registries.get_source_class(name)
         if source_cls is None:
             logger.warning("Unknown source in priority list: %s", name)
             continue
@@ -57,11 +57,11 @@ def build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> l
     for name, enricher_config in config.enrichers.items():
         if not enricher_config.enabled:
             continue
-        enricher_cls = registries.ENRICHER_CLASSES.get(name)
+        enricher_cls = registries.get_enricher_class(name)
         if enricher_cls is None:
             logger.warning("Unknown enricher: %s", name)
             continue
-        if enricher_cls in registries.LIBRARY_AWARE_ENRICHERS:
+        if name in registries.LIBRARY_AWARE_ENRICHER_NAMES:
             enrichers.append(enricher_cls(enricher_config, library))
         else:
             enrichers.append(enricher_cls(enricher_config))
@@ -79,11 +79,11 @@ def build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
     for name, idle_config in config.idle.items():
         if not idle_config.enabled:
             continue
-        idle_cls = registries.IDLE_CLASSES.get(name)
+        idle_cls = registries.get_idle_class(name)
         if idle_cls is None:
             logger.warning("Unknown idle wallpaper source: %s", name)
             continue
-        if idle_cls in registries.LIBRARY_AWARE_IDLE_CLASSES:
+        if name in registries.LIBRARY_AWARE_IDLE_NAMES:
             instances.append(idle_cls(idle_config, library))
         else:
             instances.append(idle_cls(idle_config))

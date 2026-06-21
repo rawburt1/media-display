@@ -82,7 +82,10 @@ def test_build_enrichers_instantiates_enabled():
     fake_cls = MagicMock(return_value=MagicMock())
     cfg = _minimal_config(enrichers={"fanarttv": enc_cfg})
 
-    with patch("mediainfo.registries.ENRICHER_CLASSES", {"fanarttv": fake_cls}):
+    with (
+        patch("mediainfo.registries.ENRICHER_CLASSES", {"fanarttv": fake_cls}),
+        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHER_NAMES", set()),
+    ):
         result = build_enrichers(cfg)
 
     fake_cls.assert_called_once_with(enc_cfg)
@@ -98,7 +101,7 @@ def test_build_enrichers_passes_library_to_library_aware_enrichers():
 
     with (
         patch("mediainfo.registries.ENRICHER_CLASSES", {"fanarttv": fake_cls}),
-        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHERS", {fake_cls}),
+        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHER_NAMES", {"fanarttv"}),
     ):
         result = build_enrichers(cfg, fake_library)
 
@@ -163,7 +166,7 @@ def test_build_idle_source_passes_library_to_library_aware_classes():
 
     with (
         patch("mediainfo.registries.IDLE_CLASSES", {"library": fake_cls}),
-        patch("mediainfo.registries.LIBRARY_AWARE_IDLE_CLASSES", {fake_cls}),
+        patch("mediainfo.registries.LIBRARY_AWARE_IDLE_NAMES", {"library"}),
     ):
         result = build_idle_source(cfg, fake_library)
 

@@ -45,9 +45,9 @@ _OUTPUT_ADDRESS_FIELDS = {
 
 
 def test_source(name: str, source_config: Any) -> Tuple[bool, str]:
-    from mediainfo.registries import SOURCE_CLASSES
+    from mediainfo import registries
 
-    cls = SOURCE_CLASSES.get(name)
+    cls = registries.get_source_class(name)
     if cls is None or source_config is None:
         return False, "Unknown source"
 
