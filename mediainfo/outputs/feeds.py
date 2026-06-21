@@ -1,8 +1,10 @@
-"""Feed output: serves an RSS 2.0 and Atom 1.0 feed of recently played items.
+"""Feed output: serves an RSS 2.0 and Atom 1.0 feed describing only the
+currently playing item.
 
-Each item that starts playing becomes a new feed entry with title, description,
-artwork URL (as an enclosure), and timestamp.  Idle gaps are not recorded.
-The feed is held in memory and trimmed to the most recent `max_items` entries.
+The feed holds at most one entry - title, description, artwork URL (as an
+enclosure), and timestamp - replaced whenever the playing item changes, and
+cleared while idle (including while idle wallpapers are showing, which are
+decorative and never themselves "now playing").
 
 Endpoints served on the configured port:
 
@@ -86,16 +88,24 @@ class FeedOutput(Output):
         pass
 
     def on_idle(self) -> None:
-        pass
+        with self._lock:
+            self._entries = []
 
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
+        # Idle wallpaper batches go through on_new_item too (so outputs like
+        # FolderOutput can mirror them), but they're decorative, not
+        # "playing" - the feed should go empty for these, same as on_idle().
+        if now_playing.source == "idle":
+            with self._lock:
+                self._entries = []
+            return
+
         entry = self._make_entry(now_playing)
         with self._lock:
             # Skip if the same item is re-detected without an intervening change.
             if self._entries and self._entries[0].identity == entry.identity:
                 return
-            self._entries.insert(0, entry)
-            del self._entries[self.config.max_items:]
+            self._entries = [entry]
 
     def _make_entry(self, np: NowPlaying) -> _Entry:
         now = datetime.now(tz=timezone.utc)
@@ -162,7 +172,7 @@ class FeedOutput(Output):
         ch = ET.SubElement(rss, "channel")
         ET.SubElement(ch, "title").text = self.config.title
         ET.SubElement(ch, "link").text = base_url
-        ET.SubElement(ch, "description").text = "Recently played media"
+        ET.SubElement(ch, "description").text = "Currently playing media"
         if entries:
             ET.SubElement(ch, "lastBuildDate").text = format_datetime(entries[0].published)
         for e in entries:

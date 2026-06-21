@@ -52,8 +52,8 @@ Currently implemented:
   to artwork when something plays; info output (`http://<host>:8093/`)
   pairs the current artwork at its original (high) resolution with the
   Wikipedia summary text; MQTT publishes now-playing state to a broker
-  topic; feed output serves RSS/Atom feeds of recently-played items,
-  including the Wikipedia summary when available; config output
+  topic; feed output serves RSS/Atom feeds describing only the currently
+  playing item, including the Wikipedia summary when available; config output
   (`http://<host>:8094/`) is a web page for editing every config option
   above (sources, outputs, enrichers, idle sources, polling intervals)
   without hand-editing YAML - saved changes are hot-reloaded within a
@@ -379,12 +379,12 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`outputs.mqtt`**: publishes the current now-playing state as JSON to
   `topic` on the broker at `host`/`port` (with optional `username`/
   `password`/`qos`) - useful for Home Assistant or other automation.
-- **`outputs.feed`**: serves RSS (`/rss`) and Atom (`/atom`) feeds of
-  recently-played items, with artwork as enclosures, plus an HTML
-  discovery page at `/`. `max_items` caps how many recent items are kept
-  in memory (default 50); `title` names the feed. Each entry's description
-  includes the Wikipedia summary (see `enrichers.wikipedia`) when one was
-  found for that item.
+- **`outputs.feed`**: serves RSS (`/rss`) and Atom (`/atom`) feeds
+  describing only the currently playing item (single entry, replaced
+  whenever it changes, empty while idle), with artwork as an enclosure,
+  plus an HTML discovery page at `/`. `title` names the feed. The entry's
+  description includes the Wikipedia summary (see `enrichers.wikipedia`)
+  when one was found for that item.
 - **`outputs.info`**: `host`/`port` (default 8093) for a web page pairing
   the current artwork with its bio/plot summary - artist bio for music,
   movie info, or TV show info, supplied by `enrichers.wikipedia`. No image

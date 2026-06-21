@@ -17,7 +17,7 @@ def _a(tag):
 
 
 def _config(**kwargs):
-    defaults = dict(enabled=True, host="127.0.0.1", port=8086, title="Now Playing", max_items=10)
+    defaults = dict(enabled=True, host="127.0.0.1", port=8086, title="Now Playing")
     defaults.update(kwargs)
     return FeedConfig(**defaults)
 
@@ -130,12 +130,12 @@ def test_on_new_item_adds_entry():
     assert out._entries[0].title == "Queen – Bohemian Rhapsody"
 
 
-def test_on_new_item_prepends_most_recent():
+def test_on_new_item_replaces_previous_entry():
     out = _output()
     out.on_new_item(_music(title="Song A"), MagicMock())
     out.on_new_item(_music(title="Song B"), MagicMock())
+    assert len(out._entries) == 1
     assert out._entries[0].title.endswith("Song B")
-    assert out._entries[1].title.endswith("Song A")
 
 
 def test_on_new_item_skips_duplicate_identity():
@@ -145,20 +145,23 @@ def test_on_new_item_skips_duplicate_identity():
     assert len(out._entries) == 1
 
 
-def test_on_new_item_same_song_twice_after_different_adds_two_entries():
+def test_on_new_item_same_song_twice_after_different_still_one_entry():
     out = _output()
     out.on_new_item(_music(title="Song A"), MagicMock())
     out.on_new_item(_music(title="Song B"), MagicMock())
     out.on_new_item(_music(title="Song A"), MagicMock())
-    assert len(out._entries) == 3
+    assert len(out._entries) == 1
+    assert out._entries[0].title.endswith("Song A")
 
 
-def test_on_new_item_trims_to_max_items():
-    out = _output(max_items=3)
-    for i in range(5):
-        out.on_new_item(_music(title=f"Song {i}", artist=f"Artist {i}"), MagicMock())
-    assert len(out._entries) == 3
-    assert out._entries[0].title == "Artist 4 – Song 4"
+def test_on_new_item_with_idle_wallpaper_clears_entry():
+    out = _output()
+    out.on_new_item(_music(), MagicMock())
+    idle_now_playing = NowPlaying(
+        source="idle", media_type="wallpaper", title="", subtitle="", images=[]
+    )
+    out.on_new_item(idle_now_playing, MagicMock())
+    assert out._entries == []
 
 
 def test_on_new_item_captures_image_url():
@@ -182,11 +185,11 @@ def test_on_new_item_skips_blank_image_url():
     assert out._entries[0].image_url is None
 
 
-def test_on_idle_is_noop():
+def test_on_idle_clears_entry():
     out = _output()
     out.on_new_item(_music(), MagicMock())
     out.on_idle()
-    assert len(out._entries) == 1
+    assert out._entries == []
 
 
 def test_update_is_noop():
@@ -284,16 +287,15 @@ def test_rss_no_enclosure_when_no_image():
     assert root.find("channel/item/enclosure") is None
 
 
-def test_rss_multiple_items_in_order():
+def test_rss_only_shows_the_current_item():
     out = _output()
     out.on_new_item(_music(title="Song A", artist="Alpha"), MagicMock())
     out.on_new_item(_music(title="Song B", artist="Beta"), MagicMock())
     with out.app.test_client() as client:
         root = ET.fromstring(client.get("/rss").data)
     items = root.findall("channel/item")
-    assert len(items) == 2
-    assert "Song B" in items[0].find("title").text  # most recent first
-    assert "Song A" in items[1].find("title").text
+    assert len(items) == 1
+    assert "Song B" in items[0].find("title").text
 
 
 def test_rss_empty_feed_has_no_items():

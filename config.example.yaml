@@ -279,7 +279,6 @@ outputs:
     host: 0.0.0.0
     port: 8086
     title: Now Playing               # Channel/feed title shown in feed readers
-    max_items: 50                    # Entries kept in memory (oldest discarded)
 
   # Folder output — writes the current artwork as image files in a directory.
   # Each image is replaced whenever the playing item changes. While nothing

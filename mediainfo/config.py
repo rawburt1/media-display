@@ -223,8 +223,6 @@ class FeedConfig:
     port: int = 8086
     # Feed channel title shown in podcast/RSS apps.
     title: str = "Now Playing"
-    # Maximum number of entries to keep in memory (oldest are discarded).
-    max_items: int = 50
 
 
 @dataclasses.dataclass
