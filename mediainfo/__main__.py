@@ -58,6 +58,8 @@ def main() -> None:
         config.cache.dir,
         max_age_days=config.cache.max_age_days,
         idle_max_age_hours=config.cache.idle_max_age_hours,
+        min_width=config.cache.min_width,
+        min_height=config.cache.min_height,
     )
 
     # Outputs are created once and stay alive for the life of the process.
@@ -105,6 +107,8 @@ def main() -> None:
                 config.cache.dir,
                 max_age_days=config.cache.max_age_days,
                 idle_max_age_hours=config.cache.idle_max_age_hours,
+                min_width=config.cache.min_width,
+                min_height=config.cache.min_height,
             )
             if library_config_changed:
                 library.close()

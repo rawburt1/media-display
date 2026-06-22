@@ -361,3 +361,45 @@ def test_rejected_image_is_not_cached_so_a_retry_hits_network_again(mock_get, tm
     assert cache.get_path(artwork) is None
     assert cache.get_path(artwork) is None
     assert mock_get.call_count == 2  # never cached as a "hit", so re-fetched every time
+
+
+@patch("mediainfo.cache.requests.get")
+def test_minimum_size_is_configurable(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(200, 200)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path, min_width=100, min_height=100)
+    path = cache.get_path(Artwork(url="http://example.com/small.jpg"))
+
+    assert path is not None  # 200x200 passes a lowered 100x100 minimum
+
+
+@patch("mediainfo.cache.requests.get")
+def test_configured_minimum_still_rejects_below_it(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(50, 50)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path, min_width=100, min_height=100)
+    path = cache.get_path(Artwork(url="http://example.com/tiny.jpg"))
+
+    assert path is None
+
+
+@patch("mediainfo.cache.requests.get")
+def test_minimum_size_check_disabled_when_zero(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(10, 10)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path, min_width=0, min_height=0)
+    path = cache.get_path(Artwork(url="http://example.com/tiny.jpg"))
+
+    assert path is not None  # check disabled entirely

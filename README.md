@@ -544,12 +544,15 @@ See `config.example.yaml` for all options. Key things to fill in:
   just one). List it before the other music enrichers in `enrichers:` so
   that if it fills in the album name unambiguously, they get a chance to
   also contribute art for it.
-- **`cache.dir`**: where downloaded artwork is stored. Any downloaded image
-  smaller than 640×480 is rejected (not cached, and re-tried on the next
-  poll instead) rather than shown - low-res thumbnails (a fallback icon
-  some APIs return when they have no real artwork) aren't worth displaying
-  full-screen. Manual artwork overrides (see `overrides` below) are exempt,
-  since those are a deliberate choice rather than a downloaded fallback.
+- **`cache.dir`**: where downloaded artwork is stored.
+- **`cache.min_width`** / **`cache.min_height`**: any downloaded image
+  smaller than this (default 640×480) is rejected - not cached, and
+  re-tried on the next poll instead of being shown - since low-res
+  thumbnails (a fallback icon some APIs return when they have no real
+  artwork) aren't worth displaying full-screen. Set both to `0` to
+  disable the check entirely. Manual artwork overrides (see `overrides`
+  below) are exempt, since those are a deliberate choice rather than a
+  downloaded fallback.
 - **`cache.max_age_days`**: how long unused cached now-playing artwork is
   kept before being deleted (default 30).
 - **`cache.idle_max_age_hours`**: how long unused cached idle wallpapers

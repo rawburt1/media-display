@@ -41,6 +41,14 @@ class CacheConfig:
     # on a much shorter schedule than now-playing artwork, since they're
     # decorative and easily refetched rather than tied to a specific item.
     idle_max_age_hours: int = 48
+    # Reject downloads smaller than this - low-res thumbnails (e.g. a
+    # fallback icon some APIs return when they have no real artwork)
+    # aren't worth displaying full-screen and aren't worth the disk space
+    # either. Set to 0 to disable the check entirely. Doesn't apply to
+    # manual artwork overrides (see OverridesConfig) - those are a
+    # deliberate choice, not a downloaded fallback.
+    min_width: int = 640
+    min_height: int = 480
 
 
 @dataclasses.dataclass

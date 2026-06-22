@@ -33,11 +33,10 @@ _DEFAULT_EXTENSION = ".jpg"
 # the default python-requests User-Agent and require a descriptive one.
 _HEADERS = {"User-Agent": "mediainfo/1.0 (+https://github.com/rawburt1/media-display)"}
 
-# Reject downloads smaller than this - low-res thumbnails (e.g. a fallback
-# icon some APIs return when they have no real artwork) aren't worth
-# displaying full-screen and aren't worth the disk space either.
-_MIN_WIDTH = 640
-_MIN_HEIGHT = 480
+# Default minimum dimensions - see ImageCache.__init__'s min_width/
+# min_height params (configurable via CacheConfig.min_width/min_height).
+_DEFAULT_MIN_WIDTH = 640
+_DEFAULT_MIN_HEIGHT = 480
 
 
 class ImageCache:
@@ -48,6 +47,8 @@ class ImageCache:
         cache_dir: Union[str, Path],
         max_age_days: int = 30,
         idle_max_age_hours: int = 48,
+        min_width: int = _DEFAULT_MIN_WIDTH,
+        min_height: int = _DEFAULT_MIN_HEIGHT,
     ):
         # Resolve to an absolute path: Flask's send_file() resolves relative
         # paths against the app module's directory, not the cwd, so a
@@ -69,6 +70,8 @@ class ImageCache:
         self.music_dir.mkdir(parents=True, exist_ok=True)
         self.max_age_seconds = max_age_days * 86400
         self.idle_max_age_seconds = idle_max_age_hours * 3600
+        self.min_width = min_width
+        self.min_height = min_height
         self._tier_dirs: Dict[CacheTier, Path] = {
             "default": self.cache_dir,
             "idle": self.idle_dir,
@@ -105,7 +108,7 @@ class ImageCache:
         if not self._meets_minimum_size(response.content):
             logger.info(
                 "Skipped artwork %r - smaller than %dx%d",
-                artwork.label or artwork.url, _MIN_WIDTH, _MIN_HEIGHT,
+                artwork.label or artwork.url, self.min_width, self.min_height,
             )
             return None
 
@@ -117,18 +120,19 @@ class ImageCache:
         logger.info("Cached artwork %r -> %s", artwork.label or artwork.url, path.name)
         return path
 
-    @staticmethod
-    def _meets_minimum_size(content: bytes) -> bool:
+    def _meets_minimum_size(self, content: bytes) -> bool:
         """True if the image meets the minimum dimensions, or if its size
         can't be determined (e.g. an unrecognized format) - this only ever
         rejects images we can positively confirm are too small.
         """
+        if self.min_width <= 0 and self.min_height <= 0:
+            return True
         try:
             with Image.open(io.BytesIO(content)) as img:
                 width, height = img.size
         except (UnidentifiedImageError, OSError):
             return True
-        return width >= _MIN_WIDTH and height >= _MIN_HEIGHT
+        return width >= self.min_width and height >= self.min_height
 
     @staticmethod
     def _find_existing(key: str, base_dir: Path) -> Optional[Path]:
