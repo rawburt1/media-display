@@ -557,6 +557,128 @@ def test_new_item_calls_on_new_item_with_full_image_list():
     output.on_new_item.assert_called_once_with(now_playing, cache)
 
 
+# ---------------------------------------------------------------------------
+# Manual artwork overrides
+# ---------------------------------------------------------------------------
+
+def test_override_replaces_enriched_images():
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    enriched = Artwork(url="https://example.com/enriched.jpg", label="Enriched")
+    now_playing = NowPlaying(
+        source="kodi", media_type="movie", title="Inception", images=[enriched]
+    )
+
+    overrides = MagicMock(spec=ArtworkOverrideStore)
+    override_art = Artwork(url="file:///overrides/abc.jpg", label="Manual override")
+    overrides.get.return_value = override_art
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/overrides/abc.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+        overrides=overrides,
+    )
+    orchestrator._tick()
+
+    overrides.get.assert_called_once_with("Inception", "")
+    assert now_playing.images == [override_art]
+    _, artwork, _ = output.update.call_args[0]
+    assert artwork.label == "Manual override"
+
+
+def test_no_override_match_leaves_enriched_images_untouched():
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    enriched = Artwork(url="https://example.com/enriched.jpg", label="Enriched")
+    now_playing = NowPlaying(
+        source="kodi", media_type="movie", title="Inception", images=[enriched]
+    )
+
+    overrides = MagicMock(spec=ArtworkOverrideStore)
+    overrides.get.return_value = None
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/cache/enriched.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+        overrides=overrides,
+    )
+    orchestrator._tick()
+
+    assert now_playing.images == [enriched]
+
+
+def test_no_overrides_store_is_a_no_op():
+    artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
+    now_playing = NowPlaying(
+        source="kodi", media_type="movie", title="Inception", images=[artwork]
+    )
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/cache/poster.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )  # overrides=None (default)
+    orchestrator._tick()  # must not raise
+
+    assert now_playing.images == [artwork]
+
+
+def test_override_lookup_error_is_caught_and_does_not_block_display():
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
+    now_playing = NowPlaying(
+        source="kodi", media_type="movie", title="Inception", images=[artwork]
+    )
+
+    overrides = MagicMock(spec=ArtworkOverrideStore)
+    overrides.get.side_effect = RuntimeError("disk error")
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/cache/poster.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+        overrides=overrides,
+    )
+    orchestrator._tick()  # must not raise
+
+    assert now_playing.images == [artwork]  # enriched images preserved on error
+
+
 def test_music_artwork_is_fetched_as_permanent():
     artwork = Artwork(url="https://example.com/cover.jpg", label="Cover")
     now_playing = NowPlaying(

@@ -55,6 +55,7 @@ from mediainfo.config.shared import (
     CacheConfig,
     LibraryConfig,
     LoggingConfig,
+    OverridesConfig,
 )
 from mediainfo.config.sources import (
     SOURCE_CONFIG_TYPES,
@@ -105,6 +106,7 @@ __all__ = [
     "NestHubConfig",
     "OmdbConfig",
     "OUTPUT_CONFIG_TYPES",
+    "OverridesConfig",
     "PixooConfig",
     "PlexConfig",
     "Ps5Config",
@@ -153,6 +155,7 @@ class Config:
     backoff_initial_seconds: int = 30
     backoff_max_seconds: int = 300
     alerts: AlertConfig = dataclasses.field(default_factory=AlertConfig)
+    overrides: OverridesConfig = dataclasses.field(default_factory=OverridesConfig)
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "Config":
@@ -214,4 +217,5 @@ class Config:
             backoff_initial_seconds=raw.get("backoff_initial_seconds", 30),
             backoff_max_seconds=raw.get("backoff_max_seconds", 300),
             alerts=AlertConfig(**(raw.get("alerts") or {})),
+            overrides=OverridesConfig(**(raw.get("overrides") or {})),
         )

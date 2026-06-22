@@ -5,10 +5,12 @@ outputs from config, and wiring cross-cutting state onto outputs.
 from unittest.mock import MagicMock, patch
 
 from mediainfo.wiring import (
+    build_artwork_overrides,
     build_enrichers,
     build_idle_source,
     build_sources,
     start_orchestrator,
+    wire_artwork_overrides,
     wire_health_providers,
     wire_hitster_safe,
 )
@@ -197,6 +199,50 @@ def test_start_orchestrator_starts_and_returns_orchestrator():
     mock_cls.assert_called_once()
     mock_orch.start.assert_called_once()
     assert result is mock_orch
+
+
+# ---------------------------------------------------------------------------
+# build_artwork_overrides / wire_artwork_overrides
+# ---------------------------------------------------------------------------
+
+def test_build_artwork_overrides_returns_none_when_disabled():
+    cfg = MagicMock()
+    cfg.overrides.enabled = False
+    assert build_artwork_overrides(cfg) is None
+
+
+def test_build_artwork_overrides_returns_store_when_enabled(tmp_path):
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    cfg = MagicMock()
+    cfg.overrides.enabled = True
+    cfg.overrides.dir = str(tmp_path / "overrides")
+
+    store = build_artwork_overrides(cfg)
+
+    assert isinstance(store, ArtworkOverrideStore)
+    assert store.dir == tmp_path / "overrides"
+
+
+def test_wire_artwork_overrides_wires_config_ui_output_only():
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+
+    config_output = MagicMock(spec=ConfigUiOutput)
+    other_output = MagicMock()
+    store = MagicMock()
+
+    wire_artwork_overrides([config_output, other_output], store)
+
+    config_output.set_artwork_overrides.assert_called_once_with(store)
+    assert not other_output.set_artwork_overrides.called
+
+
+def test_wire_artwork_overrides_passes_through_none():
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+
+    config_output = MagicMock(spec=ConfigUiOutput)
+    wire_artwork_overrides([config_output], None)
+    config_output.set_artwork_overrides.assert_called_once_with(None)
 
 
 # ---------------------------------------------------------------------------

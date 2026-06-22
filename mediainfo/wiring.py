@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from mediainfo import registries
+from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config
 from mediainfo.health import make_health_provider
@@ -95,8 +96,18 @@ def build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
     return CompositeIdleWallpaperSource(instances)
 
 
+def build_artwork_overrides(config: Config) -> Optional[ArtworkOverrideStore]:
+    if not config.overrides.enabled:
+        return None
+    return ArtworkOverrideStore(config.overrides.dir)
+
+
 def start_orchestrator(
-    config: Config, outputs: list, cache: ImageCache, library: Optional[MusicLibrary] = None
+    config: Config,
+    outputs: list,
+    cache: ImageCache,
+    library: Optional[MusicLibrary] = None,
+    overrides: Optional[ArtworkOverrideStore] = None,
 ) -> Orchestrator:
     orch = Orchestrator(
         sources=build_sources(config),
@@ -109,6 +120,7 @@ def start_orchestrator(
         backoff_initial_seconds=config.backoff_initial_seconds,
         backoff_max_seconds=config.backoff_max_seconds,
         alert_config=config.alerts,
+        overrides=overrides,
     )
     orch.start()
     return orch
@@ -135,3 +147,15 @@ def wire_hitster_safe(outputs: list, orch: Orchestrator) -> None:
     for output in outputs:
         if isinstance(output, ConfigUiOutput):
             output.set_hitster_safe_handlers(orch.get_hitster_safe, orch.set_hitster_safe)
+
+
+def wire_artwork_overrides(outputs: list, overrides: Optional[ArtworkOverrideStore]) -> None:
+    """Register the artwork override store on every ConfigUiOutput
+    instance, so its "Overrides" page can list/add/remove pins. A no-op
+    (the page just reports the feature as disabled) when `overrides` is
+    None - see OverridesConfig.enabled."""
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+
+    for output in outputs:
+        if isinstance(output, ConfigUiOutput):
+            output.set_artwork_overrides(overrides)

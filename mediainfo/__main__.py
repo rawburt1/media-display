@@ -19,8 +19,10 @@ from mediainfo.config import Config, LoggingConfig
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.validation import validate_config
 from mediainfo.wiring import (
+    build_artwork_overrides,
     instantiate_outputs,
     start_orchestrator,
+    wire_artwork_overrides,
     wire_health_providers,
     wire_hitster_safe,
 )
@@ -69,9 +71,11 @@ def main() -> None:
 
     config_mtime = _file_mtime(config_path)
     library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
-    orch = start_orchestrator(config, outputs, cache, library)
+    overrides = build_artwork_overrides(config)
+    orch = start_orchestrator(config, outputs, cache, library, overrides)
     wire_health_providers(outputs, orch, config)
     wire_hitster_safe(outputs, orch)
+    wire_artwork_overrides(outputs, overrides)
 
     try:
         # Main loop: sleep until a stop signal or a config-file change.
@@ -92,6 +96,7 @@ def main() -> None:
             _warn_output_changes(config, new_config)
             validate_config(new_config)
             library_config_changed = new_config.library != config.library
+            overrides_config_changed = new_config.overrides != config.overrides
             config = new_config
 
             orch.stop()
@@ -106,7 +111,10 @@ def main() -> None:
                 library = MusicLibrary(
                     config.library.db_path, max_age_days=config.library.max_age_days
                 )
-            orch = start_orchestrator(config, outputs, cache, library)
+            if overrides_config_changed:
+                overrides = build_artwork_overrides(config)
+                wire_artwork_overrides(outputs, overrides)
+            orch = start_orchestrator(config, outputs, cache, library, overrides)
             wire_health_providers(outputs, orch, config)
             wire_hitster_safe(outputs, orch)
             logger.info("Config reloaded successfully")

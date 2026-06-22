@@ -14,6 +14,7 @@ import time
 from typing import Dict, List, Optional
 
 from mediainfo.alerting import AlertManager
+from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.config import AlertConfig
 from mediainfo.enrichers.base import ArtworkEnricher
@@ -108,6 +109,7 @@ class Orchestrator:
         backoff_initial_seconds: float = 30,
         backoff_max_seconds: float = 300,
         alert_config: Optional[AlertConfig] = None,
+        overrides: Optional[ArtworkOverrideStore] = None,
     ):
         self.sources = sources
         self.enrichers = enrichers
@@ -149,6 +151,7 @@ class Orchestrator:
         )
         self._alerts = AlertManager(alert_config or AlertConfig())
         self._last_alert_check: Optional[float] = None
+        self._overrides = overrides
 
     def get_hitster_safe(self) -> bool:
         with self._hitster_safe_lock:
@@ -250,6 +253,8 @@ class Orchestrator:
         for enricher in self.enrichers:
             self._safe_call(enricher.enrich, now_playing)
 
+        self._apply_artwork_override(now_playing)
+
         logger.info(
             "Now playing changed: [%s] %s - %s (%d image(s))",
             now_playing.source,
@@ -274,6 +279,22 @@ class Orchestrator:
         )
         for index, output in enumerate(self.outputs):
             self._show_image_for_output(index, output)
+
+    def _apply_artwork_override(self, now_playing: NowPlaying) -> None:
+        """If a manual override is pinned for this title/subtitle (see
+        artwork_overrides.py), replace whatever enrichment found with just
+        that one image - a deliberate user choice overrides automatic
+        enrichment entirely, rather than just joining the rotation pool.
+        """
+        if self._overrides is None:
+            return
+        try:
+            override = self._overrides.get(now_playing.title, now_playing.subtitle)
+        except Exception:
+            logger.exception("Error checking artwork overrides for %s", now_playing.title)
+            return
+        if override is not None:
+            now_playing.images = [override]
 
     def _maybe_purge_cache(self) -> None:
         now = time.monotonic()

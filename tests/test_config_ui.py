@@ -1052,3 +1052,165 @@ def test_api_test_output_route_handles_missing_body(config_path):
 
     assert resp.status_code == 200
     assert resp.get_json()["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# Artwork overrides
+# ---------------------------------------------------------------------------
+
+def test_overrides_page_served(config_path):
+    out = _output(config_path)
+    resp = out.app.test_client().get("/overrides")
+    assert resp.status_code == 200
+    assert b"overrides" in resp.data.lower()
+
+
+def test_overrides_list_reports_disabled_when_no_store_registered(config_path):
+    out = _output(config_path)
+    resp = out.app.test_client().get("/api/overrides")
+    assert resp.get_json() == {"enabled": False, "items": []}
+
+
+def test_overrides_list_empty_when_enabled(config_path, tmp_path):
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    out = _output(config_path)
+    out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
+
+    resp = out.app.test_client().get("/api/overrides")
+
+    assert resp.get_json() == {"enabled": True, "items": []}
+
+
+def test_overrides_add_then_list(config_path, tmp_path):
+    import io
+
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    out = _output(config_path)
+    out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
+
+    resp = out.app.test_client().post(
+        "/api/overrides",
+        data={
+            "title": "Inception",
+            "subtitle": "",
+            "file": (io.BytesIO(b"fake-image-bytes"), "poster.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.get_json() == {"ok": True}
+
+    listed = out.app.test_client().get("/api/overrides").get_json()
+    assert listed["enabled"] is True
+    assert len(listed["items"]) == 1
+    assert listed["items"][0]["title"] == "Inception"
+
+
+def test_overrides_add_without_title_is_rejected(config_path, tmp_path):
+    import io
+
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    out = _output(config_path)
+    out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
+
+    resp = out.app.test_client().post(
+        "/api/overrides",
+        data={"title": "", "file": (io.BytesIO(b"x"), "poster.jpg")},
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+def test_overrides_add_without_file_is_rejected(config_path, tmp_path):
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    out = _output(config_path)
+    out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
+
+    resp = out.app.test_client().post(
+        "/api/overrides", data={"title": "Inception"}, content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+def test_overrides_add_when_disabled_returns_503(config_path):
+    import io
+
+    out = _output(config_path)
+    resp = out.app.test_client().post(
+        "/api/overrides",
+        data={"title": "Inception", "file": (io.BytesIO(b"x"), "poster.jpg")},
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 503
+
+
+def test_overrides_remove(config_path, tmp_path):
+    import io
+
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    out = _output(config_path)
+    out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
+    out.app.test_client().post(
+        "/api/overrides",
+        data={"title": "Inception", "file": (io.BytesIO(b"x"), "poster.jpg")},
+        content_type="multipart/form-data",
+    )
+
+    resp = out.app.test_client().delete(
+        "/api/overrides", json={"title": "Inception", "subtitle": ""},
+    )
+
+    assert resp.get_json() == {"ok": True}
+    assert out.app.test_client().get("/api/overrides").get_json()["items"] == []
+
+
+def test_overrides_remove_when_disabled_returns_503(config_path):
+    out = _output(config_path)
+    resp = out.app.test_client().delete("/api/overrides", json={"title": "Inception"})
+    assert resp.status_code == 503
+
+
+def test_overrides_image_served(config_path, tmp_path):
+    import io
+
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    out = _output(config_path)
+    out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
+    out.app.test_client().post(
+        "/api/overrides",
+        data={"title": "Inception", "file": (io.BytesIO(b"fake-image-bytes"), "poster.jpg")},
+        content_type="multipart/form-data",
+    )
+    filename = out.app.test_client().get("/api/overrides").get_json()["items"][0]["filename"]
+
+    resp = out.app.test_client().get(f"/api/overrides/image/{filename}")
+
+    assert resp.status_code == 200
+    assert resp.data == b"fake-image-bytes"
+
+
+def test_overrides_image_rejects_path_traversal(config_path, tmp_path):
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    out = _output(config_path)
+    out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
+
+    resp = out.app.test_client().get("/api/overrides/image/..%2F..%2Fetc%2Fpasswd")
+
+    assert resp.status_code == 404
+
+
+def test_overrides_image_404_when_disabled(config_path):
+    out = _output(config_path)
+    resp = out.app.test_client().get("/api/overrides/image/whatever.jpg")
+    assert resp.status_code == 404

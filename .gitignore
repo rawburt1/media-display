@@ -26,6 +26,9 @@ adb_keys/
 # Spotify OAuth token
 spotify_cache/
 
+# Manual artwork overrides (user-uploaded images)
+overrides/
+
 # Local Claude Code settings
 .claude/settings.local.json
 

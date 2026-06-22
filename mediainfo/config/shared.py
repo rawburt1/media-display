@@ -61,6 +61,14 @@ class AlertConfig:
 
 
 @dataclasses.dataclass
+class OverridesConfig:
+    # Manual per-title artwork pins, managed via the config UI's
+    # "Overrides" page - see mediainfo/artwork_overrides.py.
+    enabled: bool = True
+    dir: str = "./overrides"
+
+
+@dataclasses.dataclass
 class LoggingConfig:
     # Python logging level name: DEBUG, INFO, WARNING, ERROR, or CRITICAL.
     level: str = "INFO"

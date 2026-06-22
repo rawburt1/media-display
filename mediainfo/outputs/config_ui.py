@@ -66,9 +66,10 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from ruamel.yaml import YAML
 
+from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import (
     ENRICHER_CONFIG_TYPES,
@@ -83,7 +84,12 @@ from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.base import Output
 from mediainfo.outputs.config_dashboard import test_enricher, test_output, test_source
-from mediainfo.outputs.config_ui_templates import _DASHBOARD_HTML, _INDEX_HTML, _LIBRARY_HTML
+from mediainfo.outputs.config_ui_templates import (
+    _DASHBOARD_HTML,
+    _INDEX_HTML,
+    _LIBRARY_HTML,
+    _OVERRIDES_HTML,
+)
 from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
@@ -206,6 +212,7 @@ class ConfigUiOutput(Output):
         self._health_fn = None
         self._hitster_safe_get = None
         self._hitster_safe_set = None
+        self._overrides: Optional[ArtworkOverrideStore] = None
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
 
@@ -215,6 +222,12 @@ class ConfigUiOutput(Output):
         Orchestrator.get_hitster_safe."""
         self._hitster_safe_get = get_fn
         self._hitster_safe_set = set_fn
+
+    def set_artwork_overrides(self, store: Optional[ArtworkOverrideStore]) -> None:
+        """Register the artwork override store, so the "Overrides" page
+        can list/add/remove pins - see wiring.wire_artwork_overrides.
+        None means the feature is disabled (overrides.enabled: false)."""
+        self._overrides = store
 
     def set_health_provider(self, fn) -> None:
         """Register a callable that returns the health JSON dict - used by
@@ -670,6 +683,55 @@ class ConfigUiOutput(Output):
                 "albums": [{"id": i, "title": t, "mbid": m} for i, t, m in albums],
                 "tracks": [{"id": i, "title": t, "mbid": m} for i, t, m in tracks],
             })
+
+        @app.get("/overrides")
+        def overrides_page():
+            return _OVERRIDES_HTML
+
+        @app.get("/api/overrides")
+        def overrides_list():
+            if self._overrides is None:
+                return jsonify({"enabled": False, "items": []})
+            return jsonify({"enabled": True, "items": self._overrides.list()})
+
+        @app.post("/api/overrides")
+        def overrides_add():
+            if self._overrides is None:
+                return jsonify({"ok": False, "error": "Overrides are disabled"}), 503
+
+            title = (request.form.get("title") or "").strip()
+            subtitle = (request.form.get("subtitle") or "").strip()
+            file = request.files.get("file")
+            if not title:
+                return jsonify({"ok": False, "error": "Title is required"}), 400
+            if file is None or not file.filename:
+                return jsonify({"ok": False, "error": "An image file is required"}), 400
+
+            extension = Path(file.filename).suffix or ".jpg"
+            self._overrides.set(title, subtitle, file.read(), extension)
+            return jsonify({"ok": True})
+
+        @app.delete("/api/overrides")
+        def overrides_remove():
+            if self._overrides is None:
+                return jsonify({"ok": False, "error": "Overrides are disabled"}), 503
+
+            body = request.get_json(silent=True) or {}
+            removed = self._overrides.remove(
+                (body.get("title") or "").strip(), (body.get("subtitle") or "").strip()
+            )
+            return jsonify({"ok": removed})
+
+        @app.get("/api/overrides/image/<filename>")
+        def overrides_image(filename: str):
+            if self._overrides is None:
+                return "", 404
+            # send_file resolves relative to this safe, fixed directory only
+            # - filename never reaches the filesystem as a path (no "..").
+            path = self._overrides.dir / Path(filename).name
+            if not path.exists():
+                return "", 404
+            return send_file(path)
 
         @app.get("/api/status")
         def status():

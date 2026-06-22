@@ -27,3 +27,4 @@ services:
       - ./adb_keys:/app/adb_keys
       - ./artwork:/app/artwork
       - ./spotify_cache:/app/spotify_cache  # Spotify OAuth token; only needed if Spotify is enabled
+      - ./overrides:/app/overrides  # Manual artwork overrides; only needed if overrides.enabled
