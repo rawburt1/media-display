@@ -102,12 +102,25 @@ let outputsData = null;
 
 function fieldId(category, type, field) { return category + '.' + type + '.' + field; }
 
+// Simple flat-list-of-strings fields (speaker_ips, blacklist, device_ips,
+// ignore_apps, transition_exclude) round-trip through a one-item-per-line
+// textarea: list -> text for display, text -> list when read back.
+function listToTextarea(value) {
+  return Array.isArray(value) ? value.join('\\n') : '';
+}
+function textareaToList(text) {
+  return text.split('\\n').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+}
+
 function renderField(category, typeName, field) {
   const id = fieldId(category, typeName, field.name);
   const value = values[id] !== undefined ? values[id] : field.default;
   let input;
   if (field.type === 'bool') {
     input = '<input type="checkbox" id="' + id + '" ' + (value ? 'checked' : '') + '>';
+  } else if (field.type === 'list') {
+    input = '<textarea id="' + id + '" rows="3" placeholder="One per line">'
+      + listToTextarea(value).replace(/</g, '&lt;') + '</textarea>';
   } else {
     const inputType = field.secret ? 'password' : (field.type === 'int' ? 'number' : 'text');
     const v = (value === undefined || value === null) ? '' : String(value).replace(/"/g, '&quot;');
@@ -261,6 +274,9 @@ function renderOutputField(typeName, index, field) {
   if (field.type === 'bool') {
     input = '<input type="checkbox" id="' + id + '" onchange="' + onchange + '" '
       + (value ? 'checked' : '') + '>';
+  } else if (field.type === 'list') {
+    input = '<textarea id="' + id + '" onchange="' + onchange + '" rows="3" placeholder="One per line">'
+      + listToTextarea(value).replace(/</g, '&lt;') + '</textarea>';
   } else {
     const inputType = field.secret ? 'password' : (field.type === 'int' ? 'number' : 'text');
     const v = (value === undefined || value === null) ? '' : String(value).replace(/"/g, '&quot;');
@@ -271,8 +287,10 @@ function renderOutputField(typeName, index, field) {
 
 function updateOutputField(typeName, index, fieldName, el) {
   const fieldSpec = schema.outputs[typeName].find(function(f) { return f.name === fieldName; });
-  outputsData[typeName][index][fieldName] =
-    (fieldSpec.type === 'bool') ? el.checked : (fieldSpec.type === 'int' ? Number(el.value || 0) : el.value);
+  outputsData[typeName][index][fieldName] = (fieldSpec.type === 'bool') ? el.checked
+    : (fieldSpec.type === 'int') ? Number(el.value || 0)
+    : (fieldSpec.type === 'list') ? textareaToList(el.value)
+    : el.value;
 }
 
 function renderOutputTypeCard(typeName, fields) {
@@ -333,7 +351,10 @@ function collectValues() {
       const id = fieldId(category, typeName, f.name);
       const el = document.getElementById(id);
       if (!el) return;
-      out[id] = (f.type === 'bool') ? el.checked : (f.type === 'int' ? Number(el.value || 0) : el.value);
+      out[id] = (f.type === 'bool') ? el.checked
+        : (f.type === 'int') ? Number(el.value || 0)
+        : (f.type === 'list') ? textareaToList(el.value)
+        : el.value;
     });
   }
   collect('general', '', schema.general);
@@ -814,6 +835,16 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <div class="grid" id="enrichers-grid"></div>
 
 <script>
+// Simple flat-list-of-strings fields (speaker_ips, blacklist, device_ips,
+// ignore_apps, transition_exclude) round-trip through a one-item-per-line
+// textarea: list -> text for display, text -> list when read back.
+function listToTextarea(value) {
+  return Array.isArray(value) ? value.join('\\n') : '';
+}
+function textareaToList(text) {
+  return text.split('\\n').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+}
+
 let statusData = { sources: [], outputs: [], enrichers: [] };
 let currentFilter = 'all';
 let testResults = {};  // kind + ':' + id -> {ok, message} - survives the 10s auto-refresh
@@ -1039,6 +1070,10 @@ function fieldInputHtml(id, field, value) {
   if (field.type === 'bool') {
     return '<input type="checkbox" id="' + id + '"' + (value ? ' checked' : '') + '>';
   }
+  if (field.type === 'list') {
+    return '<textarea id="' + id + '" rows="3" placeholder="One per line">'
+      + listToTextarea(value).replace(/</g, '&lt;') + '</textarea>';
+  }
   const inputType = field.secret ? 'password' : (field.type === 'int' ? 'number' : 'text');
   const v = (value === undefined || value === null) ? '' : String(value).replace(/"/g, '&quot;');
   return '<input type="' + inputType + '" id="' + id + '" value="' + v + '">';
@@ -1126,7 +1161,10 @@ function saveEdit(kind, item, fields, btn, resultEl) {
   const edited = {};
   fields.forEach(function(f) {
     const el = document.getElementById('edit-' + f.name);
-    edited[f.name] = (f.type === 'bool') ? el.checked : (f.type === 'int' ? Number(el.value || 0) : el.value);
+    edited[f.name] = (f.type === 'bool') ? el.checked
+      : (f.type === 'int') ? Number(el.value || 0)
+      : (f.type === 'list') ? textareaToList(el.value)
+      : el.value;
   });
 
   btn.disabled = true;

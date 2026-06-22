@@ -78,13 +78,27 @@ def test_schema_includes_known_source_types(config_path):
     assert "plex" in data["sources"]
 
 
-def test_schema_excludes_list_typed_fields(config_path):
+def test_schema_includes_simple_list_fields(config_path):
+    # speaker_ips/blacklist are flat lists of strings - simple enough to
+    # edit as a one-item-per-line text box in the form.
     out = _output(config_path)
     data = out.app.test_client().get("/api/schema").get_json()
-    field_names = {f["name"] for f in data["sources"]["sonos"]}
-    assert "blacklist" not in field_names
-    assert "speaker_ips" not in field_names
-    assert "enabled" in field_names
+    fields = {f["name"]: f for f in data["sources"]["sonos"]}
+    assert fields["blacklist"]["type"] == "list"
+    assert fields["blacklist"]["default"] == []
+    assert fields["speaker_ips"]["type"] == "list"
+    assert "enabled" in fields
+
+
+def test_schema_excludes_complex_list_typed_fields(config_path):
+    # `transforms` is a list of differently-shaped objects, not a flat
+    # list of strings - excluded from the form, only editable via the
+    # page's "Advanced" raw YAML editor.
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/schema").get_json()
+    field_names = {f["name"] for f in data["outputs"]["pixoo"]}
+    assert "transforms" not in field_names
+    assert "ip" in field_names
 
 
 def test_schema_marks_secret_fields(config_path):
@@ -203,6 +217,30 @@ def test_save_form_preserves_comments(config_path):
     assert "# Copy this file to config.yaml" in text
 
 
+def test_save_form_sets_simple_list_field(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post(
+        "/api/config/form",
+        json={"values": {"sources.sonos.speaker_ips": ["192.168.1.10", "192.168.1.11"]}},
+    )
+
+    cfg = Config.load(config_path)
+    assert cfg.sources["sonos"].speaker_ips == ["192.168.1.10", "192.168.1.11"]
+
+
+def test_get_values_returns_simple_list_field(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post(
+        "/api/config/form",
+        json={"values": {"sources.sonos.blacklist": ["Bedroom"]}},
+    )
+
+    values = client.get("/api/config").get_json()["values"]
+    assert values["sources.sonos.blacklist"] == ["Bedroom"]
+
+
 def test_save_form_sets_bool_field(config_path):
     out = _output(config_path)
     client = out.app.test_client()
@@ -224,6 +262,33 @@ def test_save_form_creates_new_section_for_unconfigured_type(config_path):
     cfg = Config.load(config_path)
     assert cfg.enrichers["discogs"].enabled is True
     assert cfg.enrichers["discogs"].token == "abc123"
+
+
+def test_save_form_sets_simple_list_field_on_output_instance(config_path):
+    config_path.write_text(
+        """
+outputs:
+  web:
+    - enabled: true
+      port: 8090
+"""
+    )
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {
+                "web": [
+                    {"enabled": True, "port": 8090, "transition_exclude": ["zoom", "fade"]},
+                ],
+            },
+        },
+    )
+
+    cfg = Config.load(config_path)
+    assert cfg.outputs["web"][0].transition_exclude == ["zoom", "fade"]
 
 
 def test_save_form_updates_existing_output_instances(config_path):

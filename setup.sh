@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-mkdir -p config cache library logs adb_keys artwork spotify_cache
+mkdir -p config cache library logs adb_keys artwork spotify_cache overrides
 
 if [ ! -f config/config.yaml ]; then
     cp config.example.yaml config/config.yaml

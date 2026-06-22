@@ -15,9 +15,13 @@ Currently implemented:
   posters+fanart, music), Jellyfin and Emby (movie/episode posters+fanart,
   music, via the Sessions API), Sonos (album art), Spotify (current playback
   via the Web API), Apple TV (any app, via the Companion/MRP/AirPlay
-  protocols), YouTube on Android TV (via ADB, reports a song only when the
-  video looks like one - see "Extending" below), Android TV / Nvidia Shield
-  (via ADB, generic "now playing" from any other app), vinyl turntable
+  protocols), **the YouTube *app* on Android TV** (⚠️ not YouTube in
+  general - this works only via ADB against an actual Android TV device
+  running the YouTube app, e.g. an Nvidia Shield; it cannot see YouTube
+  played in a browser, on a phone, on a smart TV's own built-in app, or
+  anywhere else - reports a song only when the video looks like one, see
+  "Extending" below), Android TV / Nvidia Shield (via ADB, generic "now
+  playing" from any other app on the same device), vinyl turntable
   (audio recognition via [vinyl_recognizer](vinyl_recognizer/) + AudD),
   Home Assistant (polls a single media_player entity via HA's REST API -
   a fallback for devices a more specific source can't read directly, e.g.
@@ -37,11 +41,15 @@ Currently implemented:
   summary plus a photo, for the `info` output and RSS/Atom feeds below;
   Sonarr/Radarr/Lidarr each match against your own library (rather than a
   public catalog) and add a studio/genres/discography plus poster/fanart/
-  album art - see below; lyrics adds the playing track's lyrics (via the
-  free lyrics.ovh API) for the `info` output; TMDb and OMDb each add a 0-10
-  rating for movies/TV shows, also for the `info` output - both can be
-  enabled at once without conflict, since neither overwrites a rating the
-  other already found
+  album art - see below; lyrics adds the playing track's plain-text lyrics
+  (via the free lyrics.ovh API) for the `info` output; lrclib adds
+  *time-synced* lyrics (LRC format, via the free lrclib.net API) for the
+  `info` output, shown as a scrolling/highlighted line instead of static
+  text - only works for sources that report a playback position (currently
+  just Kodi) and tracks lrclib actually has synced lyrics for; TMDb and
+  OMDb each add a 0-10 rating for movies/TV shows, also for the `info`
+  output - both can be enabled at once without conflict, since neither
+  overwrites a rating the other already found
 - **Outputs**: Pixoo64 (local HTTP API), web page (`http://<host>:8090/`),
   and Google Nest Hub (Cast) each rotate between all available poster/fanart
   images for the current item on their own randomized schedule - each one
@@ -53,14 +61,16 @@ Currently implemented:
   player that shows idle stock-footage clips (Pexels/Pixabay) and switches
   to artwork when something plays; info output (`http://<host>:8093/`)
   pairs the current artwork at its original (high) resolution with the
-  Wikipedia summary text; MQTT publishes now-playing state to a broker
-  topic; feed output serves RSS/Atom feeds describing only the currently
-  playing item, including the Wikipedia summary when available; config output
+  Wikipedia summary text and (for music, when available) time-synced
+  scrolling lyrics; MQTT publishes now-playing state to a broker topic;
+  feed output serves RSS/Atom feeds describing only the currently playing
+  item, including the Wikipedia summary when available; config output
   (`http://<host>:8094/`) is a web page for editing every config option
-  above (sources, outputs, enrichers, idle sources, polling intervals)
-  without hand-editing YAML - saved changes are hot-reloaded within a few
-  seconds, and it has a "Hitster-safe" button that suppresses song/artist/
-  album display across *every* output (falling back to idle wallpapers/text
+  above (sources, outputs, enrichers, idle sources, polling intervals,
+  including most list-valued fields like Sonos speaker IPs) without
+  hand-editing YAML - saved changes are hot-reloaded within a few seconds,
+  and it has a "Hitster-safe" button that suppresses song/artist/album
+  display across *every* output (falling back to idle wallpapers/text
   instead) while it's on, so a song's title/artist never leaks onto a
   screen mid-round of Hitster or similar music-guessing games
 - **Idle wallpapers**: Unsplash, Last.fm scrobble history (album art from
@@ -70,6 +80,13 @@ Currently implemented:
   independently rotates through that batch on its own randomized schedule
   (same as the now-playing artwork rotation above). Multiple idle sources
   can be enabled at once - their wallpapers are merged into a single pool.
+- **Manual artwork overrides**: pin a specific image for a title/subtitle
+  that never gets a good poster from any enricher, via the config UI's
+  "Overrides" page - on by default (`overrides.enabled: true`)
+- **Alerting**: optionally POST a webhook (Slack, Discord, ntfy.sh,
+  healthchecks.io, or any endpoint that accepts JSON) once an output has
+  been continuously failing for a while (e.g. a Pixoo64 that's gone
+  unreachable on the network) - off by default, see `alerts` below
 - Disk cache for downloaded artwork (each image is only fetched once,
   and unused files are purged after `cache.max_age_days`)
 - `/health` endpoint (on the web output) reports uptime, the current
@@ -88,6 +105,41 @@ Currently implemented:
   later by re-editing config.yaml - most changes hot-reload within a few
   seconds (see "Configuration" below for the exceptions).
 
+### Getting API keys (only fill in what you actually use)
+
+Nothing below is required to get *something* on screen - Kodi, Plex,
+Sonos, Jellyfin/Emby, Apple TV, Home Assistant, Shield/YouTube (ADB), and
+Chromecast all need no API key at all, just a host/IP on your network.
+The free services below add extra artwork/metadata/wallpapers and are
+entirely optional - skip any row for a feature you don't care about.
+
+| For | Get a key/token at | Used by |
+|---|---|---|
+| Plex | [Find your X-Plex-Token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) | `sources.plex` |
+| Jellyfin | Dashboard → Advanced → API Keys → New API Key | `sources.jellyfin` |
+| Emby | the equivalent Emby settings page | `sources.emby` |
+| Spotify | [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) (free app) | `sources.spotify` |
+| PlayStation 5 | [PSN `npsso` cookie](https://ca.account.sony.com/api/v1/ssocookie) (login first) | `sources.ps5` |
+| Vinyl recognition | [AudD](https://audd.io/) - see [vinyl_recognizer/README.md](vinyl_recognizer/) | `sources.vinyl` |
+| fanart.tv | [fanart.tv/get-an-api-key](https://fanart.tv/get-an-api-key/) | `enrichers.fanarttv` |
+| TheTVDB | [thetvdb.com/dashboard/account/apikey](https://thetvdb.com/dashboard/account/apikey) | `enrichers.thetvdb` |
+| Sonarr | Settings → General → Security | `enrichers.sonarr` |
+| Radarr | Settings → General → Security | `enrichers.radarr` |
+| Lidarr | Settings → General → Security | `enrichers.lidarr` |
+| Discogs | [discogs.com/settings/developers](https://www.discogs.com/settings/developers) | `enrichers.discogs` |
+| Last.fm | [last.fm/api/account/create](https://www.last.fm/api/account/create) | `enrichers.lastfm` and `idle.lastfm` (same key works for both) |
+| TMDb | [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) | `enrichers.tmdb` |
+| OMDb | [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx) | `enrichers.omdb` |
+| Unsplash | [unsplash.com/oauth/applications](https://unsplash.com/oauth/applications) | `idle.unsplash` |
+| Pexels (video output) | [pexels.com/api](https://www.pexels.com/api/) | `outputs.video` |
+| Pixabay (video output) | [pixabay.com/api/docs](https://pixabay.com/api/docs/) | `outputs.video` |
+
+No key needed: Wikipedia, MusicBrainz, lyrics.ovh, lrclib.net (lyrics/bio
+enrichers), and the Kodi/Plex/Sonos/Jellyfin-Emby/Shield-YouTube/
+Chromecast/Home Assistant sources (host+credentials on your own network
+instead). Apple TV doesn't use an API key either - it's a one-time
+on-device pairing flow instead, see `sources.appletv` further down.
+
 ### Quick start (Docker - recommended)
 
 ```bash
@@ -102,7 +154,7 @@ docker compose up -d
 
 `./setup.sh` creates every directory `docker-compose.yml` bind-mounts
 (`config/`, `cache/`, `library/`, `logs/`, `adb_keys/`, `artwork/`,
-`spotify_cache/`) and copies `config.example.yaml` to `config/config.yaml`
+`spotify_cache/`, `overrides/`) and copies `config.example.yaml` to `config/config.yaml`
 if it isn't there yet. Running it yourself first matters: Docker otherwise
 creates any missing mount target itself as root, which the container's
 non-root app user can't then write into. config.yaml lives in
@@ -168,7 +220,9 @@ See `config.example.yaml` for all options. Key things to fill in:
   about `auth.enabled: true` with a blank username/password (see `auth`
   below).
 - **`sources.kodi`**: Kodi host/port and credentials. In Kodi, enable
-  *Settings → Services → Control → Allow remote control via HTTP*.
+  *Settings → Services → Control → Allow remote control via HTTP*. Also
+  the only source that currently reports a playback position, which
+  `enrichers.lrclib` (see below) needs to actually show synced lyrics.
 - **`sources.sonos`**: IP address of every Sonos speaker on your network
   (find them in the Sonos app under speaker settings, or your router's
   device list). Any one of them can report the full household topology,
@@ -230,10 +284,16 @@ See `config.example.yaml` for all options. Key things to fill in:
   Play - see `_VIDEO_PACKAGES` in `sources/shield.py`, easy to extend) are
   reported as `episode` instead of `music`, so `enrichers.thetvdb` can
   resolve the show by title and add a poster.
-- **`sources.youtube`**: same `host`/`port`/ADB pairing flow as
-  `sources.shield` above (can point at the same device - use a separate
-  `adb_key_path`), but targets the YouTube app specifically rather than
-  whatever app is in the foreground, reporting the video title and channel
+- **`sources.youtube`**: ⚠️ despite the name, this is **not** "now playing
+  on YouTube" in general - it only ever sees the YouTube *app* running on
+  an Android TV device (e.g. an Nvidia Shield) that this machine has ADB
+  access to. It cannot detect YouTube played in a desktop/mobile browser,
+  a phone app, a smart TV's own built-in YouTube app, or anything not
+  running on the specific Android TV box you point `host` at. Same
+  `host`/`port`/ADB pairing flow as `sources.shield` above (can point at
+  the same device - use a separate `adb_key_path`), but targets the
+  YouTube app specifically rather than whatever app is in the foreground,
+  reporting the video title and channel
   name (treated as the artist) as music. YouTube TV's media session
   doesn't expose anything that reliably distinguishes a song from any
   other video (a music track and a vlog report the exact same fields), so
@@ -277,9 +337,13 @@ See `config.example.yaml` for all options. Key things to fill in:
   instance" / "- Remove last" controls in the form - instances can only be
   appended/removed from the end, not reordered, so that non-form fields
   like `transforms` on existing instances stay attached to the right one.
-  List-typed fields themselves (`transforms`, `blacklist`) still aren't
-  shown as individual form fields; use the page's "Advanced" raw-YAML
-  editor for those. Saves are validated before being written, and the
+  Simple list fields (`speaker_ips`, `blacklist`, `device_ips`,
+  `ignore_apps`, `transition_exclude`) are editable too, as a one-value-
+  per-line text box. `transforms` is the one list field still not shown
+  individually - it's a list of differently-shaped objects (see
+  config.example.yaml), not a flat list of values a generic form field can
+  represent - use the page's "Advanced" raw-YAML editor for that one.
+  Saves are validated before being written, and the
   running process picks up the change via its existing hot-reload within
   a few seconds. This output can read and write config.yaml, including any
   credentials in it, with no authentication of its own - see SECURITY.md
@@ -460,6 +524,18 @@ See `config.example.yaml` for all options. Key things to fill in:
   a plain-text summary (`NowPlaying.summary`) plus a thumbnail photo. The
   summary is shown by the `info` output and included in RSS/Atom feed
   entries.
+- **`enrichers.lyrics`**: no API key required (free lyrics.ovh API). Adds
+  plain-text lyrics for the playing track, shown by the `info` output.
+- **`enrichers.lrclib`**: no API key required (free lrclib.net API). Adds
+  *time-synced* lyrics (LRC format, one timestamp per line) for the
+  playing track - the `info` output uses these (instead of the plain
+  `lyrics` enricher's static text) to highlight and auto-scroll the
+  current line as the song plays. Two things both need to be true for
+  this to actually show synced: the playing source has to report a
+  playback position (only `sources.kodi` does, via Kodi's own API), and
+  lrclib has to actually have a synced-lyrics entry for that track (many
+  - especially less popular ones - don't; that's a normal miss, not an
+  error). Falls back to the plain `lyrics` enricher's text otherwise.
 - **`enrichers.library`**: no API key required. For sources that don't
   report an album at all (e.g. YouTube), looks up the playing artist+song
   in the local music library and adds cover art for every album the song
@@ -468,7 +544,12 @@ See `config.example.yaml` for all options. Key things to fill in:
   just one). List it before the other music enrichers in `enrichers:` so
   that if it fills in the album name unambiguously, they get a chance to
   also contribute art for it.
-- **`cache.dir`**: where downloaded artwork is stored.
+- **`cache.dir`**: where downloaded artwork is stored. Any downloaded image
+  smaller than 640×480 is rejected (not cached, and re-tried on the next
+  poll instead) rather than shown - low-res thumbnails (a fallback icon
+  some APIs return when they have no real artwork) aren't worth displaying
+  full-screen. Manual artwork overrides (see `overrides` below) are exempt,
+  since those are a deliberate choice rather than a downloaded fallback.
 - **`cache.max_age_days`**: how long unused cached now-playing artwork is
   kept before being deleted (default 30).
 - **`cache.idle_max_age_hours`**: how long unused cached idle wallpapers
@@ -518,21 +599,45 @@ See `config.example.yaml` for all options. Key things to fill in:
   these outputs beyond your LAN (port-forwarding, a reverse proxy, a VPN
   you don't fully trust, ...). One shared username/password applies to
   all of them. See SECURITY.md for more on this.
+- **`alerts`**: off by default (`enabled: false`). When enabled, `webhook_url`
+  gets a JSON POST once an output has been continuously failing for at
+  least `error_threshold_seconds` (default 5 minutes) - e.g. a Pixoo64
+  that's gone unreachable on the network. Most chat tools (Slack, Discord,
+  ntfy.sh, healthchecks.io, or any endpoint of your own that accepts a
+  plain JSON POST) work as the webhook target. Re-fires at most every
+  `repeat_interval_seconds` (default 1 hour) while the outage continues,
+  and resets the moment the output recovers, so a long outage doesn't spam
+  the webhook but also doesn't get silently forgotten about.
+- **`overrides`**: on by default (`enabled: true`). Lets you pin a specific
+  image for a title/subtitle that never gets a good poster from any
+  enricher (matched by exact title + subtitle, case-insensitive) - manage
+  these from the config UI's "Overrides" page (`http://<host>:8094/overrides`),
+  no YAML editing needed: upload an image, type the title (and subtitle,
+  if applicable - leave blank for e.g. a movie with no subtitle), save.
+  A match replaces whatever enrichment found for that item entirely, and
+  isn't subject to the 640×480 minimum-size check other downloaded
+  artwork goes through, since it's a deliberate choice rather than an
+  automatic download. `dir` is where the uploaded images are stored.
 
-## Extending with new sources/outputs
+## Extending with new sources/outputs/enrichers
 
-1. Add a config dataclass in `mediainfo/config.py` and register it in
-   `SOURCE_CONFIG_TYPES` (or `OUTPUT_CONFIG_TYPES`, or `IDLE_CONFIG_TYPES`
-   for idle wallpaper sources).
+1. Add a config dataclass in `mediainfo/config/sources.py` (or `outputs.py`,
+   `enrichers.py`, `idle.py`) and register it in that module's
+   `SOURCE_CONFIG_TYPES` (or `OUTPUT_CONFIG_TYPES`, `ENRICHER_CONFIG_TYPES`,
+   `IDLE_CONFIG_TYPES`).
 2. Add a new module under `mediainfo/sources/` (or `outputs/`, or
    `idle/`) that implements `MediaSource.get_now_playing()` (or
    `Output.update()` / `on_idle()`, or
    `IdleWallpaperSource.get_wallpapers()`), returning a
    `mediainfo.models.NowPlaying` (or a list of `Artwork`).
-3. Register the class in `SOURCE_CLASSES` (or `OUTPUT_CLASSES`, or
-   `IDLE_CLASSES`) in `mediainfo/registries.py`.
-4. Add it to `priority` (sources), `outputs` (outputs), or `idle` (idle
-   wallpaper sources) in your `config.yaml`.
+3. Register it in `SOURCE_CLASSES` (or `OUTPUT_CLASSES`, `ENRICHER_CLASSES`,
+   `IDLE_CLASSES`) in `mediainfo/registries.py`, as a dotted import-path
+   string (e.g. `"mediainfo.sources.kodi.KodiSource"`) rather than the
+   class itself - these are resolved lazily on first use, so adding a
+   source doesn't force every plugin's own dependencies to be imported
+   up front just to build this dict.
+4. Add it to `priority` (sources), `outputs` (outputs), `enrichers`
+   (enrichers), or `idle` (idle wallpaper sources) in your `config.yaml`.
 
 Each source's `get_now_playing()` must catch its own connection errors and
 return `None` rather than raising, so one unreachable source never breaks

@@ -108,6 +108,13 @@ _GENERAL_FIELDS = [
     ("rotation_interval_seconds", "int", 30),
 ]
 
+# List-typed fields simple enough (a flat list of strings) to edit as a
+# one-item-per-line text box in the form, rather than the "Advanced" raw
+# YAML editor. `transforms` is deliberately excluded - it's a list of
+# differently-shaped objects (see config.example.yaml), not a flat list of
+# strings, so a generic form field can't represent it usefully.
+_SIMPLE_LIST_FIELDS = {"speaker_ips", "blacklist", "device_ips", "ignore_apps", "transition_exclude"}
+
 _yaml = YAML()
 _yaml.preserve_quotes = True
 
@@ -127,11 +134,18 @@ def _is_secret(name: str) -> bool:
 
 
 def _scalar_fields(cls: type) -> List[Dict[str, Any]]:
-    """Return [{"name", "type", "default", "secret"}] for a config dataclass'
-    bool/int/str fields (list-typed fields are excluded - see module docstring).
+    """Return [{"name", "type", "default", "secret"}] for a config
+    dataclass' bool/int/str fields, plus any simple flat-list-of-strings
+    field named in _SIMPLE_LIST_FIELDS (type "list", rendered as a
+    one-item-per-line text box) - other list-typed fields (e.g.
+    `transforms`, a list of differently-shaped objects) are excluded and
+    only editable via the page's "Advanced" raw YAML editor.
     """
     fields = []
     for f in dataclasses.fields(cls):
+        if f.type == "list" and f.name in _SIMPLE_LIST_FIELDS:
+            fields.append({"name": f.name, "type": "list", "default": [], "secret": False})
+            continue
         if f.type not in ("bool", "int", "str"):
             continue
         default = f.default if f.default is not dataclasses.MISSING else ""

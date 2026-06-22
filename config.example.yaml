@@ -112,7 +112,11 @@ sources:
     # Generated automatically on first run; accept the on-screen prompt.
     adb_key_path: ./adb_keys/shield
 
-  # YouTube on Android TV (e.g. the same Nvidia Shield as `shield` above).
+  # YouTube on Android TV ONLY - not YouTube in general. This detects the
+  # YouTube *app* running on an Android TV device (e.g. the same Nvidia
+  # Shield as `shield` above) over ADB; it cannot see YouTube played in a
+  # browser, a phone app, a smart TV's own built-in YouTube app, or
+  # anything not running on the specific device `host` below points at.
   # Unlike `shield`'s generic any-app session grab, this specifically
   # targets the YouTube app, reporting the video title and channel name
   # (treated as the artist) as music. YouTube TV's media session doesn't
