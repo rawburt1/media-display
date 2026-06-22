@@ -157,7 +157,11 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
 
         # Traditional wallpaper idle sources (IDLE_CLASSES registry). When
         # several are enabled at once, orch.idle_source is a
-        # CompositeIdleWallpaperSource wrapping all of them.
+        # CompositeIdleWallpaperSource wrapping all of them - exactly one
+        # of them supplies any given batch (see idle/composite.py), but
+        # wallpapers_loaded below reports the shared current-batch size
+        # under every configured source's name regardless of which one
+        # actually supplied it.
         if isinstance(orch.idle_source, CompositeIdleWallpaperSource):
             active_idle_instances = orch.idle_source.sources
         elif orch.idle_source is not None:

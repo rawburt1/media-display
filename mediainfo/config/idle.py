@@ -40,6 +40,24 @@ class PexelsWallpaperConfig:
 
 
 @dataclasses.dataclass
+class LocalWallpaperConfig:
+    enabled: bool = False
+    # Base directory - each immediate subdirectory is treated as one
+    # "destination" (e.g. one folder per trip/location). One destination
+    # is picked at random per batch, and batch_size pictures are picked at
+    # random from within it (searched recursively, so nested subfolders
+    # under a destination are included too) - pictures are never mixed
+    # across destinations within the same batch.
+    dir: str = "./wallpapers"
+    # How often (in seconds) to pick a fresh destination/batch while idle.
+    # Each output then independently rotates through that batch (in its
+    # own random order) using the top-level rotation_interval_seconds.
+    rotation_interval_seconds: int = 300
+    # Number of pictures to pick per batch.
+    batch_size: int = 15
+
+
+@dataclasses.dataclass
 class LastFmHistoryConfig:
     enabled: bool = False
     # Free API key from https://www.last.fm/api/account/create (same key
@@ -73,6 +91,7 @@ class LibraryIdleConfig:
 IDLE_CONFIG_TYPES: dict[str, type] = {
     "lastfm": LastFmHistoryConfig,
     "library": LibraryIdleConfig,
+    "local": LocalWallpaperConfig,
     "pexels": PexelsWallpaperConfig,
     "unsplash": UnsplashWallpaperConfig,
 }

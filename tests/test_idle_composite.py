@@ -1,7 +1,8 @@
-"""Tests for CompositeIdleWallpaperSource, which merges multiple idle
-wallpaper sources into a single pool."""
+"""Tests for CompositeIdleWallpaperSource, which combines multiple idle
+wallpaper sources WITHOUT mixing them within a single batch - each batch
+comes entirely from one source."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.models import Artwork
@@ -21,18 +22,73 @@ def test_rotation_interval_is_the_minimum_of_all_sources():
     assert composite.rotation_interval_seconds == 60
 
 
-def test_get_wallpapers_merges_all_sources_on_first_call():
+def test_priority_mode_uses_first_source_with_images():
     a_images = [Artwork(url="https://example.com/a.jpg", label="A")]
     b_images = [Artwork(url="https://example.com/b.jpg", label="B")]
     a = _fake_source(a_images)
     b = _fake_source(b_images)
-    composite = CompositeIdleWallpaperSource([a, b])
+    composite = CompositeIdleWallpaperSource([a, b], mode="priority")
 
     result = composite.get_wallpapers()
 
-    assert result == a_images + b_images
+    assert result == a_images  # first source wins, never mixed with b's
     a.get_wallpapers.assert_called_once()
-    b.get_wallpapers.assert_called_once()
+    b.get_wallpapers.assert_called_once()  # still fetched (so its cache stays fresh)
+
+
+def test_priority_mode_falls_through_to_next_source_when_first_is_empty():
+    b_images = [Artwork(url="https://example.com/b.jpg", label="B")]
+    a = _fake_source([])  # unavailable
+    b = _fake_source(b_images)
+    composite = CompositeIdleWallpaperSource([a, b], mode="priority")
+
+    result = composite.get_wallpapers()
+
+    assert result == b_images
+
+
+def test_priority_mode_returns_empty_when_all_sources_empty():
+    a = _fake_source([])
+    b = _fake_source([])
+    composite = CompositeIdleWallpaperSource([a, b], mode="priority")
+
+    assert composite.get_wallpapers() == []
+
+
+def test_random_mode_never_mixes_sources():
+    a_images = [Artwork(url="https://example.com/a.jpg", label="A")]
+    b_images = [Artwork(url="https://example.com/b.jpg", label="B")]
+    a = _fake_source(a_images)
+    b = _fake_source(b_images)
+    composite = CompositeIdleWallpaperSource([a, b], mode="random")
+
+    result = composite.get_wallpapers()
+
+    assert result in (a_images, b_images)
+    assert result != a_images + b_images
+
+
+def test_random_mode_can_pick_either_source():
+    a_images = [Artwork(url="https://example.com/a.jpg", label="A")]
+    b_images = [Artwork(url="https://example.com/b.jpg", label="B")]
+    a = _fake_source(a_images)
+    b = _fake_source(b_images)
+    composite = CompositeIdleWallpaperSource([a, b], mode="random")
+
+    with patch("mediainfo.idle.composite.random.shuffle", side_effect=lambda lst: lst.reverse()):
+        result = composite.get_wallpapers()
+
+    assert result == b_images  # order [0, 1] reversed to [1, 0] -> b tried first
+
+
+def test_default_mode_is_priority():
+    a_images = [Artwork(url="https://example.com/a.jpg", label="A")]
+    b_images = [Artwork(url="https://example.com/b.jpg", label="B")]
+    a = _fake_source(a_images)
+    b = _fake_source(b_images)
+    composite = CompositeIdleWallpaperSource([a, b])  # mode not specified
+
+    assert composite.get_wallpapers() == a_images
 
 
 def test_keeps_previous_batch_from_a_source_whose_interval_has_not_elapsed(monkeypatch):

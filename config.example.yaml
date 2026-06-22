@@ -622,11 +622,37 @@ library:
 # show a rotating set of wallpapers downloaded from the configured source.
 # Each output independently rotates through the batch in a random order.
 
+# Multiple idle sources can be enabled at once, but they're never mixed
+# within the same batch - exactly one supplies any given batch.
+# idle_priority controls which: list the enabled source names in the
+# order to try them ("local", "pexels", "unsplash", ...) - the first one
+# with wallpapers available wins. Any enabled source left off this list
+# is tried last, in the order it's listed under `idle:` below. Leave this
+# empty (the default) to just use that `idle:` order for everyone.
+idle_priority:
+  - local
+  - pexels
+  - unsplash
+
+# "priority" (default): use idle_priority's order as given, every time -
+# the first available source always wins. "random": same "exactly one
+# source, never mixed" rule, but which source wins is picked at random
+# each batch instead of always preferring the highest-priority one.
+idle_mode: priority
+
 idle:
 
-  # Multiple idle sources can be enabled at once - their wallpapers are
-  # merged into a single pool, with each source refetched on its own
-  # rotation_interval_seconds below.
+  # Local folders — each immediate subdirectory of `dir` is one
+  # "destination" (e.g. one folder per trip/location); one destination is
+  # picked at random per batch, and batch_size pictures are picked at
+  # random from within it (subfolders under a destination are searched
+  # too) - never mixed with another destination in the same batch. No API
+  # key needed.
+  local:
+    enabled: false
+    dir: ./wallpapers
+    rotation_interval_seconds: 300
+    batch_size: 15               # Pictures to pick per batch
 
   # Unsplash — high-resolution photography.
   # Create a free app at https://unsplash.com/oauth/applications and use the
@@ -641,10 +667,13 @@ idle:
     access_key: YOUR_UNSPLASH_ACCESS_KEY
 
   # Pexels — stock photography, as an alternative or fallback to Unsplash.
-  # Each idle source is fetched independently and merged into one pool, so
-  # enabling both means if Unsplash is ever unreachable, Pexels' wallpapers
-  # still show instead of nothing. Free key from https://www.pexels.com/api/
-  # (same key works for outputs.video's Pexels clips too, if enabled).
+  # Each idle source is fetched independently on its own schedule, so
+  # enabling both (with idle_priority above ranking Pexels ahead of or
+  # behind Unsplash) means if one is ever unreachable, the other's
+  # wallpapers still show instead of nothing - never mixed together,
+  # though; whichever one wins supplies the whole batch. Free key from
+  # https://www.pexels.com/api/ (same key works for outputs.video's
+  # Pexels clips too, if enabled).
   pexels:
     enabled: false
     queries: nature,architecture,space

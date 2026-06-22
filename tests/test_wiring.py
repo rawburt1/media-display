@@ -23,6 +23,8 @@ def _minimal_config(**kwargs):
     cfg.sources = {}
     cfg.enrichers = {}
     cfg.idle = {}
+    cfg.idle_priority = []
+    cfg.idle_mode = "priority"
     for k, v in kwargs.items():
         setattr(cfg, k, v)
     return cfg
@@ -137,7 +139,7 @@ def test_build_idle_source_returns_none_for_empty():
     assert build_idle_source(cfg) is None
 
 
-def test_build_idle_source_merges_multiple_enabled_sources():
+def test_build_idle_source_wraps_multiple_enabled_sources_in_composite():
     from mediainfo.idle.composite import CompositeIdleWallpaperSource
 
     unsplash_cfg = MagicMock()
@@ -157,6 +159,70 @@ def test_build_idle_source_merges_multiple_enabled_sources():
 
     assert isinstance(result, CompositeIdleWallpaperSource)
     assert result.sources == [fake_unsplash_cls.return_value, fake_lastfm_cls.return_value]
+    assert result.mode == "priority"
+
+
+def test_build_idle_source_orders_by_idle_priority():
+    from mediainfo.idle.composite import CompositeIdleWallpaperSource
+
+    unsplash_cfg = MagicMock(enabled=True)
+    lastfm_cfg = MagicMock(enabled=True)
+    fake_unsplash_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    fake_lastfm_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    cfg = _minimal_config(
+        idle={"unsplash": unsplash_cfg, "lastfm": lastfm_cfg},
+        idle_priority=["lastfm", "unsplash"],
+    )
+
+    with patch(
+        "mediainfo.registries.IDLE_CLASSES",
+        {"unsplash": fake_unsplash_cls, "lastfm": fake_lastfm_cls},
+    ):
+        result = build_idle_source(cfg)
+
+    assert isinstance(result, CompositeIdleWallpaperSource)
+    assert result.sources == [fake_lastfm_cls.return_value, fake_unsplash_cls.return_value]
+
+
+def test_build_idle_source_appends_unlisted_enabled_sources_after_priority_list():
+    unsplash_cfg = MagicMock(enabled=True)
+    lastfm_cfg = MagicMock(enabled=True)
+    library_cfg = MagicMock(enabled=True)
+    fake_unsplash_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    fake_lastfm_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    fake_library_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    cfg = _minimal_config(
+        idle={"unsplash": unsplash_cfg, "lastfm": lastfm_cfg, "library": library_cfg},
+        idle_priority=["lastfm"],  # unsplash/library not listed
+    )
+
+    with patch(
+        "mediainfo.registries.IDLE_CLASSES",
+        {"unsplash": fake_unsplash_cls, "lastfm": fake_lastfm_cls, "library": fake_library_cls},
+    ):
+        result = build_idle_source(cfg)
+
+    assert result.sources == [
+        fake_lastfm_cls.return_value, fake_unsplash_cls.return_value, fake_library_cls.return_value,
+    ]
+
+
+def test_build_idle_source_passes_through_idle_mode():
+    unsplash_cfg = MagicMock(enabled=True)
+    lastfm_cfg = MagicMock(enabled=True)
+    fake_unsplash_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    fake_lastfm_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
+    cfg = _minimal_config(
+        idle={"unsplash": unsplash_cfg, "lastfm": lastfm_cfg}, idle_mode="random",
+    )
+
+    with patch(
+        "mediainfo.registries.IDLE_CLASSES",
+        {"unsplash": fake_unsplash_cls, "lastfm": fake_lastfm_cls},
+    ):
+        result = build_idle_source(cfg)
+
+    assert result.mode == "random"
 
 
 def test_build_idle_source_passes_library_to_library_aware_classes():

@@ -73,20 +73,27 @@ Currently implemented:
   display across *every* output (falling back to idle wallpapers/text
   instead) while it's on, so a song's title/artist never leaks onto a
   screen mid-round of Hitster or similar music-guessing games
-- **Idle wallpapers**: Unsplash, Pexels, Last.fm scrobble history (album
-  art from your recent scrobbles), and/or your own library (random covers
-  from imported albums) - while nothing is playing, downloads a fresh
-  batch of wallpapers every `rotation_interval_seconds`, and each output
-  independently rotates through that batch on its own randomized schedule
-  (same as the now-playing artwork rotation above). Multiple idle sources
-  can be enabled at once - their wallpapers are merged into a single pool,
-  each refetched independently, so enabling both Unsplash and Pexels means
-  one being temporarily unreachable doesn't blank outputs as long as the
-  other is still working. The last successfully-fetched batch is also
-  persisted to disk and reloaded on restart, so a source being down right
-  when the process restarts doesn't blank outputs either, as long as the
-  previous batch's cached image files haven't since been purged (see
-  `cache.idle_max_age_hours`).
+- **Idle wallpapers**: Unsplash, Pexels, local folders (random pictures
+  from your own collection - see `idle.local` below), Last.fm scrobble
+  history (album art from your recent scrobbles), and/or your own music
+  library (random covers from imported albums) - while nothing is
+  playing, downloads/picks a fresh batch of wallpapers every
+  `rotation_interval_seconds`, and each output independently rotates
+  through that batch on its own randomized schedule (same as the
+  now-playing artwork rotation above). Multiple idle sources can be
+  enabled at once, each refetched independently on its own schedule, but
+  they're never mixed within a single batch - `idle_priority` (an ordered
+  list of source names) picks which one supplies any given batch: the
+  first one in that list with wallpapers available wins, so e.g. enabling
+  both Unsplash and Pexels means one being temporarily unreachable falls
+  through to the other instead of blanking outputs. `idle_mode: random`
+  (instead of the default `priority`) picks the winning source at random
+  each batch instead of always preferring the same one first - either
+  way, exactly one source's pictures show per batch, never blended. The
+  last successfully-fetched batch is also persisted to disk and reloaded
+  on restart, so a source being down right when the process restarts
+  doesn't blank outputs either, as long as the previous batch's cached
+  image files haven't since been purged (see `cache.idle_max_age_hours`).
 - **Manual artwork overrides**: pin a specific image for a title/subtitle
   that never gets a good poster from any enricher, via the config UI's
   "Overrides" page - on by default (`overrides.enabled: true`)
@@ -226,6 +233,17 @@ See `config.example.yaml` for all options. Key things to fill in:
   credential left blank (e.g. `enrichers.thetvdb` with no `api_key`), and
   about `auth.enabled: true` with a blank username/password (see `auth`
   below).
+- **`idle_priority`** / **`idle_mode`**: the `priority` list above, but for
+  idle wallpaper sources (`idle.unsplash`, `idle.pexels`, `idle.local`,
+  ...) - unlike regular sources, multiple idle sources being enabled at
+  once is normal and expected, but they're never mixed within one batch.
+  `idle_priority` is an ordered list of idle source names; the first one
+  in it with wallpapers available supplies the whole batch (any enabled
+  source not listed is tried last, in its `idle:` config order). Leave it
+  empty (the default) to just use `idle:`'s own order. `idle_mode: random`
+  (default `priority`) picks the winning source at random each batch
+  instead of always preferring the same highest-priority one first - either
+  way, exactly one source's pictures show per batch, never blended.
 - **`sources.kodi`**: Kodi host/port and credentials. In Kodi, enable
   *Settings → Services → Control → Allow remote control via HTTP*. Also
   the only source that currently reports a playback position, which
@@ -475,8 +493,18 @@ See `config.example.yaml` for all options. Key things to fill in:
   free `api_key` from https://www.pexels.com/api/ (the same key also
   works for `outputs.video`'s Pexels clips, if that's enabled). Enabling
   this alongside `idle.unsplash` gives an automatic fallback: both are
-  fetched independently and merged into one pool, so if one is
-  unreachable the other's wallpapers still show.
+  fetched independently on their own schedule, and `idle_priority` (see
+  above) decides which one's wallpapers actually show if both have some
+  ready - so if one is unreachable, the other's still show instead of
+  nothing.
+- **`idle.local`**: shows random pictures from your own collection -
+  no API key, no network. `dir` is a base directory; each of its
+  immediate subdirectories is treated as one "destination" (e.g. one
+  folder per trip or location, organize them however you like, including
+  further subfolders within a destination). Each batch picks ONE
+  destination at random and `batch_size` pictures at random from within
+  it - pictures from different destinations are never shown in the same
+  batch.
 - **`idle.lastfm`**: shows album art from `username`'s recent Last.fm
   scrobbles while nothing is playing - `batch_size` recent tracks are
   fetched every `rotation_interval_seconds` (deduplicated by album art, so

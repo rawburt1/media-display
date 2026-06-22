@@ -35,6 +35,7 @@ from mediainfo.config.idle import (
     IDLE_CONFIG_TYPES,
     LastFmHistoryConfig,
     LibraryIdleConfig,
+    LocalWallpaperConfig,
     PexelsWallpaperConfig,
     UnsplashWallpaperConfig,
 )
@@ -101,6 +102,7 @@ __all__ = [
     "LibraryEnricherConfig",
     "LibraryIdleConfig",
     "LidarrConfig",
+    "LocalWallpaperConfig",
     "LoggingConfig",
     "LrclibConfig",
     "LyricsConfig",
@@ -160,6 +162,18 @@ class Config:
     backoff_max_seconds: int = 300
     alerts: AlertConfig = dataclasses.field(default_factory=AlertConfig)
     overrides: OverridesConfig = dataclasses.field(default_factory=OverridesConfig)
+    # Order to try enabled idle wallpaper sources in (e.g. ["pexels",
+    # "local", "unsplash"]) - mirrors the top-level `priority` list above,
+    # but for idle sources. Any enabled idle source not listed here is
+    # tried last, in the order it appears under `idle:`. Leave empty (the
+    # default) to just use that config.yaml order for everyone.
+    idle_priority: list[str] = dataclasses.field(default_factory=list)
+    # "priority" (default): try idle sources in idle_priority order, use
+    # the first one with wallpapers available - never mixed with another
+    # source's pictures in the same batch. "random": same "use exactly one
+    # source, never mixed" rule, but a source is picked at random each
+    # batch instead of always preferring the highest-priority one.
+    idle_mode: str = "priority"
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "Config":
@@ -222,4 +236,6 @@ class Config:
             backoff_max_seconds=raw.get("backoff_max_seconds", 300),
             alerts=AlertConfig(**(raw.get("alerts") or {})),
             overrides=OverridesConfig(**(raw.get("overrides") or {})),
+            idle_priority=raw.get("idle_priority", []),
+            idle_mode=raw.get("idle_mode", "priority"),
         )

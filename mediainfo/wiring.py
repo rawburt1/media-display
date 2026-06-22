@@ -72,11 +72,15 @@ def build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> l
 def build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
     """Build the configured idle wallpaper source(s).
 
-    Multiple sources can be enabled at once - their wallpapers are merged
-    into a single pool (see CompositeIdleWallpaperSource), each refetched
-    on its own configured rotation_interval_seconds.
+    Multiple sources can be enabled at once, but only one ever supplies a
+    given batch - they're never mixed together (see
+    CompositeIdleWallpaperSource). config.idle_priority controls the order
+    they're tried in (any enabled source not listed there is tried last,
+    in its config.yaml order); config.idle_mode ("priority", the default,
+    or "random") controls whether that order is used as given or
+    reshuffled every batch.
     """
-    instances: list[IdleWallpaperSource] = []
+    built: dict[str, IdleWallpaperSource] = {}
     for name, idle_config in config.idle.items():
         if not idle_config.enabled:
             continue
@@ -85,15 +89,20 @@ def build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
             logger.warning("Unknown idle wallpaper source: %s", name)
             continue
         if name in registries.LIBRARY_AWARE_IDLE_NAMES:
-            instances.append(idle_cls(idle_config, library))
+            built[name] = idle_cls(idle_config, library)
         else:
-            instances.append(idle_cls(idle_config))
+            built[name] = idle_cls(idle_config)
 
-    if not instances:
+    if not built:
         return None
+
+    ordered_names = [name for name in config.idle_priority if name in built]
+    ordered_names += [name for name in built if name not in ordered_names]
+    instances = [built[name] for name in ordered_names]
+
     if len(instances) == 1:
         return instances[0]
-    return CompositeIdleWallpaperSource(instances)
+    return CompositeIdleWallpaperSource(instances, mode=config.idle_mode)
 
 
 def build_artwork_overrides(config: Config) -> Optional[ArtworkOverrideStore]:

@@ -29,6 +29,12 @@ spotify_cache/
 # Manual artwork overrides (user-uploaded images)
 overrides/
 
+# idle.local: your own pictures (no trailing slash - likely a symlink to
+# somewhere else on the host, e.g. an existing photo library, and a
+# pattern with a trailing slash only matches real directories, not
+# symlinks)
+pictures
+
 # Local Claude Code settings
 .claude/settings.local.json
 
