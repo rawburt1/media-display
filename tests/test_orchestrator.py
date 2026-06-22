@@ -358,6 +358,32 @@ def test_idle_batch_falls_through_pool_when_first_pick_fails_to_fetch():
     assert path == "/cache/Wallpaper 0"
 
 
+def test_single_wallpaper_retries_output_that_previously_failed():
+    idle_source = _FakeIdleSource(_idle_wallpapers(count=1), rotation_interval_seconds=300)
+    output = MagicMock()
+    output.update.side_effect = [RuntimeError("device unreachable"), None]
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/wallpaper.jpg"
+
+    orchestrator = Orchestrator(
+        sources=[_FakeSource()],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=0,
+        idle_source=idle_source,
+    )
+
+    orchestrator._tick()  # initial idle push fails
+    assert 0 in orchestrator.get_health()["output_errors"]
+
+    orchestrator._tick()  # retried on the next rotation check and succeeds
+
+    assert output.update.call_count == 2
+    assert 0 not in orchestrator.get_health()["output_errors"]
+
+
 def test_idle_batch_no_two_outputs_share_a_picture_when_enough_images():
     # Real (unmocked) shuffle - with >= as many images as outputs, no two
     # outputs should ever start on the same picture.
@@ -926,7 +952,12 @@ def test_rotation_advances_each_output_independently():
     assert artwork_b.label == "Image 2"  # position 1 -> 2
 
 
-def test_single_image_does_not_rotate():
+def test_single_image_does_not_advance_but_still_repushes():
+    # A single-image item has nothing to rotate *to* - but it must still
+    # be periodically re-pushed (the same artwork each time) rather than
+    # skipped outright, so a transient push failure to a physical output
+    # (e.g. a Pixoo64 briefly unreachable) gets retried instead of leaving
+    # that output frozen on stale content for as long as the item plays.
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
     now_playing = NowPlaying(
         source="kodi", media_type="movie", title="Inception", images=[artwork]
@@ -948,7 +979,37 @@ def test_single_image_does_not_rotate():
     output.update.reset_mock()
     orchestrator._tick()
 
-    output.update.assert_not_called()
+    output.update.assert_called_once()
+    _, pushed_artwork, _ = output.update.call_args[0]
+    assert pushed_artwork.label == "Poster"  # same artwork, not rotated to something else
+
+
+def test_single_image_retries_output_that_previously_failed():
+    artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
+    now_playing = NowPlaying(
+        source="kodi", media_type="movie", title="Inception", images=[artwork]
+    )
+    output = MagicMock()
+    output.update.side_effect = [RuntimeError("device unreachable"), None]
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/poster.jpg"
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=0,
+    )
+
+    orchestrator._tick()  # initial push fails
+    assert 0 in orchestrator.get_health()["output_errors"]
+
+    orchestrator._tick()  # retried on the next rotation check and succeeds
+
+    assert output.update.call_count == 2
+    assert 0 not in orchestrator.get_health()["output_errors"]
 
 
 # ---------------------------------------------------------------------------

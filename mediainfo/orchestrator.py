@@ -344,16 +344,29 @@ class Orchestrator:
         return states
 
     def _maybe_rotate(self) -> None:
-        if self._current is None or len(self._current.images) <= 1:
+        """Advance (or, for a single-image item, simply re-push) each
+        output's current pick once its rotation_interval_seconds elapses.
+
+        Single-image items still go through this on schedule rather than
+        being skipped entirely - a push that failed once (e.g. a physical
+        display like a Pixoo64 being transiently unreachable) would
+        otherwise never be retried for as long as that one item keeps
+        playing, leaving the output frozen on whatever it last received
+        (which could be a *previous*, unrelated item's artwork) until the
+        next genuinely different item starts.
+        """
+        if self._current is None:
             return
 
         now = time.monotonic()
+        multi_image = len(self._current.images) > 1
         for index, output in enumerate(self.outputs):
             state = self._rotation_state.get(index)
             if state is None or now - state.last_rotation < self.rotation_interval_seconds:
                 continue
 
-            state.position = (state.position + 1) % len(state.order)
+            if multi_image:
+                state.position = (state.position + 1) % len(state.order)
             state.last_rotation = now
             self._show_image_for_output(index, output)
 

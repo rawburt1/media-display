@@ -20,6 +20,17 @@ from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
+# Keep the underlying connection alive through NAT/firewall idle timeouts,
+# and - more importantly - reliably detect one that's gone dead without a
+# clean close (e.g. the client's network dropped silently, as can happen
+# after a laptop sleeps or a Wi-Fi blip): a missed pong closes the
+# connection server-side, which the client's own onclose handler then
+# reconnects from. Without this, a long-lived kiosk display's connection
+# can sit "open" but defunct indefinitely - showing stale state forever,
+# since plain TCP gives no other signal of that - until something forces
+# a manual page reload.
+_PING_INTERVAL_SECONDS = 20
+
 
 def broadcast(
     clients_lock,
@@ -81,6 +92,7 @@ def register_websocket_route(
     `conn.receive()` until the client disconnects (discarding it from
     `clients`, plus an optional `on_disconnect` hook, again atomically).
     """
+    sock.app.config.setdefault("SOCK_SERVER_OPTIONS", {})["ping_interval"] = _PING_INTERVAL_SECONDS
 
     @sock.route(path)
     def _handler(conn):

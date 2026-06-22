@@ -119,15 +119,22 @@ class _IdleBatchManager:
         return True
 
     def rotate(self, now: float) -> None:
-        if len(self.images) <= 1:
+        """Advance (or, for a single-wallpaper batch, simply re-push) each
+        output's current pick once its rotation_interval_seconds elapses -
+        see Orchestrator._maybe_rotate for why a single-image batch still
+        needs this rather than being skipped entirely (a failed push is
+        otherwise never retried for as long as that batch is current)."""
+        if not self.images:
             return
 
+        multi_image = len(self.images) > 1
         for index, output in enumerate(self.outputs):
             state = self.rotation_state.get(index)
             if state is None or now - state.last_rotation < self.rotation_interval_seconds:
                 continue
 
-            state.position = (state.position + 1) % len(state.order)
+            if multi_image:
+                state.position = (state.position + 1) % len(state.order)
             state.last_rotation = now
             self._show_image_for_output(index, output)
 
