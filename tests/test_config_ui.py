@@ -68,7 +68,7 @@ def library_config_path(tmp_path):
 def test_schema_includes_all_categories(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/schema").get_json()
-    assert set(data.keys()) == {"general", "sources", "outputs", "enrichers", "idle"}
+    assert set(data.keys()) == {"general", "cache", "sources", "outputs", "enrichers", "idle"}
 
 
 def test_schema_includes_known_source_types(config_path):
@@ -196,6 +196,42 @@ def test_save_form_updates_general_field(config_path):
 
     cfg = Config.load(config_path)
     assert cfg.poll_interval_seconds == 42
+
+
+def test_schema_includes_cache_section(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/schema").get_json()
+    field_names = {f["name"] for f in data["cache"]}
+    assert "min_width" in field_names
+    assert "min_height" in field_names
+    assert "dir" in field_names
+
+
+def test_get_values_includes_cache_fields(config_path):
+    out = _output(config_path)
+    values = out.app.test_client().get("/api/config").get_json()["values"]
+    assert values["cache.min_width"] == 640
+    assert values["cache.min_height"] == 480
+
+
+def test_save_form_updates_cache_min_width(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/config/form", json={"values": {"cache.min_width": 320, "cache.min_height": 240}})
+
+    cfg = Config.load(config_path)
+    assert cfg.cache.min_width == 320
+    assert cfg.cache.min_height == 240
+
+
+def test_save_form_updates_cache_preserves_other_cache_fields(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/config/form", json={"values": {"cache.min_width": 100}})
+
+    cfg = Config.load(config_path)
+    assert cfg.cache.min_width == 100
+    assert cfg.cache.max_age_days == 30  # untouched, kept its existing value
 
 
 def test_save_form_preserves_untouched_fields(config_path):

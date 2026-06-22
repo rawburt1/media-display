@@ -77,6 +77,7 @@ from mediainfo.config import (
     OUTPUT_CONFIG_TYPES,
     SOURCE_CONFIG_TYPES,
     AuthConfig,
+    CacheConfig,
     Config,
     ConfigUiConfig,
 )
@@ -107,6 +108,15 @@ _GENERAL_FIELDS = [
     ("poll_interval_seconds", "int", 5),
     ("rotation_interval_seconds", "int", 30),
 ]
+
+# Singleton settings sections - like the categories above, but each backed
+# by exactly one dataclass (no per-type registry), nested one level under
+# their own YAML key (e.g. `cache:`) rather than at the top level like
+# `general`'s fields. Keys in the form/values dict look like "cache.dir",
+# not "cache.<type_name>.dir".
+_FLAT_SECTIONS: Dict[str, type] = {
+    "cache": CacheConfig,
+}
 
 # List-typed fields simple enough (a flat list of strings) to edit as a
 # one-item-per-line text box in the form, rather than the "Advanced" raw
@@ -162,6 +172,8 @@ def _build_schema() -> Dict[str, Any]:
     schema: Dict[str, Any] = {
         "general": [{"name": n, "type": t, "default": d, "secret": False} for n, t, d in _GENERAL_FIELDS],
     }
+    for section, cls in _FLAT_SECTIONS.items():
+        schema[section] = _scalar_fields(cls)
     for category, registry in _SINGLE_INSTANCE_CATEGORIES.items():
         schema[category] = {name: _scalar_fields(cls) for name, cls in registry.items()}
     schema["outputs"] = {name: _scalar_fields(cls) for name, cls in OUTPUT_CONFIG_TYPES.items()}
@@ -295,6 +307,13 @@ class ConfigUiOutput(Output):
         for name, field_type, default in _GENERAL_FIELDS:
             values[f"general.{name}"] = data.get(name, default)
 
+        for section_name, cls in _FLAT_SECTIONS.items():
+            flat_entry = data.get(section_name) or {}
+            for field in _scalar_fields(cls):
+                values[f"{section_name}.{field['name']}"] = flat_entry.get(
+                    field["name"], field["default"]
+                )
+
         for category, registry in _SINGLE_INSTANCE_CATEGORIES.items():
             section = data.get(category) or {}
             for type_name, cls in registry.items():
@@ -353,8 +372,9 @@ class ConfigUiOutput(Output):
 
     @staticmethod
     def _merge_single_instance_fields(data: Any, values: Dict[str, Any]) -> None:
-        """Write posted "general"/single-instance (sources, enrichers, idle)
-        field values - keys of the form "general.<field>" or
+        """Write posted "general"/flat-section/single-instance (sources,
+        enrichers, idle) field values - keys of the form "general.<field>",
+        "<flat_section>.<field>" (e.g. "cache.min_width"), or
         "<category>.<type_name>.<field_name>" - into `data` in place.
         """
         for key, value in values.items():
@@ -362,6 +382,11 @@ class ConfigUiOutput(Output):
 
             if len(parts) == 2 and parts[0] == "general":
                 data[parts[1]] = value
+                continue
+
+            if len(parts) == 2 and parts[0] in _FLAT_SECTIONS:
+                section = data.setdefault(parts[0], {})
+                section[parts[1]] = value
                 continue
 
             if len(parts) != 3:

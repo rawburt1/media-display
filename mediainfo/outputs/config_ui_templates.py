@@ -100,7 +100,13 @@ let schema = null;
 let values = null;
 let outputsData = null;
 
-function fieldId(category, type, field) { return category + '.' + type + '.' + field; }
+function fieldId(category, type, field) {
+  // `type` is '' for flat single-instance sections (general, cache) -
+  // omit it rather than leaving a double dot, which the server's
+  // "<category>.<field>" parser (for those flat sections) doesn't match,
+  // so edits would silently fail to save.
+  return type ? (category + '.' + type + '.' + field) : (category + '.' + field);
+}
 
 // Simple flat-list-of-strings fields (speaker_ips, blacklist, device_ips,
 // ignore_apps, transition_exclude) round-trip through a one-item-per-line
@@ -336,6 +342,9 @@ function render() {
   let html = '<h2>General</h2><div class="card">'
     + schema.general.map(function(f) { return renderField('general', '', f); }).join('')
     + '</div>';
+  html += '<h2>Cache</h2><div class="card">'
+    + schema.cache.map(function(f) { return renderField('cache', '', f); }).join('')
+    + '</div>';
   html += renderCategory('Sources', 'sources');
   html += '<h2>Outputs</h2><div id="outputs-section"></div>';
   html += renderCategory('Enrichers', 'enrichers');
@@ -358,6 +367,7 @@ function collectValues() {
     });
   }
   collect('general', '', schema.general);
+  collect('cache', '', schema.cache);
   ['sources', 'enrichers', 'idle'].forEach(function(category) {
     Object.keys(schema[category]).forEach(function(t) {
       collect(category, t, schema[category][t]);
