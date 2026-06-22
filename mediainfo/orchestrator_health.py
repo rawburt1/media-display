@@ -26,6 +26,12 @@ class _HealthTracker:
         self.source_polled: Dict[str, float] = {}
         self.source_backoff: Dict[str, _BackoffState] = {}
         self.output_errors: Dict[int, Tuple[str, float]] = {}
+        # When the current (still-ongoing) error streak for an output
+        # began - set once on the first error and left untouched by
+        # subsequent ones, so it reflects how long the output has been
+        # continuously failing rather than just the most recent failure.
+        # Used by alerting.AlertManager. Cleared on recovery.
+        self.output_error_since: Dict[int, float] = {}
 
     def record_poll(self, name: str, now: float) -> None:
         self.source_polled[name] = now
@@ -41,9 +47,11 @@ class _HealthTracker:
 
     def record_output_success(self, index: int) -> None:
         self.output_errors.pop(index, None)
+        self.output_error_since.pop(index, None)
 
     def record_output_error(self, index: int, message: str, now: float) -> None:
         self.output_errors[index] = (message[:300], now)
+        self.output_error_since.setdefault(index, now)
 
     def as_dict(self, now: float) -> dict:
         return {
@@ -57,7 +65,13 @@ class _HealthTracker:
                 for name, state in self.source_backoff.items()
             },
             "output_errors": {
-                i: {"message": msg, "ago_seconds": round(now - ts, 1)}
+                i: {
+                    "message": msg,
+                    "ago_seconds": round(now - ts, 1),
+                    "failing_for_seconds": round(
+                        now - self.output_error_since.get(i, ts), 1
+                    ),
+                }
                 for i, (msg, ts) in self.output_errors.items()
             },
         }

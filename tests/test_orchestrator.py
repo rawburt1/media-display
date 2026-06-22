@@ -833,7 +833,7 @@ def test_single_image_does_not_rotate():
 # get_health()
 # ---------------------------------------------------------------------------
 
-def _health_orchestrator(sources=None, outputs=None, idle_source=None):
+def _health_orchestrator(sources=None, outputs=None, idle_source=None, alert_config=None):
     return Orchestrator(
         sources=sources or [_FakeSource()],
         enrichers=[],
@@ -842,6 +842,7 @@ def _health_orchestrator(sources=None, outputs=None, idle_source=None):
         poll_interval_seconds=5,
         rotation_interval_seconds=30,
         idle_source=idle_source,
+        alert_config=alert_config,
     )
 
 
@@ -936,6 +937,45 @@ def test_get_health_output_error_cleared_on_success():
     assert 0 in orch.get_health()["output_errors"]
     orch._tick()  # second call succeeds → error cleared
     assert 0 not in orch.get_health()["output_errors"]
+
+
+# ---------------------------------------------------------------------------
+# Alerting wiring (_maybe_check_alerts)
+# ---------------------------------------------------------------------------
+
+def test_alert_fires_after_threshold_via_tick():
+    from mediainfo.config import AlertConfig
+
+    output = MagicMock()
+    output.on_idle.side_effect = RuntimeError("gone")
+    alert_config = AlertConfig(
+        enabled=True, webhook_url="https://example.com/hook",
+        error_threshold_seconds=300, repeat_interval_seconds=3600,
+    )
+    orch = _health_orchestrator(outputs=[output], alert_config=alert_config)
+
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock), patch(
+        "mediainfo.alerting.requests.post"
+    ) as mock_post:
+        orch._tick()  # error starts; alert check runs but threshold not met
+        mock_post.assert_not_called()
+
+        clock.now += 301
+        orch._tick()  # alert check interval elapsed and error streak past threshold
+
+    mock_post.assert_called_once()
+
+
+def test_alert_check_is_a_no_op_when_alerting_disabled():
+    output = MagicMock()
+    output.on_idle.side_effect = RuntimeError("gone")
+    orch = _health_orchestrator(outputs=[output])  # alert_config=None -> disabled by default
+
+    with patch("mediainfo.alerting.requests.post") as mock_post:
+        orch._tick()
+
+    mock_post.assert_not_called()
 
 
 def test_get_health_idle_wallpapers_loaded():

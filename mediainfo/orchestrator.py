@@ -13,7 +13,9 @@ import threading
 import time
 from typing import Dict, List, Optional
 
+from mediainfo.alerting import AlertManager
 from mediainfo.cache import CacheTier, ImageCache
+from mediainfo.config import AlertConfig
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
@@ -25,6 +27,12 @@ from mediainfo.sources.base import MediaSource
 logger = logging.getLogger(__name__)
 
 _CACHE_PURGE_INTERVAL_SECONDS = 24 * 60 * 60
+
+# How often to check whether any output has been failing long enough to
+# fire an alert - independent of (and much coarser-grained than) the poll
+# loop itself, since this is just a periodic health check, not something
+# that needs to react within a single poll interval.
+_ALERT_CHECK_INTERVAL_SECONDS = 60
 
 # How long to tolerate a source reporting "nothing playing" before actually
 # switching outputs to idle, while something was already playing. Some
@@ -99,6 +107,7 @@ class Orchestrator:
         idle_source: Optional[IdleWallpaperSource] = None,
         backoff_initial_seconds: float = 30,
         backoff_max_seconds: float = 300,
+        alert_config: Optional[AlertConfig] = None,
     ):
         self.sources = sources
         self.enrichers = enrichers
@@ -138,6 +147,8 @@ class Orchestrator:
             build_rotation_states=self._build_rotation_states,
             idle_source=idle_source,
         )
+        self._alerts = AlertManager(alert_config or AlertConfig())
+        self._last_alert_check: Optional[float] = None
 
     def get_hitster_safe(self) -> bool:
         with self._hitster_safe_lock:
@@ -167,6 +178,7 @@ class Orchestrator:
 
     def _tick(self) -> None:
         self._maybe_purge_cache()
+        self._maybe_check_alerts()
 
         now_playing = self._resolve_now_playing()
         if now_playing is None:
@@ -273,6 +285,18 @@ class Orchestrator:
 
         self._last_cache_purge = now
         self._safe_call(self.cache.purge_expired)
+
+    def _maybe_check_alerts(self) -> None:
+        now = time.monotonic()
+        if (
+            self._last_alert_check is not None
+            and now - self._last_alert_check < _ALERT_CHECK_INTERVAL_SECONDS
+        ):
+            return
+
+        self._last_alert_check = now
+        labels = {i: type(output).__name__ for i, output in enumerate(self.outputs)}
+        self._alerts.check(labels, self._health.output_error_since, now)
 
     def _build_rotation_states(self, num_images: int, num_outputs: int) -> Dict[int, _RotationState]:
         """Build one _RotationState per output, sharing a single shuffled

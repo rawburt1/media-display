@@ -44,6 +44,23 @@ class CacheConfig:
 
 
 @dataclasses.dataclass
+class AlertConfig:
+    # Off by default. When enabled, a webhook is POSTed once an output has
+    # been continuously failing (e.g. a Pixoo64 or Nest Hub unreachable on
+    # the network) for at least error_threshold_seconds - most chat tools
+    # (Slack, Discord, ntfy.sh, healthchecks.io, ...) accept a plain JSON
+    # POST, so no extra dependency is needed here.
+    enabled: bool = False
+    webhook_url: str = ""
+    # How long an output must be continuously erroring before the first
+    # alert fires for it.
+    error_threshold_seconds: int = 300
+    # Minimum time between repeat alerts for the same still-failing output,
+    # so a long outage doesn't spam the webhook on every check.
+    repeat_interval_seconds: int = 3600
+
+
+@dataclasses.dataclass
 class LoggingConfig:
     # Python logging level name: DEBUG, INFO, WARNING, ERROR, or CRITICAL.
     level: str = "INFO"

@@ -108,6 +108,7 @@ def start_orchestrator(
         idle_source=build_idle_source(config, library),
         backoff_initial_seconds=config.backoff_initial_seconds,
         backoff_max_seconds=config.backoff_max_seconds,
+        alert_config=config.alerts,
     )
     orch.start()
     return orch

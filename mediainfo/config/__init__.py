@@ -49,7 +49,13 @@ from mediainfo.config.outputs import (
     VideoOutputConfig,
     WebConfig,
 )
-from mediainfo.config.shared import AuthConfig, CacheConfig, LibraryConfig, LoggingConfig
+from mediainfo.config.shared import (
+    AlertConfig,
+    AuthConfig,
+    CacheConfig,
+    LibraryConfig,
+    LoggingConfig,
+)
 from mediainfo.config.sources import (
     SOURCE_CONFIG_TYPES,
     AppleTvConfig,
@@ -68,6 +74,7 @@ from mediainfo.config.sources import (
 )
 
 __all__ = [
+    "AlertConfig",
     "AppleTvConfig",
     "AuthConfig",
     "CacheConfig",
@@ -145,6 +152,7 @@ class Config:
     # backoff_max_seconds.
     backoff_initial_seconds: int = 30
     backoff_max_seconds: int = 300
+    alerts: AlertConfig = dataclasses.field(default_factory=AlertConfig)
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "Config":
@@ -205,4 +213,5 @@ class Config:
             auth=AuthConfig(**(raw.get("auth") or {})),
             backoff_initial_seconds=raw.get("backoff_initial_seconds", 30),
             backoff_max_seconds=raw.get("backoff_max_seconds", 300),
+            alerts=AlertConfig(**(raw.get("alerts") or {})),
         )
