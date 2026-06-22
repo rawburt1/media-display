@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 from urllib.parse import quote
 
 import requests
@@ -39,6 +39,19 @@ def resolve_kodi_image_url(host: str, port: int, art_path: str) -> str:
     return f"http://{host}:{port}/image/{quote(art_path, safe='')}"
 
 
+def _time_to_seconds(value: Optional[dict]) -> Optional[float]:
+    """Convert a Kodi {"hours", "minutes", "seconds", "milliseconds"} time
+    object (as returned by Player.GetProperties) to seconds."""
+    if not value:
+        return None
+    return (
+        value.get("hours", 0) * 3600
+        + value.get("minutes", 0) * 60
+        + value.get("seconds", 0)
+        + value.get("milliseconds", 0) / 1000
+    )
+
+
 class KodiSource(MediaSource):
     name = "kodi"
 
@@ -69,6 +82,7 @@ class KodiSource(MediaSource):
                 {"playerid": player_id, "properties": _ITEM_PROPERTIES},
             )
             item = result.get("item", {})
+            position_seconds, duration_seconds = self._get_position(player_id)
 
             art = item.get("art") or {}
 
@@ -136,11 +150,30 @@ class KodiSource(MediaSource):
                 ids=ids,
                 season=item.get("season") if media_type == "episode" else None,
                 year=item.get("year") if media_type == "movie" else None,
+                position_seconds=position_seconds,
+                duration_seconds=duration_seconds,
             )
         except Exception:
             logger.exception("Kodi source error")
             self.last_poll_failed = True
             return None
+
+    def _get_position(self, player_id: int) -> Tuple[Optional[float], Optional[float]]:
+        """Return (position_seconds, duration_seconds) for the active
+        player, or (None, None) if unavailable - used by the info output
+        to sync scrolling lyrics to playback (see models.NowPlaying).
+        Failure here is non-fatal: now-playing detection itself doesn't
+        depend on it, so this never raises.
+        """
+        try:
+            result = self._rpc(
+                "Player.GetProperties",
+                {"playerid": player_id, "properties": ["time", "totaltime"]},
+            )
+            return _time_to_seconds(result.get("time")), _time_to_seconds(result.get("totaltime"))
+        except Exception:
+            logger.exception("Kodi position lookup error")
+            return None, None
 
     def _get_tvshow_ids(self, tvshowid: Optional[int]) -> Optional[dict]:
         if tvshowid is None:

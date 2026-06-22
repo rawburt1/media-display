@@ -195,13 +195,27 @@ class Orchestrator:
 
         transition = self._classify(now_playing)
         if transition is _Transition.SAME_ITEM_ROTATE:
+            self._refresh_position(now_playing)
             self._maybe_rotate()
         elif transition is _Transition.SAME_ITEM_NO_ARTWORK:
+            self._refresh_position(now_playing)
             # Same no-artwork item: keep idle wallpapers running on image
             # outputs without notifying text-only outputs to go idle.
             self._show_idle_wallpaper(notify_idle=False)
         else:
             self._handle_new_item(now_playing)
+
+    def _refresh_position(self, now_playing: NowPlaying) -> None:
+        """Keep self._current's playback position/duration fresh from
+        every poll, not just frozen at whatever it was when the item
+        started - _maybe_rotate periodically re-pushes self._current to
+        outputs (see its docstring), and outputs that show synced lyrics
+        (e.g. info.py) rely on a reasonably current position for that to
+        stay in sync rather than drifting for the rest of the item.
+        """
+        assert self._current is not None  # only called for SAME_ITEM transitions
+        self._current.position_seconds = now_playing.position_seconds
+        self._current.duration_seconds = now_playing.duration_seconds
 
     def _resolve_now_playing(self) -> Optional[NowPlaying]:
         """Poll sources and apply the Hitster-safe filter - the one

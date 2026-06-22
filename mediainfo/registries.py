@@ -74,6 +74,7 @@ ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "lastfm": "mediainfo.enrichers.lastfm.LastFmEnricher",
     "library": "mediainfo.enrichers.library.LibraryEnricher",
     "lidarr": "mediainfo.enrichers.lidarr.LidarrEnricher",
+    "lrclib": "mediainfo.enrichers.lrclib.LrclibEnricher",
     "lyrics": "mediainfo.enrichers.lyrics.LyricsEnricher",
     "musicbrainz": "mediainfo.enrichers.musicbrainz.MusicBrainzEnricher",
     "omdb": "mediainfo.enrichers.omdb.OmdbEnricher",
@@ -97,7 +98,9 @@ LIBRARY_AWARE_IDLE_NAMES = {"library"}
 
 # Enrichers that look up music metadata by artist/album name and so can use
 # the local MusicLibrary cache to avoid repeating the same external lookup.
-LIBRARY_AWARE_ENRICHER_NAMES = {"discogs", "fanarttv", "lastfm", "library", "lyrics", "musicbrainz"}
+LIBRARY_AWARE_ENRICHER_NAMES = {
+    "discogs", "fanarttv", "lastfm", "library", "lrclib", "lyrics", "musicbrainz",
+}
 
 # Config attributes to include per output type in the /health response.
 OUTPUT_DETAIL_FIELDS: dict = {

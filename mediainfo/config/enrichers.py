@@ -69,6 +69,17 @@ class LyricsConfig:
 
 
 @dataclasses.dataclass
+class LrclibConfig:
+    enabled: bool = False
+    # No API key required; uses the free lrclib.net API. Adds time-synced
+    # (LRC-format) lyrics alongside the plain-text `lyrics` enricher, for
+    # the info output to highlight/scroll in time with playback - falls
+    # back to nothing (not an error) when lrclib has no synced lyrics for
+    # a track, which is common for less popular songs.
+
+
+
+@dataclasses.dataclass
 class TmdbConfig:
     enabled: bool = False
     # Free credential from https://www.themoviedb.org/settings/api - either
@@ -123,6 +134,7 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "lastfm": LastFmConfig,
     "library": LibraryEnricherConfig,
     "lidarr": LidarrConfig,
+    "lrclib": LrclibConfig,
     "lyrics": LyricsConfig,
     "musicbrainz": MusicBrainzConfig,
     "omdb": OmdbConfig,

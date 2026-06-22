@@ -55,6 +55,11 @@ _INDEX_HTML = """<!DOCTYPE html>
     #rating:empty { display: none; }
     #summary { font-size: 1.1em; line-height: 1.5; margin-top: 1em; opacity: 0.95; }
     #lyrics { font-size: 1em; line-height: 1.6; margin-top: 1em; opacity: 0.9; white-space: pre-line; }
+    #synced-lyrics { margin-top: 1em; overflow: hidden; position: relative; max-height: 40vh; }
+    #synced-lyrics .line {
+      font-size: 1.1em; line-height: 2; opacity: 0.4; transition: opacity 0.3s ease-in-out;
+    }
+    #synced-lyrics .line.current { opacity: 1; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -69,6 +74,7 @@ _INDEX_HTML = """<!DOCTYPE html>
       <div id="rating"></div>
       <div id="summary"></div>
       <div id="lyrics"></div>
+      <div id="synced-lyrics"></div>
     </div>
   </div>
   <script>
@@ -87,6 +93,73 @@ _INDEX_HTML = """<!DOCTYPE html>
       };
       standbyImg.src = src;
     }
+
+    // --- Synced lyrics (LRC) ---
+    // The server only sends a fresh position_seconds roughly once per
+    // rotation_interval_seconds (or sooner, on a real item change) - not
+    // continuously - so between updates this estimates the current
+    // position locally from elapsed wall-clock time, and re-syncs (snaps
+    // to the server's value rather than drifting further) whenever a
+    // fresh one arrives.
+    const LRC_LINE_RE = /^\[(\d+):(\d+(?:\.\d+)?)\](.*)$/;
+    let syncedLines = [];       // [{time, text}], sorted by time
+    let syncedLyricsKey = null; // raw LRC text, to detect when it actually changes
+    let basePosition = null;    // server-reported position_seconds as of baseTimestamp
+    let baseTimestamp = null;   // performance.now() when basePosition was received
+
+    function parseLrc(lrcText) {
+      const lines = [];
+      for (const rawLine of lrcText.split("\\n")) {
+        const match = LRC_LINE_RE.exec(rawLine);
+        if (!match) continue;
+        const minutes = parseInt(match[1], 10);
+        const seconds = parseFloat(match[2]);
+        const text = match[3].trim();
+        if (text) lines.push({ time: minutes * 60 + seconds, text: text });
+      }
+      lines.sort((a, b) => a.time - b.time);
+      return lines;
+    }
+
+    function renderSyncedLyrics(lrcText) {
+      if (lrcText !== syncedLyricsKey) {
+        syncedLyricsKey = lrcText;
+        syncedLines = lrcText ? parseLrc(lrcText) : [];
+        const container = document.getElementById("synced-lyrics");
+        container.innerHTML = "";
+        syncedLines.forEach((line, i) => {
+          const div = document.createElement("div");
+          div.className = "line";
+          div.id = "lrc-line-" + i;
+          div.textContent = line.text;
+          container.appendChild(div);
+        });
+      }
+    }
+
+    function highlightCurrentLine() {
+      if (!syncedLines.length || basePosition === null) return;
+      const elapsed = (performance.now() - baseTimestamp) / 1000;
+      const estimatedPosition = basePosition + elapsed;
+
+      let currentIndex = -1;
+      for (let i = 0; i < syncedLines.length; i++) {
+        if (syncedLines[i].time <= estimatedPosition) currentIndex = i;
+        else break;
+      }
+
+      const container = document.getElementById("synced-lyrics");
+      const previousCurrent = container.querySelector(".line.current");
+      const nextCurrent = currentIndex >= 0 ? document.getElementById("lrc-line-" + currentIndex) : null;
+      if (previousCurrent === nextCurrent) return;
+      if (previousCurrent) previousCurrent.classList.remove("current");
+      if (nextCurrent) {
+        nextCurrent.classList.add("current");
+        nextCurrent.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    }
+
+    setInterval(highlightCurrentLine, 250);
 
     function applyState(data) {
       const title = document.getElementById("title");
@@ -116,7 +189,25 @@ _INDEX_HTML = """<!DOCTYPE html>
       subtitle.textContent = data.subtitle || "";
       rating.textContent = data.rating ? "★ " + data.rating + "/10" : "";
       summary.textContent = data.summary || "";
-      lyrics.textContent = data.lyrics || "";
+
+      // Synced (time-highlighted, scrolling) lyrics take over from the
+      // plain static block whenever both are available - falls back to
+      // plain text if there's no synced version, or no position to sync
+      // against (most sources don't report playback position).
+      const canSync = !!data.lyrics_synced && data.position_seconds != null;
+      lyrics.style.display = canSync ? "none" : "";
+      document.getElementById("synced-lyrics").style.display = canSync ? "" : "none";
+
+      if (canSync) {
+        renderSyncedLyrics(data.lyrics_synced);
+        basePosition = data.position_seconds;
+        baseTimestamp = performance.now();
+        highlightCurrentLine();
+      } else {
+        lyrics.textContent = data.lyrics || "";
+        basePosition = null;
+        baseTimestamp = null;
+      }
     }
 
     function connect() {
@@ -190,6 +281,8 @@ class InfoOutput(Output):
             "subtitle": now_playing.subtitle,
             "summary": now_playing.summary,
             "lyrics": now_playing.lyrics,
+            "lyrics_synced": now_playing.lyrics_synced,
+            "position_seconds": now_playing.position_seconds,
             "rating": now_playing.rating,
             "art_label": artwork.label if artwork else "",
         }

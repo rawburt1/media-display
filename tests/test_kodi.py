@@ -23,14 +23,21 @@ def _source(**kwargs) -> KodiSource:
     return KodiSource(KodiConfig(**defaults))
 
 
-def _rpc_responses(active_players, item, tvshow_uniqueid=None):
+_ZERO_TIME = {"hours": 0, "minutes": 0, "seconds": 0, "milliseconds": 0}
+
+
+def _rpc_responses(active_players, item, tvshow_uniqueid=None, position=None):
     players_response = MagicMock()
     players_response.json.return_value = {"result": active_players}
 
     item_response = MagicMock()
     item_response.json.return_value = {"result": {"item": item}}
 
-    responses = [players_response, item_response]
+    position_response = MagicMock()
+    position = position or {"time": _ZERO_TIME, "totaltime": _ZERO_TIME}
+    position_response.json.return_value = {"result": position}
+
+    responses = [players_response, item_response, position_response]
 
     if item.get("type") == "episode":
         tvshow_response = MagicMock()
@@ -189,6 +196,45 @@ def test_music_item_with_musicbrainz_ids(mock_post):
         "musicbrainzartist": "83d91898-7763-47d7-b03b-b92132375c47",
         "musicbrainzalbum": "album-mbid",
     }
+
+
+# ---------------------------------------------------------------------------
+# Playback position (Player.GetProperties)
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.sources.kodi.requests.post")
+def test_position_and_duration_are_converted_to_seconds(mock_post):
+    mock_post.side_effect = _rpc_responses(
+        [{"playerid": 0, "type": "audio"}],
+        {"type": "song", "title": "Comfortably Numb", "artist": ["Pink Floyd"]},
+        position={
+            "time": {"hours": 0, "minutes": 1, "seconds": 23, "milliseconds": 500},
+            "totaltime": {"hours": 0, "minutes": 6, "seconds": 23, "milliseconds": 0},
+        },
+    )
+
+    now_playing = _source().get_now_playing()
+
+    assert now_playing.position_seconds == 83.5
+    assert now_playing.duration_seconds == 383.0
+
+
+@patch("mediainfo.sources.kodi.requests.post")
+def test_position_lookup_failure_does_not_fail_now_playing(mock_post):
+    players_response = MagicMock()
+    players_response.json.return_value = {"result": [{"playerid": 0, "type": "audio"}]}
+    item_response = MagicMock()
+    item_response.json.return_value = {
+        "result": {"item": {"type": "song", "title": "Comfortably Numb", "artist": ["Pink Floyd"]}}
+    }
+
+    mock_post.side_effect = [players_response, item_response, Exception("boom")]
+
+    now_playing = _source().get_now_playing()
+
+    assert now_playing.title == "Comfortably Numb"
+    assert now_playing.position_seconds is None
+    assert now_playing.duration_seconds is None
 
 
 @patch("mediainfo.sources.kodi.requests.post")

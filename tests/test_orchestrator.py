@@ -705,6 +705,50 @@ def test_override_lookup_error_is_caught_and_does_not_block_display():
     assert now_playing.images == [artwork]  # enriched images preserved on error
 
 
+# ---------------------------------------------------------------------------
+# Playback position refresh (for synced lyrics on the info output)
+# ---------------------------------------------------------------------------
+
+def test_position_refreshes_on_same_item_ticks():
+    artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
+
+    class _AdvancingSource:
+        name = "kodi"
+
+        def __init__(self):
+            self.position = 10.0
+
+        def get_now_playing(self):
+            self.position += 5.0
+            return NowPlaying(
+                source="kodi", media_type="music", title="Money", subtitle="Pink Floyd",
+                images=[artwork], position_seconds=self.position, duration_seconds=383.0,
+            )
+
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/cache/poster.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_AdvancingSource()],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+
+    orchestrator._tick()  # new item: position_seconds == 15.0
+    assert orchestrator._current.position_seconds == 15.0
+
+    orchestrator._tick()  # same item: position_seconds refreshed to 20.0
+    assert orchestrator._current.position_seconds == 20.0
+
+    orchestrator._tick()  # same item again: refreshed to 25.0
+    assert orchestrator._current.position_seconds == 25.0
+
+
 def test_music_artwork_is_fetched_as_permanent():
     artwork = Artwork(url="https://example.com/cover.jpg", label="Cover")
     now_playing = NowPlaying(
