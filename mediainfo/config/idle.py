@@ -23,6 +23,23 @@ class UnsplashWallpaperConfig:
 
 
 @dataclasses.dataclass
+class PexelsWallpaperConfig:
+    enabled: bool = False
+    # Comma-separated list of search queries to pick wallpapers from while
+    # nothing is playing, e.g. "nature,architecture,space".
+    queries: str = ""
+    # How often (in seconds) to download a fresh batch of wallpapers while
+    # idle. Each output then independently rotates through that batch (in
+    # its own random order) using the top-level rotation_interval_seconds.
+    rotation_interval_seconds: int = 300
+    # Number of wallpapers to download per batch.
+    batch_size: int = 10
+    # Free API key from https://www.pexels.com/api/ - the same key works
+    # for outputs.video's Pexels video clips too, if that's also enabled.
+    api_key: str = ""
+
+
+@dataclasses.dataclass
 class LastFmHistoryConfig:
     enabled: bool = False
     # Free API key from https://www.last.fm/api/account/create (same key
@@ -56,5 +73,6 @@ class LibraryIdleConfig:
 IDLE_CONFIG_TYPES: dict[str, type] = {
     "lastfm": LastFmHistoryConfig,
     "library": LibraryIdleConfig,
+    "pexels": PexelsWallpaperConfig,
     "unsplash": UnsplashWallpaperConfig,
 }

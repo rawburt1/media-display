@@ -640,6 +640,18 @@ idle:
     batch_size: 10               # Images to download per batch
     access_key: YOUR_UNSPLASH_ACCESS_KEY
 
+  # Pexels — stock photography, as an alternative or fallback to Unsplash.
+  # Each idle source is fetched independently and merged into one pool, so
+  # enabling both means if Unsplash is ever unreachable, Pexels' wallpapers
+  # still show instead of nothing. Free key from https://www.pexels.com/api/
+  # (same key works for outputs.video's Pexels clips too, if enabled).
+  pexels:
+    enabled: false
+    queries: nature,architecture,space
+    rotation_interval_seconds: 300
+    batch_size: 10
+    api_key: YOUR_PEXELS_API_KEY
+
   # Last.fm scrobble history — shows album art from your recent scrobbles
   # instead of (or as an alternative to) photography.
   # Get a free API key at https://www.last.fm/api/account/create (same key

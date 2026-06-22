@@ -88,6 +88,7 @@ ENRICHER_CLASSES: dict[str, Union[str, type]] = {
 IDLE_CLASSES: dict[str, Union[str, type]] = {
     "lastfm": "mediainfo.idle.lastfm.LastFmWallpaperSource",
     "library": "mediainfo.idle.library.LibraryWallpaperSource",
+    "pexels": "mediainfo.idle.pexels.PexelsWallpaperSource",
     "unsplash": "mediainfo.idle.unsplash.UnsplashWallpaperSource",
 }
 

@@ -73,13 +73,20 @@ Currently implemented:
   display across *every* output (falling back to idle wallpapers/text
   instead) while it's on, so a song's title/artist never leaks onto a
   screen mid-round of Hitster or similar music-guessing games
-- **Idle wallpapers**: Unsplash, Last.fm scrobble history (album art from
-  your recent scrobbles), and/or your own library (random covers from
-  imported albums) - while nothing is playing, downloads a fresh batch of
-  wallpapers every `rotation_interval_seconds`, and each output
+- **Idle wallpapers**: Unsplash, Pexels, Last.fm scrobble history (album
+  art from your recent scrobbles), and/or your own library (random covers
+  from imported albums) - while nothing is playing, downloads a fresh
+  batch of wallpapers every `rotation_interval_seconds`, and each output
   independently rotates through that batch on its own randomized schedule
   (same as the now-playing artwork rotation above). Multiple idle sources
-  can be enabled at once - their wallpapers are merged into a single pool.
+  can be enabled at once - their wallpapers are merged into a single pool,
+  each refetched independently, so enabling both Unsplash and Pexels means
+  one being temporarily unreachable doesn't blank outputs as long as the
+  other is still working. The last successfully-fetched batch is also
+  persisted to disk and reloaded on restart, so a source being down right
+  when the process restarts doesn't blank outputs either, as long as the
+  previous batch's cached image files haven't since been purged (see
+  `cache.idle_max_age_hours`).
 - **Manual artwork overrides**: pin a specific image for a title/subtitle
   that never gets a good poster from any enricher, via the config UI's
   "Overrides" page - on by default (`overrides.enabled: true`)
@@ -131,7 +138,7 @@ entirely optional - skip any row for a feature you don't care about.
 | TMDb | [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) | `enrichers.tmdb` |
 | OMDb | [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx) | `enrichers.omdb` |
 | Unsplash | [unsplash.com/oauth/applications](https://unsplash.com/oauth/applications) | `idle.unsplash` |
-| Pexels (video output) | [pexels.com/api](https://www.pexels.com/api/) | `outputs.video` |
+| Pexels (video clips and/or idle wallpapers) | [pexels.com/api](https://www.pexels.com/api/) | `outputs.video`, `idle.pexels` (same key works for both) |
 | Pixabay (video output) | [pixabay.com/api/docs](https://pixabay.com/api/docs/) | `outputs.video` |
 
 No key needed: Wikipedia, MusicBrainz, lyrics.ovh, lrclib.net (lyrics/bio
@@ -463,6 +470,13 @@ See `config.example.yaml` for all options. Key things to fill in:
   `rotation_interval_seconds`, and each output rotates through that batch
   independently (using the top-level `rotation_interval_seconds`). Requires
   a free `access_key` from https://unsplash.com/oauth/applications.
+- **`idle.pexels`**: same shape as `idle.unsplash` above (`queries`,
+  `batch_size`, `rotation_interval_seconds`), backed by Pexels instead -
+  free `api_key` from https://www.pexels.com/api/ (the same key also
+  works for `outputs.video`'s Pexels clips, if that's enabled). Enabling
+  this alongside `idle.unsplash` gives an automatic fallback: both are
+  fetched independently and merged into one pool, so if one is
+  unreachable the other's wallpapers still show.
 - **`idle.lastfm`**: shows album art from `username`'s recent Last.fm
   scrobbles while nothing is playing - `batch_size` recent tracks are
   fetched every `rotation_interval_seconds` (deduplicated by album art, so

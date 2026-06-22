@@ -35,6 +35,7 @@ from mediainfo.config.idle import (
     IDLE_CONFIG_TYPES,
     LastFmHistoryConfig,
     LibraryIdleConfig,
+    PexelsWallpaperConfig,
     UnsplashWallpaperConfig,
 )
 from mediainfo.config.outputs import (
@@ -109,6 +110,7 @@ __all__ = [
     "OmdbConfig",
     "OUTPUT_CONFIG_TYPES",
     "OverridesConfig",
+    "PexelsWallpaperConfig",
     "PixooConfig",
     "PlexConfig",
     "Ps5Config",
