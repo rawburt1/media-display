@@ -8,10 +8,18 @@ lived as four separate Orchestrator attributes. `random.shuffle`/
 `random.uniform` for building rotation state deliberately stay in
 orchestrator.py (via the `build_rotation_states` callback passed in here)
 so that module's existing test patches keep working unchanged.
+
+The last successfully-fetched batch is also persisted to a small JSON file
+under the cache's idle directory, and reloaded on construction - so if the
+idle source (e.g. Unsplash) is unreachable right after a restart, outputs
+still have the previous batch to show instead of going blank, as long as
+its underlying cached image files haven't since been purged (see
+cache.idle_max_age_hours).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
@@ -24,6 +32,8 @@ if TYPE_CHECKING:
     from mediainfo.orchestrator import _RotationState
 
 logger = logging.getLogger(__name__)
+
+_PERSIST_FILENAME = "last_idle_batch.json"
 
 
 class _IdleBatchManager:
@@ -42,9 +52,17 @@ class _IdleBatchManager:
         self._call_output = call_output
         self._build_rotation_states = build_rotation_states
         self.idle_source = idle_source
-        self.images: List[Artwork] = []
+        self._persist_path = self.cache.idle_dir / _PERSIST_FILENAME
+        self.images: List[Artwork] = self._load_persisted_batch()
         self.rotation_state: Dict[int, "_RotationState"] = {}
-        self.now_playing: Optional[NowPlaying] = None
+        self.now_playing: Optional[NowPlaying] = (
+            NowPlaying(source="idle", media_type="wallpaper", title="", subtitle="", images=self.images)
+            if self.images
+            else None
+        )
+        # 0.0 (not "now") deliberately - a seeded-from-disk batch is not a
+        # fresh fetch, so the very first show() still tries the real idle
+        # source rather than waiting out a full rotation_interval_seconds.
         self.last_batch_fetch = 0.0
 
     def clear_if_stale(self, now_playing: NowPlaying) -> None:
@@ -97,26 +115,69 @@ class _IdleBatchManager:
 
     def refetch(self, now: float) -> bool:
         """Fetch a fresh idle wallpaper batch and show it on every
-        image-capable output. Returns False, leaving any existing batch
-        untouched, if the idle source had nothing to offer.
+        image-capable output.
+
+        If the idle source had nothing to offer (e.g. unreachable), falls
+        back to re-showing whatever batch is already in self.images
+        (carried over from earlier this process, or loaded from disk at
+        startup) instead of leaving outputs blank - but only pushes it if
+        it hasn't already been shown in this process (self.rotation_state
+        empty); an already-showing batch is left alone here and picked up
+        by the normal rotate()/timing path instead. Returns False only
+        when there is truly nothing - fresh or previous - to show.
         """
         assert self.idle_source is not None
         images = self.idle_source.get_wallpapers()
-        if not images:
-            return False
+        if images:
+            logger.info("Fetched %d idle wallpaper(s)", len(images))
+            self.images = images
+            self.now_playing = NowPlaying(
+                source="idle", media_type="wallpaper", title="", subtitle="", images=images
+            )
+            self.last_batch_fetch = now
+            self._push_current_batch()
+            self._save_persisted_batch(images)
+            return True
 
-        logger.info("Fetched %d idle wallpaper(s)", len(images))
-        self.images = images
-        self.now_playing = NowPlaying(
-            source="idle", media_type="wallpaper", title="", subtitle="", images=images
-        )
-        self.last_batch_fetch = now
-        self.rotation_state = self._build_rotation_states(len(images), len(self.outputs))
+        if self.images and not self.rotation_state:
+            logger.warning(
+                "Idle source returned no wallpapers (unavailable?) - "
+                "showing the previous batch of %d instead of going blank",
+                len(self.images),
+            )
+            self._push_current_batch()
+            return True
+
+        return False
+
+    def _push_current_batch(self) -> None:
+        self.rotation_state = self._build_rotation_states(len(self.images), len(self.outputs))
         for index, output in enumerate(self.outputs):
             self._call_output(index, output.on_new_item, self.now_playing, self.cache)
         for index, output in enumerate(self.outputs):
             self._show_image_for_output(index, output)
-        return True
+
+    def _load_persisted_batch(self) -> List[Artwork]:
+        try:
+            if not self._persist_path.exists():
+                return []
+            raw = json.loads(self._persist_path.read_text(encoding="utf-8"))
+            return [Artwork(url=item["url"], label=item.get("label", "")) for item in raw]
+        except Exception:
+            # Low severity and non-fatal either way - just means starting
+            # with no previous batch to fall back on, same as a fresh
+            # install. Logged at debug rather than as an error/exception
+            # to avoid alarming output for what's just a missing/garbled
+            # optional file.
+            logger.debug("No usable persisted idle wallpaper batch", exc_info=True)
+            return []
+
+    def _save_persisted_batch(self, images: List[Artwork]) -> None:
+        try:
+            raw = [{"url": a.url, "label": a.label} for a in images]
+            self._persist_path.write_text(json.dumps(raw), encoding="utf-8")
+        except Exception:
+            logger.exception("Failed to persist idle wallpaper batch")
 
     def rotate(self, now: float) -> None:
         """Advance (or, for a single-wallpaper batch, simply re-push) each

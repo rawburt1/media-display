@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mediainfo.cache import ImageCache
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.orchestrator import _NOTHING_PLAYING_GRACE_SECONDS, Orchestrator
 
@@ -1595,15 +1596,131 @@ def test_idle_batch_needs_refetch_does_not_mutate_state():
     assert idle_source.calls == 0  # never asked the source for anything
 
 
-def test_refetch_idle_batch_returns_false_and_leaves_state_when_source_empty():
+def test_refetch_idle_batch_returns_false_when_source_empty_and_no_previous_batch():
     idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
     orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
-    orch._idle.images = _idle_wallpapers(count=1)
 
     result = orch._idle.refetch(time.monotonic())
 
     assert result is False
+    assert orch._idle.images == []
+
+
+def test_refetch_idle_batch_falls_back_to_previous_batch_when_source_empty():
+    # The idle source being unavailable (e.g. Unsplash down) shouldn't
+    # blank outputs that already have a batch to show - whether retained
+    # from earlier this process or loaded from disk at startup.
+    idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/wallpaper.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+    orch = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
+    orch._idle.images = _idle_wallpapers(count=1)
+
+    result = orch._idle.refetch(time.monotonic())
+
+    assert result is True
     assert orch._idle.images == _idle_wallpapers(count=1)  # untouched
+    output.update.assert_called_once()  # the previous batch was still pushed
+
+
+def test_refetch_idle_batch_leaves_an_already_shown_batch_alone():
+    # If the batch was already pushed in this process (rotation_state
+    # non-empty), a failed refetch should NOT re-push it - that's left to
+    # the normal rotate()/timing path. The existing artwork stays
+    # displayed either way (show()'s caller only blanks outputs when
+    # self.images is empty), so there's nothing to re-push here.
+    idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
+    output = MagicMock()
+    cache = MagicMock()
+    orch = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
+    orch._idle.images = _idle_wallpapers(count=1)
+    orch._idle.rotation_state = {0: MagicMock()}
+
+    result = orch._idle.refetch(time.monotonic())
+
+    assert result is False
+    output.update.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Idle batch persistence across restarts (falls back to it when the idle
+# source is unavailable right after startup)
+# ---------------------------------------------------------------------------
+
+def test_successful_fetch_is_persisted_to_disk(tmp_path):
+    images = _idle_wallpapers(count=2)
+    idle_source = _FakeIdleSource(images, rotation_interval_seconds=300)
+    cache = ImageCache(tmp_path)
+    output = MagicMock()
+
+    orch = Orchestrator(
+        sources=[_FakeSource()],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+        idle_source=idle_source,
+    )
+    orch._tick()
+
+    persist_path = cache.idle_dir / "last_idle_batch.json"
+    assert persist_path.exists()
+    import json
+    saved = json.loads(persist_path.read_text())
+    assert [item["url"] for item in saved] == [a.url for a in images]
+
+
+def test_persisted_batch_is_loaded_on_construction_and_used_as_fallback(tmp_path):
+    cache = ImageCache(tmp_path)
+    persist_path = cache.idle_dir / "last_idle_batch.json"
+    import json
+    persist_path.write_text(json.dumps([{"url": "https://example.com/old.jpg", "label": "Old"}]))
+
+    idle_source = _FakeIdleSource([], rotation_interval_seconds=300)  # unavailable
+    output = MagicMock()
+    cache.get_path = MagicMock(return_value="/tmp/old.jpg")
+    cache.get_transformed_path = MagicMock(side_effect=lambda path, _: path)
+
+    orch = Orchestrator(
+        sources=[_FakeSource()],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+        idle_source=idle_source,
+    )
+    orch._tick()
+
+    # The persisted batch was loaded and shown despite the idle source
+    # being unavailable - the output was never left blank.
+    output.update.assert_called_once()
+    output.on_idle.assert_not_called()
+    _, artwork, _ = output.update.call_args[0]
+    assert artwork.url == "https://example.com/old.jpg"
+
+
+def test_no_persisted_batch_and_unavailable_source_falls_back_to_idle(tmp_path):
+    cache = ImageCache(tmp_path)
+    idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
+    output = MagicMock()
+
+    orch = Orchestrator(
+        sources=[_FakeSource()],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+        idle_source=idle_source,
+    )
+    orch._tick()
+
+    output.on_idle.assert_called_once()
+    output.update.assert_not_called()
 
 
 def test_refetch_idle_batch_returns_true_and_updates_state():
