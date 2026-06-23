@@ -160,8 +160,7 @@ class KodiSource(MediaSource):
 
     def _get_position(self, player_id: int) -> Tuple[Optional[float], Optional[float]]:
         """Return (position_seconds, duration_seconds) for the active
-        player, or (None, None) if unavailable - used by the info output
-        to sync scrolling lyrics to playback (see models.NowPlaying).
+        player, or (None, None) if unavailable (see models.NowPlaying).
         Failure here is non-fatal: now-playing detection itself doesn't
         depend on it, so this never raises.
         """

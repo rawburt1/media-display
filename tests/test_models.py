@@ -48,7 +48,6 @@ def test_defaults_are_empty():
     assert np.year is None
     assert np.summary == ""
     assert np.discography == []
-    assert np.lyrics == ""
     assert np.rating is None
 
 

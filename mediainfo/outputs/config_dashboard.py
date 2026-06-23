@@ -125,13 +125,6 @@ def test_enricher(name: str, enricher_config: Any) -> Tuple[bool, str]:
             return (summary is not None, "Found summary for test query" if summary else
                     "No match for test query (en.wikipedia.org may be unreachable)")
 
-        if name == "lyrics":
-            from mediainfo.enrichers.lyrics import LyricsEnricher
-
-            lyrics = LyricsEnricher(enricher_config)._fetch("Queen", "Bohemian Rhapsody")
-            return (lyrics is not None, "Found lyrics for test query" if lyrics else
-                    "Reached lyrics.ovh, no match for test query (api.lyrics.ovh may be unreachable)")
-
         if name == "tmdb":
             from mediainfo.enrichers import tmdb as tmdb_module
 

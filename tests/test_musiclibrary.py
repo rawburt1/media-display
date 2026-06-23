@@ -449,13 +449,13 @@ def test_get_or_fetch_caches_a_negative_result(tmp_path):
 def test_get_or_fetch_respects_max_age_seconds_override(tmp_path):
     lib = _library(tmp_path, max_age_days=0)
     track_id = lib.get_or_create_track(lib.get_or_create_artist("Pink Floyd"), "Money")
-    fetch_fn = MagicMock(return_value="lyrics text")
+    fetch_fn = MagicMock(return_value="bio text")
 
-    lib.get_or_fetch("track", track_id, "lyrics", "lyrics.ovh", fetch_fn, max_age_seconds=float("inf"))
+    lib.get_or_fetch("track", track_id, "bio", "wikipedia", fetch_fn, max_age_seconds=float("inf"))
     time.sleep(0.01)
     result = lib.get_or_fetch(
-        "track", track_id, "lyrics", "lyrics.ovh", fetch_fn, max_age_seconds=float("inf")
+        "track", track_id, "bio", "wikipedia", fetch_fn, max_age_seconds=float("inf")
     )
 
-    assert result == "lyrics text"
+    assert result == "bio text"
     fetch_fn.assert_called_once()  # not re-fetched despite max_age_days=0 on the library

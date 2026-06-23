@@ -707,7 +707,7 @@ def test_override_lookup_error_is_caught_and_does_not_block_display():
 
 
 # ---------------------------------------------------------------------------
-# Playback position refresh (for synced lyrics on the info output)
+# Playback position refresh
 # ---------------------------------------------------------------------------
 
 def test_position_refreshes_on_same_item_ticks():

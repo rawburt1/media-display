@@ -546,23 +546,6 @@ enrichers:
   wikipedia:
     enabled: true
 
-  # Lyrics — fills in NowPlaying.lyrics (shown by the `info` output) for the
-  # currently playing track. No API key required; uses the free lyrics.ovh
-  # API. (Genius's official API only returns a link to their lyrics page,
-  # not the lyrics text itself, so it can't be used here.)
-  lyrics:
-    enabled: true
-
-  # lrclib - fills in NowPlaying.lyrics_synced (time-synced, LRC-format
-  # lyrics) for the currently playing track, shown by the `info` output as
-  # scrolling/highlighted lines in time with playback (requires a source
-  # that reports position_seconds, e.g. Kodi - falls back to the plain
-  # `lyrics` enricher's static text otherwise). No API key required; uses
-  # the free lrclib.net API. Many tracks have no synced lyrics available -
-  # that's a normal miss, not an error.
-  lrclib:
-    enabled: true
-
   # TMDb — audience rating (0-10) for movies and TV shows, shown by the
   # `info` output. Free credential from
   # https://www.themoviedb.org/settings/api - either the short v3 "API Key"

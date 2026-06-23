@@ -313,8 +313,7 @@ class MusicLibrary:
         before from this source, nothing found".
 
         `max_age_seconds` overrides the library-wide default for this one
-        lookup - pass float("inf") for a claim that should never expire
-        (e.g. lyrics, which don't change for a given recording).
+        lookup - pass float("inf") for a claim that should never expire.
         """
         with self._lock:
             row = self._conn.execute(
@@ -355,7 +354,7 @@ class MusicLibrary:
         cache, same as a manual get_claim/set_claim pair would).
 
         Collapses the get_claim → fetch-on-miss → set_claim shape shared
-        by several music enrichers (lastfm, lyrics, discogs) into one call.
+        by several music enrichers (lastfm, discogs) into one call.
         """
         cached = self.get_claim(entity_type, entity_id, field, source, max_age_seconds)
         if cached is not None:

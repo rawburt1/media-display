@@ -14,8 +14,8 @@ def _config(**kwargs):
 
 
 def _music(
-    title="Bohemian Rhapsody", artist="Queen", summary="", lyrics="", rating=None,
-    lyrics_synced="", position_seconds=None, duration_seconds=None,
+    title="Bohemian Rhapsody", artist="Queen", summary="", rating=None,
+    position_seconds=None, duration_seconds=None,
 ):
     return NowPlaying(
         source="kodi",
@@ -23,8 +23,6 @@ def _music(
         title=title,
         subtitle=artist,
         summary=summary,
-        lyrics=lyrics,
-        lyrics_synced=lyrics_synced,
         rating=rating,
         position_seconds=position_seconds,
         duration_seconds=duration_seconds,
@@ -79,23 +77,11 @@ def test_payload_when_playing_without_image():
     assert "image" not in payload
 
 
-def test_payload_includes_lyrics_and_rating():
+def test_payload_includes_rating():
     out = _output()
-    out.on_new_item(_music(lyrics="Is this the real life?", rating=8.5), MagicMock())
+    out.on_new_item(_music(rating=8.5), MagicMock())
     payload = out._get_payload()
-    assert payload["lyrics"] == "Is this the real life?"
     assert payload["rating"] == 8.5
-
-
-def test_payload_includes_synced_lyrics_and_position():
-    out = _output()
-    out.on_new_item(
-        _music(lyrics_synced="[00:01.50]Hello", position_seconds=42.5, duration_seconds=180.0),
-        MagicMock(),
-    )
-    payload = out._get_payload()
-    assert payload["lyrics_synced"] == "[00:01.50]Hello"
-    assert payload["position_seconds"] == 42.5
 
 
 def test_payload_when_playing_with_image(tmp_path):

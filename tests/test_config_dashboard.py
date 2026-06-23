@@ -216,23 +216,6 @@ def test_enricher_wikipedia_success():
     assert ok is True
 
 
-def test_enricher_lyrics_success():
-    with patch(
-        "mediainfo.enrichers.lyrics.LyricsEnricher._fetch",
-        return_value="Is this the real life?",
-    ):
-        ok, message = check_enricher("lyrics", MagicMock())
-    assert ok is True
-    assert "Found" in message
-
-
-def test_enricher_lyrics_failure():
-    with patch("mediainfo.enrichers.lyrics.LyricsEnricher._fetch", return_value=None):
-        ok, message = check_enricher("lyrics", MagicMock())
-    assert ok is False
-    assert "no match" in message.lower()
-
-
 def test_enricher_library_no_network_needed():
     ok, message = check_enricher("library", MagicMock())
     assert ok is True

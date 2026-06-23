@@ -45,18 +45,11 @@ class NowPlaying:
     # Other albums/songs by the playing artist, e.g. from the Lidarr
     # enricher - "<album> - <track>" pairs, in no particular order.
     discography: List[str] = field(default_factory=list)
-    # Lyrics for the playing track, e.g. from the lyrics enricher.
-    lyrics: str = ""
-    # Time-synced lyrics in LRC format ("[mm:ss.xx] line text" per line),
-    # e.g. from the lrclib enricher - lets the info output highlight/scroll
-    # the current line in time with playback instead of showing static text.
-    lyrics_synced: str = ""
     # Audience rating (0-10), e.g. from the TMDb enricher.
     rating: Optional[float] = None
     # How far into the track/episode playback currently is, and its total
     # length, in seconds - only populated by sources that can report it
-    # (e.g. Kodi). Used together with lyrics_synced to estimate which line
-    # is current; None means "unknown", not "at the start".
+    # (e.g. Kodi). None means "unknown", not "at the start".
     position_seconds: Optional[float] = None
     duration_seconds: Optional[float] = None
 

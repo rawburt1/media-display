@@ -209,9 +209,7 @@ class Orchestrator:
         """Keep self._current's playback position/duration fresh from
         every poll, not just frozen at whatever it was when the item
         started - _maybe_rotate periodically re-pushes self._current to
-        outputs (see its docstring), and outputs that show synced lyrics
-        (e.g. info.py) rely on a reasonably current position for that to
-        stay in sync rather than drifting for the rest of the item.
+        outputs (see its docstring).
         """
         assert self._current is not None  # only called for SAME_ITEM transitions
         self._current.position_seconds = now_playing.position_seconds

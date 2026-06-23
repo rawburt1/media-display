@@ -71,7 +71,7 @@ def test_build_sources_from_example_config(example_config):
 def test_build_enrichers_from_example_config(example_config):
     enrichers = wiring.build_enrichers(example_config)
     # Every enabled enricher in config.example.yaml.
-    assert len(enrichers) == 13
+    assert len(enrichers) == 11
 
 
 def test_build_idle_source_from_example_config(example_config):

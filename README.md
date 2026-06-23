@@ -41,12 +41,7 @@ Currently implemented:
   summary plus a photo, for the `info` output and RSS/Atom feeds below;
   Sonarr/Radarr/Lidarr each match against your own library (rather than a
   public catalog) and add a studio/genres/discography plus poster/fanart/
-  album art - see below; lyrics adds the playing track's plain-text lyrics
-  (via the free lyrics.ovh API) for the `info` output; lrclib adds
-  *time-synced* lyrics (LRC format, via the free lrclib.net API) for the
-  `info` output, shown as a scrolling/highlighted line instead of static
-  text - only works for sources that report a playback position (currently
-  just Kodi) and tracks lrclib actually has synced lyrics for; TMDb and
+  album art - see below; TMDb and
   OMDb each add a 0-10 rating for movies/TV shows, also for the `info`
   output - both can be enabled at once without conflict, since neither
   overwrites a rating the other already found
@@ -61,8 +56,7 @@ Currently implemented:
   player that shows idle stock-footage clips (Pexels/Pixabay) and switches
   to artwork when something plays; info output (`http://<host>:8093/`)
   pairs the current artwork at its original (high) resolution with the
-  Wikipedia summary text and (for music, when available) time-synced
-  scrolling lyrics; MQTT publishes now-playing state to a broker topic;
+  Wikipedia summary text; MQTT publishes now-playing state to a broker topic;
   feed output serves RSS/Atom feeds describing only the currently playing
   item, including the Wikipedia summary when available; config output
   (`http://<host>:8094/`) is a web page for editing every config option
@@ -148,8 +142,8 @@ entirely optional - skip any row for a feature you don't care about.
 | Pexels (video clips and/or idle wallpapers) | [pexels.com/api](https://www.pexels.com/api/) | `outputs.video`, `idle.pexels` (same key works for both) |
 | Pixabay (video output) | [pixabay.com/api/docs](https://pixabay.com/api/docs/) | `outputs.video` |
 
-No key needed: Wikipedia, MusicBrainz, lyrics.ovh, lrclib.net (lyrics/bio
-enrichers), and the Kodi/Plex/Sonos/Jellyfin-Emby/Shield-YouTube/
+No key needed: Wikipedia, MusicBrainz (bio enrichers), and the
+Kodi/Plex/Sonos/Jellyfin-Emby/Shield-YouTube/
 Chromecast/Home Assistant sources (host+credentials on your own network
 instead). Apple TV doesn't use an API key either - it's a one-time
 on-device pairing flow instead, see `sources.appletv` further down.
@@ -245,9 +239,7 @@ See `config.example.yaml` for all options. Key things to fill in:
   instead of always preferring the same highest-priority one first - either
   way, exactly one source's pictures show per batch, never blended.
 - **`sources.kodi`**: Kodi host/port and credentials. In Kodi, enable
-  *Settings → Services → Control → Allow remote control via HTTP*. Also
-  the only source that currently reports a playback position, which
-  `enrichers.lrclib` (see below) needs to actually show synced lyrics.
+  *Settings → Services → Control → Allow remote control via HTTP*.
 - **`sources.sonos`**: IP address of every Sonos speaker on your network
   (find them in the Sonos app under speaker settings, or your router's
   device list). Any one of them can report the full household topology,
@@ -566,18 +558,6 @@ See `config.example.yaml` for all options. Key things to fill in:
   a plain-text summary (`NowPlaying.summary`) plus a thumbnail photo. The
   summary is shown by the `info` output and included in RSS/Atom feed
   entries.
-- **`enrichers.lyrics`**: no API key required (free lyrics.ovh API). Adds
-  plain-text lyrics for the playing track, shown by the `info` output.
-- **`enrichers.lrclib`**: no API key required (free lrclib.net API). Adds
-  *time-synced* lyrics (LRC format, one timestamp per line) for the
-  playing track - the `info` output uses these (instead of the plain
-  `lyrics` enricher's static text) to highlight and auto-scroll the
-  current line as the song plays. Two things both need to be true for
-  this to actually show synced: the playing source has to report a
-  playback position (only `sources.kodi` does, via Kodi's own API), and
-  lrclib has to actually have a synced-lyrics entry for that track (many
-  - especially less popular ones - don't; that's a normal miss, not an
-  error). Falls back to the plain `lyrics` enricher's text otherwise.
 - **`enrichers.library`**: no API key required. For sources that don't
   report an album at all (e.g. YouTube), looks up the playing artist+song
   in the local music library and adds cover art for every album the song
@@ -608,15 +588,13 @@ See `config.example.yaml` for all options. Key things to fill in:
   re-fetching them is just wasted API calls.
 - **`library.db_path`** / **`library.max_age_days`**: a local SQLite
   database of artist/album/track metadata (MusicBrainz ids, cached cover
-  art URLs, artist photos, lyrics), queried before the `musicbrainz`,
-  `fanarttv`, `discogs`, `lastfm`, and `lyrics` enrichers make an external
+  art URLs, artist photos), queried before the `musicbrainz`,
+  `fanarttv`, `discogs`, and `lastfm` enrichers make an external
   API call - so the same artist/album/song doesn't trigger a repeat lookup
   across plays or process restarts. MusicBrainz is treated as the source
   of truth for canonical ids; other sources' results are cached (including
   a "nothing found" result, to avoid retrying known dead ends) for
-  `max_age_days` (default 30) before being looked up again - except
-  lyrics, which are cached forever, since a recording's lyrics don't
-  change. If you run
+  `max_age_days` (default 30) before being looked up again. If you run
   [Lidarr](https://lidarr.audio/), `python -m mediainfo import-lidarr
   --config config.yaml --url http://lidarr-host:8686 --api-key
   YOUR_LIDARR_API_KEY` (or the `docker compose run` equivalent, with
