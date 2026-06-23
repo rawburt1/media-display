@@ -26,6 +26,13 @@ class RecognizerConfig:
     acrcloud_access_key: str = ""
     acrcloud_access_secret: str = ""
 
+    # Folder of your own reference clips (see local_folder.py) to match
+    # against, temporarily, whenever ACRCloud reports it's rate-limiting
+    # us - empty (the default) disables this and just treats a rate
+    # limit as a plain miss. Only used when recognition_provider is
+    # "acrcloud".
+    local_folder_fallback_dir: str = ""
+
     # API key from https://acoustid.org/my-applications. Requires the
     # `fpcalc` binary (Chromaprint) to be installed - see acoustid.py.
     acoustid_api_key: str = ""

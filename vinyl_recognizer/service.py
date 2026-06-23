@@ -8,7 +8,7 @@ import threading
 import time
 from typing import Optional
 
-from vinyl_recognizer import acoustid, acrcloud, audd, recorder, shazam, vibra
+from vinyl_recognizer import acoustid, acrcloud, audd, local_folder, recorder, shazam, vibra
 from vinyl_recognizer.config import RecognizerConfig
 
 logger = logging.getLogger(__name__)
@@ -80,12 +80,19 @@ class RecognizerService:
 
     def _recognize(self, wav_bytes: bytes) -> Optional[dict]:
         if self.config.recognition_provider == "acrcloud":
-            return acrcloud.recognize(
-                wav_bytes,
-                self.config.acrcloud_host,
-                self.config.acrcloud_access_key,
-                self.config.acrcloud_access_secret,
-            )
+            try:
+                return acrcloud.recognize(
+                    wav_bytes,
+                    self.config.acrcloud_host,
+                    self.config.acrcloud_access_key,
+                    self.config.acrcloud_access_secret,
+                )
+            except acrcloud.RateLimitedError:
+                logger.warning("ACRCloud is rate-limiting us")
+                if not self.config.local_folder_fallback_dir:
+                    return None
+                logger.info("Falling back to local_folder_fallback_dir")
+                return local_folder.recognize(wav_bytes, self.config.local_folder_fallback_dir)
         if self.config.recognition_provider == "acoustid":
             return acoustid.recognize(wav_bytes, self.config.acoustid_api_key)
         if self.config.recognition_provider == "shazam":
