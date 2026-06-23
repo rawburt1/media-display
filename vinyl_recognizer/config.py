@@ -11,8 +11,24 @@ import yaml
 
 @dataclasses.dataclass
 class RecognizerConfig:
+    # Which recognition API to use: "audd", "acrcloud", "acoustid",
+    # "shazam", or "vibra" (shazam and vibra need no API key - see
+    # shazam.py / vibra.py).
+    recognition_provider: str = "audd"
+
     # API token from https://dashboard.audd.io/
     audd_api_key: str = ""
+
+    # ACRCloud project credentials from the console's "Audio & Video
+    # Recognition" project page. `acrcloud_host` is the project's
+    # identification endpoint, e.g. "identify-eu-west-1.acrcloud.com".
+    acrcloud_host: str = ""
+    acrcloud_access_key: str = ""
+    acrcloud_access_secret: str = ""
+
+    # API key from https://acoustid.org/my-applications. Requires the
+    # `fpcalc` binary (Chromaprint) to be installed - see acoustid.py.
+    acoustid_api_key: str = ""
 
     # Input device name (substring match) or index, as shown by
     # `python -m vinyl_recognizer --list-devices`. Empty uses the system

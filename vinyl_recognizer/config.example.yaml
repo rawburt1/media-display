@@ -3,8 +3,36 @@
 # Run `python -m vinyl_recognizer --list-devices` first to find the name (or
 # index) of your Behringer UCA202 (or other USB audio interface).
 
-# API token from https://dashboard.audd.io/
+# Which recognition API to use: "audd", "acrcloud", "acoustid", "shazam",
+# or "vibra".
+recognition_provider: audd
+
+# API token from https://dashboard.audd.io/ (only used when
+# recognition_provider is "audd").
 audd_api_key: YOUR_AUDD_API_TOKEN
+
+# ACRCloud project credentials (only used when recognition_provider is
+# "acrcloud") - create a free "Audio & Video Recognition" project at
+# https://console.acrcloud.com/ and copy these from its console page.
+acrcloud_host: identify-eu-west-1.acrcloud.com
+acrcloud_access_key: YOUR_ACRCLOUD_ACCESS_KEY
+acrcloud_access_secret: YOUR_ACRCLOUD_ACCESS_SECRET
+
+# API key from https://acoustid.org/my-applications (only used when
+# recognition_provider is "acoustid"). Also requires the `fpcalc` binary
+# (Chromaprint command-line tools) to be installed - see acoustid.py.
+acoustid_api_key: YOUR_ACOUSTID_API_KEY
+
+# "shazam" needs no API key at all (it talks to Shazam's own backend via
+# the shazamio library, the same way the mobile app does) - just requires
+# `ffmpeg` to be installed for shazamio's own audio decoding. Nothing to
+# fill in here beyond setting recognition_provider: shazam above.
+
+# "vibra" also needs no API key (same Shazam backend as above, but via
+# the native `vibra` binary instead of shazamio - see vibra.py). Requires
+# building https://github.com/BayernMuller/vibra from source and putting
+# the resulting binary on PATH; nothing to fill in here beyond setting
+# recognition_provider: vibra above.
 
 # Substring of the input device's name (e.g. "UCA202"), or its numeric
 # index. Leave empty to use the system default input device.
@@ -22,9 +50,9 @@ signal_clip_seconds: 1
 # Length (in seconds) of the clip sent to AudD for recognition.
 recognition_clip_seconds: 8
 
-# Minimum time (in seconds) between AudD requests while audio keeps
-# playing - keep this high enough to stay within AudD's free tier
-# (300 requests/day by default).
+# Minimum time (in seconds) between recognition requests while audio keeps
+# playing - keep this high enough to stay within your provider's free
+# tier (AudD's default free tier is 300 requests/day).
 recognition_interval_seconds: 60
 
 # RMS amplitude (0-1) below which audio is considered silence.

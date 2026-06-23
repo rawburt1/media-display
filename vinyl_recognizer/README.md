@@ -20,34 +20,70 @@ the main `mediainfo` app/container).
 ## Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+./install.sh
+# add --with-vibra too if you want the "vibra" provider (see below) -
+# skipped by default since it has to be compiled from source
 
 # Find your UCA202's device name/index:
-python -m vinyl_recognizer --list-devices
+./start.sh --list-devices
 
-cp config.example.yaml config.yaml
-# edit config.yaml: set audd_api_key and input_device
+# edit config.yaml: set input_device, and the API key/credentials for
+# whichever recognition_provider you pick (see Configuration below)
 
-python -m vinyl_recognizer --config config.yaml
+./start.sh
 ```
 
-On Linux, `sounddevice` requires the `libportaudio2` system package
-(`sudo apt install libportaudio2`).
+`install.sh` installs the system packages every built-in provider except
+`"vibra"` needs (`libportaudio2` for `sounddevice`, `libchromaprint-tools`
+for AcoustID's `fpcalc`, `ffmpeg` for Shazam), creates a Python virtualenv
+in `.venv` and installs `requirements.txt` into it, and copies
+`config.example.yaml` to `config.yaml` if one doesn't exist yet. It's
+idempotent - safe to re-run any time (e.g. after a `git pull`) to pick up
+new dependencies; it won't touch an existing `config.yaml`.
+
+`start.sh` runs the service using that venv/config (passing through any
+extra args, e.g. `--list-devices`). Both scripts expect to be run from
+within this `vinyl_recognizer/` directory.
+
+The `"vibra"` provider needs the native `vibra` binary
+(https://github.com/BayernMuller/vibra) on PATH, which isn't packaged for
+apt - `./install.sh --with-vibra` builds and installs it (requires `git`,
+`cmake`, `build-essential`, `libcurl4-openssl-dev`, all installed
+automatically by the flag).
 
 ## Configuration
 
 See `config.example.yaml` for all options. Key things to fill in:
 
+- **`recognition_provider`**: `"audd"` (default), `"acrcloud"`,
+  `"acoustid"`, `"shazam"`, or `"vibra"` - which API to send recognition
+  clips to.
 - **`audd_api_key`**: API token from https://dashboard.audd.io/ (free tier
-  is ~300 requests/day).
+  is ~300 requests/day). Only used when `recognition_provider: audd`.
+- **`acrcloud_host`** / **`acrcloud_access_key`** / **`acrcloud_access_secret`**:
+  project credentials from https://console.acrcloud.com/ (create a free
+  "Audio & Video Recognition" project, then copy these from its console
+  page). Only used when `recognition_provider: acrcloud`.
+- **`acoustid_api_key`**: API key from https://acoustid.org/my-applications
+  (free). Only used when `recognition_provider: acoustid` - and only works
+  if the `fpcalc` binary is installed, since that's what computes the
+  fingerprint AcoustID matches against (no raw audio is sent to AcoustID
+  at all). AcoustID has no cover art of its own, so `artwork_url` is
+  always empty for this provider.
+- **`"shazam"`** needs no API key or credentials at all - it talks to
+  Shazam's own backend via the `shazamio` library, the same way the
+  mobile app does. Only requires `ffmpeg` to be installed.
+- **`"vibra"`** also needs no API key - it talks to the same Shazam
+  backend as `"shazam"`, but via the native `vibra` binary instead of
+  the Python `shazamio` library (no ffmpeg/asyncio involved). Requires
+  building https://github.com/BayernMuller/vibra from source yourself
+  and putting the binary on PATH.
 - **`input_device`**: a substring of your UCA202's name (e.g. `"UCA202"`)
   as shown by `--list-devices`, or its numeric index. Empty uses the
   system default input device.
-- **`recognition_interval_seconds`**: minimum time between AudD requests
-  while audio is playing. Keep this high enough (default 60s) to stay
-  within AudD's free tier over a few hours of listening.
+- **`recognition_interval_seconds`**: minimum time between recognition
+  requests while audio is playing. Keep this high enough (default 60s) to
+  stay within your provider's free tier over a few hours of listening.
 - **`silence_threshold`** / **`silence_grace_seconds`**: control when the
   service decides nothing is playing (so it stops calling AudD and reports
   an empty result).
@@ -58,8 +94,9 @@ A background loop wakes up every `poll_interval_seconds` and records a
 short clip to check for signal (RMS amplitude). If the turntable is silent,
 nothing is sent anywhere. Once signal is detected, and at least
 `recognition_interval_seconds` has passed since the last attempt, it records
-a longer clip and sends it to AudD. The most recent successful result
-(title/artist/album/artwork) is cached and served at:
+a longer clip and sends it to whichever provider `recognition_provider`
+selects (AudD, ACRCloud, AcoustID, Shazam, or vibra). The most recent
+successful result (title/artist/album/artwork) is cached and served at:
 
 ```
 GET /now-playing

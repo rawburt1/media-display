@@ -71,6 +71,85 @@ def test_recognition_not_repeated_before_interval_elapses(mock_record, mock_reco
     mock_recognize.assert_called_once()
 
 
+@patch("vinyl_recognizer.service.acrcloud.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_acrcloud_provider_dispatches_to_acrcloud(mock_record, mock_recognize):
+    mock_record.return_value = _LOUD
+    mock_recognize.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service(
+        recognition_provider="acrcloud",
+        acrcloud_host="host.acrcloud.com",
+        acrcloud_access_key="key",
+        acrcloud_access_secret="secret",
+    )
+
+    service.tick()
+
+    args, _ = mock_recognize.call_args
+    assert args[1:] == ("host.acrcloud.com", "key", "secret")
+    assert service.get_now_playing()["title"] == "Comfortably Numb"
+
+
+@patch("vinyl_recognizer.service.acoustid.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_acoustid_provider_dispatches_to_acoustid(mock_record, mock_recognize):
+    mock_record.return_value = _LOUD
+    mock_recognize.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service(recognition_provider="acoustid", acoustid_api_key="test-key")
+
+    service.tick()
+
+    args, _ = mock_recognize.call_args
+    assert args[1:] == ("test-key",)
+    assert service.get_now_playing()["title"] == "Comfortably Numb"
+
+
+@patch("vinyl_recognizer.service.shazam.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_shazam_provider_dispatches_to_shazam(mock_record, mock_recognize):
+    mock_record.return_value = _LOUD
+    mock_recognize.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service(recognition_provider="shazam")
+
+    service.tick()
+
+    mock_recognize.assert_called_once()
+    assert service.get_now_playing()["title"] == "Comfortably Numb"
+
+
+@patch("vinyl_recognizer.service.vibra.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_vibra_provider_dispatches_to_vibra(mock_record, mock_recognize):
+    mock_record.return_value = _LOUD
+    mock_recognize.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service(recognition_provider="vibra")
+
+    service.tick()
+
+    mock_recognize.assert_called_once()
+    assert service.get_now_playing()["title"] == "Comfortably Numb"
+
+
 @patch("vinyl_recognizer.service.audd.recognize")
 @patch("vinyl_recognizer.service.recorder.record_clip")
 def test_no_match_leaves_current_unset(mock_record, mock_recognize):
