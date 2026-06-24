@@ -19,11 +19,12 @@ acrcloud_access_key: YOUR_ACRCLOUD_ACCESS_KEY
 acrcloud_access_secret: YOUR_ACRCLOUD_ACCESS_SECRET
 
 # Optional, "acrcloud" only: if ACRCloud reports it's rate-limiting us,
-# temporarily fall back to matching against your own reference clips in
-# this folder instead of giving up (see local_folder.py) - requires
-# `fpcalc`. Leave empty (the default) to just treat a rate limit as a
-# plain miss. Each file's name (minus extension) is used as the result,
-# e.g. "Pink Floyd - Comfortably Numb - The Wall.flac".
+# we first fall back to vibra automatically (no setup needed). If vibra
+# also has no match, fall back further to matching against your own
+# reference clips in this folder (see local_folder.py) - requires
+# `fpcalc`. Leave empty (the default) to skip this second-level fallback.
+# Each file's name (minus extension) is used as the result, e.g.
+# "Pink Floyd - Comfortably Numb - The Wall.flac".
 local_folder_fallback_dir: ""
 
 # API key from https://acoustid.org/my-applications (only used when
