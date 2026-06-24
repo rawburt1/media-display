@@ -128,6 +128,7 @@ def start_orchestrator(
         idle_source=build_idle_source(config, library),
         backoff_initial_seconds=config.backoff_initial_seconds,
         backoff_max_seconds=config.backoff_max_seconds,
+        nothing_playing_grace_seconds=config.nothing_playing_grace_seconds,
         alert_config=config.alerts,
         overrides=overrides,
     )

@@ -22,6 +22,14 @@ rotation_interval_seconds: 30
 backoff_initial_seconds: 30
 backoff_max_seconds: 300
 
+# How long (in seconds) to tolerate a source reporting "nothing playing"
+# before actually switching outputs to idle, while something was already
+# playing - covers a source briefly reporting no active session for a
+# single poll or two during normal playback (e.g. Kodi's active-player
+# list momentarily empty around a scene transition) without flashing
+# every output to idle and back.
+nothing_playing_grace_seconds: 2
+
 
 # ---------------------------------------------------------------------------
 # Source priority
