@@ -119,6 +119,7 @@ def test_acrcloud_rate_limit_falls_back_to_vibra(mock_record, mock_acrcloud, moc
 
     mock_vibra.assert_called_once()
     assert service.get_now_playing()["title"] == "Comfortably Numb"
+    assert service.get_now_playing()["provider"] == "vibra"
 
 
 @patch("vinyl_recognizer.service.local_folder.recognize")
@@ -152,6 +153,7 @@ def test_acrcloud_rate_limit_falls_back_to_local_folder_when_vibra_misses(
     args, _ = mock_local_folder.call_args
     assert args[1] == "/some/folder"
     assert service.get_now_playing()["title"] == "Comfortably Numb"
+    assert service.get_now_playing()["provider"] == "local_folder"
 
 
 @patch("vinyl_recognizer.service.local_folder.recognize")
