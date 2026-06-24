@@ -82,7 +82,7 @@ class WikipediaEnricher(ArtworkEnricher):
 
                 # Prefer the full-resolution original over the thumbnail -
                 # Wikipedia's REST summary always downsizes the thumbnail to
-                # ~320px wide, which the cache's 640x480 minimum-size filter
+                # ~320px wide, which the cache's 400x400 minimum-size filter
                 # then rejects on every single fetch, discarding a usable
                 # originalimage that was right there in the same response.
                 thumbnail = (summary.get("originalimage") or {}).get("source") or (

@@ -1,8 +1,8 @@
 """Turntable "now playing" source, via the vinyl_recognizer service.
 
 Polls a `vinyl_recognizer` instance (running on the machine the Behringer
-UCA202 is connected to) for the most recently AudD-recognized track from
-the turntable's line-in.
+UCA202 is connected to) for the most recently recognized track from the
+turntable's line-in.
 """
 
 from __future__ import annotations
@@ -17,6 +17,18 @@ from mediainfo.models import Artwork, NowPlaying
 from mediainfo.sources.base import MediaSource
 
 logger = logging.getLogger(__name__)
+
+# Matches vinyl_recognizer's recognition_provider values (and its
+# "local_folder" fallback tag) to a human-readable label for the artwork
+# source, rather than hardcoding one provider's name.
+_PROVIDER_LABELS = {
+    "audd": "AudD",
+    "acrcloud": "ACRCloud",
+    "acoustid": "AcoustID",
+    "shazam": "Shazam",
+    "vibra": "vibra",
+    "local_folder": "local folder",
+}
 
 
 class VinylSource(MediaSource):
@@ -44,7 +56,9 @@ class VinylSource(MediaSource):
         images = []
         artwork_url = data.get("artwork_url")
         if artwork_url:
-            images.append(Artwork(url=artwork_url, label="Album art (AudD)"))
+            provider = data.get("provider", "")
+            label = _PROVIDER_LABELS.get(provider, provider or "vinyl_recognizer")
+            images.append(Artwork(url=artwork_url, label=f"Album art ({label})"))
 
         return NowPlaying(
             source=self.name,

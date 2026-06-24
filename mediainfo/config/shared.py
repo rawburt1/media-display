@@ -47,8 +47,8 @@ class CacheConfig:
     # either. Set to 0 to disable the check entirely. Doesn't apply to
     # manual artwork overrides (see OverridesConfig) - those are a
     # deliberate choice, not a downloaded fallback.
-    min_width: int = 640
-    min_height: int = 480
+    min_width: int = 400
+    min_height: int = 400
 
 
 @dataclasses.dataclass

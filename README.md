@@ -568,7 +568,7 @@ See `config.example.yaml` for all options. Key things to fill in:
   also contribute art for it.
 - **`cache.dir`**: where downloaded artwork is stored.
 - **`cache.min_width`** / **`cache.min_height`**: any downloaded image
-  smaller than this (default 640×480) is rejected - not cached, and
+  smaller than this (default 400×400) is rejected - not cached, and
   re-tried on the next poll instead of being shown - since low-res
   thumbnails (a fallback icon some APIs return when they have no real
   artwork) aren't worth displaying full-screen. Set both to `0` to
@@ -638,7 +638,7 @@ See `config.example.yaml` for all options. Key things to fill in:
   no YAML editing needed: upload an image, type the title (and subtitle,
   if applicable - leave blank for e.g. a movie with no subtitle), save.
   A match replaces whatever enrichment found for that item entirely, and
-  isn't subject to the 640×480 minimum-size check other downloaded
+  isn't subject to the 400×400 minimum-size check other downloaded
   artwork goes through, since it's a deliberate choice rather than an
   automatic download. `dir` is where the uploaded images are stored.
 

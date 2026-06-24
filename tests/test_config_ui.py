@@ -210,8 +210,8 @@ def test_schema_includes_cache_section(config_path):
 def test_get_values_includes_cache_fields(config_path):
     out = _output(config_path)
     values = out.app.test_client().get("/api/config").get_json()["values"]
-    assert values["cache.min_width"] == 640
-    assert values["cache.min_height"] == 480
+    assert values["cache.min_width"] == 400
+    assert values["cache.min_height"] == 400
 
 
 def test_save_form_updates_cache_min_width(config_path):
