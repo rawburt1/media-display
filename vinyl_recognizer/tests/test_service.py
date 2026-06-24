@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import numpy as np
 
+from vinyl_recognizer import acrcloud
 from vinyl_recognizer.config import RecognizerConfig
 from vinyl_recognizer.service import RecognizerService
 
@@ -93,6 +94,55 @@ def test_acrcloud_provider_dispatches_to_acrcloud(mock_record, mock_recognize):
     args, _ = mock_recognize.call_args
     assert args[1:] == ("host.acrcloud.com", "key", "secret")
     assert service.get_now_playing()["title"] == "Comfortably Numb"
+
+
+@patch("vinyl_recognizer.service.local_folder.recognize")
+@patch("vinyl_recognizer.service.acrcloud.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_acrcloud_rate_limit_falls_back_to_local_folder(mock_record, mock_acrcloud, mock_local_folder):
+    mock_record.return_value = _LOUD
+    mock_acrcloud.side_effect = acrcloud.RateLimitedError("rate limited")
+    mock_local_folder.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service(
+        recognition_provider="acrcloud",
+        acrcloud_host="host.acrcloud.com",
+        acrcloud_access_key="key",
+        acrcloud_access_secret="secret",
+        local_folder_fallback_dir="/some/folder",
+    )
+
+    service.tick()
+
+    mock_local_folder.assert_called_once()
+    args, _ = mock_local_folder.call_args
+    assert args[1] == "/some/folder"
+    assert service.get_now_playing()["title"] == "Comfortably Numb"
+
+
+@patch("vinyl_recognizer.service.local_folder.recognize")
+@patch("vinyl_recognizer.service.acrcloud.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_acrcloud_rate_limit_without_fallback_dir_leaves_current_unset(
+    mock_record, mock_acrcloud, mock_local_folder
+):
+    mock_record.return_value = _LOUD
+    mock_acrcloud.side_effect = acrcloud.RateLimitedError("rate limited")
+    service = _service(
+        recognition_provider="acrcloud",
+        acrcloud_host="host.acrcloud.com",
+        acrcloud_access_key="key",
+        acrcloud_access_secret="secret",
+    )
+
+    service.tick()
+
+    mock_local_folder.assert_not_called()
+    assert service.get_now_playing() == {}
 
 
 @patch("vinyl_recognizer.service.acoustid.recognize")
