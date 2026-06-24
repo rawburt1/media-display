@@ -14,6 +14,13 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+class RateLimitedError(Exception):
+    """Raised instead of returning None when ACRCloud reports the request
+    was rejected for rate-limiting/quota reasons, so callers can tell that
+    apart from a normal "no match" miss and fall back to something else
+    (see service.py's use of local_folder.recognize())."""
+
+
 def recognize(wav_bytes: bytes, host: str, access_key: str, access_secret: str) -> Optional[dict]:
     """Identify a short audio clip via ACRCloud.
 
@@ -22,7 +29,8 @@ def recognize(wav_bytes: bytes, host: str, access_key: str, access_secret: str) 
 
     Returns a dict with `title`, `artist`, `album`, `artwork_url` (any of
     which may be empty strings), or None if nothing was recognized or the
-    request failed.
+    request failed. Raises RateLimitedError instead of returning None if
+    the rejection looks rate-limit/quota related rather than a plain miss.
     """
     timestamp = str(int(time.time()))
     signature = _sign(access_key, access_secret, timestamp)
@@ -41,17 +49,25 @@ def recognize(wav_bytes: bytes, host: str, access_key: str, access_secret: str) 
             files={"sample": ("clip.wav", wav_bytes, "audio/wav")},
             timeout=30,
         )
+        if response.status_code == 429:
+            raise RateLimitedError(f"ACRCloud HTTP 429: {response.text}")
         response.raise_for_status()
         data = response.json()
+    except RateLimitedError:
+        raise
     except Exception:
         logger.exception("ACRCloud request failed")
         return None
 
     status = data.get("status") or {}
-    if status.get("code") != 0:
+    code = status.get("code")
+    if code != 0:
         # code 1001 is "no result found" - a normal miss, not an error.
-        if status.get("code") != 1001:
-            logger.warning("ACRCloud error response: %r", data)
+        if code == 1001:
+            return None
+        if "limit" in (status.get("msg") or "").lower():
+            raise RateLimitedError(f"ACRCloud error response: {data!r}")
+        logger.warning("ACRCloud error response: %r", data)
         return None
 
     music = ((data.get("metadata") or {}).get("music") or [None])[0]
