@@ -161,7 +161,7 @@ def test_no_thumbnail_does_not_add_image(mock_get):
 @patch("mediainfo.enrichers.wikipedia.requests.get")
 def test_prefers_originalimage_over_thumbnail(mock_get):
     # The REST summary's thumbnail is always downsized (~320px wide), which
-    # the cache's 640x480 minimum-size filter then rejects on every fetch -
+    # the cache's 400x400 minimum-size filter then rejects on every fetch -
     # the full-resolution originalimage in the same response should win.
     mock_get.side_effect = [
         _search_response(),

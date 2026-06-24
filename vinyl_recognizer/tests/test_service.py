@@ -274,3 +274,62 @@ def test_silence_after_grace_period_clears_current_track(mock_monotonic, mock_re
     mock_monotonic.return_value = 120.0
     service.tick()
     assert service.get_now_playing() == {}
+
+
+@patch("vinyl_recognizer.service.audd.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_recognized_result_is_tagged_with_provider(mock_record, mock_recognize):
+    mock_record.return_value = _LOUD
+    mock_recognize.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service()
+
+    service.tick()
+
+    assert service.get_now_playing()["provider"] == "audd"
+
+
+@patch("vinyl_recognizer.service.shazam.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_shazam_result_is_tagged_with_provider(mock_record, mock_recognize):
+    mock_record.return_value = _LOUD
+    mock_recognize.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service(recognition_provider="shazam")
+
+    service.tick()
+
+    assert service.get_now_playing()["provider"] == "shazam"
+
+
+@patch("vinyl_recognizer.service.local_folder.recognize")
+@patch("vinyl_recognizer.service.acrcloud.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_local_folder_fallback_result_is_tagged_with_provider(mock_record, mock_acrcloud, mock_local_folder):
+    mock_record.return_value = _LOUD
+    mock_acrcloud.side_effect = acrcloud.RateLimitedError("rate limited")
+    mock_local_folder.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service(
+        recognition_provider="acrcloud",
+        acrcloud_host="host.acrcloud.com",
+        acrcloud_access_key="key",
+        acrcloud_access_secret="secret",
+        local_folder_fallback_dir="/some/folder",
+    )
+
+    service.tick()
+
+    assert service.get_now_playing()["provider"] == "local_folder"

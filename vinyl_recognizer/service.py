@@ -86,25 +86,41 @@ class RecognizerService:
     def _recognize(self, wav_bytes: bytes) -> Optional[dict]:
         if self.config.recognition_provider == "acrcloud":
             try:
-                return acrcloud.recognize(
-                    wav_bytes,
-                    self.config.acrcloud_host,
-                    self.config.acrcloud_access_key,
-                    self.config.acrcloud_access_secret,
+                return _tag_provider(
+                    acrcloud.recognize(
+                        wav_bytes,
+                        self.config.acrcloud_host,
+                        self.config.acrcloud_access_key,
+                        self.config.acrcloud_access_secret,
+                    ),
+                    "acrcloud",
                 )
             except acrcloud.RateLimitedError:
                 logger.warning("ACRCloud is rate-limiting us; falling back to vibra")
                 result = vibra.recognize(wav_bytes)
                 if result:
-                    return result
+                    return _tag_provider(result, "vibra")
                 if not self.config.local_folder_fallback_dir:
                     return None
                 logger.info("vibra had no match either; falling back to local_folder_fallback_dir")
-                return local_folder.recognize(wav_bytes, self.config.local_folder_fallback_dir)
+                return _tag_provider(
+                    local_folder.recognize(wav_bytes, self.config.local_folder_fallback_dir),
+                    "local_folder",
+                )
         if self.config.recognition_provider == "acoustid":
-            return acoustid.recognize(wav_bytes, self.config.acoustid_api_key)
+            return _tag_provider(acoustid.recognize(wav_bytes, self.config.acoustid_api_key), "acoustid")
         if self.config.recognition_provider == "shazam":
-            return shazam.recognize(wav_bytes)
+            return _tag_provider(shazam.recognize(wav_bytes), "shazam")
         if self.config.recognition_provider == "vibra":
-            return vibra.recognize(wav_bytes)
-        return audd.recognize(wav_bytes, self.config.audd_api_key)
+            return _tag_provider(vibra.recognize(wav_bytes), "vibra")
+        return _tag_provider(audd.recognize(wav_bytes, self.config.audd_api_key), "audd")
+
+
+def _tag_provider(result: Optional[dict], provider: str) -> Optional[dict]:
+    """Records which provider actually produced `result`, so consumers
+    (e.g. mediainfo's vinyl source) can label the artwork by its real
+    source rather than just `recognition_provider`, which doesn't capture
+    fallbacks like ACRCloud -> local_folder."""
+    if result is None:
+        return None
+    return {**result, "provider": provider}

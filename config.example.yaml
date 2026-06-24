@@ -590,8 +590,8 @@ cache:
   # check entirely. Doesn't apply to manual artwork overrides (see
   # `overrides` below) - those are a deliberate choice, not a downloaded
   # fallback.
-  min_width: 640
-  min_height: 480
+  min_width: 400
+  min_height: 400
 
 # Local SQLite database of artist/album/track metadata (MusicBrainz ids,
 # cached cover art URLs, artist photos) - queried before the musicbrainz,
@@ -750,7 +750,7 @@ alerts:
 # "Overrides" page (linked from the main configuration page) - matched by
 # exact title + subtitle, case-insensitive. A match replaces whatever
 # enrichment found for that item entirely, and bypasses the cache's
-# 640x480 minimum-size filter (it's a deliberate choice, not a download).
+# 400x400 minimum-size filter (it's a deliberate choice, not a download).
 
 overrides:
   enabled: true

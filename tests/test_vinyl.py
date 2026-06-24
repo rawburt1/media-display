@@ -21,6 +21,7 @@ def test_returns_now_playing_with_artwork(mock_get):
         "artist": "Pink Floyd",
         "album": "The Wall",
         "artwork_url": "https://example.com/cover.jpg",
+        "provider": "audd",
     }
     mock_get.return_value = mock_response
 
@@ -36,6 +37,59 @@ def test_returns_now_playing_with_artwork(mock_get):
 
     args, _ = mock_get.call_args
     assert args[0] == "http://192.168.1.40:8091/now-playing"
+
+
+@patch("mediainfo.sources.vinyl.requests.get")
+def test_artwork_label_reflects_shazam_provider(mock_get):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "https://example.com/cover.jpg",
+        "provider": "shazam",
+    }
+    mock_get.return_value = mock_response
+
+    now_playing = _source().get_now_playing()
+
+    assert now_playing.images[0].label == "Album art (Shazam)"
+
+
+@patch("mediainfo.sources.vinyl.requests.get")
+def test_artwork_label_reflects_local_folder_fallback_provider(mock_get):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "https://example.com/cover.jpg",
+        "provider": "local_folder",
+    }
+    mock_get.return_value = mock_response
+
+    now_playing = _source().get_now_playing()
+
+    assert now_playing.images[0].label == "Album art (local folder)"
+
+
+@patch("mediainfo.sources.vinyl.requests.get")
+def test_artwork_label_falls_back_to_generic_when_provider_missing(mock_get):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "https://example.com/cover.jpg",
+    }
+    mock_get.return_value = mock_response
+
+    now_playing = _source().get_now_playing()
+
+    assert now_playing.images[0].label == "Album art (vinyl_recognizer)"
 
 
 @patch("mediainfo.sources.vinyl.requests.get")
