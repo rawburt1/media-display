@@ -399,8 +399,11 @@ class Orchestrator:
         images = self._current.images
         tier: CacheTier = "music" if self._current.media_type == "music" else "default"
 
+        skip_artist_photos = output.music_album_art_only and self._current.media_type == "music"
         for attempt in range(len(images)):
             artwork = images[state.order[(state.position + attempt) % len(state.order)]]
+            if skip_artist_photos and artwork.is_artist_photo:
+                continue
             try:
                 image_path = self.cache.get_path(artwork, tier=tier)
                 if image_path is None:

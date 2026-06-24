@@ -15,6 +15,12 @@ class Artwork:
     # Human-readable description, e.g. "Poster (fanart.tv)" - used for
     # logging and shown in the web UI.
     label: str = ""
+    # True for an artist bio photo (Wikipedia, Last.fm) rather than actual
+    # album/cover art - lets outputs that only want to show real album
+    # art for music (see Output.music_album_art_only) skip these without
+    # relying on fragile label string-matching (labels aren't consistent
+    # across sources, e.g. Kodi's own album thumbnail is "Poster (Kodi)").
+    is_artist_photo: bool = False
 
 
 @dataclass

@@ -21,6 +21,11 @@ _PALETTE_COLORS = 24
 
 
 class PixooOutput(Output):
+    # The 64x64 LED matrix is too small/low-fidelity to make an unrelated
+    # artist bio photo (Wikipedia, Last.fm) worth showing - only ever show
+    # the actual album art for music.
+    music_album_art_only = True
+
     def __init__(self, config: PixooConfig):
         self.config = config
         self._url = f"http://{config.ip}/post"

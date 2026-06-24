@@ -58,6 +58,7 @@ def test_adds_artist_photo_on_success(mock_get):
     assert np.images[0].url == REAL_URL
     assert "Last.fm" in np.images[0].label
     assert "Queen" in np.images[0].label
+    assert np.images[0].is_artist_photo is True
 
 
 @patch("mediainfo.enrichers.lastfm.requests.get")
