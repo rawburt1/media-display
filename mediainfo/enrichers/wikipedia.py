@@ -63,7 +63,13 @@ class WikipediaEnricher(ArtworkEnricher):
         summary, thumbnail = result
         now_playing.summary = summary
         if thumbnail and not any(image.url == thumbnail for image in now_playing.images):
-            now_playing.images.append(Artwork(url=thumbnail, label="Photo (Wikipedia)"))
+            # Only an artist *photo* (as opposed to album art) when this is
+            # music - for a movie/TV show this is the poster-ish photo for
+            # the title itself, which is the real artwork.
+            is_artist_photo = now_playing.media_type == "music"
+            now_playing.images.append(
+                Artwork(url=thumbnail, label="Photo (Wikipedia)", is_artist_photo=is_artist_photo)
+            )
 
     def _lookup(self, queries: List[str]) -> _CacheEntry:
         try:

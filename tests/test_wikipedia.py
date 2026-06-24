@@ -65,6 +65,18 @@ def test_adds_summary_and_photo_for_music(mock_get):
     assert len(np.images) == 1
     assert np.images[0].url == "https://example.com/t.jpg"
     assert "Wikipedia" in np.images[0].label
+    assert np.images[0].is_artist_photo is True
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_photo_is_not_marked_artist_photo_for_movie(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response()]
+    enricher = WikipediaEnricher(_config())
+    np = _movie()
+
+    enricher.enrich(np)
+
+    assert np.images[0].is_artist_photo is False
 
 
 @patch("mediainfo.enrichers.wikipedia.requests.get")

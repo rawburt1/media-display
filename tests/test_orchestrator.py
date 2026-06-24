@@ -1738,3 +1738,92 @@ def test_refetch_idle_batch_returns_true_and_updates_state():
     assert orch._idle.images == images
     output.on_new_item.assert_called_once()
     output.update.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Output.music_album_art_only (e.g. PixooOutput) - skip artist photos
+# ---------------------------------------------------------------------------
+
+def test_music_album_art_only_output_skips_artist_photo():
+    album_art = Artwork(url="https://example.com/album.jpg", label="Album art (Spotify)")
+    artist_photo = Artwork(
+        url="https://example.com/artist.jpg", label="Photo (Wikipedia)", is_artist_photo=True
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money",
+        images=[artist_photo, album_art],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = True
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/album.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_called_once()
+    _, artwork, _ = output.update.call_args[0]
+    assert artwork is album_art
+
+
+def test_music_album_art_only_output_shows_nothing_when_only_artist_photos_available():
+    artist_photo = Artwork(
+        url="https://example.com/artist.jpg", label="Photo (Wikipedia)", is_artist_photo=True
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money", images=[artist_photo],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = True
+    cache = MagicMock()
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_not_called()
+
+
+def test_regular_output_still_shows_artist_photo():
+    artist_photo = Artwork(
+        url="https://example.com/artist.jpg", label="Photo (Wikipedia)", is_artist_photo=True
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money", images=[artist_photo],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = False
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/artist.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_called_once()
+    _, artwork, _ = output.update.call_args[0]
+    assert artwork is artist_photo
