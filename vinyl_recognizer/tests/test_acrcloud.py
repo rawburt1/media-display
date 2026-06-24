@@ -1,5 +1,6 @@
 """Tests for the ACRCloud API client."""
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 from vinyl_recognizer import acrcloud
@@ -93,3 +94,26 @@ def test_recognize_returns_none_on_request_exception(mock_post):
     mock_post.side_effect = RuntimeError("network error")
 
     assert acrcloud.recognize(b"wav-bytes", "host.acrcloud.com", "key", "secret") is None
+
+
+@patch("vinyl_recognizer.acrcloud.requests.post")
+def test_recognize_raises_rate_limited_on_http_429(mock_post):
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.text = "Too Many Requests"
+    mock_post.return_value = mock_response
+
+    with pytest.raises(acrcloud.RateLimitedError):
+        acrcloud.recognize(b"wav-bytes", "host.acrcloud.com", "key", "secret")
+
+
+@patch("vinyl_recognizer.acrcloud.requests.post")
+def test_recognize_raises_rate_limited_on_limit_status_message(mock_post):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {"status": {"code": 3003, "msg": "Limit Exceeded"}}
+    mock_post.return_value = mock_response
+
+    with pytest.raises(acrcloud.RateLimitedError):
+        acrcloud.recognize(b"wav-bytes", "host.acrcloud.com", "key", "secret")
