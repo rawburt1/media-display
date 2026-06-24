@@ -35,16 +35,18 @@ _CACHE_PURGE_INTERVAL_SECONDS = 24 * 60 * 60
 # that needs to react within a single poll interval.
 _ALERT_CHECK_INTERVAL_SECONDS = 60
 
-# How long to tolerate a source reporting "nothing playing" before actually
-# switching outputs to idle, while something was already playing. Some
-# sources briefly report no active session for a single poll or two during
-# normal playback (e.g. Kodi's active-player list can momentarily come back
-# empty around a chapter/scene transition) - without this grace period, that
-# one missed poll flashes every output to idle and back, including a full
-# re-enrichment cycle, even though playback never actually stopped. A source
-# that's cold (nothing has played yet this run) is unaffected - this only
-# applies once something is already showing.
-_NOTHING_PLAYING_GRACE_SECONDS = 2
+# Default for the nothing_playing_grace_seconds constructor param below
+# (overridable via Config.nothing_playing_grace_seconds) - how long to
+# tolerate a source reporting "nothing playing" before actually switching
+# outputs to idle, while something was already playing. Some sources
+# briefly report no active session for a single poll or two during normal
+# playback (e.g. Kodi's active-player list can momentarily come back
+# empty around a chapter/scene transition) - without this grace period,
+# that one missed poll flashes every output to idle and back, including a
+# full re-enrichment cycle, even though playback never actually stopped. A
+# source that's cold (nothing has played yet this run) is unaffected -
+# this only applies once something is already showing.
+_DEFAULT_NOTHING_PLAYING_GRACE_SECONDS = 2
 
 # Backoff for sources whose device/service couldn't be reached (see
 # MediaSource.last_poll_failed) - doubles after each consecutive failure,
@@ -108,6 +110,7 @@ class Orchestrator:
         idle_source: Optional[IdleWallpaperSource] = None,
         backoff_initial_seconds: float = 30,
         backoff_max_seconds: float = 300,
+        nothing_playing_grace_seconds: float = _DEFAULT_NOTHING_PLAYING_GRACE_SECONDS,
         alert_config: Optional[AlertConfig] = None,
         overrides: Optional[ArtworkOverrideStore] = None,
     ):
@@ -120,6 +123,7 @@ class Orchestrator:
         self.idle_source = idle_source
         self.backoff_initial_seconds = backoff_initial_seconds
         self.backoff_max_seconds = backoff_max_seconds
+        self.nothing_playing_grace_seconds = nothing_playing_grace_seconds
         self._current: Optional[NowPlaying] = None
         # Each output independently cycles through `self._current.images` in
         # its own randomized order, keyed by its index in `self.outputs`.
@@ -127,7 +131,7 @@ class Orchestrator:
         self._last_cache_purge: Optional[float] = None
         # When the time it was first seen since `self._current` was set;
         # None means either nothing is playing or the source just resumed.
-        # See _NOTHING_PLAYING_GRACE_SECONDS above.
+        # See nothing_playing_grace_seconds above.
         self._nothing_playing_since: Optional[float] = None
         # "Hitster-safe" mode: while enabled, music now-playing (songs,
         # artists, albums) is treated as if nothing were playing on every
@@ -251,9 +255,9 @@ class Orchestrator:
             now = time.monotonic()
             if self._nothing_playing_since is None:
                 self._nothing_playing_since = now
-            if now - self._nothing_playing_since < _NOTHING_PLAYING_GRACE_SECONDS:
+            if now - self._nothing_playing_since < self.nothing_playing_grace_seconds:
                 # Tolerate a brief gap without touching outputs at all - see
-                # _NOTHING_PLAYING_GRACE_SECONDS above.
+                # nothing_playing_grace_seconds above.
                 return
             logger.info("Nothing playing; switching outputs to idle")
             self._current = None
