@@ -156,6 +156,13 @@ class Config:
     # backoff_max_seconds.
     backoff_initial_seconds: int = 30
     backoff_max_seconds: int = 300
+    # How long (in seconds) to tolerate a source reporting "nothing
+    # playing" before actually switching outputs to idle, while something
+    # was already playing - covers a source briefly reporting no active
+    # session for a single poll or two during normal playback (e.g.
+    # Kodi's active-player list momentarily empty around a scene
+    # transition) without flashing every output to idle and back.
+    nothing_playing_grace_seconds: float = 2
     alerts: AlertConfig = dataclasses.field(default_factory=AlertConfig)
     overrides: OverridesConfig = dataclasses.field(default_factory=OverridesConfig)
     # Order to try enabled idle wallpaper sources in (e.g. ["pexels",
@@ -230,6 +237,7 @@ class Config:
             auth=AuthConfig(**(raw.get("auth") or {})),
             backoff_initial_seconds=raw.get("backoff_initial_seconds", 30),
             backoff_max_seconds=raw.get("backoff_max_seconds", 300),
+            nothing_playing_grace_seconds=raw.get("nothing_playing_grace_seconds", 2),
             alerts=AlertConfig(**(raw.get("alerts") or {})),
             overrides=OverridesConfig(**(raw.get("overrides") or {})),
             idle_priority=raw.get("idle_priority", []),

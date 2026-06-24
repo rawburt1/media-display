@@ -7,7 +7,7 @@ import pytest
 
 from mediainfo.cache import ImageCache
 from mediainfo.models import Artwork, NowPlaying
-from mediainfo.orchestrator import _NOTHING_PLAYING_GRACE_SECONDS, Orchestrator
+from mediainfo.orchestrator import _DEFAULT_NOTHING_PLAYING_GRACE_SECONDS, Orchestrator
 
 
 class _FakeSource:
@@ -180,7 +180,7 @@ def test_gap_longer_than_grace_period_still_goes_idle():
         orchestrator._tick()  # nothing playing: grace period starts
         output.on_idle.assert_not_called()
 
-        clock.now += _NOTHING_PLAYING_GRACE_SECONDS + 1
+        clock.now += _DEFAULT_NOTHING_PLAYING_GRACE_SECONDS + 1
         orchestrator._tick()  # grace period elapsed: now truly idle
 
     output.on_idle.assert_called_once()
@@ -292,7 +292,7 @@ def test_non_image_output_does_not_get_on_idle_when_playing_without_artwork():
         orchestrator._tick()  # source goes quiet, but within the grace period
         output.on_idle.assert_not_called()
 
-        clock.now += _NOTHING_PLAYING_GRACE_SECONDS + 1
+        clock.now += _DEFAULT_NOTHING_PLAYING_GRACE_SECONDS + 1
         orchestrator._tick()  # grace period elapsed: now truly idle
         output.on_idle.assert_called_once()
 
