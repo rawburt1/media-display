@@ -96,12 +96,41 @@ def test_acrcloud_provider_dispatches_to_acrcloud(mock_record, mock_recognize):
     assert service.get_now_playing()["title"] == "Comfortably Numb"
 
 
-@patch("vinyl_recognizer.service.local_folder.recognize")
+@patch("vinyl_recognizer.service.vibra.recognize")
 @patch("vinyl_recognizer.service.acrcloud.recognize")
 @patch("vinyl_recognizer.service.recorder.record_clip")
-def test_acrcloud_rate_limit_falls_back_to_local_folder(mock_record, mock_acrcloud, mock_local_folder):
+def test_acrcloud_rate_limit_falls_back_to_vibra(mock_record, mock_acrcloud, mock_vibra):
     mock_record.return_value = _LOUD
     mock_acrcloud.side_effect = acrcloud.RateLimitedError("rate limited")
+    mock_vibra.return_value = {
+        "title": "Comfortably Numb",
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "artwork_url": "",
+    }
+    service = _service(
+        recognition_provider="acrcloud",
+        acrcloud_host="host.acrcloud.com",
+        acrcloud_access_key="key",
+        acrcloud_access_secret="secret",
+    )
+
+    service.tick()
+
+    mock_vibra.assert_called_once()
+    assert service.get_now_playing()["title"] == "Comfortably Numb"
+
+
+@patch("vinyl_recognizer.service.local_folder.recognize")
+@patch("vinyl_recognizer.service.vibra.recognize")
+@patch("vinyl_recognizer.service.acrcloud.recognize")
+@patch("vinyl_recognizer.service.recorder.record_clip")
+def test_acrcloud_rate_limit_falls_back_to_local_folder_when_vibra_misses(
+    mock_record, mock_acrcloud, mock_vibra, mock_local_folder
+):
+    mock_record.return_value = _LOUD
+    mock_acrcloud.side_effect = acrcloud.RateLimitedError("rate limited")
+    mock_vibra.return_value = None
     mock_local_folder.return_value = {
         "title": "Comfortably Numb",
         "artist": "Pink Floyd",
@@ -118,6 +147,7 @@ def test_acrcloud_rate_limit_falls_back_to_local_folder(mock_record, mock_acrclo
 
     service.tick()
 
+    mock_vibra.assert_called_once()
     mock_local_folder.assert_called_once()
     args, _ = mock_local_folder.call_args
     assert args[1] == "/some/folder"
@@ -125,13 +155,15 @@ def test_acrcloud_rate_limit_falls_back_to_local_folder(mock_record, mock_acrclo
 
 
 @patch("vinyl_recognizer.service.local_folder.recognize")
+@patch("vinyl_recognizer.service.vibra.recognize")
 @patch("vinyl_recognizer.service.acrcloud.recognize")
 @patch("vinyl_recognizer.service.recorder.record_clip")
 def test_acrcloud_rate_limit_without_fallback_dir_leaves_current_unset(
-    mock_record, mock_acrcloud, mock_local_folder
+    mock_record, mock_acrcloud, mock_vibra, mock_local_folder
 ):
     mock_record.return_value = _LOUD
     mock_acrcloud.side_effect = acrcloud.RateLimitedError("rate limited")
+    mock_vibra.return_value = None
     service = _service(
         recognition_provider="acrcloud",
         acrcloud_host="host.acrcloud.com",
@@ -141,6 +173,7 @@ def test_acrcloud_rate_limit_without_fallback_dir_leaves_current_unset(
 
     service.tick()
 
+    mock_vibra.assert_called_once()
     mock_local_folder.assert_not_called()
     assert service.get_now_playing() == {}
 
