@@ -60,17 +60,22 @@ class _IdleBatchManager:
             if self.images
             else None
         )
-        # 0.0 (not "now") deliberately - a seeded-from-disk batch is not a
+        # None (not "now") deliberately - a seeded-from-disk batch is not a
         # fresh fetch, so the very first show() still tries the real idle
         # source rather than waiting out a full rotation_interval_seconds.
-        self.last_batch_fetch = 0.0
+        # (Must be a sentinel rather than 0.0: needs_refetch() compares
+        # against time.monotonic(), whose absolute value is unspecified -
+        # on a freshly-booted machine it can be smaller than
+        # rotation_interval_seconds, which made 0.0 indistinguishable from
+        # "just fetched".)
+        self.last_batch_fetch: Optional[float] = None
 
     def clear_if_stale(self, now_playing: NowPlaying) -> None:
         """Clear the idle batch only once real artwork is available again."""
         if now_playing.images and self.images:
             self.images = []
             self.rotation_state = {}
-            self.last_batch_fetch = 0.0
+            self.last_batch_fetch = None
 
     def show(self, now: float, notify_idle: bool = True) -> None:
         """Show idle wallpapers on image-capable outputs.
@@ -105,6 +110,7 @@ class _IdleBatchManager:
         assert self.idle_source is not None
         return (
             not self.images
+            or self.last_batch_fetch is None
             or now - self.last_batch_fetch >= self.idle_source.rotation_interval_seconds
         )
 

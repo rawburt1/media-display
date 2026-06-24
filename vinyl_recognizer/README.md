@@ -64,6 +64,11 @@ See `config.example.yaml` for all options. Key things to fill in:
   project credentials from https://console.acrcloud.com/ (create a free
   "Audio & Video Recognition" project, then copy these from its console
   page). Only used when `recognition_provider: acrcloud`.
+- **`local_folder_fallback_dir`**: optional, `"acrcloud"` only. If
+  ACRCloud reports it's rate-limiting us, temporarily match against your
+  own reference clips in this folder instead of giving up - see
+  "Local-folder fallback" below. Leave empty (the default) to just treat
+  a rate limit as a plain miss.
 - **`acoustid_api_key`**: API key from https://acoustid.org/my-applications
   (free). Only used when `recognition_provider: acoustid` - and only works
   if the `fpcalc` binary is installed, since that's what computes the
@@ -87,6 +92,28 @@ See `config.example.yaml` for all options. Key things to fill in:
 - **`silence_threshold`** / **`silence_grace_seconds`**: control when the
   service decides nothing is playing (so it stops calling AudD and reports
   an empty result).
+
+## Local-folder fallback (ACRCloud rate limits)
+
+If you're using `recognition_provider: acrcloud` and it starts
+rate-limiting requests, `local_folder_fallback_dir` lets you fall back to
+matching against your own collection instead of getting nothing:
+
+1. Set `local_folder_fallback_dir` to a folder path and put a short
+   reference clip in it for each record you want recognized this way,
+   named `Artist - Title - Album.<ext>` (album is optional - `Artist -
+   Title.<ext>` works too). Any format `fpcalc` can decode works (wav,
+   flac, mp3, ...).
+2. When ACRCloud reports a rate limit, the live clip is fingerprinted
+   with Chromaprint (`fpcalc`) and compared against every reference clip
+   in the folder, trying every alignment offset (the live clip almost
+   never starts at the same point in the track as your reference). The
+   best match above a similarity threshold wins.
+3. This only recognizes records you've made a reference clip for, and
+   only kicks in while ACRCloud is actually rate-limiting - it's a
+   stopgap, not a replacement for an external provider. Requires
+   `fpcalc` (`sudo apt install libchromaprint-tools`, or via
+   `./install.sh`).
 
 ## How it works
 
