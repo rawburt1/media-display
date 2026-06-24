@@ -35,8 +35,8 @@ _HEADERS = {"User-Agent": "mediainfo/1.0 (+https://github.com/rawburt1/media-dis
 
 # Default minimum dimensions - see ImageCache.__init__'s min_width/
 # min_height params (configurable via CacheConfig.min_width/min_height).
-_DEFAULT_MIN_WIDTH = 640
-_DEFAULT_MIN_HEIGHT = 480
+_DEFAULT_MIN_WIDTH = 400
+_DEFAULT_MIN_HEIGHT = 400
 
 
 class ImageCache:
