@@ -44,7 +44,7 @@ _ALERT_CHECK_INTERVAL_SECONDS = 60
 # re-enrichment cycle, even though playback never actually stopped. A source
 # that's cold (nothing has played yet this run) is unaffected - this only
 # applies once something is already showing.
-_NOTHING_PLAYING_GRACE_SECONDS = 10
+_NOTHING_PLAYING_GRACE_SECONDS = 2
 
 # Backoff for sources whose device/service couldn't be reached (see
 # MediaSource.last_poll_failed) - doubles after each consecutive failure,
