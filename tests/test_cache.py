@@ -305,7 +305,7 @@ def test_rejects_image_narrower_than_minimum_even_if_tall_enough(mock_get, tmp_p
 def test_accepts_image_at_exactly_the_minimum_size(mock_get, tmp_path):
     mock_response = MagicMock()
     mock_response.headers = {"Content-Type": "image/jpeg"}
-    mock_response.content = _jpeg_bytes(640, 480)
+    mock_response.content = _jpeg_bytes(400, 400)
     mock_response.raise_for_status = MagicMock()
     mock_get.return_value = mock_response
 
@@ -403,3 +403,71 @@ def test_minimum_size_check_disabled_when_zero(mock_get, tmp_path):
     path = cache.get_path(Artwork(url="http://example.com/tiny.jpg"))
 
     assert path is not None  # check disabled entirely
+
+
+# ---------------------------------------------------------------------------
+# download_temp: download without caching to disk
+# ---------------------------------------------------------------------------
+
+def test_download_temp_returns_none_without_artwork(tmp_path):
+    cache = ImageCache(tmp_path)
+    assert cache.download_temp(None) is None
+    assert cache.download_temp(Artwork(url="")) is None
+
+
+@patch("mediainfo.cache.requests.get")
+def test_download_temp_writes_to_temp_not_cache(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"fake-image-bytes"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    path = cache.download_temp(Artwork(url="http://example.com/wallpaper.jpg"))
+
+    assert path is not None
+    assert path.exists()
+    assert path.read_bytes() == b"fake-image-bytes"
+    # Must not be stored in any of the cache subdirectories.
+    assert path.parent != cache.cache_dir
+    assert path.parent != cache.idle_dir
+    assert path.parent != cache.music_dir
+
+
+@patch("mediainfo.cache.requests.get")
+def test_download_temp_always_fetches_from_network(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"fake-image-bytes"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    artwork = Artwork(url="http://example.com/wallpaper.jpg")
+
+    path1 = cache.download_temp(artwork)
+    path2 = cache.download_temp(artwork)
+
+    assert mock_get.call_count == 2  # no caching: always re-fetches
+    # Each call returns a different temp file.
+    assert path1 != path2
+
+    # Clean up.
+    for p in (path1, path2):
+        if p and p.exists():
+            p.unlink()
+
+
+@patch("mediainfo.cache.requests.get")
+def test_download_temp_returns_none_for_undersized_image(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = _jpeg_bytes(50, 50)
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    path = cache.download_temp(Artwork(url="http://example.com/thumb.jpg"))
+
+    assert path is None

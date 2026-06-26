@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, Literal, Optional, Union
@@ -35,8 +36,8 @@ _HEADERS = {"User-Agent": "mediainfo/1.0 (+https://github.com/rawburt1/media-dis
 
 # Default minimum dimensions - see ImageCache.__init__'s min_width/
 # min_height params (configurable via CacheConfig.min_width/min_height).
-_DEFAULT_MIN_WIDTH = 640
-_DEFAULT_MIN_HEIGHT = 480
+_DEFAULT_MIN_WIDTH = 400
+_DEFAULT_MIN_HEIGHT = 400
 
 
 class ImageCache:
@@ -139,6 +140,38 @@ class ImageCache:
         for path in base_dir.glob(f"{key}.*"):
             return path
         return None
+
+    def download_temp(self, artwork: Optional[Artwork]) -> Optional[Path]:
+        """Download artwork to a temporary file without writing to the cache.
+
+        The caller is responsible for deleting the file when done. Returns None
+        if there is no artwork, the URL is empty, or the image is smaller than
+        the configured minimum dimensions. file:// URLs are returned as-is
+        without downloading (caller must not delete those paths).
+        """
+        if artwork is None or not artwork.url:
+            return None
+
+        if artwork.url.startswith("file://"):
+            path = Path(urlparse(artwork.url).path)
+            return path if path.exists() else None
+
+        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=_HEADERS)
+        response.raise_for_status()
+
+        if not self._meets_minimum_size(response.content):
+            logger.info(
+                "Skipped artwork %r - smaller than %dx%d",
+                artwork.label or artwork.url, self.min_width, self.min_height,
+            )
+            return None
+
+        content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        extension = _EXTENSIONS.get(content_type, _DEFAULT_EXTENSION)
+
+        with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as f:
+            f.write(response.content)
+        return Path(f.name)
 
     def get_transformed_path(self, original_path: Path, transforms: list) -> Path:
         """Return a path to a transformed copy of the image.
