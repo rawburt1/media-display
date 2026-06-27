@@ -107,6 +107,18 @@ class LidarrConfig:
     max_discography_items: int = 50
 
 
+@dataclasses.dataclass
+class SvtConfig:
+    # No API key required - uses SVT's public content API (contento.svt.se).
+    enabled: bool = True
+    # Optional Sonarr connection for resolving Swedish SVT titles to their
+    # tvdb-id (which SVT's own API can't provide), so enrichers like thetvdb
+    # and fanarttv can subsequently fetch proper artwork by id.
+    sonarr_host: str = ""
+    sonarr_port: int = 8989
+    sonarr_api_key: str = ""
+
+
 # Registry mapping config section names to their dataclass types. Adding a
 # new enricher starts here.
 ENRICHER_CONFIG_TYPES: dict[str, type] = {
@@ -119,6 +131,7 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "omdb": OmdbConfig,
     "radarr": RadarrConfig,
     "sonarr": SonarrConfig,
+    "svt": SvtConfig,
     "thetvdb": TheTvDbConfig,
     "tmdb": TmdbConfig,
     "wikipedia": WikipediaConfig,

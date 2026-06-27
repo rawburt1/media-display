@@ -25,6 +25,7 @@ from mediainfo.config.enrichers import (
     OmdbConfig,
     RadarrConfig,
     SonarrConfig,
+    SvtConfig,
     TheTvDbConfig,
     TmdbConfig,
     WikipediaConfig,
