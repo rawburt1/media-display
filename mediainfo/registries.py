@@ -78,6 +78,7 @@ ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "omdb": "mediainfo.enrichers.omdb.OmdbEnricher",
     "radarr": "mediainfo.enrichers.radarr.RadarrEnricher",
     "sonarr": "mediainfo.enrichers.sonarr.SonarrEnricher",
+    "svt": "mediainfo.enrichers.svt.SvtEnricher",
     "thetvdb": "mediainfo.enrichers.thetvdb.TheTvDbEnricher",
     "tmdb": "mediainfo.enrichers.tmdb.TmdbEnricher",
     "wikipedia": "mediainfo.enrichers.wikipedia.WikipediaEnricher",

@@ -494,6 +494,22 @@ enrichers:
     # at the cost of more API calls for generic titles.
     max_search_candidates: 5
 
+  # SVT Play — poster art for Swedish public broadcaster (SVT) shows.
+  # No API key required. Acts as a fallback: only runs when no other
+  # enricher has found artwork, so it only kicks in for shows that
+  # thetvdb/tmdb can't find by their Swedish title.
+  #
+  # Optional: configure a Sonarr connection below to resolve SVT's Swedish
+  # titles to their TheTVDB id (via Sonarr's alternate-title index). This
+  # lets enrichers like thetvdb and fanarttv find proper artwork by id even
+  # when they can't match the Swedish title themselves.  Use the same host /
+  # port / api_key as your Sonarr enricher section below.
+  svt:
+    enabled: true
+    sonarr_host: 192.168.1.50
+    sonarr_port: 8989
+    sonarr_api_key: YOUR_SONARR_API_KEY
+
   # fanart.tv — high-quality posters, backgrounds, and disc art.
   # Get a free personal API key at https://fanart.tv/get-an-api-key/
   fanarttv:
