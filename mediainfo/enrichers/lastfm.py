@@ -34,9 +34,10 @@ class LastFmEnricher(ArtworkEnricher):
         self.library = library
 
     def enrich(self, now_playing: NowPlaying) -> None:
-        if now_playing.media_type != "music":
-            return
-        artist = now_playing.subtitle
+        if now_playing.media_type == "music":
+            artist = now_playing.subtitle
+        else:
+            artist = now_playing.artist
         if not artist:
             return
 
