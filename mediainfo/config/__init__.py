@@ -18,6 +18,7 @@ from mediainfo.config.enrichers import (
     ENRICHER_CONFIG_TYPES,
     DiscogsConfig,
     FanartTvConfig,
+    FingerprintConfig,
     LastFmConfig,
     LibraryEnricherConfig,
     LidarrConfig,
