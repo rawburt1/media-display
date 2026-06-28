@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 import pychromecast
-from flask import Flask, send_file
+from flask import Flask, Response
 
 from mediainfo.config import AuthConfig, NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -45,7 +45,8 @@ class NestHubOutput(Output):
         self.auth_config = auth_config
         self.transform_pipeline = parse_pipeline(config.transforms)
         self._lock = threading.Lock()
-        self._image_path: Optional[Path] = None
+        self._image_data: bytes = b""
+        self._image_content_type: str = _DEFAULT_CONTENT_TYPE
         self._cast = None
         self._last_url: Optional[str] = None
         self._last_connect_attempt: Optional[float] = None
@@ -54,9 +55,11 @@ class NestHubOutput(Output):
         threading.Thread(target=self._run_server, daemon=True).start()
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+        data = image_path.read_bytes()
+        content_type = _CONTENT_TYPES.get(image_path.suffix.lower(), _DEFAULT_CONTENT_TYPE)
         with self._lock:
-            self._image_path = image_path
-
+            self._image_data = data
+            self._image_content_type = content_type
         self._idle = False
         self._cast_image(image_path)
 
@@ -84,12 +87,11 @@ class NestHubOutput(Output):
         @app.get("/image/current")
         def current_image():
             with self._lock:
-                image_path = self._image_path
-
-            if image_path is None or not image_path.exists():
+                data = self._image_data
+                content_type = self._image_content_type
+            if not data:
                 return "", 404
-
-            return send_file(image_path)
+            return Response(data, content_type=content_type)
 
         install_auth(app, self.auth_config)
         return app
