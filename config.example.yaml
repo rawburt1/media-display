@@ -478,11 +478,25 @@ enrichers:
   library:
     enabled: true
 
+  # SVT Play — poster art for Swedish public broadcaster (SVT) shows, and
+  # tvdb-id resolution for shows whose SVT title is a Swedish translation.
+  # No API key required for SVT's own API. Listed before thetvdb so that
+  # the tvdb-id and/or originalProgramTitle set here can be used by thetvdb
+  # and fanarttv in the same enrichment pass.
+  #
+  # Optional: configure a Sonarr connection to resolve SVT's Swedish titles
+  # to their TheTVDB id via Sonarr's alternate-title index. Use the same
+  # host / port / api_key as your Sonarr enricher section below.
+  svt:
+    enabled: true
+    sonarr_host: 192.168.1.50
+    sonarr_port: 8989
+    sonarr_api_key: YOUR_SONARR_API_KEY
+
   # TheTVDB — TV episode artwork and banners.
   # Get a free project API key at https://thetvdb.com/dashboard/account/apikey
-  # Listed before fanarttv: for sources that only give us a show title (no
-  # tvdb id - e.g. the Shield source), this resolves it by name and writes
-  # the id back, so fanart.tv's TV branch below gets to use it too.
+  # Listed after svt: the SVT enricher may resolve a tvdb-id or set an
+  # original-language title first; thetvdb uses both as fallback search terms.
   thetvdb:
     enabled: true
     api_key: YOUR_THETVDB_API_KEY
@@ -493,22 +507,6 @@ enrichers:
     # catch a correct match that thetvdb's own search ranks further down,
     # at the cost of more API calls for generic titles.
     max_search_candidates: 5
-
-  # SVT Play — poster art for Swedish public broadcaster (SVT) shows.
-  # No API key required. Acts as a fallback: only runs when no other
-  # enricher has found artwork, so it only kicks in for shows that
-  # thetvdb/tmdb can't find by their Swedish title.
-  #
-  # Optional: configure a Sonarr connection below to resolve SVT's Swedish
-  # titles to their TheTVDB id (via Sonarr's alternate-title index). This
-  # lets enrichers like thetvdb and fanarttv find proper artwork by id even
-  # when they can't match the Swedish title themselves.  Use the same host /
-  # port / api_key as your Sonarr enricher section below.
-  svt:
-    enabled: true
-    sonarr_host: 192.168.1.50
-    sonarr_port: 8989
-    sonarr_api_key: YOUR_SONARR_API_KEY
 
   # fanart.tv — high-quality posters, backgrounds, and disc art.
   # Get a free personal API key at https://fanart.tv/get-an-api-key/

@@ -68,6 +68,12 @@ class TheTvDbEnricher(ArtworkEnricher):
                 if not now_playing.title:
                     return
                 series_id = self._resolve_series_id(now_playing.title, now_playing.subtitle)
+                # When the device title is a local translation (e.g. a Swedish
+                # SVT title) and the primary search found nothing, try with the
+                # original-language title if one was provided by a prior enricher
+                # (e.g. SVT's own `originalProgramTitle` field via the SVT enricher).
+                if not series_id and now_playing.original_title:
+                    series_id = self._resolve_series_id(now_playing.original_title, now_playing.subtitle)
                 if not series_id:
                     return
                 now_playing.ids["tvdb"] = series_id

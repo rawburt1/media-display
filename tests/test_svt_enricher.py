@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mediainfo.config import SvtConfig
-from mediainfo.enrichers.svt import SvtEnricher, _slugify
+from mediainfo.enrichers.svt import SvtEnricher, _SONARR_CACHE_TTL, _slugify
 from mediainfo.models import Artwork, NowPlaying
 
 
@@ -44,7 +44,7 @@ def test_slugify(title, expected):
 
 
 # ---------------------------------------------------------------------------
-# SvtEnricher.enrich
+# SvtEnricher.enrich — artwork
 # ---------------------------------------------------------------------------
 
 @patch("mediainfo.enrichers.svt.requests.post")
@@ -70,6 +70,16 @@ def test_skips_when_images_already_found(mock_post):
 
     mock_post.assert_not_called()
     assert len(np.images) == 1  # unchanged
+
+
+@patch("mediainfo.enrichers.svt.requests.post")
+def test_skips_svg_lookup_when_tvdb_id_already_set(mock_post):
+    enricher = SvtEnricher(SvtConfig())
+    np = _now_playing(ids={"tvdb": "12345"})
+
+    enricher.enrich(np)
+
+    mock_post.assert_not_called()
 
 
 @patch("mediainfo.enrichers.svt.requests.post")
@@ -139,6 +149,104 @@ def test_network_error_leaves_images_unchanged(mock_post):
     enricher.enrich(np)  # must not raise
 
     assert np.images == []
+
+
+# ---------------------------------------------------------------------------
+# originalProgramTitle (Single type)
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.svt.requests.post")
+def test_stores_original_program_title_from_single_type(mock_post):
+    mock = MagicMock()
+    mock.raise_for_status = MagicMock()
+    mock.json.return_value = {
+        "data": {
+            "contentBySlug": [
+                {
+                    "originalProgramTitle": "Melody Gardot - The Essential at Olympia Paris",
+                    "images": {"portrait": {"id": "12345"}, "wide": {"id": "99999"}},
+                }
+            ]
+        }
+    }
+    mock_post.return_value = mock
+
+    enricher = SvtEnricher(SvtConfig())
+    np = _now_playing(title="Melody Gardot Live at the Olympia")
+    enricher.enrich(np)
+
+    assert np.original_title == "Melody Gardot - The Essential at Olympia Paris"
+    assert len(np.images) == 1
+
+
+@patch("mediainfo.enrichers.svt.requests.post")
+def test_extracts_artist_from_artist_dash_title_format(mock_post):
+    mock = MagicMock()
+    mock.raise_for_status = MagicMock()
+    mock.json.return_value = {
+        "data": {
+            "contentBySlug": [
+                {
+                    "originalProgramTitle": "Melody Gardot - The Essential at Olympia Paris",
+                    "images": {"portrait": {"id": "12345"}, "wide": {"id": "99999"}},
+                }
+            ]
+        }
+    }
+    mock_post.return_value = mock
+
+    enricher = SvtEnricher(SvtConfig())
+    np = _now_playing(title="Melody Gardot live på Olympia")
+    enricher.enrich(np)
+
+    assert np.artist == "Melody Gardot"
+
+
+@patch("mediainfo.enrichers.svt.requests.post")
+def test_does_not_extract_artist_when_no_dash_in_original_title(mock_post):
+    mock = MagicMock()
+    mock.raise_for_status = MagicMock()
+    mock.json.return_value = {
+        "data": {
+            "contentBySlug": [
+                {
+                    "originalProgramTitle": "Some Concert Without A Dash",
+                    "images": {"portrait": {"id": "12345"}, "wide": {"id": "99999"}},
+                }
+            ]
+        }
+    }
+    mock_post.return_value = mock
+
+    enricher = SvtEnricher(SvtConfig())
+    np = _now_playing(title="Något konsertprogram")
+    enricher.enrich(np)
+
+    assert np.artist == ""
+
+
+@patch("mediainfo.enrichers.svt.requests.post")
+def test_does_not_overwrite_existing_original_title(mock_post):
+    mock = MagicMock()
+    mock.raise_for_status = MagicMock()
+    mock.json.return_value = {
+        "data": {
+            "contentBySlug": [
+                {
+                    "originalProgramTitle": "New Title From SVT",
+                    "images": {"portrait": {"id": "12345"}, "wide": {"id": "99999"}},
+                }
+            ]
+        }
+    }
+    mock_post.return_value = mock
+
+    enricher = SvtEnricher(SvtConfig())
+    np = _now_playing()
+    np.original_title = "Already Set"
+    enricher.enrich(np)
+
+    assert np.original_title == "Already Set"
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +358,24 @@ def test_sonarr_series_list_is_cached(mock_get, mock_post):
     assert mock_get.call_count == 1
 
 
+@patch("mediainfo.enrichers.svt.time.monotonic")
+@patch("mediainfo.enrichers.svt.requests.post")
+@patch("mediainfo.enrichers.svt.requests.get")
+def test_sonarr_cache_refreshes_after_ttl(mock_get, mock_post, mock_time):
+    mock_get.return_value = _sonarr_get([])
+    mock_post.return_value = _mock_response()
+
+    enricher = SvtEnricher(_sonarr_config())
+
+    mock_time.return_value = 0.0
+    enricher.enrich(_now_playing(title="Show A"))
+    assert mock_get.call_count == 1
+
+    mock_time.return_value = _SONARR_CACHE_TTL + 1
+    enricher.enrich(_now_playing(title="Show B"))
+    assert mock_get.call_count == 2
+
+
 @patch("mediainfo.enrichers.svt.requests.get")
 def test_sonarr_not_called_when_not_configured(mock_get):
     enricher = SvtEnricher(SvtConfig())  # no sonarr_host/api_key
@@ -260,3 +386,19 @@ def test_sonarr_not_called_when_not_configured(mock_get):
         enricher.enrich(np)
 
     mock_get.assert_not_called()
+
+
+@patch("mediainfo.enrichers.svt.requests.post")
+@patch("mediainfo.enrichers.svt.requests.get")
+def test_sonarr_match_skips_svg_artwork_lookup(mock_get, mock_post):
+    """When Sonarr sets a tvdb-id, the SVT CDN artwork lookup is skipped."""
+    mock_get.return_value = _sonarr_get([
+        _series(title="Den danska kvinnan", tvdb_id=12345)
+    ])
+
+    enricher = SvtEnricher(_sonarr_config())
+    np = _now_playing(title="Den danska kvinnan")
+    enricher.enrich(np)
+
+    assert np.ids["tvdb"] == "12345"
+    mock_post.assert_not_called()
