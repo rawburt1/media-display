@@ -62,6 +62,10 @@ _INDEX_HTML = """<!DOCTYPE html>
   details summary { cursor: pointer; color: #6b7fa8; font-size: 12px; margin: 30px 0 10px; }
   .nav-link { float: right; color: #6b7fa8; font-size: 12px; text-decoration: none; margin-left: 16px; }
   .nav-link:hover { color: #dce8ff; }
+  .auth-warning { background: #431407; border: 1px solid #9a3412; border-radius: 8px;
+                  padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: #fed7aa; }
+  .auth-warning strong { color: #fb923c; }
+  .auth-warning a { color: #fb923c; }
 </style>
 </head>
 <body>
@@ -69,6 +73,7 @@ _INDEX_HTML = """<!DOCTYPE html>
 <a class="nav-link" href="/overrides">Overrides &rarr;</a>
 <a class="nav-link" href="/dashboard">Status &rarr;</a>
 <h1>mediainfo configuration</h1>
+<!-- __AUTH_WARNING__ -->
 <div id="form"></div>
 
 <details>

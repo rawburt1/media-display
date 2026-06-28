@@ -3,7 +3,7 @@
 from flask import Flask
 
 from mediainfo.config import AuthConfig
-from mediainfo.web_auth import install_auth, is_private_address
+from mediainfo.web_auth import install_auth, is_loopback_address, is_private_address
 
 
 # ---------------------------------------------------------------------------
@@ -118,3 +118,30 @@ def test_public_address_with_wrong_credentials_is_rejected():
         auth=("u", "wrong"),
     )
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# is_loopback_address
+# ---------------------------------------------------------------------------
+
+def test_loopback_ipv4_is_loopback():
+    assert is_loopback_address("127.0.0.1")
+    assert is_loopback_address("127.255.255.255")
+
+
+def test_loopback_ipv6_is_loopback():
+    assert is_loopback_address("::1")
+
+
+def test_lan_address_is_not_loopback():
+    assert not is_loopback_address("192.168.1.1")
+    assert not is_loopback_address("10.0.0.1")
+
+
+def test_docker_bridge_is_not_loopback():
+    assert not is_loopback_address("172.17.0.1")
+
+
+def test_missing_is_not_loopback():
+    assert not is_loopback_address(None)
+    assert not is_loopback_address("")
