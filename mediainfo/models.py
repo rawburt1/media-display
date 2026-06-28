@@ -43,6 +43,10 @@ class NowPlaying:
     year: Optional[int] = None
     # Bio/plot summary text, e.g. from the Wikipedia enricher.
     summary: str = ""
+    # Original-language title when the device title is a local translation,
+    # e.g. set by the SVT enricher from SVT's own `originalProgramTitle` field
+    # so enrichers like thetvdb can search with it as a fallback.
+    original_title: str = ""
     # Studio/network that produced the movie or TV series, e.g. from the
     # Radarr/Sonarr enrichers.
     studio: str = ""
@@ -51,6 +55,11 @@ class NowPlaying:
     # Other albums/songs by the playing artist, e.g. from the Lidarr
     # enricher - "<album> - <track>" pairs, in no particular order.
     discography: List[str] = field(default_factory=list)
+    # Artist name for non-music media that is known to be a music/concert
+    # programme (e.g. set by the SVT enricher when originalProgramTitle is
+    # in "Artist - Title" form) - lets Wikipedia and Last.fm look up artist
+    # photos for SVT concert broadcasts without the media_type being "music".
+    artist: str = ""
     # Audience rating (0-10), e.g. from the TMDb enricher.
     rating: Optional[float] = None
     # How far into the track/episode playback currently is, and its total

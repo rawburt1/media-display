@@ -408,3 +408,73 @@ def test_series_not_found_returns_gracefully(mock_post, mock_get):
     _enricher().enrich(now_playing)
 
     assert now_playing.images == []
+
+
+# ---------------------------------------------------------------------------
+# original_title fallback (e.g. SVT shows with a Swedish device title)
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_falls_back_to_original_title_when_primary_search_returns_nothing(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response({"data": []}),          # primary title search → no results
+        _response(_SEARCH_RESULTS),       # original_title search → found
+        _response(_ARTWORK_TYPES),
+        _response(_SERIES_ARTWORKS),
+    ]
+
+    now_playing = NowPlaying(
+        source="shield", media_type="episode",
+        title="Den danska kvinnan", subtitle="5. Brutna ben", ids={},
+        original_title="The Danish Woman",
+    )
+    _enricher().enrich(now_playing)
+
+    assert now_playing.ids["tvdb"] == "98765"
+    assert len(now_playing.images) == 2
+
+    # Second search used the original_title.
+    second_search = mock_get.call_args_list[1]
+    assert second_search.kwargs["params"] == {"query": "The Danish Woman", "type": "series"}
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_does_not_try_original_title_when_primary_search_finds_result(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.side_effect = [
+        _response(_SEARCH_RESULTS),   # primary search finds something
+        _response(_ARTWORK_TYPES),
+        _response(_SERIES_ARTWORKS),
+    ]
+
+    now_playing = NowPlaying(
+        source="shield", media_type="episode",
+        title="Bonusfamiljen", subtitle="1. Avsnitt 1", ids={},
+        original_title="The Bonus Family",
+    )
+    _enricher().enrich(now_playing)
+
+    assert now_playing.ids["tvdb"] == "98765"
+    # Only one /search call (the primary one) — original_title not tried.
+    search_calls = [c for c in mock_get.call_args_list if "search" in c.args[0]]
+    assert len(search_calls) == 1
+
+
+@patch("mediainfo.enrichers.thetvdb.requests.get")
+@patch("mediainfo.enrichers.thetvdb.requests.post")
+def test_original_title_fallback_skipped_when_not_set(mock_post, mock_get):
+    mock_post.return_value = _response({"data": {"token": "test-token"}})
+    mock_get.return_value = _response({"data": []})
+
+    now_playing = NowPlaying(
+        source="shield", media_type="episode",
+        title="Unknown Show", subtitle="1. Episode", ids={},
+    )
+    _enricher().enrich(now_playing)
+
+    assert now_playing.images == []
+    # Only one /search call since original_title is empty.
+    assert mock_get.call_count == 1
