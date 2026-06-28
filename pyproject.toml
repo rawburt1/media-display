@@ -1,3 +1,14 @@
+[project]
+name = "mediainfo"
+version = "0.1.0"
+description = "Now-playing artwork on any screen: web, Pixoo64, Nest Hub, Ulanzi, and more"
+requires-python = ">=3.10"
+readme = "README.md"
+license = { file = "LICENSE" }
+
+[project.scripts]
+mediainfo = "mediainfo.__main__:main"
+
 [tool.mypy]
 ignore_missing_imports = true
 
