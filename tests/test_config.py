@@ -161,3 +161,54 @@ def test_from_dict_does_not_warn_on_known_plugin_names(caplog):
     with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
         Config.from_dict({"sources": {"kodi": {"enabled": True}}, "outputs": {"web": {"enabled": True}}})
     assert caplog.records == []
+
+
+# ---------------------------------------------------------------------------
+# ConfigUiConfig host default
+# ---------------------------------------------------------------------------
+
+def test_config_ui_config_default_host_is_loopback():
+    from mediainfo.config import ConfigUiConfig
+    cfg = ConfigUiConfig()
+    assert cfg.host == "127.0.0.1"
+
+
+def test_web_config_default_host_is_any():
+    from mediainfo.config import WebConfig
+    cfg = WebConfig()
+    assert cfg.host == "0.0.0.0"
+
+
+# ---------------------------------------------------------------------------
+# Environment variable expansion
+# ---------------------------------------------------------------------------
+
+def test_load_expands_env_var_in_string_value(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEST_PLEX_TOKEN", "secret-token-123")
+    p = tmp_path / "config.yaml"
+    p.write_text("sources:\n  plex:\n    enabled: true\n    token: ${TEST_PLEX_TOKEN}\n")
+    config = Config.load(p)
+    assert config.sources["plex"].token == "secret-token-123"
+
+
+def test_load_expands_env_var_with_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEST_MISSING_VAR", raising=False)
+    p = tmp_path / "config.yaml"
+    p.write_text("sources:\n  plex:\n    enabled: true\n    token: ${TEST_MISSING_VAR:-fallback}\n")
+    config = Config.load(p)
+    assert config.sources["plex"].token == "fallback"
+
+
+def test_load_keeps_literal_when_env_var_unset(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEST_MISSING_VAR", raising=False)
+    p = tmp_path / "config.yaml"
+    p.write_text("sources:\n  plex:\n    enabled: true\n    token: ${TEST_MISSING_VAR}\n")
+    config = Config.load(p)
+    assert config.sources["plex"].token == "${TEST_MISSING_VAR}"
+
+
+def test_load_does_not_expand_non_env_var_strings(tmp_path):
+    p = tmp_path / "config.yaml"
+    p.write_text("sources:\n  kodi:\n    enabled: true\n    host: 192.168.1.21\n")
+    config = Config.load(p)
+    assert config.sources["kodi"].host == "192.168.1.21"

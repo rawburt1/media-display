@@ -155,3 +155,33 @@ def test_validate_config_silent_when_auth_disabled_with_blank_credentials(caplog
         validate_config(cfg)
 
     assert caplog.records == []
+
+
+# ---------------------------------------------------------------------------
+# Unexpanded env var references
+# ---------------------------------------------------------------------------
+
+def test_validate_config_warns_on_unexpanded_env_var_in_credential(caplog):
+    from mediainfo.config import TheTvDbConfig
+
+    cfg = _config_for_credential_test(
+        enrichers={"thetvdb": TheTvDbConfig(enabled=True, api_key="${THETVDB_API_KEY}")}
+    )
+
+    with caplog.at_level(logging.WARNING, logger="mediainfo.validation"):
+        validate_config(cfg)
+
+    assert any("${THETVDB_API_KEY}" in r.message for r in caplog.records)
+
+
+def test_validate_config_silent_when_env_var_is_expanded(caplog):
+    from mediainfo.config import TheTvDbConfig
+
+    cfg = _config_for_credential_test(
+        enrichers={"thetvdb": TheTvDbConfig(enabled=True, api_key="real-key-no-dollar")}
+    )
+
+    with caplog.at_level(logging.WARNING, logger="mediainfo.validation"):
+        validate_config(cfg)
+
+    assert not any("${" in r.message for r in caplog.records)

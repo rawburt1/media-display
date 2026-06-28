@@ -30,6 +30,23 @@ _PRIVATE_NETWORKS = [
     ipaddress.ip_network("fc00::/7"),  # IPv6 unique local addresses
 ]
 
+_LOOPBACK_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+]
+
+
+def is_loopback_address(addr: Optional[str]) -> bool:
+    """True for loopback addresses only (127.x.x.x, ::1) — stricter than
+    is_private_address, which also includes LAN ranges."""
+    if not addr:
+        return False
+    try:
+        ip = ipaddress.ip_address(addr.split("%")[0])
+    except ValueError:
+        return False
+    return any(ip in network for network in _LOOPBACK_NETWORKS)
+
 
 def is_private_address(addr: Optional[str]) -> bool:
     """True for RFC1918 private-use addresses, loopback, and IPv6 ULA.

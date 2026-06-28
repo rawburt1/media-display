@@ -91,7 +91,7 @@ from mediainfo.outputs.config_ui_templates import (
     _LIBRARY_HTML,
     _OVERRIDES_HTML,
 )
-from mediainfo.web_auth import install_auth
+from mediainfo.web_auth import install_auth, is_loopback_address
 
 logger = logging.getLogger(__name__)
 
@@ -592,12 +592,38 @@ class ConfigUiOutput(Output):
         thread.join(timeout=5)
         loop.close()
 
+    def _auth_warning_html(self) -> str:
+        """Return the auth-warning banner HTML to inject into the config
+        form, or an empty string if auth is enabled or the request is from
+        the local machine (loopback only).
+
+        The warning is shown to any non-loopback caller when auth is off,
+        because the config form has read+write access to config.yaml
+        including all stored credentials.
+        """
+        if self.auth_config and self.auth_config.enabled:
+            return ""
+        if is_loopback_address(request.remote_addr):
+            return ""
+        return (
+            '<div class="auth-warning">'
+            "<strong>No authentication.</strong> "
+            "This page and all credentials in it are accessible to anyone on your network. "
+            "Set <code>auth.enabled: true</code> in config.yaml to require a login, "
+            "or set <code>outputs.config.host: 127.0.0.1</code> to restrict access "
+            "to this machine only. "
+            'See <a href="https://github.com/rawburt1/media-display/blob/master/SECURITY.md">'
+            "SECURITY.md</a>."
+            "</div>"
+        )
+
     def _build_app(self) -> Flask:
         app = Flask(__name__)
 
         @app.get("/")
         def index():
-            return _DASHBOARD_HTML if self.config.ui == "dashboard" else _INDEX_HTML
+            page = _DASHBOARD_HTML if self.config.ui == "dashboard" else _INDEX_HTML
+            return page.replace("<!-- __AUTH_WARNING__ -->", self._auth_warning_html())
 
         # Both views are always reachable on every instance, regardless of
         # `ui` - only the page served at "/" (the instance's default)
@@ -605,7 +631,7 @@ class ConfigUiOutput(Output):
         # form (and vice versa) without running a second output instance.
         @app.get("/form")
         def form_page():
-            return _INDEX_HTML
+            return _INDEX_HTML.replace("<!-- __AUTH_WARNING__ -->", self._auth_warning_html())
 
         @app.get("/dashboard")
         def dashboard_page():
