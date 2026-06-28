@@ -79,7 +79,7 @@ class RecognizerService:
         if result and result.get("title"):
             logger.info("Recognized: %s - %s", result.get("artist"), result.get("title"))
             with self._lock:
-                self._current = result
+                self._current = {**result, "recognized_at": time.time()}
         else:
             logger.info("No recognition match")
 

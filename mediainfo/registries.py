@@ -71,6 +71,7 @@ OUTPUT_EXTRA_ARGS = {
 ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "discogs": "mediainfo.enrichers.discogs.DiscogsEnricher",
     "fanarttv": "mediainfo.enrichers.fanarttv.FanartTvEnricher",
+    "fingerprint": "mediainfo.enrichers.fingerprint.FingerprintEnricher",
     "lastfm": "mediainfo.enrichers.lastfm.LastFmEnricher",
     "library": "mediainfo.enrichers.library.LibraryEnricher",
     "lidarr": "mediainfo.enrichers.lidarr.LidarrEnricher",

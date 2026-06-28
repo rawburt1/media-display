@@ -108,6 +108,17 @@ class LidarrConfig:
 
 
 @dataclasses.dataclass
+class FingerprintConfig:
+    enabled: bool = False
+    # Host and port of a running vinyl_recognizer instance.
+    host: str = "localhost"
+    port: int = 8091
+    # Only use recognition results from the last N seconds; older results
+    # likely belong to a track that's no longer playing.
+    max_age_seconds: int = 120
+
+
+@dataclasses.dataclass
 class SvtConfig:
     # No API key required - uses SVT's public content API (contento.svt.se).
     enabled: bool = True
@@ -124,6 +135,7 @@ class SvtConfig:
 ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "discogs": DiscogsConfig,
     "fanarttv": FanartTvConfig,
+    "fingerprint": FingerprintConfig,
     "lastfm": LastFmConfig,
     "library": LibraryEnricherConfig,
     "lidarr": LidarrConfig,
