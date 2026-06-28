@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
 from mediainfo.cache import ImageCache
@@ -34,6 +36,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _PERSIST_FILENAME = "last_idle_batch.json"
+_TEMP_DIR = Path(tempfile.gettempdir()).resolve()
+
+
+def _unlink_temp(path: Optional[Path]) -> None:
+    """Delete path only if it lives in the system temp directory."""
+    if path is None:
+        return
+    try:
+        if path.resolve().is_relative_to(_TEMP_DIR):
+            path.unlink(missing_ok=True)
+    except Exception:
+        pass
 
 
 class _IdleBatchManager:
@@ -218,15 +232,20 @@ class _IdleBatchManager:
 
         for attempt in range(len(self.images)):
             artwork = self.images[state.order[(state.position + attempt) % len(state.order)]]
+            original_path = None
             try:
-                image_path = self.cache.get_path(artwork, tier="idle")
-                if image_path is None:
+                original_path = self.cache.download_temp(artwork)
+                if original_path is None:
                     continue
-                image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
+                image_path = self.cache.get_transformed_path(original_path, output.transform_pipeline)
             except Exception:
                 logger.exception("Failed to fetch idle wallpaper %s", artwork.url)
+                _unlink_temp(original_path)
                 continue
 
             logger.info("Idle wallpaper: %s", artwork.label)
             self._call_output(index, output.update, self.now_playing, artwork, image_path)
+            _unlink_temp(original_path)
+            if image_path is not original_path:
+                _unlink_temp(image_path)
             return

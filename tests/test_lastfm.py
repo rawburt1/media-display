@@ -58,6 +58,7 @@ def test_adds_artist_photo_on_success(mock_get):
     assert np.images[0].url == REAL_URL
     assert "Last.fm" in np.images[0].label
     assert "Queen" in np.images[0].label
+    assert np.images[0].is_artist_photo is True
 
 
 @patch("mediainfo.enrichers.lastfm.requests.get")
@@ -132,6 +133,36 @@ def test_does_not_add_duplicate(mock_get):
     enricher.enrich(np)
 
     assert len(np.images) == 1
+
+
+@patch("mediainfo.enrichers.lastfm.requests.get")
+def test_fetches_artist_photo_for_episode_with_artist_field(mock_get):
+    mock_get.return_value = _mock_get(_api_response([_image("extralarge", REAL_URL)]))
+    enricher = LastFmEnricher(_config())
+    np = NowPlaying(
+        source="shield", media_type="episode", title="Melody Gardot live på Olympia",
+        subtitle="", artist="Melody Gardot", images=[],
+    )
+
+    enricher.enrich(np)
+
+    assert len(np.images) == 1
+    assert np.images[0].url == REAL_URL
+    assert "Melody Gardot" in np.images[0].label
+
+
+@patch("mediainfo.enrichers.lastfm.requests.get")
+def test_skips_episode_without_artist_field(mock_get):
+    enricher = LastFmEnricher(_config())
+    np = NowPlaying(
+        source="shield", media_type="episode", title="Breaking Bad", subtitle="Pilot",
+        images=[],
+    )
+
+    enricher.enrich(np)
+
+    mock_get.assert_not_called()
+    assert np.images == []
 
 
 @patch("mediainfo.enrichers.lastfm.requests.get")

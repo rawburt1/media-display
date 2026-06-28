@@ -17,6 +17,13 @@ class Output(ABC):
     # images are not routed to them.
     handles_images: bool = True
 
+    # Set to True (e.g. on PixooOutput) to skip artist-photo images
+    # (Artwork.is_artist_photo) while showing music, so this output only
+    # ever shows actual album/cover art - never an unrelated artist bio
+    # photo from the rotation pool. No effect outside music, since
+    # artist photos only ever get added for media_type == "music".
+    music_album_art_only: bool = False
+
     # List of Transform objects applied to every image before update() is
     # called.  Populated from the output's config `transforms:` key.
     transform_pipeline: List = []

@@ -34,9 +34,10 @@ class LastFmEnricher(ArtworkEnricher):
         self.library = library
 
     def enrich(self, now_playing: NowPlaying) -> None:
-        if now_playing.media_type != "music":
-            return
-        artist = now_playing.subtitle
+        if now_playing.media_type == "music":
+            artist = now_playing.subtitle
+        else:
+            artist = now_playing.artist
         if not artist:
             return
 
@@ -48,7 +49,7 @@ class LastFmEnricher(ArtworkEnricher):
 
         if url and not any(img.url == url for img in now_playing.images):
             now_playing.images.append(
-                Artwork(url=url, label=f"Artist photo (Last.fm): {artist}")
+                Artwork(url=url, label=f"Artist photo (Last.fm): {artist}", is_artist_photo=True)
             )
 
     def _image_for(self, artist: str) -> Optional[str]:
