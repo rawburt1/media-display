@@ -10,13 +10,16 @@ current image, and points the device's default media receiver at it.
 from __future__ import annotations
 
 import logging
+import os
+import shutil
+import tempfile
 import threading
 import time
 from pathlib import Path
 from typing import Optional
 
 import pychromecast
-from flask import Flask, Response
+from flask import Flask, send_file
 
 from mediainfo.config import AuthConfig, NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -45,8 +48,10 @@ class NestHubOutput(Output):
         self.auth_config = auth_config
         self.transform_pipeline = parse_pipeline(config.transforms)
         self._lock = threading.Lock()
-        self._image_data: bytes = b""
-        self._image_content_type: str = _DEFAULT_CONTENT_TYPE
+        # Stable file that survives idle rotations so the Nest Hub can always
+        # fetch the image, even after the original temp file has been deleted.
+        self._stable_path: Optional[Path] = None
+        self._stable_content_type: str = _DEFAULT_CONTENT_TYPE
         self._cast = None
         self._last_url: Optional[str] = None
         self._last_connect_attempt: Optional[float] = None
@@ -55,11 +60,35 @@ class NestHubOutput(Output):
         threading.Thread(target=self._run_server, daemon=True).start()
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
-        data = image_path.read_bytes()
         content_type = _CONTENT_TYPES.get(image_path.suffix.lower(), _DEFAULT_CONTENT_TYPE)
+
+        # Copy to a stable temp file we manage ourselves.  The caller
+        # (orchestrator_idle) deletes the original image_path immediately
+        # after update() returns, so we must have our own persistent copy
+        # before _cast_image() tells the Nest Hub to fetch it.
+        suffix = image_path.suffix or ".jpg"
+        fd, tmp = tempfile.mkstemp(suffix=suffix)
+        try:
+            stable = Path(tmp)
+            shutil.copy2(image_path, stable)
+        finally:
+            os.close(fd)
+
         with self._lock:
-            self._image_data = data
-            self._image_content_type = content_type
+            old = self._stable_path
+            self._stable_path = stable
+            self._stable_content_type = content_type
+
+        # Delete the previous stable file now that we have a new one.
+        if old is not None:
+            try:
+                old.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        logger.debug(
+            "NestHub image updated: %s (%d bytes)", stable.name, stable.stat().st_size
+        )
         self._idle = False
         self._cast_image(image_path)
 
@@ -87,11 +116,12 @@ class NestHubOutput(Output):
         @app.get("/image/current")
         def current_image():
             with self._lock:
-                data = self._image_data
-                content_type = self._image_content_type
-            if not data:
+                path = self._stable_path
+                content_type = self._stable_content_type
+            if path is None or not path.exists():
+                logger.debug("NestHub /image/current: no image available (path=%s)", path)
                 return "", 404
-            return Response(data, content_type=content_type)
+            return send_file(path, mimetype=content_type)
 
         install_auth(app, self.auth_config)
         return app

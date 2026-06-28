@@ -122,10 +122,13 @@ def test_update_after_idle_casts_again(mock_get_cast, tmp_path):
     assert cast.media_controller.play_media.call_count == 2
 
 
-def test_serves_current_image():
+def test_serves_current_image(tmp_path):
+    image = tmp_path / "current.jpg"
+    image.write_bytes(b"image-bytes")
+
     output = _output()
-    output._image_data = b"image-bytes"
-    output._image_content_type = "image/jpeg"
+    output._stable_path = image
+    output._stable_content_type = "image/jpeg"
 
     with output.app.test_client() as client:
         response = client.get("/image/current")
