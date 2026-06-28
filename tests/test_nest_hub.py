@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from mediainfo.config import NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.nest_hub import NestHubOutput
@@ -21,17 +23,24 @@ def _output(**kwargs):
         return NestHubOutput(_config(**kwargs))
 
 
+def _img(tmp_path: Path, name: str) -> Path:
+    """Create a minimal real file so image_path.read_bytes() succeeds."""
+    p = tmp_path / name
+    p.write_bytes(b"x")
+    return p
+
+
 _NOW_PLAYING = NowPlaying(source="kodi", media_type="movie", title="Inception")
 _ARTWORK = Artwork(url="https://example.com/poster.jpg", label="Poster")
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
-def test_update_casts_image_url(mock_get_cast):
+def test_update_casts_image_url(mock_get_cast, tmp_path):
     cast = MagicMock()
     mock_get_cast.return_value = cast
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
 
     mock_get_cast.assert_called_once_with(("192.168.1.50", 8009, None, None, "Nest Hub"))
     cast.wait.assert_called_once()
@@ -41,25 +50,25 @@ def test_update_casts_image_url(mock_get_cast):
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
-def test_update_does_not_recast_same_image(mock_get_cast):
+def test_update_does_not_recast_same_image(mock_get_cast, tmp_path):
     cast = MagicMock()
     mock_get_cast.return_value = cast
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.jpg"))
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
 
     assert cast.media_controller.play_media.call_count == 1
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
-def test_update_recasts_when_image_changes(mock_get_cast):
+def test_update_recasts_when_image_changes(mock_get_cast, tmp_path):
     cast = MagicMock()
     mock_get_cast.return_value = cast
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.png"))
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/def456.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.png"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "def456.jpg"))
 
     assert cast.media_controller.play_media.call_count == 2
     first_url, first_type = cast.media_controller.play_media.call_args_list[0][0]
@@ -71,31 +80,31 @@ def test_update_recasts_when_image_changes(mock_get_cast):
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
-def test_connection_error_does_not_raise(mock_get_cast):
+def test_connection_error_does_not_raise(mock_get_cast, tmp_path):
     mock_get_cast.side_effect = RuntimeError("connection refused")
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.jpg"))  # should not raise
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))  # should not raise
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
-def test_connection_error_does_not_retry_immediately(mock_get_cast):
+def test_connection_error_does_not_retry_immediately(mock_get_cast, tmp_path):
     mock_get_cast.side_effect = RuntimeError("connection refused")
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.jpg"))
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/def456.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "def456.jpg"))
 
     assert mock_get_cast.call_count == 1
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
-def test_on_idle_quits_app_once(mock_get_cast):
+def test_on_idle_quits_app_once(mock_get_cast, tmp_path):
     cast = MagicMock()
     mock_get_cast.return_value = cast
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
     output.on_idle()
     output.on_idle()
 
@@ -103,24 +112,22 @@ def test_on_idle_quits_app_once(mock_get_cast):
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
-def test_update_after_idle_casts_again(mock_get_cast):
+def test_update_after_idle_casts_again(mock_get_cast, tmp_path):
     cast = MagicMock()
     mock_get_cast.return_value = cast
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
     output.on_idle()
-    output.update(_NOW_PLAYING, _ARTWORK, Path("/cache/abc123.jpg"))
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
 
     assert cast.media_controller.play_media.call_count == 2
 
 
-def test_serves_current_image(tmp_path):
-    image = tmp_path / "abc123.jpg"
-    image.write_bytes(b"image-bytes")
-
+def test_serves_current_image():
     output = _output()
-    output._image_path = image
+    output._image_data = b"image-bytes"
+    output._image_content_type = "image/jpeg"
 
     with output.app.test_client() as client:
         response = client.get("/image/current")
