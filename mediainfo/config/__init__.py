@@ -9,10 +9,13 @@ import X` call sites are unaffected by the split.
 from __future__ import annotations
 
 import dataclasses
+import logging
 from pathlib import Path
 from typing import Any, Union
 
 import yaml
+
+_logger = logging.getLogger(__name__)
 
 from mediainfo.config.enrichers import (
     ENRICHER_CONFIG_TYPES,
@@ -202,28 +205,43 @@ class Config:
         (e.g. the `config` output's validate-before-save logic) can build
         and validate a Config without writing it to a file first.
         """
-        sources = {
-            name: SOURCE_CONFIG_TYPES[name](**values)
-            for name, values in (raw.get("sources") or {}).items()
-            if name in SOURCE_CONFIG_TYPES
-        }
+        sources = {}
+        for name, values in (raw.get("sources") or {}).items():
+            if name not in SOURCE_CONFIG_TYPES:
+                _logger.warning(
+                    "Unknown source plugin %r in config — ignored. Check for typos.", name
+                )
+                continue
+            sources[name] = SOURCE_CONFIG_TYPES[name](**values)
+
         outputs: dict[str, list[Any]] = {}
         for name, value in (raw.get("outputs") or {}).items():
             if name not in OUTPUT_CONFIG_TYPES:
+                _logger.warning(
+                    "Unknown output plugin %r in config — ignored. Check for typos.", name
+                )
                 continue
             config_cls = OUTPUT_CONFIG_TYPES[name]
             entries = value if isinstance(value, list) else [value]
             outputs[name] = [config_cls(**entry) for entry in entries]
-        enrichers = {
-            name: ENRICHER_CONFIG_TYPES[name](**values)
-            for name, values in (raw.get("enrichers") or {}).items()
-            if name in ENRICHER_CONFIG_TYPES
-        }
-        idle = {
-            name: IDLE_CONFIG_TYPES[name](**values)
-            for name, values in (raw.get("idle") or {}).items()
-            if name in IDLE_CONFIG_TYPES
-        }
+
+        enrichers = {}
+        for name, values in (raw.get("enrichers") or {}).items():
+            if name not in ENRICHER_CONFIG_TYPES:
+                _logger.warning(
+                    "Unknown enricher plugin %r in config — ignored. Check for typos.", name
+                )
+                continue
+            enrichers[name] = ENRICHER_CONFIG_TYPES[name](**values)
+
+        idle = {}
+        for name, values in (raw.get("idle") or {}).items():
+            if name not in IDLE_CONFIG_TYPES:
+                _logger.warning(
+                    "Unknown idle wallpaper source %r in config — ignored. Check for typos.", name
+                )
+                continue
+            idle[name] = IDLE_CONFIG_TYPES[name](**values)
 
         return cls(
             poll_interval_seconds=raw.get("poll_interval_seconds", 5),

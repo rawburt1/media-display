@@ -43,6 +43,9 @@ def main() -> None:
     if len(sys.argv) >= 2 and sys.argv[1] == "import-lidarr":
         _import_lidarr_main(sys.argv[2:])
         return
+    if len(sys.argv) >= 2 and sys.argv[1] == "validate-config":
+        _validate_config_main(sys.argv[2:])
+        return
 
     parser = argparse.ArgumentParser(description="Pixoo64 / web media art display")
     parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
@@ -193,6 +196,57 @@ def _setup_logging(log_config: LoggingConfig) -> None:
         handlers=handlers,
         force=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# validate-config subcommand
+# ---------------------------------------------------------------------------
+
+def _validate_config_main(argv: list) -> None:
+    """Load and validate config.yaml, printing all warnings as errors.
+
+    Exits 0 if the config is valid, 1 if any warnings are found.
+    Designed to be run as a pre-flight check without starting the app:
+      python -m mediainfo validate-config --config config/config.yaml
+    """
+    import io
+
+    parser = argparse.ArgumentParser(
+        prog="python -m mediainfo validate-config",
+        description="Validate a config.yaml file and report any problems",
+    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
+    args = parser.parse_args(argv)
+
+    # Capture warnings emitted by Config.load() (unknown plugin names) and
+    # validate_config() (blank credentials, missing priority entries, etc.).
+    captured: list[logging.LogRecord] = []
+
+    class _CapturingHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            captured.append(record)
+
+    handler = _CapturingHandler()
+    handler.setLevel(logging.WARNING)
+    root = logging.getLogger()
+    root.addHandler(handler)
+    root.setLevel(logging.WARNING)
+
+    try:
+        config = Config.load(args.config)
+        validate_config(config)
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        root.removeHandler(handler)
+
+    if captured:
+        for record in captured:
+            print(f"WARNING: {record.getMessage()}", file=sys.stderr)
+        sys.exit(1)
+
+    print("Config OK")
 
 
 # ---------------------------------------------------------------------------

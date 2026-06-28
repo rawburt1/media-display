@@ -122,3 +122,42 @@ def test_from_dict_empty_dict_uses_defaults():
 def test_from_dict_raises_on_unknown_field():
     with pytest.raises(TypeError):
         Config.from_dict({"sources": {"kodi": {"enabled": True, "no_such_field": "x"}}})
+
+
+# ---------------------------------------------------------------------------
+# Unknown plugin name warnings
+# ---------------------------------------------------------------------------
+
+def test_from_dict_warns_on_unknown_source_name(caplog):
+    import logging
+    with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
+        Config.from_dict({"sources": {"youtubee": {"enabled": True, "host": "1.2.3.4"}}})
+    assert any("youtubee" in r.message for r in caplog.records)
+
+
+def test_from_dict_warns_on_unknown_output_name(caplog):
+    import logging
+    with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
+        Config.from_dict({"outputs": {"webb": {"enabled": True}}})
+    assert any("webb" in r.message for r in caplog.records)
+
+
+def test_from_dict_warns_on_unknown_enricher_name(caplog):
+    import logging
+    with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
+        Config.from_dict({"enrichers": {"fanartv": {"enabled": True, "api_key": "x"}}})
+    assert any("fanartv" in r.message for r in caplog.records)
+
+
+def test_from_dict_warns_on_unknown_idle_name(caplog):
+    import logging
+    with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
+        Config.from_dict({"idle": {"unsplashh": {"enabled": True, "access_key": "x"}}})
+    assert any("unsplashh" in r.message for r in caplog.records)
+
+
+def test_from_dict_does_not_warn_on_known_plugin_names(caplog):
+    import logging
+    with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
+        Config.from_dict({"sources": {"kodi": {"enabled": True}}, "outputs": {"web": {"enabled": True}}})
+    assert caplog.records == []

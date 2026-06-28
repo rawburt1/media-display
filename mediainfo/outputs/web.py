@@ -333,6 +333,11 @@ class WebOutput(Output):
         def index():
             return self._index_html
 
+        @app.get("/health/live")
+        def health_live():
+            return jsonify({"status": "ok"})
+
+        @app.get("/health/ready")
         @app.get("/health")
         def health():
             best = request.accept_mimetypes.best_match(

@@ -14,9 +14,16 @@ USER app
 
 EXPOSE 8090
 
-# Mark the container unhealthy if the web output stops responding or if any
-# source hasn't been polled in over 120 seconds (signals a stuck polling loop).
+# Liveness check: the process is alive and Flask is serving requests.
+# Uses /health/live (always returns 200 OK as long as the app is running)
+# rather than /health (readiness: reports per-source/output status), so
+# external-source failures (Apple TV offline, Plex unreachable, etc.) do
+# not trigger container restarts. Requires outputs.web (or outputs.config /
+# outputs.info / outputs.feed / outputs.video) to be enabled in config.yaml;
+# if no HTTP output is active there is no listener on any port and this
+# check will fail — disable it in that case with HEALTHCHECK NONE in a
+# docker-compose.yml override.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request,json,sys; r=urllib.request.urlopen('http://localhost:8090/health',timeout=5); d=json.load(r); ago=d.get('source_last_polled_ago',{}); sys.exit(0 if not ago or max(ago.values())<120 else 1)"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8090/health/live', timeout=5)"
 
 CMD ["python", "-m", "mediainfo", "--config", "config.yaml"]
