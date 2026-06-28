@@ -190,7 +190,7 @@ def test_gap_longer_than_grace_period_still_goes_idle():
 def test_idle_source_shows_wallpaper():
     output = MagicMock()
     cache = MagicMock()
-    cache.get_path.return_value = "/tmp/wallpaper.jpg"
+    cache.download_temp.return_value = "/tmp/wallpaper.jpg"
     cache.get_transformed_path.side_effect = lambda path, _: path
     artwork = Artwork(url="https://i.redd.it/abc.jpg", label="r/wallpapers: Test")
     idle_source = _FakeIdleSource([artwork])
@@ -312,7 +312,7 @@ def test_idle_batch_each_output_starts_on_a_different_picture():
     output_a = MagicMock()
     output_b = MagicMock()
     cache = MagicMock()
-    cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
+    cache.download_temp.side_effect = lambda artwork: f"/cache/{artwork.label}"
     cache.get_transformed_path.side_effect = lambda path, _: path
 
     orchestrator = _orchestrator(outputs=[output_a, output_b], cache=cache, idle_source=idle_source)
@@ -338,12 +338,12 @@ def test_idle_batch_falls_through_pool_when_first_pick_fails_to_fetch():
     output = MagicMock()
     cache = MagicMock()
 
-    def get_path(artwork, **kwargs):
+    def download_temp(artwork):
         if artwork.label == "Wallpaper 2":
             return None  # rejected
         return f"/cache/{artwork.label}"
 
-    cache.get_path.side_effect = get_path
+    cache.download_temp.side_effect = download_temp
     cache.get_transformed_path.side_effect = lambda path, _: path
 
     orchestrator = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
@@ -401,18 +401,19 @@ def test_idle_batch_no_two_outputs_share_a_picture_when_enough_images():
     assert len(set(labels)) == len(outputs)
 
 
-def test_idle_wallpaper_fetched_with_idle_flag_for_separate_cache_purging():
+def test_idle_wallpaper_displayed_without_caching_to_disk():
+    # Idle images are downloaded to a temp file and never written to the
+    # persistent cache directory - download_temp is used instead of get_path.
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=300)
     output = MagicMock()
     cache = MagicMock()
-    cache.get_path.return_value = "/cache/wallpaper.jpg"
     cache.get_transformed_path.side_effect = lambda path, _: path
 
     orchestrator = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
     orchestrator._tick()
 
-    _, kwargs = cache.get_path.call_args
-    assert kwargs.get("tier") == "idle"
+    cache.download_temp.assert_called_once()
+    cache.get_path.assert_not_called()
 
 
 def test_idle_rotation_state_staggers_initial_last_rotation_per_output():
@@ -1681,7 +1682,7 @@ def test_persisted_batch_is_loaded_on_construction_and_used_as_fallback(tmp_path
 
     idle_source = _FakeIdleSource([], rotation_interval_seconds=300)  # unavailable
     output = MagicMock()
-    cache.get_path = MagicMock(return_value="/tmp/old.jpg")
+    cache.download_temp = MagicMock(return_value="/tmp/old.jpg")
     cache.get_transformed_path = MagicMock(side_effect=lambda path, _: path)
 
     orch = Orchestrator(
@@ -1738,3 +1739,92 @@ def test_refetch_idle_batch_returns_true_and_updates_state():
     assert orch._idle.images == images
     output.on_new_item.assert_called_once()
     output.update.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Output.music_album_art_only (e.g. PixooOutput) - skip artist photos
+# ---------------------------------------------------------------------------
+
+def test_music_album_art_only_output_skips_artist_photo():
+    album_art = Artwork(url="https://example.com/album.jpg", label="Album art (Spotify)")
+    artist_photo = Artwork(
+        url="https://example.com/artist.jpg", label="Photo (Wikipedia)", is_artist_photo=True
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money",
+        images=[artist_photo, album_art],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = True
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/album.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_called_once()
+    _, artwork, _ = output.update.call_args[0]
+    assert artwork is album_art
+
+
+def test_music_album_art_only_output_shows_nothing_when_only_artist_photos_available():
+    artist_photo = Artwork(
+        url="https://example.com/artist.jpg", label="Photo (Wikipedia)", is_artist_photo=True
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money", images=[artist_photo],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = True
+    cache = MagicMock()
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_not_called()
+
+
+def test_regular_output_still_shows_artist_photo():
+    artist_photo = Artwork(
+        url="https://example.com/artist.jpg", label="Photo (Wikipedia)", is_artist_photo=True
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money", images=[artist_photo],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = False
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/artist.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_called_once()
+    _, artwork, _ = output.update.call_args[0]
+    assert artwork is artist_photo

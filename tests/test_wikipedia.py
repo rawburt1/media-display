@@ -65,6 +65,18 @@ def test_adds_summary_and_photo_for_music(mock_get):
     assert len(np.images) == 1
     assert np.images[0].url == "https://example.com/t.jpg"
     assert "Wikipedia" in np.images[0].label
+    assert np.images[0].is_artist_photo is True
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_photo_is_not_marked_artist_photo_for_movie(mock_get):
+    mock_get.side_effect = [_search_response(), _summary_response()]
+    enricher = WikipediaEnricher(_config())
+    np = _movie()
+
+    enricher.enrich(np)
+
+    assert np.images[0].is_artist_photo is False
 
 
 @patch("mediainfo.enrichers.wikipedia.requests.get")
@@ -106,6 +118,34 @@ def test_searches_using_show_title_for_episode(mock_get):
     enricher = WikipediaEnricher(_config())
 
     enricher.enrich(_episode(show="Breaking Bad"))
+
+    params = mock_get.call_args_list[0].kwargs["params"]
+    assert params["srsearch"] == "Breaking Bad (TV series)"
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_searches_artist_for_episode_with_artist_field(mock_get):
+    mock_get.side_effect = [_search_response("Melody Gardot"), _summary_response("A jazz vocalist.")]
+    enricher = WikipediaEnricher(_config())
+    np = _episode(show="Melody Gardot live på Olympia")
+    np.artist = "Melody Gardot"
+
+    enricher.enrich(np)
+
+    params = mock_get.call_args_list[0].kwargs["params"]
+    assert params["srsearch"] == "Melody Gardot"
+    assert np.summary == "A jazz vocalist."
+    assert len(np.images) == 1
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_episode_without_artist_still_searches_tv_series(mock_get):
+    mock_get.side_effect = [_search_response("Breaking Bad"), _summary_response("A drama series.")]
+    enricher = WikipediaEnricher(_config())
+    np = _episode(show="Breaking Bad")
+    # artist is "" by default
+
+    enricher.enrich(np)
 
     params = mock_get.call_args_list[0].kwargs["params"]
     assert params["srsearch"] == "Breaking Bad (TV series)"

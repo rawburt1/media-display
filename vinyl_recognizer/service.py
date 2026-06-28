@@ -1,5 +1,10 @@
 """Background loop: records short clips, detects silence, and calls a
-recognition provider (AudD, ACRCloud, AcoustID, Shazam, or vibra)."""
+recognition provider (AudD, ACRCloud, AcoustID, Shazam, or vibra).
+
+If ACRCloud rate-limits us, falls back to vibra (no setup needed - it's
+already built/working), then to local_folder_fallback_dir if that's
+configured and vibra also has no match.
+"""
 
 from __future__ import annotations
 
@@ -70,15 +75,15 @@ class RecognizerService:
             self.config.recognition_clip_seconds, self.config.sample_rate, self._device
         )
         wav_bytes = recorder.to_wav_bytes(clip, self.config.sample_rate)
-        result = self._recognize(wav_bytes)
+        result = self.recognize(wav_bytes)
         if result and result.get("title"):
             logger.info("Recognized: %s - %s", result.get("artist"), result.get("title"))
             with self._lock:
-                self._current = result
+                self._current = {**result, "recognized_at": time.time()}
         else:
             logger.info("No recognition match")
 
-    def _recognize(self, wav_bytes: bytes) -> Optional[dict]:
+    def recognize(self, wav_bytes: bytes) -> Optional[dict]:
         if self.config.recognition_provider == "acrcloud":
             try:
                 return acrcloud.recognize(
@@ -88,10 +93,13 @@ class RecognizerService:
                     self.config.acrcloud_access_secret,
                 )
             except acrcloud.RateLimitedError:
-                logger.warning("ACRCloud is rate-limiting us")
+                logger.warning("ACRCloud is rate-limiting us; falling back to vibra")
+                result = vibra.recognize(wav_bytes)
+                if result:
+                    return result
                 if not self.config.local_folder_fallback_dir:
                     return None
-                logger.info("Falling back to local_folder_fallback_dir")
+                logger.info("vibra had no match either; falling back to local_folder_fallback_dir")
                 return local_folder.recognize(wav_bytes, self.config.local_folder_fallback_dir)
         if self.config.recognition_provider == "acoustid":
             return acoustid.recognize(wav_bytes, self.config.acoustid_api_key)

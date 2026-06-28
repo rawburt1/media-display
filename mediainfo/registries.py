@@ -71,6 +71,7 @@ OUTPUT_EXTRA_ARGS = {
 ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "discogs": "mediainfo.enrichers.discogs.DiscogsEnricher",
     "fanarttv": "mediainfo.enrichers.fanarttv.FanartTvEnricher",
+    "fingerprint": "mediainfo.enrichers.fingerprint.FingerprintEnricher",
     "lastfm": "mediainfo.enrichers.lastfm.LastFmEnricher",
     "library": "mediainfo.enrichers.library.LibraryEnricher",
     "lidarr": "mediainfo.enrichers.lidarr.LidarrEnricher",
@@ -78,6 +79,7 @@ ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "omdb": "mediainfo.enrichers.omdb.OmdbEnricher",
     "radarr": "mediainfo.enrichers.radarr.RadarrEnricher",
     "sonarr": "mediainfo.enrichers.sonarr.SonarrEnricher",
+    "svt": "mediainfo.enrichers.svt.SvtEnricher",
     "thetvdb": "mediainfo.enrichers.thetvdb.TheTvDbEnricher",
     "tmdb": "mediainfo.enrichers.tmdb.TmdbEnricher",
     "wikipedia": "mediainfo.enrichers.wikipedia.WikipediaEnricher",

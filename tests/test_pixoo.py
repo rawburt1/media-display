@@ -226,3 +226,7 @@ def test_update_does_not_raise_on_bad_image(tmp_path):
 def test_pixoo_config_preview_path_defaults_empty():
     cfg = PixooConfig(enabled=True, ip="192.168.1.32")
     assert cfg.preview_path == ""
+
+
+def test_only_shows_album_art_for_music():
+    assert PixooOutput.music_album_art_only is True

@@ -63,7 +63,10 @@ class WikipediaEnricher(ArtworkEnricher):
         summary, thumbnail = result
         now_playing.summary = summary
         if thumbnail and not any(image.url == thumbnail for image in now_playing.images):
-            now_playing.images.append(Artwork(url=thumbnail, label="Photo (Wikipedia)"))
+            is_artist_photo = now_playing.media_type == "music" or bool(now_playing.artist)
+            now_playing.images.append(
+                Artwork(url=thumbnail, label="Photo (Wikipedia)", is_artist_photo=is_artist_photo)
+            )
 
     def _lookup(self, queries: List[str]) -> _CacheEntry:
         try:
@@ -102,6 +105,8 @@ class WikipediaEnricher(ArtworkEnricher):
             # "Queen") resolve to a disambiguation page, so fall back to
             # genre-specific disambiguators.
             return [np.subtitle, f"{np.subtitle} (band)", f"{np.subtitle} (musician)"]
+        if np.artist:
+            return [np.artist, f"{np.artist} (band)", f"{np.artist} (musician)"]
         if np.media_type == "movie":
             if not np.title:
                 return []
