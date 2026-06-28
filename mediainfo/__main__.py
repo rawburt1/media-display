@@ -209,8 +209,6 @@ def _validate_config_main(argv: list) -> None:
     Designed to be run as a pre-flight check without starting the app:
       python -m mediainfo validate-config --config config/config.yaml
     """
-    import io
-
     parser = argparse.ArgumentParser(
         prog="python -m mediainfo validate-config",
         description="Validate a config.yaml file and report any problems",
