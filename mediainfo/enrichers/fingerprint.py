@@ -59,8 +59,8 @@ class FingerprintEnricher(ArtworkEnricher):
             resp = requests.get(self._url, timeout=5)
             resp.raise_for_status()
             data = resp.json()
-        except Exception:
-            logger.exception("Fingerprint enricher: failed to contact vinyl_recognizer")
+        except Exception as e:
+            logger.warning("Fingerprint enricher: vinyl_recognizer unreachable (%s)", e)
             return None
 
         if not data.get("title"):
