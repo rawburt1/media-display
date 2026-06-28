@@ -1,6 +1,16 @@
 # Copy this file to config.yaml and fill in your own values.
 # Lines starting with # are comments and are ignored.
 # Remove the leading # from any line to activate that setting.
+#
+# Environment variable expansion
+# -------------------------------
+# Any string value can reference an environment variable:
+#   client_secret: ${SPOTIFY_CLIENT_SECRET}          # required; kept as-is if unset
+#   client_secret: ${SPOTIFY_CLIENT_SECRET:-}        # empty string if unset
+#   client_secret: ${SPOTIFY_CLIENT_SECRET:-default} # literal "default" if unset
+#
+# This lets you keep secrets out of config.yaml and pass them via Docker
+# Compose environment / .env files or system environment variables instead.
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +277,9 @@ outputs:
   # see SECURITY.md.
   config:
     enabled: true
+    # host defaults to 127.0.0.1 (loopback only — not reachable from the LAN).
+    # Set to 0.0.0.0 to allow access from other machines. Required when running
+    # inside Docker and accessing from the host. See SECURITY.md.
     host: 0.0.0.0
     port: 8094
     # "form" (default): the full editable form above. "dashboard": a

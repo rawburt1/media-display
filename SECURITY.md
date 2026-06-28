@@ -41,3 +41,35 @@ it has read **and write** access to `config.yaml`, including whatever
 credentials are stored in it. Anyone who can reach its port (and isn't
 blocked by `auth`, if enabled) can read your API keys/tokens and change
 any setting. Only enable it on a trusted local network, or behind `auth`.
+
+Its `host` setting defaults to `127.0.0.1` (loopback only), so it isn't
+reachable from the LAN without a deliberate change. When running inside
+Docker, set `host: 0.0.0.0` in config.yaml **and** include the management
+compose overlay to publish the port:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.management.yml up -d
+```
+
+## Keeping credentials out of config.yaml
+
+Any string value in config.yaml can reference an environment variable:
+
+```yaml
+sources:
+  spotify:
+    client_secret: ${SPOTIFY_CLIENT_SECRET}
+```
+
+Set the variable in your shell, a `.env` file, or Docker Compose's
+`environment:` section. The app expands it at startup. If the variable
+isn't set, the literal `${SPOTIFY_CLIENT_SECRET}` string is kept and
+the startup validator will warn about the unexpanded reference.
+
+## Operating modes at a glance
+
+| Setup | Reachable from | Recommended for |
+|---|---|---|
+| `host: 127.0.0.1` (default) | This machine only | Single-machine installs, development |
+| `host: 0.0.0.0`, no `auth` | Entire LAN (no login) | Fully trusted home network |
+| `host: 0.0.0.0`, `auth.enabled: true` | LAN (login required); public IPs challenge all | Exposing beyond LAN via port-forward/reverse proxy |

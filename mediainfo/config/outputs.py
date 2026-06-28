@@ -46,7 +46,11 @@ class InfoConfig:
 @dataclasses.dataclass
 class ConfigUiConfig:
     enabled: bool = False
-    host: str = "0.0.0.0"
+    # Bind address for the config UI server.  Defaults to 127.0.0.1 (loopback
+    # only) so it isn't reachable from the LAN without an explicit choice.
+    # Set to 0.0.0.0 to allow access from other machines — required when
+    # running inside Docker and accessing from the host.  See SECURITY.md.
+    host: str = "127.0.0.1"
     port: int = 8094
     # "form" (default): the full editable config.yaml form + raw YAML
     # editor. "dashboard": a read-focused status overview of sources/
