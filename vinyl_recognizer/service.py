@@ -75,7 +75,7 @@ class RecognizerService:
             self.config.recognition_clip_seconds, self.config.sample_rate, self._device
         )
         wav_bytes = recorder.to_wav_bytes(clip, self.config.sample_rate)
-        result = self._recognize(wav_bytes)
+        result = self.recognize(wav_bytes)
         if result and result.get("title"):
             logger.info("Recognized: %s - %s", result.get("artist"), result.get("title"))
             with self._lock:
@@ -83,7 +83,7 @@ class RecognizerService:
         else:
             logger.info("No recognition match")
 
-    def _recognize(self, wav_bytes: bytes) -> Optional[dict]:
+    def recognize(self, wav_bytes: bytes) -> Optional[dict]:
         if self.config.recognition_provider == "acrcloud":
             try:
                 return acrcloud.recognize(
