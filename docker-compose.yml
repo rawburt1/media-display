@@ -21,9 +21,8 @@ services:
       - "${VIDEO_PORT:-8091}:8091"
       - "${NEST_HUB_PORT:-8092}:8092"
       - "${INFO_PORT:-8093}:8093"
-      - "${CONFIG_PORT:-8094}:8094"    # outputs.config (config UI) - its documented default port
-      - "${CONFIG_PORT_ALT:-8095}:8095" # outputs.config on an alternate port (e.g. second instance)
-      - "${FEED_PORT:-8086}:8086"       # outputs.feed (RSS/Atom) - only needed if that output is enabled
+      # outputs.config and outputs.feed ports are in docker-compose.management.yml.
+      # Run: docker compose -f docker-compose.yml -f docker-compose.management.yml up -d
     volumes:
       # A directory mount (not a single-file mount) so config.yaml stays
       # readable/writable across edits that replace the file via rename

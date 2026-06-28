@@ -71,3 +71,16 @@ def validate_config(config: Config) -> None:
             "request presenting empty credentials will authenticate successfully, "
             "which is no real protection. Set a real username/password."
         )
+
+    for (category, name), fields in _REQUIRED_CREDENTIAL_FIELDS.items():
+        item = getattr(config, category).get(name)
+        if item is None or not getattr(item, "enabled", False):
+            continue
+        for f in fields:
+            val = getattr(item, f, None)
+            if val and "${" in val:
+                logger.warning(
+                    "%s.%s.%s contains an unexpanded env var reference ('%s') — "
+                    "the environment variable was not set at startup.",
+                    category, name, f, val,
+                )

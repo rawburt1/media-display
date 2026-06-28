@@ -10,12 +10,45 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any, Union
 
 import yaml
 
 _logger = logging.getLogger(__name__)
+
+# Matches ${VAR_NAME} and ${VAR_NAME:-default} in YAML string values.
+_ENV_VAR_RE = re.compile(r"\$\{([^}:]+)(?::-([^}]*))?\}")
+
+
+def _expand_env_vars(value: Any) -> Any:
+    """Recursively expand ${VAR} and ${VAR:-default} in all string values.
+
+    ${VAR}          → value of VAR, or the literal '${VAR}' if not set
+    ${VAR:-default} → value of VAR, or 'default' if not set
+
+    Applied to the raw YAML dict before Config.from_dict() processes it,
+    so credentials can be kept out of config.yaml and passed via the
+    environment instead:
+      sources:
+        spotify:
+          client_secret: ${SPOTIFY_CLIENT_SECRET}
+    """
+    if isinstance(value, str):
+        def _replace(m: re.Match) -> str:
+            var_name, fallback = m.group(1), m.group(2)
+            env_val = os.environ.get(var_name)
+            if env_val is not None:
+                return env_val
+            return fallback if fallback is not None else m.group(0)
+        return _ENV_VAR_RE.sub(_replace, value)
+    if isinstance(value, dict):
+        return {k: _expand_env_vars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_expand_env_vars(v) for v in value]
+    return value
 
 from mediainfo.config.enrichers import (
     ENRICHER_CONFIG_TYPES,
@@ -195,7 +228,7 @@ class Config:
         with path.open("r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
 
-        return cls.from_dict(raw)
+        return cls.from_dict(_expand_env_vars(raw))
 
     @classmethod
     def from_dict(cls, raw: dict) -> "Config":
