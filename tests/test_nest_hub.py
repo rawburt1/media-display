@@ -3,8 +3,6 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from mediainfo.config import NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.nest_hub import NestHubOutput
