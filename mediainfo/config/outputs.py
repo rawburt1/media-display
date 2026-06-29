@@ -6,20 +6,55 @@ import dataclasses
 
 
 @dataclasses.dataclass
-class PixooConfig:
+class _OutputFilterMixin:
+    """Optional per-output content filter fields.
+
+    All fields default to "no restriction" so existing configs that omit
+    them keep their current behaviour unchanged.
+
+    Rule evaluation order (first failing rule blocks the output):
+      1. deny_media_types  — block if media_type is in the list
+      2. deny_sources      — block if source is in the list
+      3. allow_media_types — block if non-empty AND media_type not in list
+      4. allow_sources     — block if non-empty AND source not in list
+      5. active_hours      — block if current local time is outside window
+
+    deny always beats allow.  active_hours wraps around midnight, e.g.
+    "22:00-06:00" means active from 22:00 through 06:00 the next morning.
+    """
+
+    allow_media_types: list = dataclasses.field(default_factory=list)
+    deny_media_types: list = dataclasses.field(default_factory=list)
+    allow_sources: list = dataclasses.field(default_factory=list)
+    deny_sources: list = dataclasses.field(default_factory=list)
+    # When True, send the output to idle whenever the current media is
+    # blocked by the rules above.  When False (default), the output simply
+    # keeps showing whatever it last received.
+    idle_when_filtered: bool = False
+    # "HH:MM-HH:MM" local-time window during which this output is active.
+    # Leave empty (default) for always-on.
+    active_hours: str = ""
+
+
+@dataclasses.dataclass
+class PixooConfig(_OutputFilterMixin):
     enabled: bool = False
     ip: str = ""
+    # LED matrix size in pixels.  64 for the Pixoo64 (default); 16 for the
+    # Pixoo 16×16 Pixel Art LED Frame.  Affects both the image sent to the
+    # device and the PicWidth field in the API payload.
+    size: int = 64
     # Optional image transforms applied before the image is sent to the
     # display.  See config.example.yaml for the full list of available
     # transforms and their parameters.
     transforms: list = dataclasses.field(default_factory=list)
-    # When set, save a 512×512 nearest-neighbour preview of the final
-    # 64×64 image here after each update (useful for visual QA).
+    # When set, save a 512×512 nearest-neighbour preview of the final image
+    # here after each update (useful for visual QA).
     preview_path: str = ""
 
 
 @dataclasses.dataclass
-class WebConfig:
+class WebConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"
     port: int = 8090
@@ -31,7 +66,7 @@ class WebConfig:
 
 
 @dataclasses.dataclass
-class InfoConfig:
+class InfoConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"
     port: int = 8093
@@ -44,7 +79,7 @@ class InfoConfig:
 
 
 @dataclasses.dataclass
-class ConfigUiConfig:
+class ConfigUiConfig(_OutputFilterMixin):
     enabled: bool = False
     # Bind address for the config UI server.  Defaults to 127.0.0.1 (loopback
     # only) so it isn't reachable from the LAN without an explicit choice.
@@ -61,7 +96,7 @@ class ConfigUiConfig:
 
 
 @dataclasses.dataclass
-class FeedConfig:
+class FeedConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"
     port: int = 8086
@@ -70,7 +105,7 @@ class FeedConfig:
 
 
 @dataclasses.dataclass
-class FolderConfig:
+class FolderConfig(_OutputFilterMixin):
     enabled: bool = False
     # Directory that mirrors the album art / fanart / posters for whatever
     # is currently playing. Replaced whenever the item changes, and cleared
@@ -80,7 +115,7 @@ class FolderConfig:
 
 
 @dataclasses.dataclass
-class NestHubConfig:
+class NestHubConfig(_OutputFilterMixin):
     enabled: bool = False
     # IP address of the Google Nest Hub (or other Cast-compatible display).
     device_ip: str = ""
@@ -94,7 +129,7 @@ class NestHubConfig:
 
 
 @dataclasses.dataclass
-class UlanziConfig:
+class UlanziConfig(_OutputFilterMixin):
     enabled: bool = False
     # IP address of the Ulanzi TC001 (or other AWTRIX3 device).
     device_ip: str = ""
@@ -106,7 +141,7 @@ class UlanziConfig:
 
 
 @dataclasses.dataclass
-class MqttConfig:
+class MqttConfig(_OutputFilterMixin):
     enabled: bool = False
     # Hostname or IP of the MQTT broker.
     host: str = "localhost"
@@ -126,7 +161,7 @@ class MqttConfig:
 
 
 @dataclasses.dataclass
-class VideoOutputConfig:
+class VideoOutputConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"
     port: int = 8091
