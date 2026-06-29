@@ -22,6 +22,7 @@ from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
 from mediainfo.orchestrator_health import _BackoffState, _HealthTracker
 from mediainfo.orchestrator_idle import _IdleBatchManager
+from mediainfo.output_filter import passes_filter
 from mediainfo.outputs.base import Output
 from mediainfo.sources.base import MediaSource
 
@@ -128,6 +129,10 @@ class Orchestrator:
         # Each output independently cycles through `self._current.images` in
         # its own randomized order, keyed by its index in `self.outputs`.
         self._rotation_state: Dict[int, _RotationState] = {}
+        # Output indices that are currently blocked by their content filter
+        # (allow/deny rules or active_hours).  Filtered outputs do not receive
+        # on_new_item() or update() calls while blocked.
+        self._filtered_outputs: set[int] = set()
         self._last_cache_purge: Optional[float] = None
         # When the time it was first seen since `self._current` was set;
         # None means either nothing is playing or the source just resumed.
@@ -262,6 +267,7 @@ class Orchestrator:
             logger.info("Nothing playing; switching outputs to idle")
             self._current = None
             self._rotation_state = {}
+            self._filtered_outputs = set()
             self._nothing_playing_since = None
         self._show_idle_wallpaper()
 
@@ -280,9 +286,14 @@ class Orchestrator:
         )
 
         self._current = now_playing
+        self._filtered_outputs = self._compute_filtered(now_playing)
 
         for index, output in enumerate(self.outputs):
-            self._call_output(index, output.on_new_item, now_playing, self.cache)
+            if index in self._filtered_outputs:
+                if getattr(getattr(output, "config", None), "idle_when_filtered", False):
+                    self._call_output(index, output.on_idle)
+            else:
+                self._call_output(index, output.on_new_item, now_playing, self.cache)
 
         if not now_playing.images:
             logger.warning("No artwork available for %s", now_playing.title)
@@ -294,7 +305,8 @@ class Orchestrator:
             len(now_playing.images), len(self.outputs)
         )
         for index, output in enumerate(self.outputs):
-            self._show_image_for_output(index, output)
+            if index not in self._filtered_outputs:
+                self._show_image_for_output(index, output)
 
     def _apply_artwork_override(self, now_playing: NowPlaying) -> None:
         """If a manual override is pinned for this title/subtitle (see
@@ -374,9 +386,13 @@ class Orchestrator:
         if self._current is None:
             return
 
+        self._recheck_filters()
+
         now = time.monotonic()
         multi_image = len(self._current.images) > 1
         for index, output in enumerate(self.outputs):
+            if index in self._filtered_outputs:
+                continue
             state = self._rotation_state.get(index)
             if state is None or now - state.last_rotation < self.rotation_interval_seconds:
                 continue
@@ -385,6 +401,52 @@ class Orchestrator:
                 state.position = (state.position + 1) % len(state.order)
             state.last_rotation = now
             self._show_image_for_output(index, output)
+
+    def _compute_filtered(self, now_playing: NowPlaying) -> set[int]:
+        """Return the set of output indices that should be blocked for *now_playing*."""
+        filtered = set()
+        for index, output in enumerate(self.outputs):
+            config = getattr(output, "config", None)
+            if not passes_filter(now_playing, config):
+                logger.debug(
+                    "Output %d (%s) filtered for [%s/%s]",
+                    index, type(output).__name__, now_playing.source, now_playing.media_type,
+                )
+                filtered.add(index)
+        return filtered
+
+    def _recheck_filters(self) -> None:
+        """Re-evaluate filters for all outputs against the current item.
+
+        Called on every rotation tick so that active_hours transitions
+        (e.g. an output becoming active at 08:00 while the same item keeps
+        playing) are applied without waiting for the next track change.
+        """
+        if self._current is None:
+            return
+        for index, output in enumerate(self.outputs):
+            config = getattr(output, "config", None)
+            was_filtered = index in self._filtered_outputs
+            is_filtered = not passes_filter(self._current, config)
+            if is_filtered == was_filtered:
+                continue
+            if is_filtered:
+                self._filtered_outputs.add(index)
+                logger.debug(
+                    "Output %d (%s) became filtered mid-play",
+                    index, type(output).__name__,
+                )
+                if getattr(config, "idle_when_filtered", False):
+                    self._call_output(index, output.on_idle)
+            else:
+                self._filtered_outputs.discard(index)
+                logger.debug(
+                    "Output %d (%s) became unfiltered mid-play",
+                    index, type(output).__name__,
+                )
+                self._call_output(index, output.on_new_item, self._current, self.cache)
+                if self._current.images:
+                    self._show_image_for_output(index, output)
 
     def _show_image_for_output(self, index: int, output: Output) -> None:
         """Resolve and push the output's current rotation pick - falling
