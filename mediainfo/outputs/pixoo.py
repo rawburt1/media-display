@@ -1,4 +1,8 @@
-"""Pixoo64 output: pushes artwork to a Divoom Pixoo64 over its local HTTP API."""
+"""Pixoo output: pushes artwork to a Divoom Pixoo over its local HTTP API.
+
+Supports any Pixoo display size — configure `size: 64` for the Pixoo64
+(default) or `size: 16` for the Pixoo 16×16 Pixel Art LED Frame.
+"""
 
 from __future__ import annotations
 
@@ -16,14 +20,12 @@ from mediainfo.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
 
-_SIZE = 64
 _PALETTE_COLORS = 24
 
 
 class PixooOutput(Output):
-    # The 64x64 LED matrix is too small/low-fidelity to make an unrelated
-    # artist bio photo (Wikipedia, Last.fm) worth showing - only ever show
-    # the actual album art for music.
+    # The LED matrix is too small/low-fidelity to make an unrelated artist
+    # bio photo (Wikipedia, Last.fm) worth showing — only show album art.
     music_album_art_only = True
 
     def __init__(self, config: PixooConfig):
@@ -32,9 +34,10 @@ class PixooOutput(Output):
         self.transform_pipeline = parse_pipeline(config.transforms)
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+        size = self.config.size
         try:
             image = Image.open(image_path).convert("RGB")
-            image = _prepare_for_led(image)
+            image = _prepare_for_led(image, size)
             pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
 
             if self.config.preview_path:
@@ -47,7 +50,7 @@ class PixooOutput(Output):
                 {
                     "Command": "Draw/SendHttpGif",
                     "PicNum": 1,
-                    "PicWidth": _SIZE,
+                    "PicWidth": size,
                     "PicOffset": 0,
                     "PicID": 1,
                     "PicSpeed": 1000,
@@ -55,21 +58,21 @@ class PixooOutput(Output):
                 }
             )
         except Exception:
-            logger.exception("Failed to send image to Pixoo64")
+            logger.exception("Failed to send image to Pixoo at %s", self.config.ip)
 
     def _post(self, payload: dict) -> None:
         response = requests.post(self._url, json=payload, timeout=5)
         response.raise_for_status()
 
 
-def _prepare_for_led(image: Image.Image) -> Image.Image:
-    """Process a full-resolution image for a 64×64 LED matrix.
+def _prepare_for_led(image: Image.Image, size: int = 64) -> Image.Image:
+    """Process a full-resolution image for an LED matrix of the given size.
 
     Pipeline:
       1. Center-crop to square so the subject fills the frame.
       2. Boost contrast before downscaling (makes colours pop at low res).
       3. Unsharp mask to preserve edge sharpness through the downscale.
-      4. Downsample to 64×64 with LANCZOS.
+      4. Downsample to size×size with LANCZOS.
       5. Quantize to ~24 colours so the LED shows bold, clean blocks.
     """
     # 1. Center-crop to square
@@ -87,7 +90,7 @@ def _prepare_for_led(image: Image.Image) -> Image.Image:
     image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=120, threshold=3))
 
     # 4. Downsample
-    image = image.resize((_SIZE, _SIZE), Image.Resampling.LANCZOS)
+    image = image.resize((size, size), Image.Resampling.LANCZOS)
 
     # 5. Palette reduction → bold colour blocks
     image = image.quantize(colors=_PALETTE_COLORS).convert("RGB")

@@ -382,10 +382,13 @@ outputs:
   #     server_host: 192.168.1.10
   #     server_port: 8093
 
-  # Divoom Pixoo64 — 64×64 LED pixel display.
+  # Divoom Pixoo — LED pixel display.
+  # Works with the Pixoo64 (64×64, default) and the Pixoo 16×16 Pixel Art
+  # LED Frame.  Set `size: 16` for the smaller display.
   pixoo:
     enabled: true
     ip: 192.168.1.32
+    size: 64        # 64 for Pixoo64 (default), 16 for Pixoo 16×16
 
   # Multiple Pixoo displays — one in the living room, one on the desk:
   # pixoo:
@@ -393,6 +396,54 @@ outputs:
   #     ip: 192.168.1.32
   #   - enabled: true
   #     ip: 192.168.1.33
+
+  # ---------------------------------------------------------------------------
+  # Per-output content filters (optional, applies to every output type)
+  # ---------------------------------------------------------------------------
+  # Each output accepts six optional filter fields that control which media it
+  # receives.  All default to "no restriction" — omit them to keep the current
+  # behaviour where every output receives everything.
+  #
+  # Filter evaluation order (first failing rule blocks the output):
+  #   1. deny_media_types  — block if media_type matches any entry
+  #   2. deny_sources      — block if source matches any entry
+  #   3. allow_media_types — block if non-empty AND media_type not in list
+  #   4. allow_sources     — block if non-empty AND source not in list
+  #   5. active_hours      — block if current local time is outside window
+  #
+  # deny always beats allow: a type/source in both lists is denied.
+  #
+  # Example: Pixoo shows only music from select sources, 08:00–22:00
+  # pixoo:
+  #   - enabled: true
+  #     ip: 192.168.1.32
+  #     allow_media_types:
+  #       - music
+  #     allow_sources:
+  #       - sonos
+  #       - spotify
+  #       - vinyl
+  #     idle_when_filtered: true    # go to idle screen when filtered out
+  #     active_hours: "08:00-22:00" # only active 08:00–22:00; wraps midnight
+  #
+  # Example: Nest Hub shows only film, TV and games, never music
+  # nest_hub:
+  #   enabled: true
+  #   device_ip: 192.168.1.50
+  #   server_host: 192.168.1.10
+  #   server_port: 8092
+  #   allow_media_types:
+  #     - movie
+  #     - episode
+  #     - game
+  #   idle_when_filtered: true
+  #
+  # media_type values: music, movie, episode, game
+  # source values: kodi, plex, jellyfin, emby, sonos, spotify, vinyl,
+  #                appletv, homeassistant, youtube, shield, chromecast, ps5
+  # active_hours: "HH:MM-HH:MM" local time; wrap-around supported
+  #   e.g. "22:00-06:00" is active from 22:00 through 06:00 the next morning
+  # ---------------------------------------------------------------------------
 
   # Ulanzi TC001 (or any AWTRIX3 device) — scrolling text clock.
   # Displays artist and song title as scrolling text. Artwork is not shown

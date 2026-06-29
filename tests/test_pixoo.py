@@ -1,4 +1,4 @@
-"""Tests for the Pixoo64 output and LED image-preparation pipeline."""
+"""Tests for the Pixoo output and LED image-preparation pipeline."""
 
 from __future__ import annotations
 
@@ -49,6 +49,12 @@ def test_prepare_for_led_output_is_64x64():
     img = _solid_image(600, 600)
     result = _prepare_for_led(img)
     assert result.size == (64, 64)
+
+
+def test_prepare_for_led_output_is_16x16_when_size_16():
+    img = _solid_image(600, 600)
+    result = _prepare_for_led(img, size=16)
+    assert result.size == (16, 16)
 
 
 def test_prepare_for_led_output_is_rgb():
@@ -178,6 +184,21 @@ def test_update_sends_64x64_pixels(tmp_path):
     gif_payload = next(p for p in sent_payloads if p.get("Command") == "Draw/SendHttpGif")
     raw = base64.b64decode(gif_payload["PicData"])
     assert len(raw) == 64 * 64 * 3  # RGB bytes
+    assert gif_payload["PicWidth"] == 64
+
+
+def test_update_sends_16x16_pixels_when_size_16(tmp_path):
+    img_path = _save_image(tmp_path / "art.jpg")
+    output = PixooOutput(_config(size=16))
+
+    sent_payloads = []
+    with patch.object(output, "_post", side_effect=lambda p: sent_payloads.append(p)):
+        output.update(_now_playing(), _artwork(), img_path)
+
+    gif_payload = next(p for p in sent_payloads if p.get("Command") == "Draw/SendHttpGif")
+    raw = base64.b64decode(gif_payload["PicData"])
+    assert len(raw) == 16 * 16 * 3  # RGB bytes
+    assert gif_payload["PicWidth"] == 16
 
 
 def test_update_saves_preview_when_configured(tmp_path):
@@ -222,6 +243,11 @@ def test_update_does_not_raise_on_bad_image(tmp_path):
 # ---------------------------------------------------------------------------
 # PixooConfig — preview_path default
 # ---------------------------------------------------------------------------
+
+def test_pixoo_config_size_defaults_to_64():
+    cfg = PixooConfig(enabled=True, ip="192.168.1.32")
+    assert cfg.size == 64
+
 
 def test_pixoo_config_preview_path_defaults_empty():
     cfg = PixooConfig(enabled=True, ip="192.168.1.32")
