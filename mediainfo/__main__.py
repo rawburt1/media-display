@@ -29,8 +29,16 @@ from mediainfo.wiring import (
 
 logger = logging.getLogger(__name__)
 
-# Config file is polled for changes at this interval (seconds).
 _CONFIG_POLL_INTERVAL = 2
+
+
+class _CapturingHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
 
 
 def main() -> None:
@@ -57,13 +65,7 @@ def main() -> None:
     logger.info("Starting mediainfo")
     validate_config(config)
 
-    cache = ImageCache(
-        config.cache.dir,
-        max_age_days=config.cache.max_age_days,
-        idle_max_age_hours=config.cache.idle_max_age_hours,
-        min_width=config.cache.min_width,
-        min_height=config.cache.min_height,
-    )
+    cache = _build_cache(config)
 
     # Outputs are created once and stay alive for the life of the process.
     # Their background servers (Flask, MQTT, etc.) keep running across reloads.
@@ -77,9 +79,7 @@ def main() -> None:
     config_mtime = _file_mtime(config_path)
     library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
     overrides = build_artwork_overrides(config)
-    orch = start_orchestrator(config, outputs, cache, library, overrides)
-    wire_health_providers(outputs, orch, config)
-    wire_hitster_safe(outputs, orch)
+    orch = _start_and_wire(config, outputs, cache, library, overrides)
     wire_artwork_overrides(outputs, overrides)
 
     try:
@@ -106,13 +106,7 @@ def main() -> None:
 
             orch.stop()
             orch.join()
-            cache = ImageCache(
-                config.cache.dir,
-                max_age_days=config.cache.max_age_days,
-                idle_max_age_hours=config.cache.idle_max_age_hours,
-                min_width=config.cache.min_width,
-                min_height=config.cache.min_height,
-            )
+            cache = _build_cache(config)
             if library_config_changed:
                 library.close()
                 library = MusicLibrary(
@@ -121,9 +115,7 @@ def main() -> None:
             if overrides_config_changed:
                 overrides = build_artwork_overrides(config)
                 wire_artwork_overrides(outputs, overrides)
-            orch = start_orchestrator(config, outputs, cache, library, overrides)
-            wire_health_providers(outputs, orch, config)
-            wire_hitster_safe(outputs, orch)
+            orch = _start_and_wire(config, outputs, cache, library, overrides)
             logger.info("Config reloaded successfully")
     finally:
         logger.info("Shutting down ...")
@@ -149,6 +141,23 @@ def _make_stop_handler(stop_event: threading.Event):
 # ---------------------------------------------------------------------------
 # Lifecycle utilities
 # ---------------------------------------------------------------------------
+
+def _build_cache(config: Config) -> ImageCache:
+    return ImageCache(
+        config.cache.dir,
+        max_age_days=config.cache.max_age_days,
+        idle_max_age_hours=config.cache.idle_max_age_hours,
+        min_width=config.cache.min_width,
+        min_height=config.cache.min_height,
+    )
+
+
+def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: MusicLibrary, overrides):
+    orch = start_orchestrator(config, outputs, cache, library, overrides)
+    wire_health_providers(outputs, orch, config)
+    wire_hitster_safe(outputs, orch)
+    return orch
+
 
 def _file_mtime(path: Path) -> Optional[float]:
     """Return the mtime of *path*, or None if the file cannot be stat'd."""
@@ -218,12 +227,6 @@ def _validate_config_main(argv: list) -> None:
 
     # Capture warnings emitted by Config.load() (unknown plugin names) and
     # validate_config() (blank credentials, missing priority entries, etc.).
-    captured: list[logging.LogRecord] = []
-
-    class _CapturingHandler(logging.Handler):
-        def emit(self, record: logging.LogRecord) -> None:
-            captured.append(record)
-
     handler = _CapturingHandler()
     handler.setLevel(logging.WARNING)
     root = logging.getLogger()
@@ -239,8 +242,8 @@ def _validate_config_main(argv: list) -> None:
     finally:
         root.removeHandler(handler)
 
-    if captured:
-        for record in captured:
+    if handler.records:
+        for record in handler.records:
             print(f"WARNING: {record.getMessage()}", file=sys.stderr)
         sys.exit(1)
 
