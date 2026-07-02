@@ -57,7 +57,7 @@ class _IdleBatchManager:
         cache: ImageCache,
         rotation_interval_seconds: float,
         call_output: Callable[..., None],
-        build_rotation_states: Callable[[int, int], Dict[int, "_RotationState"]],
+        build_rotation_states: Callable[[int, List[int]], Dict[int, "_RotationState"]],
         idle_source: Optional[IdleWallpaperSource] = None,
     ):
         self.outputs = outputs
@@ -171,7 +171,9 @@ class _IdleBatchManager:
         return False
 
     def _push_current_batch(self) -> None:
-        self.rotation_state = self._build_rotation_states(len(self.images), len(self.outputs))
+        self.rotation_state = self._build_rotation_states(
+            len(self.images), list(range(len(self.outputs)))
+        )
         for index, output in enumerate(self.outputs):
             self._call_output(index, output.on_new_item, self.now_playing, self.cache)
         for index, output in enumerate(self.outputs):
