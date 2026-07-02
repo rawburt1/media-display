@@ -1,12 +1,4 @@
-"""HTML/CSS/JS template for the video output's page (_INDEX_HTML).
-
-Split out from video.py - returned verbatim (modulo the transitions CSS/JS
-placeholder substitution done once in VideoOutput.__init__) by the `/` route.
-"""
-
-from __future__ import annotations
-
-_INDEX_HTML = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -35,7 +27,7 @@ _INDEX_HTML = """<!DOCTYPE html>
       object-fit: contain; opacity: 0;
       transition: opacity 1s ease-in-out, transform 1s ease-in-out;
     }
-    /* __TRANSITIONS_CSS__ */
+    {{ transitions_css }}
     #meta { padding: 0.5em; text-align: center; }
     #title { font-size: 1.5em; }
     #subtitle { font-size: 1em; opacity: 0.8; }
@@ -57,7 +49,7 @@ _INDEX_HTML = """<!DOCTYPE html>
   </div>
 
   <script>
-    /* __TRANSITIONS_JS__ */
+    {{ transitions_js }}
 
     const player = document.getElementById('player');
     const videoContainer = document.getElementById('video-container');
@@ -171,4 +163,3 @@ _INDEX_HTML = """<!DOCTYPE html>
   </script>
 </body>
 </html>
-"""
