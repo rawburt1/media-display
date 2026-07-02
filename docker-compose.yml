@@ -41,6 +41,7 @@ services:
       - ./artwork:/app/artwork
       - ./spotify_cache:/app/spotify_cache  # Spotify OAuth token; only needed if Spotify is enabled
       - ./overrides:/app/overrides  # Manual artwork overrides; only needed if overrides.enabled
+      - ./posters:/app/posters  # Static show posters; only needed if posters.entries is non-empty
       # idle.local: point this at your own pictures (each immediate
       # subdirectory of the host path is one "destination") - mounted
       # read-only since this output never needs to write to it. Only

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
-from flask import Flask, make_response, request
+from flask import Flask, make_response, render_template, request
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import AuthConfig, FeedConfig
@@ -36,18 +36,6 @@ logger = logging.getLogger(__name__)
 
 _ATOM_NS = "http://www.w3.org/2005/Atom"
 ET.register_namespace("", _ATOM_NS)
-
-_INDEX_HTML = """<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Now Playing Feed</title></head>
-<body>
-<h1>Now Playing Feed</h1>
-<ul>
-  <li><a href="/rss">RSS 2.0</a></li>
-  <li><a href="/atom">Atom 1.0</a></li>
-</ul>
-</body>
-</html>"""
 
 
 def _a(tag: str) -> str:
@@ -146,7 +134,7 @@ class FeedOutput(Output):
 
         @app.get("/")
         def index():
-            return _INDEX_HTML
+            return render_template("feeds/index.html")
 
         @app.get("/rss")
         def rss():
