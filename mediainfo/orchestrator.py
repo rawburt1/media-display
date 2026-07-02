@@ -18,6 +18,7 @@ from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.config import AlertConfig
 from mediainfo.enrichers.base import ArtworkEnricher
+from mediainfo.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
 from mediainfo.orchestrator_health import _BackoffState, _HealthTracker
@@ -146,6 +147,7 @@ class Orchestrator:
         alert_config: Optional[AlertConfig] = None,
         overrides: Optional[ArtworkOverrideStore] = None,
         poster_store: Optional[PosterStore] = None,
+        history: Optional[PlaybackHistory] = None,
     ):
         self.sources = sources
         self.enrichers = enrichers
@@ -185,6 +187,7 @@ class Orchestrator:
         self._last_alert_check: Optional[float] = None
         self._overrides = overrides
         self._poster_store = poster_store
+        self._history = history
 
     @staticmethod
     def _build_groups(outputs: List[Output]) -> List[_RouteGroup]:
@@ -332,6 +335,12 @@ class Orchestrator:
             prepared[item.identity] = donor
             return donor
         self._enrich_item(item)
+        # Exactly here - a genuinely new item, once per identity per tick,
+        # after enrichment (so the logged artwork URL is the enriched
+        # pick). The donor/rebind paths above deliberately don't log:
+        # the item was already playing, just on another group.
+        if self._history is not None:
+            self._history.record(item)
         prepared[item.identity] = item
         return item
 

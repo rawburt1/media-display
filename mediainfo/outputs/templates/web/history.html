@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Now Playing &middot; history</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000; color: #ddd; font-family: sans-serif;
+           max-width: 720px; margin: 0 auto; padding: 24px 16px 60px; }
+    h1 { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .nav-link { float: right; color: #888; font-size: 12px; text-decoration: none; }
+    .nav-link:hover { color: #fff; }
+    p.hint { font-size: 12px; color: #888; margin-bottom: 20px; }
+    .day { font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+           text-transform: uppercase; color: #777; margin: 18px 0 8px; }
+    .row { display: flex; align-items: center; gap: 12px; padding: 8px 10px;
+           border-radius: 10px; }
+    .row:hover { background: #111; }
+    .row img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px;
+               background: #151515; flex: none; }
+    .row .noart { width: 48px; height: 48px; border-radius: 6px; background: #151515;
+                  flex: none; display: flex; align-items: center; justify-content: center;
+                  color: #444; font-size: 20px; }
+    .info { flex: 1; min-width: 0; }
+    .title { font-size: 14px; font-weight: 600; color: #fff;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .subtitle { font-size: 12px; color: #999; margin-top: 1px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .meta { text-align: right; flex: none; }
+    .time { font-size: 12px; color: #999; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 700;
+             letter-spacing: 0.3px; text-transform: uppercase; color: #7a8a9f;
+             background: #10151d; border-radius: 999px; padding: 2px 8px; margin-top: 3px; }
+    #empty, #disabled { font-size: 13px; color: #666; padding: 24px 0; }
+  </style>
+</head>
+<body>
+<a class="nav-link" href="/">&larr; Now playing</a>
+<h1>Recently played</h1>
+<p class="hint">Everything that has played, newest first - across every source.</p>
+<div id="disabled" style="display:none">
+  History is disabled (set <code>history.enabled: true</code> in config.yaml).
+</div>
+<div id="list"></div>
+
+<script>
+function dayLabel(date) {
+  const today = new Date();
+  const that = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round(
+    (new Date(today.getFullYear(), today.getMonth(), today.getDate()) - that) / 86400000
+  );
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+}
+
+function render(items) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  if (items.length === 0) {
+    list.innerHTML = '<div id="empty">Nothing logged yet - play something.</div>';
+    return;
+  }
+
+  let currentDay = null;
+  items.forEach(function (item) {
+    const played = new Date(item.played_at * 1000);
+    const label = dayLabel(played);
+    if (label !== currentDay) {
+      currentDay = label;
+      const day = document.createElement("div");
+      day.className = "day";
+      day.textContent = label;
+      list.appendChild(day);
+    }
+
+    const row = document.createElement("div");
+    row.className = "row";
+
+    if (item.has_artwork) {
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.src = "/history/image/" + item.id;
+      img.alt = "";
+      img.onerror = function () { img.replaceWith(noArt()); };
+      row.appendChild(img);
+    } else {
+      row.appendChild(noArt());
+    }
+
+    const info = document.createElement("div");
+    info.className = "info";
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = item.title;
+    const subtitle = document.createElement("div");
+    subtitle.className = "subtitle";
+    subtitle.textContent = [item.subtitle, item.album].filter(Boolean).join(" · ");
+    info.appendChild(title);
+    info.appendChild(subtitle);
+    row.appendChild(info);
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const time = document.createElement("div");
+    time.className = "time";
+    time.textContent = played.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = item.source;
+    meta.appendChild(time);
+    meta.appendChild(document.createElement("br"));
+    meta.appendChild(badge);
+    row.appendChild(meta);
+
+    list.appendChild(row);
+  });
+}
+
+function noArt() {
+  const div = document.createElement("div");
+  div.className = "noart";
+  div.textContent = "♪";
+  return div;
+}
+
+fetch("/api/history?limit=200")
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    if (data.enabled === false) {
+      document.getElementById("disabled").style.display = "block";
+      return;
+    }
+    render(data.items || []);
+  });
+</script>
+</body>
+</html>

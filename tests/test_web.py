@@ -575,3 +575,62 @@ def test_auth_not_required_for_private_address_when_enabled():
     out = WebOutput(_config(), auth_config=auth)
     resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Playback history page (/history, /api/history, /history/image/<id>)
+# ---------------------------------------------------------------------------
+
+def _history_store(tmp_path):
+    from mediainfo.history import PlaybackHistory
+    return PlaybackHistory(str(tmp_path / "history.db"))
+
+
+def test_history_api_reports_disabled_without_store():
+    out = _output()
+    resp = out.app.test_client().get("/api/history")
+    assert resp.get_json() == {"enabled": False, "items": []}
+
+
+def test_history_api_lists_entries(tmp_path):
+    store = _history_store(tmp_path)
+    store.record(_music())
+    out = _output()
+    out.set_history(store)
+
+    data = out.app.test_client().get("/api/history").get_json()
+    assert data["enabled"] is True
+    assert data["items"][0]["title"] == "Bohemian Rhapsody"
+
+
+def test_history_page_served():
+    out = _output()
+    body = out.app.test_client().get("/history").data.decode()
+    assert "Recently played" in body
+
+
+def test_history_image_resolved_through_cache(tmp_path):
+    store = _history_store(tmp_path)
+    store.record(_music(images=[Artwork(url="http://x/cover.jpg")]))
+    entry_id = store.list()[0]["id"]
+
+    img = tmp_path / "cover.jpg"
+    img.write_bytes(b"cover-bytes")
+    cache = MagicMock()
+    cache.get_path.return_value = img
+
+    from mediainfo.outputs.web import WebOutput
+    out = WebOutput(_config(), 30, cache)
+    out.set_history(store)
+
+    resp = out.app.test_client().get(f"/history/image/{entry_id}")
+    assert resp.status_code == 200
+    assert resp.data == b"cover-bytes"
+    # music entry -> music cache tier (never purged)
+    assert cache.get_path.call_args.kwargs["tier"] == "music"
+
+
+def test_history_image_404_for_unknown_entry(tmp_path):
+    out = _output()
+    out.set_history(_history_store(tmp_path))
+    assert out.app.test_client().get("/history/image/999").status_code == 404

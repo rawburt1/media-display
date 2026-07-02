@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Playback history**: a persistent log of everything that has played
+  (SQLite, `history:` config section, on by default), browsable at the
+  web output's new `/history` page - grouped by day, with thumbnails
+  resolved from the regular artwork cache and a JSON API at
+  `/api/history`. One row per genuinely new item; a stop-and-resume of
+  the same item within `dedupe_window_seconds` isn't logged twice, an
+  item shown by several outputs at once (per-output routing) is logged
+  once, and the oldest rows beyond `max_entries` are pruned.
 - `outputs.mqtt[].ha_discovery` (default off): publish retained Home
   Assistant MQTT discovery configs on every (re)connect, so a
   "mediainfo" device with two sensors (now-playing state with the full

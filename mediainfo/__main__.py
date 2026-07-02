@@ -20,11 +20,13 @@ from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.validation import validate_config
 from mediainfo.wiring import (
     build_artwork_overrides,
+    build_history,
     build_poster_store,
     instantiate_outputs,
     start_orchestrator,
     wire_artwork_overrides,
     wire_health_providers,
+    wire_history,
     wire_hitster_safe,
 )
 
@@ -81,8 +83,10 @@ def main() -> None:
     library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
     overrides = build_artwork_overrides(config)
     poster_store = build_poster_store(config)
-    orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store)
+    history = build_history(config)
+    orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store, history)
     wire_artwork_overrides(outputs, overrides)
+    wire_history(outputs, history)
 
     try:
         # Main loop: sleep until a stop signal or a config-file change.
@@ -105,6 +109,7 @@ def main() -> None:
             library_config_changed = new_config.library != config.library
             overrides_config_changed = new_config.overrides != config.overrides
             posters_config_changed = new_config.posters != config.posters
+            history_config_changed = new_config.history != config.history
             config = new_config
 
             orch.stop()
@@ -120,7 +125,12 @@ def main() -> None:
                 wire_artwork_overrides(outputs, overrides)
             if posters_config_changed:
                 poster_store = build_poster_store(config)
-            orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store)
+            if history_config_changed:
+                if history is not None:
+                    history.close()
+                history = build_history(config)
+                wire_history(outputs, history)
+            orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store, history)
             logger.info("Config reloaded successfully")
     finally:
         logger.info("Shutting down ...")
@@ -128,6 +138,8 @@ def main() -> None:
         orch.join()
         _shutdown_outputs(outputs)
         library.close()
+        if history is not None:
+            history.close()
         logger.info("Shutdown complete")
 
 
@@ -157,8 +169,8 @@ def _build_cache(config: Config) -> ImageCache:
     )
 
 
-def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: MusicLibrary, overrides, poster_store=None):
-    orch = start_orchestrator(config, outputs, cache, library, overrides, poster_store)
+def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: MusicLibrary, overrides, poster_store=None, history=None):
+    orch = start_orchestrator(config, outputs, cache, library, overrides, poster_store, history)
     wire_health_providers(outputs, orch, config)
     wire_hitster_safe(outputs, orch)
     return orch

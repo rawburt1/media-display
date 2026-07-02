@@ -86,6 +86,20 @@ class PostersConfig:
 
 
 @dataclasses.dataclass
+class HistoryConfig:
+    # Persistent playback history (a self-hosted scrobble log across every
+    # source) - browsable at the web output's /history page. See
+    # mediainfo/history.py.
+    enabled: bool = True
+    db_path: str = "./library/history.db"
+    # Oldest entries beyond this count are pruned on insert.
+    max_entries: int = 1000
+    # A repeat of the most recent entry within this window is not logged
+    # again - covers a source blip that stops and resumes the same item.
+    dedupe_window_seconds: int = 600
+
+
+@dataclasses.dataclass
 class LoggingConfig:
     # Python logging level name: DEBUG, INFO, WARNING, ERROR, or CRITICAL.
     level: str = "INFO"
