@@ -86,6 +86,32 @@ class _RotationState:
     last_rotation: float
 
 
+@dataclasses.dataclass
+class _RouteGroup:
+    """One set of outputs sharing the same content-rule signature (see
+    docs/per-output-routing.md) - they always agree on which item they'd
+    show, so they share its state: the current item, each member output's
+    rotation through that item's images, and the "nothing playing" grace
+    clock.
+
+    Currently a single group holds every output, which reproduces the
+    previous single-`_current` global-winner behavior exactly; per-group
+    routing assigns each group its own highest-priority match.
+    """
+
+    output_indices: List[int]
+    current: Optional[NowPlaying] = None
+    rotation_state: Dict[int, _RotationState] = dataclasses.field(default_factory=dict)
+    # Member output indices currently blocked by their content filter
+    # (allow/deny rules or active_hours). Filtered outputs do not receive
+    # on_new_item() or update() calls while blocked.
+    filtered_outputs: set = dataclasses.field(default_factory=set)
+    # When this group's sources first reported "nothing playing" while
+    # something was showing; None means either nothing is playing or the
+    # source just resumed. See nothing_playing_grace_seconds.
+    nothing_playing_since: Optional[float] = None
+
+
 class _Transition(enum.Enum):
     """What kind of tick this is, decided purely from the current poll
     result and the orchestrator's existing state - before any enrichment,
@@ -127,19 +153,13 @@ class Orchestrator:
         self.backoff_initial_seconds = backoff_initial_seconds
         self.backoff_max_seconds = backoff_max_seconds
         self.nothing_playing_grace_seconds = nothing_playing_grace_seconds
-        self._current: Optional[NowPlaying] = None
-        # Each output independently cycles through `self._current.images` in
-        # its own randomized order, keyed by its index in `self.outputs`.
-        self._rotation_state: Dict[int, _RotationState] = {}
-        # Output indices that are currently blocked by their content filter
-        # (allow/deny rules or active_hours).  Filtered outputs do not receive
-        # on_new_item() or update() calls while blocked.
-        self._filtered_outputs: set[int] = set()
+        # Route groups (see _RouteGroup): every output lives in exactly one
+        # group; a group's outputs share the item they show. A single group
+        # holding all outputs reproduces the original global-winner behavior.
+        self._groups: List[_RouteGroup] = [
+            _RouteGroup(output_indices=list(range(len(outputs))))
+        ]
         self._last_cache_purge: Optional[float] = None
-        # When the time it was first seen since `self._current` was set;
-        # None means either nothing is playing or the source just resumed.
-        # See nothing_playing_grace_seconds above.
-        self._nothing_playing_since: Optional[float] = None
         # "Hitster-safe" mode: while enabled, music now-playing (songs,
         # artists, albums) is treated as if nothing were playing on every
         # output - so the title/artist never leaks on screen during a game
@@ -164,6 +184,31 @@ class Orchestrator:
         self._last_alert_check: Optional[float] = None
         self._overrides = overrides
         self._poster_store = poster_store
+
+    # -- single-group state aliases -----------------------------------------
+    # The orchestrator's original single-item attributes, aliased to the
+    # first route group's state - kept for tests and get_health(), which
+    # predate route groups. Internal code passes an explicit group instead.
+
+    @property
+    def _current(self) -> Optional[NowPlaying]:
+        return self._groups[0].current
+
+    @_current.setter
+    def _current(self, value: Optional[NowPlaying]) -> None:
+        self._groups[0].current = value
+
+    @property
+    def _rotation_state(self) -> Dict[int, _RotationState]:
+        return self._groups[0].rotation_state
+
+    @property
+    def _filtered_outputs(self) -> set:
+        return self._groups[0].filtered_outputs
+
+    @property
+    def _nothing_playing_since(self) -> Optional[float]:
+        return self._groups[0].nothing_playing_since
 
     def get_hitster_safe(self) -> bool:
         with self._hitster_safe_lock:
@@ -196,36 +241,44 @@ class Orchestrator:
         self._maybe_check_alerts()
 
         now_playing = self._resolve_now_playing()
+        # Stripped here, once per poll result, rather than per group - so
+        # groups sharing an item never double-process it.
+        if now_playing is not None and now_playing.media_type == "music":
+            now_playing.title = _strip_parenthetical(now_playing.title)
+
+        self._tick_group(self._groups[0], now_playing)
+
+    def _tick_group(self, group: _RouteGroup, now_playing: Optional[NowPlaying]) -> None:
+        """Advance one route group given the item routed to it this tick
+        (None when nothing it accepts is playing)."""
         if now_playing is None:
-            self._handle_nothing_playing()
+            self._handle_nothing_playing(group)
             return
 
-        self._nothing_playing_since = None
-        if now_playing.media_type == "music":
-            now_playing.title = _strip_parenthetical(now_playing.title)
+        group.nothing_playing_since = None
         self._maybe_clear_stale_idle_state(now_playing)
 
-        transition = self._classify(now_playing)
+        transition = self._classify(group, now_playing)
         if transition is _Transition.SAME_ITEM_ROTATE:
-            self._refresh_position(now_playing)
-            self._maybe_rotate()
+            self._refresh_position(group, now_playing)
+            self._maybe_rotate(group)
         elif transition is _Transition.SAME_ITEM_NO_ARTWORK:
-            self._refresh_position(now_playing)
+            self._refresh_position(group, now_playing)
             # Same no-artwork item: keep idle wallpapers running on image
             # outputs without notifying text-only outputs to go idle.
             self._show_idle_wallpaper(notify_idle=False)
         else:
-            self._handle_new_item(now_playing)
+            self._handle_new_item(group, now_playing)
 
-    def _refresh_position(self, now_playing: NowPlaying) -> None:
-        """Keep self._current's playback position/duration fresh from
-        every poll, not just frozen at whatever it was when the item
-        started - _maybe_rotate periodically re-pushes self._current to
+    def _refresh_position(self, group: _RouteGroup, now_playing: NowPlaying) -> None:
+        """Keep the group's current item's playback position/duration fresh
+        from every poll, not just frozen at whatever it was when the item
+        started - _maybe_rotate periodically re-pushes the current item to
         outputs (see its docstring).
         """
-        assert self._current is not None  # only called for SAME_ITEM transitions
-        self._current.position_seconds = now_playing.position_seconds
-        self._current.duration_seconds = now_playing.duration_seconds
+        assert group.current is not None  # only called for SAME_ITEM transitions
+        group.current.position_seconds = now_playing.position_seconds
+        group.current.duration_seconds = now_playing.duration_seconds
 
     def _resolve_now_playing(self) -> Optional[NowPlaying]:
         """Poll sources and apply the Hitster-safe filter - the one
@@ -245,36 +298,36 @@ class Orchestrator:
     def _maybe_clear_stale_idle_state(self, now_playing: NowPlaying) -> None:
         self._idle.clear_if_stale(now_playing)
 
-    def _classify(self, now_playing: NowPlaying) -> _Transition:
-        """Pure: decide what kind of tick this is from `now_playing` and
-        `self._current` alone - no enrichment, no cache access, no output
-        calls.
+    def _classify(self, group: _RouteGroup, now_playing: NowPlaying) -> _Transition:
+        """Pure: decide what kind of tick this is for `group` from
+        `now_playing` and `group.current` alone - no enrichment, no cache
+        access, no output calls.
         """
-        if self._current is not None and now_playing.identity == self._current.identity:
+        if group.current is not None and now_playing.identity == group.current.identity:
             return (
                 _Transition.SAME_ITEM_ROTATE
-                if self._current.images
+                if group.current.images
                 else _Transition.SAME_ITEM_NO_ARTWORK
             )
         return _Transition.NEW_ITEM
 
-    def _handle_nothing_playing(self) -> None:
-        if self._current is not None:
+    def _handle_nothing_playing(self, group: _RouteGroup) -> None:
+        if group.current is not None:
             now = time.monotonic()
-            if self._nothing_playing_since is None:
-                self._nothing_playing_since = now
-            if now - self._nothing_playing_since < self.nothing_playing_grace_seconds:
+            if group.nothing_playing_since is None:
+                group.nothing_playing_since = now
+            if now - group.nothing_playing_since < self.nothing_playing_grace_seconds:
                 # Tolerate a brief gap without touching outputs at all - see
                 # nothing_playing_grace_seconds above.
                 return
             logger.info("Nothing playing; switching outputs to idle")
-            self._current = None
-            self._rotation_state = {}
-            self._filtered_outputs = set()
-            self._nothing_playing_since = None
+            group.current = None
+            group.rotation_state = {}
+            group.filtered_outputs = set()
+            group.nothing_playing_since = None
         self._show_idle_wallpaper()
 
-    def _handle_new_item(self, now_playing: NowPlaying) -> None:
+    def _handle_new_item(self, group: _RouteGroup, now_playing: NowPlaying) -> None:
         for enricher in self.enrichers:
             self._safe_call(enricher.enrich, now_playing)
 
@@ -289,11 +342,12 @@ class Orchestrator:
             len(now_playing.images),
         )
 
-        self._current = now_playing
-        self._filtered_outputs = self._compute_filtered(now_playing)
+        group.current = now_playing
+        group.filtered_outputs = self._compute_filtered(group, now_playing)
 
-        for index, output in enumerate(self.outputs):
-            if index in self._filtered_outputs:
+        for index in group.output_indices:
+            output = self.outputs[index]
+            if index in group.filtered_outputs:
                 if getattr(getattr(output, "config", None), "idle_when_filtered", False):
                     self._call_output(index, output.on_idle)
             else:
@@ -301,16 +355,16 @@ class Orchestrator:
 
         if not now_playing.images:
             logger.warning("No artwork available for %s", now_playing.title)
-            self._rotation_state = {}
+            group.rotation_state = {}
             self._show_idle_wallpaper(notify_idle=False)
             return
 
-        self._rotation_state = self._build_rotation_states(
-            len(now_playing.images), len(self.outputs)
+        group.rotation_state = self._build_rotation_states(
+            len(now_playing.images), group.output_indices
         )
-        for index, output in enumerate(self.outputs):
-            if index not in self._filtered_outputs:
-                self._show_image_for_output(index, output)
+        for index in group.output_indices:
+            if index not in group.filtered_outputs:
+                self._show_image_for_output(group, index, self.outputs[index])
 
     def _apply_poster_store(self, now_playing: NowPlaying) -> None:
         """If a static poster is configured for this title (and optionally
@@ -367,13 +421,16 @@ class Orchestrator:
         labels = {i: type(output).__name__ for i, output in enumerate(self.outputs)}
         self._alerts.check(labels, self._health.output_error_since, now)
 
-    def _build_rotation_states(self, num_images: int, num_outputs: int) -> Dict[int, _RotationState]:
-        """Build one _RotationState per output, sharing a single shuffled
-        order but starting each output at a different position in it - so
-        outputs never start on the same picture (as long as there are at
-        least as many images as outputs) instead of leaving that to chance
-        via independent per-output shuffles, which can (and visibly does,
-        with a modest-sized image pool) coincidentally collide.
+    def _build_rotation_states(
+        self, num_images: int, output_indices: List[int]
+    ) -> Dict[int, _RotationState]:
+        """Build one _RotationState per output in `output_indices`, sharing
+        a single shuffled order but starting each output at a different
+        position in it - so outputs never start on the same picture (as
+        long as there are at least as many images as outputs) instead of
+        leaving that to chance via independent per-output shuffles, which
+        can (and visibly does, with a modest-sized image pool)
+        coincidentally collide.
 
         Each output's rotation clock is also given its own random phase
         within the interval, so they don't all advance to their next image
@@ -384,16 +441,17 @@ class Orchestrator:
         random.shuffle(order)
         now = time.monotonic()
         states = {}
-        for index in range(num_outputs):
+        for offset, index in enumerate(output_indices):
             jitter = random.uniform(0, self.rotation_interval_seconds)
             states[index] = _RotationState(
-                order=order, position=index % num_images, last_rotation=now - jitter
+                order=order, position=offset % num_images, last_rotation=now - jitter
             )
         return states
 
-    def _maybe_rotate(self) -> None:
+    def _maybe_rotate(self, group: _RouteGroup) -> None:
         """Advance (or, for a single-image item, simply re-push) each
-        output's current pick once its rotation_interval_seconds elapses.
+        group output's current pick once its rotation_interval_seconds
+        elapses.
 
         Single-image items still go through this on schedule rather than
         being skipped entirely - a push that failed once (e.g. a physical
@@ -403,29 +461,31 @@ class Orchestrator:
         (which could be a *previous*, unrelated item's artwork) until the
         next genuinely different item starts.
         """
-        if self._current is None:
+        if group.current is None:
             return
 
-        self._recheck_filters()
+        self._recheck_filters(group)
 
         now = time.monotonic()
-        multi_image = len(self._current.images) > 1
-        for index, output in enumerate(self.outputs):
-            if index in self._filtered_outputs:
+        multi_image = len(group.current.images) > 1
+        for index in group.output_indices:
+            if index in group.filtered_outputs:
                 continue
-            state = self._rotation_state.get(index)
+            state = group.rotation_state.get(index)
             if state is None or now - state.last_rotation < self.rotation_interval_seconds:
                 continue
 
             if multi_image:
                 state.position = (state.position + 1) % len(state.order)
             state.last_rotation = now
-            self._show_image_for_output(index, output)
+            self._show_image_for_output(group, index, self.outputs[index])
 
-    def _compute_filtered(self, now_playing: NowPlaying) -> set[int]:
-        """Return the set of output indices that should be blocked for *now_playing*."""
+    def _compute_filtered(self, group: _RouteGroup, now_playing: NowPlaying) -> set:
+        """Return the group output indices that should be blocked for
+        *now_playing*."""
         filtered = set()
-        for index, output in enumerate(self.outputs):
+        for index in group.output_indices:
+            output = self.outputs[index]
             config = getattr(output, "config", None)
             if not passes_filter(now_playing, config):
                 logger.debug(
@@ -435,23 +495,25 @@ class Orchestrator:
                 filtered.add(index)
         return filtered
 
-    def _recheck_filters(self) -> None:
-        """Re-evaluate filters for all outputs against the current item.
+    def _recheck_filters(self, group: _RouteGroup) -> None:
+        """Re-evaluate filters for the group's outputs against its current
+        item.
 
         Called on every rotation tick so that active_hours transitions
         (e.g. an output becoming active at 08:00 while the same item keeps
         playing) are applied without waiting for the next track change.
         """
-        if self._current is None:
+        if group.current is None:
             return
-        for index, output in enumerate(self.outputs):
+        for index in group.output_indices:
+            output = self.outputs[index]
             config = getattr(output, "config", None)
-            was_filtered = index in self._filtered_outputs
-            is_filtered = not passes_filter(self._current, config)
+            was_filtered = index in group.filtered_outputs
+            is_filtered = not passes_filter(group.current, config)
             if is_filtered == was_filtered:
                 continue
             if is_filtered:
-                self._filtered_outputs.add(index)
+                group.filtered_outputs.add(index)
                 logger.debug(
                     "Output %d (%s) became filtered mid-play",
                     index, type(output).__name__,
@@ -459,16 +521,16 @@ class Orchestrator:
                 if getattr(config, "idle_when_filtered", False):
                     self._call_output(index, output.on_idle)
             else:
-                self._filtered_outputs.discard(index)
+                group.filtered_outputs.discard(index)
                 logger.debug(
                     "Output %d (%s) became unfiltered mid-play",
                     index, type(output).__name__,
                 )
-                self._call_output(index, output.on_new_item, self._current, self.cache)
-                if self._current.images:
-                    self._show_image_for_output(index, output)
+                self._call_output(index, output.on_new_item, group.current, self.cache)
+                if group.current.images:
+                    self._show_image_for_output(group, index, output)
 
-    def _show_image_for_output(self, index: int, output: Output) -> None:
+    def _show_image_for_output(self, group: _RouteGroup, index: int, output: Output) -> None:
         """Resolve and push the output's current rotation pick - falling
         through the rest of the pool (in rotation order) if that pick fails
         to fetch (e.g. rejected by the cache's minimum-size filter, or a
@@ -476,12 +538,12 @@ class Orchestrator:
         until its next scheduled rotation, up to rotation_interval_seconds
         later.
         """
-        assert self._current is not None  # only called while something is playing
-        state = self._rotation_state[index]
-        images = self._current.images
-        tier: CacheTier = "music" if self._current.media_type == "music" else "default"
+        assert group.current is not None  # only called while something is playing
+        state = group.rotation_state[index]
+        images = group.current.images
+        tier: CacheTier = "music" if group.current.media_type == "music" else "default"
 
-        skip_artist_photos = output.music_album_art_only and self._current.media_type == "music"
+        skip_artist_photos = output.music_album_art_only and group.current.media_type == "music"
         for attempt in range(len(images)):
             artwork = images[state.order[(state.position + attempt) % len(state.order)]]
             if skip_artist_photos and artwork.is_artist_photo:
@@ -495,12 +557,12 @@ class Orchestrator:
                 logger.exception("Failed to fetch artwork %s", artwork.url)
                 continue
 
-            self._call_output(index, output.update, self._current, artwork, image_path)
+            self._call_output(index, output.update, group.current, artwork, image_path)
             return
 
         logger.warning(
             "No fetchable artwork for %s (%d candidate(s) all failed)",
-            self._current.title, len(images),
+            group.current.title, len(images),
         )
 
     def _show_idle_wallpaper(self, notify_idle: bool = True) -> None:

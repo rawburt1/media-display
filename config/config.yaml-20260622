@@ -1,0 +1,299 @@
+# Copy this file to config.yaml and fill in your own values.
+
+# How often (in seconds) to poll each enabled source for "now playing" info.
+poll_interval_seconds: 5
+
+# Source priority: when multiple sources are active at once, the first
+# active source in this list wins.
+priority:
+- kodi
+- appletv
+- homeassistant
+- youtube
+- shield
+- plex
+- sonos
+- vinyl
+- spotify
+
+# Idle wallpaper source priority - first one with pictures available wins;
+# never mixed together. Local pictures first (fastest, no network), then
+# Pexels, then Unsplash as a last resort (currently unreliable from here).
+idle_priority:
+- local
+- pexels
+- unsplash
+idle_mode: priority
+
+sources:
+  kodi:
+    enabled: true
+    host: 192.168.1.21
+    port: 8080
+    username: kodi
+    password: kodi
+
+  homeassistant:
+    enabled: true
+    host: 192.168.1.11
+    port: 8123
+    use_ssl: false
+    token: 
+      eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiZGI1YTBjZjRjZjg0MmQzYjJjMTQ0NmUxOTUwMWMyZSIsImlhdCI6MTc4MTk0NjU3MCwiZXhwIjoyMDk3MzA2NTcwfQ.lt1SNguJC0zyyizfgWUqUWyK-h2GmzZefDl_NaCCbxw
+    entity_id: media_player.apple_tv_4k_vardagsrum
+
+  shield:
+    enabled: true
+    host: 192.168.1.21
+    port: 5555
+    adb_key_path: ./adb_keys/shield
+
+  sonos:
+    enabled: true
+    # IP address of every Sonos speaker on your network. Any one of them
+    # can report the full household topology, so listing more than one
+    # keeps every zone visible even if a particular speaker is
+    # temporarily off or unreachable.
+    speaker_ips:
+    - 192.168.1.80     # Kitchen 5
+    - 192.168.1.224    # Bedroom
+    - 192.168.1.82     # BOOST
+    - 192.168.1.81     # Sub 1
+    - 192.168.1.217    # TV-rum
+    - 192.168.1.215    # Living Room 5
+
+  plex:
+    # Disabled until host/token are filled in below.
+    enabled: true
+    host: "192.168.1.105"
+    port: 32400
+    # See https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
+    token: "Vh6z6-V8Rb5ANo3uaEeY"
+
+  vinyl:
+    # Disabled until vinyl_recognizer is deployed on the machine the
+    # Behringer UCA202 is connected to - see vinyl_recognizer/README.md.
+    enabled: false
+    host: "192.168.1.40"
+    port: 8091
+
+  appletv:
+    enabled: true
+    host: '192.168.1.22'
+    companion_credentials: '6eb0e0eb5fbf55d8d817624c0a85e0266bd441de5aba08c8de20b399f24c4ee9:60b9c61c6a87f41656e859bdf9f9371830a2914d96bf3735cb76d5d6ea1cab38:32463242464434392d323939452d344430452d423636332d434537363137313544344335:32646665613934362d383139342d346231382d383636382d626534656566323261666265'
+    mrp_credentials: ''
+    airplay_credentials: ''
+  emby:
+    enabled: false
+    host: ''
+    port: 8096
+    api_key: ''
+  jellyfin:
+    enabled: false
+    host: ''
+    port: 8096
+    api_key: ''
+  spotify:
+    enabled: true
+    client_id: da79760d06f346ecbf320946f6a4ad3e
+    client_secret: 194c24f595f142fd964d950781adec18
+    redirect_uri: http://localhost:8888/callback
+    cache_path: ./spotify_cache/token.json
+  youtube:
+    enabled: true
+    host: 192.168.1.21
+    port: 5555
+    adb_key_path: ./adb_keys/youtube
+outputs:
+  config:
+  - enabled: true
+    host: 0.0.0.0
+    port: 8095
+    ui: dashboard
+
+  pixoo:
+  - enabled: true
+    # IP address of your Divoom Pixoo64.
+    ip: 192.168.1.32
+
+    preview_path: ''
+  web:
+  - enabled: true
+    host: 0.0.0.0
+    port: 8090
+
+  folder:
+  - enabled: true
+    # Mirrors the album art / fanart / posters for whatever is currently
+    # playing (replaced whenever the item changes, cleared while idle).
+    dir: ./artwork
+
+  nest_hub:
+  - enabled: true
+    # IP address of your Google Nest Hub.
+    device_ip: "192.168.1.41"
+    # This machine's LAN address, so the Nest Hub can fetch the image to
+    # show.
+    server_host: "192.168.1.40"
+    server_port: 8092
+
+  ulanzi:
+  - enabled: true
+      # IP address of the Ulanzi TC001.
+    device_ip: "192.168.1.30"
+    app_name: now_playing
+    username: ''
+    password: ''
+  - enabled: true
+      # IP address of the second Ulanzi TC001.
+    device_ip: "192.168.1.31"
+    app_name: now_playing
+
+    password: ''
+    username: ''
+  video:
+  - enabled: true
+    host: 0.0.0.0
+    port: 8091
+    source: pexels
+    queries: swedish nature, swedish architecture
+    refresh_interval_seconds: 3600
+    batch_size: 15
+    pexels_api_key: "w8sPVOcHVtIRnjWtazimT5pwUIxGKHfAZdSv1C2uSMmKblMjXNXiYL5G"
+
+    pixabay_api_key: ''
+  feed:
+  - enabled: true
+    host: 0.0.0.0
+    port: 8888
+    title: Now Playing
+  info:
+  - enabled: true
+    host: 0.0.0.0
+    port: 8093
+  mqtt:
+  - enabled: false
+    host: localhost
+    port: 1883
+    topic: mediainfo/now_playing
+    client_id: mediainfo
+    username: ''
+    password: ''
+    qos: 0
+    retain: true
+cache:
+  dir: ./cache
+
+library:
+  db_path: ./library/library.db
+
+idle:
+  local:
+    enabled: true
+    dir: ./pictures
+    rotation_interval_seconds: 300
+    batch_size: 15
+
+  unsplash:
+    # Disabled until access_key is filled in below (create a free app at
+    # https://unsplash.com/oauth/applications).
+    enabled: true
+    queries: city, landscape background, swedish nature, swedish archipelago, 
+      norwegian nature
+    rotation_interval_seconds: 300
+    batch_size: 10
+    access_key: "594ae55e2f785a386ed08a56619c882c4f0cfd28d9789db26b04f68a746d4aaa"
+
+  pexels:
+    # Fallback for when Unsplash is unreachable - fetched independently
+    # and merged into the same pool (see idle/composite.py).
+    enabled: true
+    queries: city, landscape background, swedish nature, swedish archipelago, 
+      norwegian nature
+    rotation_interval_seconds: 300
+    batch_size: 10
+    api_key: "w8sPVOcHVtIRnjWtazimT5pwUIxGKHfAZdSv1C2uSMmKblMjXNXiYL5G"
+
+  lastfm:
+    enabled: false
+    api_key: 'c4cf08ea2622ad3b43cf8a3eab31ca02'
+    username: 'rawburt'
+    batch_size: 10
+    rotation_interval_seconds: 300
+
+  library:
+    # Disabled by default - enable to show cover art from your own
+    # imported library instead of/alongside Unsplash and Last.fm.
+    enabled: false
+    batch_size: 10
+    rotation_interval_seconds: 300
+logging:
+  # DEBUG, INFO (default), WARNING, ERROR, or CRITICAL.
+  level: INFO
+  file: ./logs/mediainfo.log
+  max_bytes: 1048576
+  backup_count: 3
+
+auth:
+  # Off - this only ever runs on the home LAN. Enable + set a real
+  # username/password before exposing any output beyond it.
+  enabled: false
+  username: ''
+  password: ''
+
+enrichers:
+  library:
+    enabled: true
+
+  thetvdb:
+    # Disabled until api_key is filled in below.
+    enabled: true
+    # Project API key from https://thetvdb.com/dashboard/account/apikey
+    api_key: "5c6492cb-c8cd-464a-b931-33a4a7c8ac02"
+    # Only needed for "user-supported" API keys.
+    pin: ""
+
+  fanarttv:
+    enabled: true
+    # Personal API key from https://fanart.tv/get-an-api-key/
+    api_key: c28bd54bde57442cec810a467b9fc19b
+
+  discogs:
+    enabled: true
+    token: 'rExlwmhieuEGCadaUAORoTtbpiRzUhltCUWwoMgv'
+  lastfm:
+    # Free API key from https://www.last.fm/api/account/create - won't
+    # add anything until a real key is filled in below.
+    enabled: true
+    api_key: 'c4cf08ea2622ad3b43cf8a3eab31ca02'
+  musicbrainz:
+    # No API key required - uses the free Cover Art Archive.
+    enabled: true
+  wikipedia:
+    # No API key required - uses the free Wikipedia REST API.
+    enabled: true
+  lidarr:
+    enabled: true
+    host: 192.168.1.122
+    port: 6003
+    api_key: 5cba53034ad545abaef0ef64a6885eb2
+    max_discography_items: 50
+  radarr:
+    enabled: true
+    host: 192.168.1.122
+    port: 6002
+    api_key: 93fdfd62190e4ac997a4b21a742ee4e0
+  sonarr:
+    enabled: true
+    host: '192.168.1.122'
+    port: 6001
+    api_key: 29e1c970228449488afeb677070f9553
+  lyrics:
+    enabled: true
+  tmdb:
+    enabled: true
+    api_key: 
+      eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxOWFhOGQ0OWY1YzVkODExOTRlZTdmNDA4YmVmMDkyZiIsIm5iZiI6MTc4MDcyOTk2NC4zMzc5OTk4LCJzdWIiOiI2YTIzYzg2Y2NkNjU0NjdjOWY0MDMyMGYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.tSt0Jh7-WPNzLbd8Oa_UHGNNqoXxumNuMJIIex2epnc
+  omdb:
+    enabled: true
+    api_key: a473dd
