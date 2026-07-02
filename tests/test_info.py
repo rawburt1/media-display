@@ -84,6 +84,29 @@ def test_payload_includes_rating():
     assert payload["rating"] == 8.5
 
 
+def test_payload_includes_playback_position_when_reported():
+    out = _output()
+    out.on_new_item(_music(position_seconds=42.5, duration_seconds=180.0), MagicMock())
+    payload = out._get_payload()
+    assert payload["position_seconds"] == 42.5
+    assert payload["duration_seconds"] == 180.0
+
+
+def test_payload_omits_playback_position_when_unknown():
+    # position/duration default to None ("unknown", not "at the start").
+    out = _output()
+    out.on_new_item(_music(), MagicMock())
+    payload = out._get_payload()
+    assert "position_seconds" not in payload
+    assert "duration_seconds" not in payload
+
+
+def test_index_page_has_progress_bar():
+    out = _output()
+    body = out.app.test_client().get("/").data.decode()
+    assert 'id="progress"' in body
+
+
 def test_payload_when_playing_with_image(tmp_path):
     out = _output()
     np = _music()

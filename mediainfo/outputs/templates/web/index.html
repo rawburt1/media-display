@@ -21,6 +21,9 @@
     #title { font-size: 1.5em; }
     #subtitle { font-size: 1em; opacity: 0.8; }
     #art-label { font-size: 0.8em; opacity: 0.5; margin-top: 0.3em; }
+    #progress { display: none; width: min(60vw, 400px); height: 4px; margin: 0.6em auto 0;
+                background: rgba(255, 255, 255, 0.25); border-radius: 2px; overflow: hidden; }
+    #progress-fill { width: 0%; height: 100%; background: #fff; border-radius: 2px; }
   </style>
 </head>
 <body>
@@ -32,6 +35,7 @@
     <div id="title"></div>
     <div id="subtitle"></div>
     <div id="art-label"></div>
+    <div id="progress"><div id="progress-fill"></div></div>
   </div>
   <script>
     {{ transitions_js }}
@@ -75,7 +79,33 @@
       title.textContent = data.title || "";
       subtitle.textContent = data.subtitle || "";
       artLabel.textContent = data.art_label || "";
+      setProgress(data);
     }
+
+    // Payloads only arrive on item changes and rotation ticks, so the bar
+    // advances locally at 1s/s from the last reported position; each new
+    // payload re-anchors it (correcting for pauses/seeks within one tick).
+    let progress = null;
+
+    function setProgress(data) {
+      progress = (typeof data.position_seconds === "number" && data.duration_seconds > 0)
+        ? { position: data.position_seconds, duration: data.duration_seconds, at: Date.now() }
+        : null;
+      renderProgress();
+    }
+
+    function renderProgress() {
+      const bar = document.getElementById("progress");
+      if (progress === null) {
+        bar.style.display = "none";
+        return;
+      }
+      const pos = Math.min(progress.position + (Date.now() - progress.at) / 1000, progress.duration);
+      bar.style.display = "block";
+      document.getElementById("progress-fill").style.width = (100 * pos / progress.duration) + "%";
+    }
+
+    setInterval(renderProgress, 1000);
 
     function connect() {
       const ws = new WebSocket("ws://" + location.host + "/ws");
