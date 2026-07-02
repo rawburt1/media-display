@@ -18,6 +18,7 @@ from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
+from mediainfo.poster_store import PosterStore
 
 logger = logging.getLogger(__name__)
 
@@ -111,12 +112,19 @@ def build_artwork_overrides(config: Config) -> Optional[ArtworkOverrideStore]:
     return ArtworkOverrideStore(config.overrides.dir)
 
 
+def build_poster_store(config: Config) -> Optional[PosterStore]:
+    if not config.posters.enabled or not config.posters.entries:
+        return None
+    return PosterStore(config.posters.dir, config.posters.entries)
+
+
 def start_orchestrator(
     config: Config,
     outputs: list,
     cache: ImageCache,
     library: Optional[MusicLibrary] = None,
     overrides: Optional[ArtworkOverrideStore] = None,
+    poster_store: Optional[PosterStore] = None,
 ) -> Orchestrator:
     orch = Orchestrator(
         sources=build_sources(config),
@@ -131,6 +139,7 @@ def start_orchestrator(
         nothing_playing_grace_seconds=config.nothing_playing_grace_seconds,
         alert_config=config.alerts,
         overrides=overrides,
+        poster_store=poster_store,
     )
     orch.start()
     return orch
