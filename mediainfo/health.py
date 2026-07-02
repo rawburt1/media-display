@@ -128,6 +128,12 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
             if err:
                 entry["last_error"] = err["message"]
                 entry["last_error_ago_seconds"] = err["ago_seconds"]
+            binding = data.get("output_now_playing", {}).get(i)
+            if binding:
+                # Which item this output is bound to - with per-output
+                # source routing, different outputs can show different
+                # sources at once.
+                entry["now_playing"] = f"{binding['source']}: {binding['title']}"
             cfg = getattr(output, "config", None)
             if cfg:
                 for field in registries.OUTPUT_DETAIL_FIELDS.get(type_name, []):

@@ -1,9 +1,14 @@
 # Per-output source routing — design plan
 
-Status: **planned, not implemented.** Written 2026-07-02, against the
-codebase as of PR #11. File/line references below will drift; the
-structural claims (what holds single-item state, what iterates all
-outputs) are the durable part.
+Status: **implemented** (2026-07-02, same day as planned - see the
+"Routing phase 1-4" commits). This document is kept as the design
+rationale; where it and the code disagree, the code won. Notable
+deviations from the plan: the `orch._current` aliases were kept (not
+dropped in phase 3) since filterless test configs still yield one group;
+Hitster-safe moved into the poll loop per result, so a lower-priority
+non-music item can show while music is suppressed; and the open questions
+below were resolved as "ship default-on, no `routing:` flag" and
+"dashboard bindings in v1".
 
 ## Goal
 
