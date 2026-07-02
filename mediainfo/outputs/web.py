@@ -110,6 +110,7 @@ class WebOutput(Output):
         self._images_pushed_for_pool = False
 
         self._health_fn = None
+        self._history = None
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
         threading.Thread(target=self._rotate_clients_loop, daemon=True).start()
@@ -117,6 +118,11 @@ class WebOutput(Output):
     def set_health_provider(self, fn) -> None:
         """Register a callable that returns the health JSON dict for /health."""
         self._health_fn = fn
+
+    def set_history(self, history) -> None:
+        """Register the PlaybackHistory store backing the /history page -
+        see wiring.wire_history. None means the feature is disabled."""
+        self._history = history
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         with self._lock:
@@ -362,6 +368,42 @@ class WebOutput(Output):
         @app.get("/api/now-playing")
         def now_playing_json():
             return jsonify(self._get_payload())
+
+        @app.get("/history")
+        def history_page():
+            return render_template("web/history.html")
+
+        @app.get("/api/history")
+        def history_json():
+            if self._history is None:
+                return jsonify({"enabled": False, "items": []})
+            try:
+                limit = int(request.args.get("limit", 50))
+            except ValueError:
+                limit = 50
+            return jsonify({"enabled": True, "items": self._history.list(limit)})
+
+        @app.get("/history/image/<int:entry_id>")
+        def history_image(entry_id: int):
+            """Thumbnail for one history entry, resolved through the
+            regular artwork cache by the entry's stored URL - usually a
+            plain cache hit, since the artwork was fetched when the item
+            played."""
+            if self._history is None or self._cache is None:
+                return "", 404
+            entry = self._history.entry_artwork(entry_id)
+            if entry is None:
+                return "", 404
+            url, media_type = entry
+            tier: CacheTier = "music" if media_type == "music" else "default"
+            try:
+                path = self._cache.get_path(Artwork(url=url), tier=tier)
+            except Exception:
+                logger.exception("Failed to resolve history artwork %s", url)
+                return "", 404
+            if path is None or not path.exists():
+                return "", 404
+            return send_file(path)
 
         @app.get("/image/current")
         def current_image():

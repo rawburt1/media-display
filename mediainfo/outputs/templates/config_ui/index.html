@@ -558,6 +558,9 @@ function render() {
   html += '<h2>Cache</h2><div class="card">'
     + schema.cache.map(function(f) { return renderField('cache', '', f); }).join('')
     + '</div>';
+  html += '<h2>Playback History</h2><div class="card">'
+    + schema.history.map(function(f) { return renderField('history', '', f); }).join('')
+    + '</div>';
   html += renderCategory('Sources', 'sources');
   html += '<h2>Outputs</h2><div id="outputs-section"></div>';
   html += renderCategory('Enrichers', 'enrichers');
