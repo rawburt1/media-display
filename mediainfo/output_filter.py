@@ -15,8 +15,54 @@ active_hours wraps around midnight ("22:00-06:00" means 22:00â€“23:59 or 00:00â€
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
 from typing import Any
+
+
+@dataclasses.dataclass(frozen=True)
+class ContentRules:
+    """The routing-relevant subset of an output's filter config - the
+    allow/deny rules, without active_hours (that gates *whether* an output
+    displays, not *what* it would show; see docs/per-output-routing.md).
+
+    Frozen/hashable so outputs sharing the same rules can be grouped into
+    one route group by using their ContentRules as the group key.
+    """
+
+    allow_media_types: tuple = ()
+    deny_media_types: tuple = ()
+    allow_sources: tuple = ()
+    deny_sources: tuple = ()
+
+    @classmethod
+    def from_config(cls, config: Any) -> "ContentRules":
+        # Guard: only apply rules when the config field is the expected
+        # Python type. Non-list values (e.g. from a MagicMock in tests)
+        # are treated as "no rule".
+        def norm(name: str) -> tuple:
+            value = getattr(config, name, None)
+            return tuple(sorted(value)) if isinstance(value, list) else ()
+
+        return cls(
+            allow_media_types=norm("allow_media_types"),
+            deny_media_types=norm("deny_media_types"),
+            allow_sources=norm("allow_sources"),
+            deny_sources=norm("deny_sources"),
+        )
+
+    def accepts(self, now_playing: Any) -> bool:
+        """First failing rule wins; deny always beats allow (see module
+        docstring). Empty rules pass unconditionally."""
+        if now_playing.media_type in self.deny_media_types:
+            return False
+        if now_playing.source in self.deny_sources:
+            return False
+        if self.allow_media_types and now_playing.media_type not in self.allow_media_types:
+            return False
+        if self.allow_sources and now_playing.source not in self.allow_sources:
+            return False
+        return True
 
 
 def passes_filter(now_playing: Any, config: Any) -> bool:
@@ -24,22 +70,10 @@ def passes_filter(now_playing: Any, config: Any) -> bool:
     if config is None:
         return True
 
-    deny_types = getattr(config, "deny_media_types", None)
-    deny_srcs = getattr(config, "deny_sources", None)
-    allow_types = getattr(config, "allow_media_types", None)
-    allow_srcs = getattr(config, "allow_sources", None)
-    active_hours = getattr(config, "active_hours", None)
+    if not ContentRules.from_config(config).accepts(now_playing):
+        return False
 
-    # Guard: only apply rules when the config field is the expected Python type.
-    # Non-list values (e.g. from a MagicMock in tests) are treated as "no rule".
-    if isinstance(deny_types, list) and deny_types and now_playing.media_type in deny_types:
-        return False
-    if isinstance(deny_srcs, list) and deny_srcs and now_playing.source in deny_srcs:
-        return False
-    if isinstance(allow_types, list) and allow_types and now_playing.media_type not in allow_types:
-        return False
-    if isinstance(allow_srcs, list) and allow_srcs and now_playing.source not in allow_srcs:
-        return False
+    active_hours = getattr(config, "active_hours", None)
     if isinstance(active_hours, str) and active_hours and not _in_active_hours(active_hours):
         return False
     return True

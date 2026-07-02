@@ -200,7 +200,7 @@ function matchesFilter(status) {
 // of config field names is a losing game across every source/output/
 // enricher's own config dataclass. Only this fixed set of *computed*
 // (non-config) fields is ever worth showing on a card.
-const _DETAIL_ALLOW = ['wallpapers_loaded', 'videos_loaded'];
+const _DETAIL_ALLOW = ['wallpapers_loaded', 'videos_loaded', 'now_playing'];
 
 function detailText(item) {
   return Object.keys(item)
