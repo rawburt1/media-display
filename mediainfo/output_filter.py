@@ -79,26 +79,39 @@ def passes_filter(now_playing: Any, config: Any) -> bool:
     return True
 
 
-def _in_active_hours(active_hours: str) -> bool:
-    """Return True if the current local time falls within *active_hours*.
+def in_time_window(window: str, now: datetime.time | None = None) -> bool:
+    """Return True if `now` (default: current local time) falls within a
+    daily "HH:MM-HH:MM" window.
 
-    Format: "HH:MM-HH:MM".  Wrap-around windows (e.g. "22:00-06:00") are
-    supported and mean "active if now >= start OR now <= end".
-    Malformed values are treated as always-active to avoid blocking outputs.
+    Wrap-around windows (e.g. "22:00-06:00") are supported and mean
+    "inside if now >= start OR now <= end". Raises ValueError on a
+    malformed window - callers decide their own fallback (active_hours
+    treats malformed as always-active; display schedules skip the entry).
+
+    Also used by display power/brightness scheduling (display_schedule.py),
+    which shares this window format.
     """
-    try:
-        start_str, end_str = active_hours.split("-", 1)
-        start = _parse_hhmm(start_str)
-        end = _parse_hhmm(end_str)
-    except (ValueError, AttributeError):
-        return True
+    start_str, end_str = window.split("-", 1)
+    start = _parse_hhmm(start_str)
+    end = _parse_hhmm(end_str)
 
-    now = datetime.datetime.now().time().replace(second=0, microsecond=0)
+    if now is None:
+        now = datetime.datetime.now().time()
+    now = now.replace(second=0, microsecond=0)
 
     if start <= end:
         return start <= now <= end
     # wrap-around (e.g. 22:00-06:00)
     return now >= start or now <= end
+
+
+def _in_active_hours(active_hours: str) -> bool:
+    """in_time_window with active_hours' fallback: malformed values are
+    treated as always-active to avoid blocking outputs."""
+    try:
+        return in_time_window(active_hours)
+    except (ValueError, AttributeError):
+        return True
 
 
 def _parse_hhmm(s: str) -> datetime.time:
