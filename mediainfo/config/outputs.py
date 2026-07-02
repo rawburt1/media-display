@@ -178,6 +178,16 @@ class MqttConfig(_OutputFilterMixin):
     # Retain the last published message so new subscribers immediately see
     # the current state.
     retain: bool = True
+    # Publish Home Assistant MQTT discovery messages on every (re)connect,
+    # so a "mediainfo" device with now-playing sensors appears in HA
+    # automatically - no YAML needed on the HA side. Requires HA's MQTT
+    # integration with discovery enabled (its default). Also publishes an
+    # availability topic (<topic>/availability) with a last-will, so the
+    # entities show "unavailable" in HA when this process goes away.
+    ha_discovery: bool = False
+    # Topic prefix HA listens on for discovery messages - only change it
+    # if your HA instance uses a non-default discovery_prefix.
+    ha_discovery_prefix: str = "homeassistant"
 
 
 @dataclasses.dataclass

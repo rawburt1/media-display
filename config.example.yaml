@@ -352,6 +352,14 @@ outputs:
     password: ""
     qos: 0                        # 0 = at most once, 1 = at least once
     retain: true                  # New subscribers see the current state immediately
+    # Home Assistant MQTT discovery: publish retained discovery configs so
+    # a "mediainfo" device with two sensors (now-playing state + title,
+    # full payload as attributes) appears in HA automatically - no YAML
+    # needed on the HA side, just its MQTT integration with discovery on
+    # (the default). Includes an availability topic with a last-will, so
+    # the entities show "unavailable" when this process is down.
+    ha_discovery: false
+    # ha_discovery_prefix: homeassistant  # only if HA's discovery_prefix differs
 
   # Multiple MQTT outputs — e.g. one per room or automation system:
   # mqtt:
