@@ -16,6 +16,13 @@ services:
     build: .
     restart: unless-stopped
     command: ["python", "-m", "mediainfo", "--config", "config/config.yaml"]
+    environment:
+      # Every time-of-day config option (outputs' active_hours,
+      # screen_off_hours, brightness_schedule) is evaluated in the
+      # container's local time - which is UTC unless set here, so a
+      # "23:00-07:00" window would fire hours off from wall-clock time.
+      # Set your IANA zone in .env (e.g. TZ=Europe/Stockholm).
+      - TZ=${TZ:-Etc/UTC}
     ports:
       - "${WEB_PORT:-8090}:8090"
       - "${VIDEO_PORT:-8091}:8091"
