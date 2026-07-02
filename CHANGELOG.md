@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- Docker: the container ran in UTC, so every time-of-day option
+  (`active_hours`, `screen_off_hours`, `brightness_schedule`) fired
+  offset from wall-clock time. docker-compose.yml now passes `TZ`
+  through (set your IANA zone in `.env`, e.g. `TZ=Europe/Stockholm`;
+  tzdata is already in the image).
+
 ### Added
 - **Playback history**: a persistent log of everything that has played
   (SQLite, `history:` config section, on by default), browsable at the
