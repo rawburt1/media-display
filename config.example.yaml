@@ -455,6 +455,31 @@ outputs:
   #   e.g. "22:00-06:00" is active from 22:00 through 06:00 the next morning
   # ---------------------------------------------------------------------------
 
+  # ---------------------------------------------------------------------------
+  # Display power/brightness scheduling (pixoo and ulanzi outputs)
+  # ---------------------------------------------------------------------------
+  # active_hours above only switches an output to idle *content* - the panel
+  # stays lit. These two optional fields drive the hardware itself, on the
+  # same daily HH:MM-HH:MM window format (wraps midnight):
+  #
+  #   screen_off_hours: "23:00-07:00"   # panel actually off during the window
+  #   brightness_schedule:              # first matching window wins; outside
+  #     - "08:00-20:00=90"              # all windows brightness is left alone
+  #     - "20:00-23:00=15"
+  #
+  # Brightness units are device-native: Pixoo 0-100; Ulanzi/AWTRIX3 0-255
+  # (and only effective while AWTRIX3's own auto-brightness is off).
+  #
+  # Example: Pixoo at full brightness by day, dim in the evening, off at night
+  # pixoo:
+  #   - enabled: true
+  #     ip: 192.168.1.32
+  #     screen_off_hours: "23:00-07:00"
+  #     brightness_schedule:
+  #       - "07:00-20:00=90"
+  #       - "20:00-23:00=15"
+  # ---------------------------------------------------------------------------
+
   # Ulanzi TC001 (or any AWTRIX3 device) — scrolling text clock.
   # Displays artist and song title as scrolling text. Artwork is not shown
   # (the display is text-only); it shows the clock face when nothing plays.

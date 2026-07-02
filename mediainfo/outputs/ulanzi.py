@@ -22,6 +22,7 @@ import requests
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import UlanziConfig
+from mediainfo.display_schedule import DisplaySchedule, ScheduledDisplay
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 
@@ -100,6 +101,35 @@ class UlanziOutput(Output):
         self._url = f"http://{config.device_ip}/api/custom"
         self._auth = (config.username, config.password) if config.username else None
         self._last_text: Optional[str] = None
+        self._scheduler = ScheduledDisplay(
+            DisplaySchedule(config.screen_off_hours, config.brightness_schedule),
+            set_power=self._set_power,
+            set_brightness=self._set_brightness,
+            label=f"Ulanzi {config.device_ip}",
+        )
+
+    def on_schedule_tick(self) -> None:
+        self._scheduler.tick()
+
+    def _set_power(self, on: bool) -> None:
+        response = requests.post(
+            f"http://{self.config.device_ip}/api/power",
+            json={"power": on},
+            auth=self._auth,
+            timeout=5,
+        )
+        response.raise_for_status()
+
+    def _set_brightness(self, level: int) -> None:
+        # Only effective while AWTRIX3's own auto-brightness (ABRI) is off
+        # - see UlanziConfig.brightness_schedule.
+        response = requests.post(
+            f"http://{self.config.device_ip}/api/settings",
+            json={"BRI": level},
+            auth=self._auth,
+            timeout=5,
+        )
+        response.raise_for_status()
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         if now_playing.source == "idle":

@@ -258,6 +258,17 @@ class Orchestrator:
         self._maybe_purge_cache()
         self._maybe_check_alerts()
 
+        # Time-based device housekeeping (power/brightness schedules) runs
+        # for every output every tick, filtered or not - via _safe_call
+        # rather than _call_output, so a no-op here never clears (or a
+        # schedule hiccup never sets) an output's update() health state.
+        # getattr: tolerate duck-typed outputs (tests) that don't inherit
+        # Output, same as the `config`/`last_poll_failed` accesses do.
+        for output in self.outputs:
+            tick = getattr(output, "on_schedule_tick", None)
+            if tick is not None:
+                self._safe_call(tick)
+
         results = self._poll_sources()
         # Stripped here, once per poll result, rather than per group - so
         # groups sharing an item never double-process it.
