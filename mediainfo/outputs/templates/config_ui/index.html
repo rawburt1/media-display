@@ -301,7 +301,7 @@ function filterSectionId(typeName, index) {
 }
 
 function filterModeBtn(fn, typeName, index, mode, current) {
-  var labels = {all: 'Alla', allow: 'Tillåt', deny: 'Blockera'};
+  var labels = {all: 'All', allow: 'Allow', deny: 'Block'};
   return '<button type="button" class="filter-mode-btn' + (mode === current ? ' active' : '') + '" '
     + 'onclick="' + fn + '(\'' + typeName + '\',' + index + ',\'' + mode + '\')">'
     + labels[mode] + '</button>';
@@ -319,7 +319,7 @@ function renderFilterSection(typeName, index) {
   var srcMode = filterGetMode(allowSrcs, denySrcs);
 
   // Media types
-  var typeHtml = '<div class="filter-group"><div class="filter-label">Medietyper</div>'
+  var typeHtml = '<div class="filter-group"><div class="filter-label">Media types</div>'
     + '<div class="filter-mode">'
     + filterModeBtn('filterSetTypeMode', typeName, index, 'all', typeMode)
     + filterModeBtn('filterSetTypeMode', typeName, index, 'allow', typeMode)
@@ -339,7 +339,7 @@ function renderFilterSection(typeName, index) {
   typeHtml += '</div>';
 
   // Sources
-  var srcHtml = '<div class="filter-group"><div class="filter-label">Källor</div>'
+  var srcHtml = '<div class="filter-group"><div class="filter-label">Sources</div>'
     + '<div class="filter-mode">'
     + filterModeBtn('filterSetSrcMode', typeName, index, 'all', srcMode)
     + filterModeBtn('filterSetSrcMode', typeName, index, 'allow', srcMode)
@@ -354,11 +354,11 @@ function renderFilterSection(typeName, index) {
             + s + ' &times;</span>';
         }).join('')
       + '<select onchange="filterAddSource(\'' + typeName + '\',' + index + ',this)">'
-      + '<option value="">+ Lägg till källa</option>'
+      + '<option value="">+ Add source</option>'
       + filterMeta.known_sources.map(function(s) {
           return '<option value="' + s + '">' + s + '</option>';
         }).join('')
-      + '<option value="__custom__">Annan…</option>'
+      + '<option value="__custom__">Other…</option>'
       + '</select>'
       + '</div>';
   }
@@ -366,22 +366,22 @@ function renderFilterSection(typeName, index) {
 
   // idle_when_filtered
   var idleHtml = '<div class="filter-group filter-row">'
-    + '<label class="filter-label">Visa tom skärm när filtrerat</label>'
+    + '<label class="filter-label">Switch to idle when filtered</label>'
     + '<input type="checkbox" onchange="filterSetIdle(\'' + typeName + '\',' + index + ',this)" '
     + (idleWhenFiltered ? 'checked' : '') + '>'
     + '</div>';
 
   // active_hours
   var ahHtml = '<div class="filter-group filter-row">'
-    + '<label class="filter-label">Aktiva timmar (HH:MM-HH:MM)</label>'
-    + '<input type="text" class="filter-input" placeholder="t.ex. 08:00-22:00" '
+    + '<label class="filter-label">Active hours (HH:MM-HH:MM)</label>'
+    + '<input type="text" class="filter-input" placeholder="e.g. 08:00-22:00" '
     + 'value="' + activeHours.replace(/"/g, '&quot;') + '" '
     + 'onchange="filterUpdateActiveHours(\'' + typeName + '\',' + index + ',this)">'
     + '</div>';
 
   var summary = filterBuildSummary(typeName, index);
   return '<div class="filter-section" id="' + filterSectionId(typeName, index) + '">'
-    + '<div class="filter-heading">Displayprofil och innehållsregler</div>'
+    + '<div class="filter-heading">Content filters</div>'
     + typeHtml + srcHtml + idleHtml + ahHtml
     + (summary ? '<div class="filter-summary">' + summary + '</div>' : '')
     + '</div>';
@@ -417,7 +417,7 @@ function filterAddSource(typeName, index, selectEl) {
   selectEl.value = '';
   var source = val;
   if (val === '__custom__') {
-    source = prompt('Ange källnamn:');
+    source = prompt('Enter source name:');
     if (!source || !source.trim()) return;
     source = source.trim();
   }
@@ -453,12 +453,12 @@ function filterBuildSummary(typeName, index) {
   var allowSrcs = inst.allow_sources || [];
   var denySrcs = inst.deny_sources || [];
   var parts = [];
-  if (allowTypes.length) parts.push('Visar bara: ' + allowTypes.join(', '));
-  else if (denyTypes.length) parts.push('Blockerar: ' + denyTypes.join(', '));
-  if (allowSrcs.length) parts.push('Tillåtna källor: ' + allowSrcs.join(', '));
-  else if (denySrcs.length) parts.push('Blockerade källor: ' + denySrcs.join(', '));
-  if (inst.idle_when_filtered) parts.push('Visar tom skärm vid filtrering');
-  if (inst.active_hours) parts.push('Aktiv ' + inst.active_hours);
+  if (allowTypes.length) parts.push('Only shows: ' + allowTypes.join(', '));
+  else if (denyTypes.length) parts.push('Blocks: ' + denyTypes.join(', '));
+  if (allowSrcs.length) parts.push('Allowed sources: ' + allowSrcs.join(', '));
+  else if (denySrcs.length) parts.push('Blocked sources: ' + denySrcs.join(', '));
+  if (inst.idle_when_filtered) parts.push('Goes idle when filtered');
+  if (inst.active_hours) parts.push('Active ' + inst.active_hours);
   return parts.join(' · ');
 }
 
