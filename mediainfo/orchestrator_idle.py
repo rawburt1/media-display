@@ -69,6 +69,17 @@ class _IdleBatchManager:
         self._persist_path = self.cache.idle_dir / _PERSIST_FILENAME
         self.images: List[Artwork] = self._load_persisted_batch()
         self.rotation_state: Dict[int, "_RotationState"] = {}
+        # Which outputs idle handling may currently touch - set by show()
+        # from the orchestrator's route groups every tick. Defaults to
+        # every output so direct refetch()/rotate() calls (tests) behave
+        # like the pre-routing single-group orchestrator.
+        self.notify_indices: set = set(range(len(outputs)))
+        self.wallpaper_indices: set = set(range(len(outputs)))
+        # Outputs that have received at least one push from the current
+        # batch. An output (re)joining the wallpaper set mid-batch - its
+        # route group just went idle - gets its first wallpaper immediately
+        # in rotate() instead of waiting out its rotation interval.
+        self._pushed: set = set()
         self.now_playing: Optional[NowPlaying] = (
             NowPlaying(source="idle", media_type="wallpaper", title="", subtitle="", images=self.images)
             if self.images
@@ -84,33 +95,45 @@ class _IdleBatchManager:
         # "just fetched".)
         self.last_batch_fetch: Optional[float] = None
 
-    def clear_if_stale(self, now_playing: NowPlaying) -> None:
-        """Clear the idle batch only once real artwork is available again."""
-        if now_playing.images and self.images:
+    def clear_if_stale(self) -> None:
+        """Drop the batch so playback ending later triggers a fresh fetch.
+
+        The orchestrator calls this only once *every* route group is
+        showing real artwork (see _maybe_clear_stale_idle_state) - clearing
+        while any group is still idle would blank its outputs.
+        """
+        if self.images:
             self.images = []
             self.rotation_state = {}
+            self._pushed = set()
             self.last_batch_fetch = None
 
-    def show(self, now: float, notify_idle: bool = True) -> None:
-        """Show idle wallpapers on image-capable outputs.
+    def show(self, now: float, notify_indices: set, wallpaper_indices: set) -> None:
+        """Show idle wallpapers on the given outputs.
 
-        notify_idle controls whether on_idle() is called (set to False when
-        something is playing but has no artwork, so outputs keep their
-        current display instead of clearing).
+        notify_indices: outputs of fully idle groups - they get on_idle()
+        notifications (and wallpapers, for image-capable ones).
+        wallpaper_indices: superset that additionally includes outputs of
+        groups whose current item has no artwork - those get wallpapers on
+        image outputs without text outputs being told to go idle.
         """
+        self.notify_indices = set(notify_indices)
+        self.wallpaper_indices = set(wallpaper_indices)
+        # Outputs that left the wallpaper set (their group bound an item)
+        # get a fresh immediate push in rotate() when they return.
+        self._pushed &= self.wallpaper_indices
+
         # Non-image outputs (e.g. Ulanzi text, video player) always manage
         # their own idle display; notify them regardless of idle_source.
-        if notify_idle:
-            self._notify_outputs(handles_images=False)
+        self._notify_outputs(handles_images=False)
 
         if self.idle_source is None:
-            if notify_idle:
-                self._notify_outputs(handles_images=True)
+            self._notify_outputs(handles_images=True)
             return
 
         if self.needs_refetch(now):
             fetched = self.refetch(now)
-            if not fetched and not self.images and notify_idle:
+            if not fetched and not self.images:
                 self._notify_outputs(handles_images=True)
             return
 
@@ -129,7 +152,8 @@ class _IdleBatchManager:
         )
 
     def _notify_outputs(self, handles_images: bool) -> None:
-        for i, output in enumerate(self.outputs):
+        for i in sorted(self.notify_indices):
+            output = self.outputs[i]
             if bool(output.handles_images) == handles_images:
                 self._call_output(i, output.on_idle)
 
@@ -171,13 +195,19 @@ class _IdleBatchManager:
         return False
 
     def _push_current_batch(self) -> None:
+        # Rotation states are built for every output (so one joining the
+        # wallpaper set mid-batch already has a position), but only the
+        # current wallpaper set is actually pushed to - outputs bound to a
+        # playing item must not be told about the idle batch.
         self.rotation_state = self._build_rotation_states(
             len(self.images), list(range(len(self.outputs)))
         )
-        for index, output in enumerate(self.outputs):
-            self._call_output(index, output.on_new_item, self.now_playing, self.cache)
-        for index, output in enumerate(self.outputs):
-            self._show_image_for_output(index, output)
+        self._pushed = set()
+        for index in sorted(self.wallpaper_indices):
+            self._call_output(index, self.outputs[index].on_new_item, self.now_playing, self.cache)
+        for index in sorted(self.wallpaper_indices):
+            self._show_image_for_output(index, self.outputs[index])
+            self._pushed.add(index)
 
     def _load_persisted_batch(self) -> List[Artwork]:
         try:
@@ -211,9 +241,24 @@ class _IdleBatchManager:
             return
 
         multi_image = len(self.images) > 1
-        for index, output in enumerate(self.outputs):
+        for index in sorted(self.wallpaper_indices):
+            output = self.outputs[index]
             state = self.rotation_state.get(index)
-            if state is None or now - state.last_rotation < self.rotation_interval_seconds:
+            if state is None:
+                continue
+
+            if index not in self._pushed:
+                # This output's group just went idle mid-batch: show it a
+                # wallpaper now (with the batch's on_new_item first, the
+                # same order _push_current_batch uses) rather than leaving
+                # its previous item up for the rest of a rotation interval.
+                self._pushed.add(index)
+                state.last_rotation = now
+                self._call_output(index, output.on_new_item, self.now_playing, self.cache)
+                self._show_image_for_output(index, output)
+                continue
+
+            if now - state.last_rotation < self.rotation_interval_seconds:
                 continue
 
             if multi_image:
