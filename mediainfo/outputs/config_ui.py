@@ -172,7 +172,7 @@ def _scalar_fields(cls: type) -> List[Dict[str, Any]]:
     only editable via the page's "Advanced" raw YAML editor.
 
     Filter fields (_FILTER_FIELD_NAMES) are also excluded here — they are
-    rendered by the dedicated "Displayprofil" section instead.
+    rendered by the dedicated "Content filters" section instead.
     """
     fields = []
     for f in dataclasses.fields(cls):
@@ -240,12 +240,12 @@ def _validate_filter_fields(data: Any) -> Optional[str]:
             deny_t = set(inst.get("deny_media_types") or [])
             conflict = allow_t & deny_t
             if conflict:
-                return f"{label}: samma mediatyp i tillåt och blockera: {', '.join(sorted(conflict))}"
+                return f"{label}: media type in both allow and deny: {', '.join(sorted(conflict))}"
             allow_s = set(inst.get("allow_sources") or [])
             deny_s = set(inst.get("deny_sources") or [])
             conflict_s = allow_s & deny_s
             if conflict_s:
-                return f"{label}: samma source i tillåt och blockera: {', '.join(sorted(conflict_s))}"
+                return f"{label}: source in both allow and deny: {', '.join(sorted(conflict_s))}"
             ah = inst.get("active_hours") or ""
             if ah:
                 err = validate_active_hours(ah)

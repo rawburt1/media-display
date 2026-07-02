@@ -18,7 +18,20 @@ import json
 import logging
 from typing import Any, Callable, Optional
 
+from mediainfo.models import NowPlaying
+
 logger = logging.getLogger(__name__)
+
+
+def add_playback_position(payload: dict, now_playing: NowPlaying) -> None:
+    """Add position/duration to a WebSocket payload when the source reports
+    them (see NowPlaying.position_seconds - None means "unknown"). The page
+    advances its progress bar locally between pushes, since payloads only
+    go out on item changes and rotation ticks, not every poll.
+    """
+    if now_playing.duration_seconds and now_playing.position_seconds is not None:
+        payload["position_seconds"] = now_playing.position_seconds
+        payload["duration_seconds"] = now_playing.duration_seconds
 
 # Keep the underlying connection alive through NAT/firewall idle timeouts,
 # and - more importantly - reliably detect one that's gone dead without a
