@@ -748,7 +748,10 @@ class Orchestrator:
     def get_health(self) -> dict:
         """Return runtime health data for the /health endpoint."""
         now = time.monotonic()
-        np = self._current
+        # The highest-priority bound item, for the payload's original
+        # single now_playing field - with no filters configured (one
+        # group) this is exactly the pre-routing global winner.
+        np = next((g.current for g in self._groups if g.current is not None), None)
         data = self._health.as_dict(now)
         data["poll_interval_seconds"] = self.poll_interval_seconds
         data["rotation_interval_seconds"] = self.rotation_interval_seconds
@@ -759,6 +762,22 @@ class Orchestrator:
             "subtitle": np.subtitle,
             "images": [a.label or a.url for a in np.images],
         } if np else None
+        # What each output is currently bound to (per-output source
+        # routing) - None while its group is idle or the output itself is
+        # filtered (active_hours / idle_when_filtered).
+        data["output_now_playing"] = {
+            index: (
+                None
+                if group.current is None or index in group.filtered_outputs
+                else {
+                    "source": group.current.source,
+                    "title": group.current.title,
+                    "subtitle": group.current.subtitle,
+                }
+            )
+            for group in self._groups
+            for index in group.output_indices
+        }
         data["idle_wallpapers_loaded"] = len(self._idle.images)
         data["hitster_safe"] = self.get_hitster_safe()
         return data

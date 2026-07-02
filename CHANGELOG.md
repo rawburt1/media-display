@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Per-output source routing**: each output now shows the
+  highest-priority active item its content filters accept, instead of
+  every output following one global winner. Two sources playing at once
+  (e.g. Kodi in the living room, Sonos in the kitchen) can show on
+  different outputs simultaneously - an `allow_media_types: [music]`
+  display follows Sonos while an unfiltered one follows Kodi. Outputs
+  without filters behave exactly as before. `/health` (and the
+  dashboard's output cards) now report which item each output is bound
+  to. Behavior changes for existing filter users: an output whose filter
+  rejects the playing item now falls through to the next active source
+  it accepts (previously it went idle even when one was available), and
+  while Hitster-safe suppresses music, a simultaneously-playing
+  non-music item (e.g. a movie) can now show instead of everything going
+  idle.
 - `enrichers.thetvdb.max_search_candidates` (default 5, same as before):
   how many ambiguous title-search results get checked episode-by-episode
   before giving up - now configurable instead of a fixed constant, so it

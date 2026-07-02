@@ -413,6 +413,16 @@ outputs:
   #
   # deny always beats allow: a type/source in both lists is denied.
   #
+  # Filters also *route*: an output whose rules reject what a higher-priority
+  # source is playing shows the highest-priority active item it does accept,
+  # instead of going idle. Two sources playing at once (e.g. Kodi in the
+  # living room, Sonos in the kitchen) can therefore show on different
+  # outputs simultaneously - a music-only display follows Sonos while an
+  # unfiltered one follows Kodi. Only when *nothing* an output accepts is
+  # playing does it fall back to idle (or blank, with idle_when_filtered).
+  # active_hours doesn't participate in routing - it just switches the
+  # output off outside the window.
+  #
   # Example: Pixoo shows only music from select sources, 08:00–22:00
   # pixoo:
   #   - enabled: true
