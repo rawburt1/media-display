@@ -68,7 +68,7 @@ def library_config_path(tmp_path):
 def test_schema_includes_all_categories(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/schema").get_json()
-    assert set(data.keys()) == {"general", "cache", "sources", "outputs", "enrichers", "idle"}
+    assert set(data.keys()) == {"general", "cache", "sources", "outputs", "enrichers", "idle", "filter_meta"}
 
 
 def test_schema_includes_known_source_types(config_path):
@@ -1315,3 +1315,134 @@ def test_overrides_image_404_when_disabled(config_path):
     out = _output(config_path)
     resp = out.app.test_client().get("/api/overrides/image/whatever.jpg")
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Filter meta and per-output filter fields
+# ---------------------------------------------------------------------------
+
+def test_schema_filter_meta_has_media_types_and_known_sources(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/schema").get_json()
+    fm = data["filter_meta"]
+    assert set(fm["media_types"]) == {"music", "movie", "episode", "game"}
+    assert "kodi" in fm["known_sources"]
+    assert "plex" in fm["known_sources"]
+
+
+def test_schema_filter_fields_excluded_from_outputs_fields(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/schema").get_json()
+    for type_name, fields in data["outputs"].items():
+        field_names = {f["name"] for f in fields}
+        for filter_field in ("allow_media_types", "deny_media_types", "allow_sources",
+                             "deny_sources", "idle_when_filtered", "active_hours"):
+            assert filter_field not in field_names, f"{filter_field} should not appear in schema.outputs.{type_name}"
+
+
+def test_get_config_outputs_includes_filter_fields(config_path):
+    config_path.write_text(
+        "outputs:\n  web:\n    - enabled: true\n      port: 8090\n      allow_media_types: [music]\n"
+    )
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert data["outputs"]["web"][0]["allow_media_types"] == ["music"]
+    assert data["outputs"]["web"][0]["deny_media_types"] == []
+
+
+def test_save_form_saves_allow_media_types(config_path):
+    config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"web": [{"enabled": True, "port": 8090,
+                                                  "allow_media_types": ["music", "movie"],
+                                                  "deny_media_types": [], "allow_sources": [],
+                                                  "deny_sources": [], "idle_when_filtered": False,
+                                                  "active_hours": ""}]}},
+    )
+    assert resp.get_json() == {"ok": True}
+    cfg = Config.load(config_path)
+    assert cfg.outputs["web"][0].allow_media_types == ["music", "movie"]
+
+
+def test_save_form_cleans_empty_filter_lists_from_yaml(config_path):
+    config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"web": [{"enabled": True, "port": 8090,
+                                                  "allow_media_types": [], "deny_media_types": [],
+                                                  "allow_sources": [], "deny_sources": [],
+                                                  "idle_when_filtered": False, "active_hours": ""}]}},
+    )
+    text = config_path.read_text()
+    for field in ("allow_media_types", "deny_media_types", "allow_sources", "deny_sources",
+                  "idle_when_filtered", "active_hours"):
+        assert field not in text
+
+
+def test_save_form_rejects_conflicting_allow_deny_media_types(config_path):
+    config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
+    out = _output(config_path)
+    resp = out.app.test_client().post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"web": [{"enabled": True, "port": 8090,
+                                                  "allow_media_types": ["music"],
+                                                  "deny_media_types": ["music"],
+                                                  "allow_sources": [], "deny_sources": [],
+                                                  "idle_when_filtered": False, "active_hours": ""}]}},
+    )
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert "music" in data["error"]
+
+
+def test_save_form_rejects_conflicting_allow_deny_sources(config_path):
+    config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
+    out = _output(config_path)
+    resp = out.app.test_client().post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"web": [{"enabled": True, "port": 8090,
+                                                  "allow_media_types": [], "deny_media_types": [],
+                                                  "allow_sources": ["kodi"],
+                                                  "deny_sources": ["kodi"],
+                                                  "idle_when_filtered": False, "active_hours": ""}]}},
+    )
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert "kodi" in data["error"]
+
+
+def test_save_form_rejects_invalid_active_hours(config_path):
+    config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
+    out = _output(config_path)
+    resp = out.app.test_client().post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"web": [{"enabled": True, "port": 8090,
+                                                  "allow_media_types": [], "deny_media_types": [],
+                                                  "allow_sources": [], "deny_sources": [],
+                                                  "idle_when_filtered": False,
+                                                  "active_hours": "not-a-time"}]}},
+    )
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert "active_hours" in data["error"]
+
+
+def test_save_form_accepts_valid_active_hours_with_midnight_wrap(config_path):
+    config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
+    out = _output(config_path)
+    resp = out.app.test_client().post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"web": [{"enabled": True, "port": 8090,
+                                                  "allow_media_types": [], "deny_media_types": [],
+                                                  "allow_sources": [], "deny_sources": [],
+                                                  "idle_when_filtered": False,
+                                                  "active_hours": "22:00-06:00"}]}},
+    )
+    assert resp.get_json() == {"ok": True}
+    cfg = Config.load(config_path)
+    assert cfg.outputs["web"][0].active_hours == "22:00-06:00"

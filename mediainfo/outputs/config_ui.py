@@ -1,5 +1,11 @@
 """Config output: a web page for editing config.yaml in the browser.
 
+The pages' HTML/CSS/JS live in templates/config_ui/ (index.html is the
+editable form; dashboard.html, library.html, and overrides.html are the
+other views), rendered via Flask's standard Jinja setup. They're almost
+entirely static - the only server-side rendering is the form's
+auth-warning banner (see _show_auth_warning).
+
 The form is generated from the registered source/output/enricher/idle
 config dataclasses (mediainfo.config.SOURCE_CONFIG_TYPES etc.), so any
 config type added there automatically gets a form section - no UI code to
@@ -66,7 +72,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, render_template, request, send_file
 from ruamel.yaml import YAML
 
 from mediainfo.artwork_overrides import ArtworkOverrideStore
@@ -85,17 +91,31 @@ from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.base import Output
 from mediainfo.outputs.config_dashboard import test_enricher, test_output, test_source
-from mediainfo.outputs.config_ui_templates import (
-    _DASHBOARD_HTML,
-    _INDEX_HTML,
-    _LIBRARY_HTML,
-    _OVERRIDES_HTML,
-)
 from mediainfo.web_auth import install_auth, is_loopback_address
 
 logger = logging.getLogger(__name__)
 
 _SECRET_HINTS = ("password", "token", "secret", "api_key", "key", "credentials", "pin", "npsso")
+
+# Filter fields live on _OutputFilterMixin (inherited by every output config).
+# They are handled by a dedicated UI section instead of the auto-generated
+# scalar fields, so we exclude them from _scalar_fields() to avoid duplication.
+_FILTER_FIELD_NAMES = frozenset({
+    "allow_media_types", "deny_media_types",
+    "allow_sources", "deny_sources",
+    "idle_when_filtered", "active_hours",
+})
+
+_FILTER_DEFAULTS: Dict[str, Any] = {
+    "allow_media_types": [],
+    "deny_media_types": [],
+    "allow_sources": [],
+    "deny_sources": [],
+    "idle_when_filtered": False,
+    "active_hours": "",
+}
+
+_KNOWN_MEDIA_TYPES = ["music", "movie", "episode", "game"]
 
 # Categories where each type has exactly one configured instance.
 _SINGLE_INSTANCE_CATEGORIES: Dict[str, Dict[str, type]] = {
@@ -150,9 +170,14 @@ def _scalar_fields(cls: type) -> List[Dict[str, Any]]:
     one-item-per-line text box) - other list-typed fields (e.g.
     `transforms`, a list of differently-shaped objects) are excluded and
     only editable via the page's "Advanced" raw YAML editor.
+
+    Filter fields (_FILTER_FIELD_NAMES) are also excluded here — they are
+    rendered by the dedicated "Displayprofil" section instead.
     """
     fields = []
     for f in dataclasses.fields(cls):
+        if f.name in _FILTER_FIELD_NAMES:
+            continue
         if f.type == "list" and f.name in _SIMPLE_LIST_FIELDS:
             fields.append({"name": f.name, "type": "list", "default": [], "secret": False})
             continue
@@ -177,6 +202,10 @@ def _build_schema() -> Dict[str, Any]:
     for category, registry in _SINGLE_INSTANCE_CATEGORIES.items():
         schema[category] = {name: _scalar_fields(cls) for name, cls in registry.items()}
     schema["outputs"] = {name: _scalar_fields(cls) for name, cls in OUTPUT_CONFIG_TYPES.items()}
+    schema["filter_meta"] = {
+        "media_types": _KNOWN_MEDIA_TYPES,
+        "known_sources": sorted(SOURCE_CONFIG_TYPES.keys()),
+    }
     return schema
 
 
@@ -187,6 +216,55 @@ def _as_instance_list(raw: Any) -> list:
     if isinstance(raw, list):
         return raw
     return [raw] if raw else []
+
+
+def _get_filter_values(instance: dict) -> dict:
+    result = {}
+    for name, default in _FILTER_DEFAULTS.items():
+        val = instance.get(name, default)
+        if isinstance(default, list):
+            result[name] = list(val) if isinstance(val, list) else list(default)
+        else:
+            result[name] = val if val is not None else default
+    return result
+
+
+def _validate_filter_fields(data: Any) -> Optional[str]:
+    from mediainfo.output_filter import validate_active_hours
+
+    outputs = data.get("outputs") or {}
+    for type_name, raw in outputs.items():
+        for i, inst in enumerate(_as_instance_list(raw)):
+            label = f"outputs.{type_name}[{i + 1}]"
+            allow_t = set(inst.get("allow_media_types") or [])
+            deny_t = set(inst.get("deny_media_types") or [])
+            conflict = allow_t & deny_t
+            if conflict:
+                return f"{label}: samma mediatyp i tillåt och blockera: {', '.join(sorted(conflict))}"
+            allow_s = set(inst.get("allow_sources") or [])
+            deny_s = set(inst.get("deny_sources") or [])
+            conflict_s = allow_s & deny_s
+            if conflict_s:
+                return f"{label}: samma source i tillåt och blockera: {', '.join(sorted(conflict_s))}"
+            ah = inst.get("active_hours") or ""
+            if ah:
+                err = validate_active_hours(ah)
+                if err:
+                    return f"{label}.active_hours: {err}"
+    return None
+
+
+def _clean_output_filter_defaults(data: Any) -> None:
+    outputs = data.get("outputs") or {}
+    for _type_name, raw in list(outputs.items()):
+        for instance in _as_instance_list(raw):
+            for name in ("allow_media_types", "deny_media_types", "allow_sources", "deny_sources"):
+                if isinstance(instance.get(name), list) and not instance[name]:
+                    instance.pop(name, None)
+            if instance.get("idle_when_filtered") is False:
+                instance.pop("idle_when_filtered", None)
+            if not instance.get("active_hours"):
+                instance.pop("active_hours", None)
 
 
 @dataclasses.dataclass
@@ -328,6 +406,10 @@ class ConfigUiOutput(Output):
         """Return {output_type: [instance_field_values, ...]} for every
         registered output type, with at least one (possibly all-default)
         instance per type so the form always has something to render.
+
+        Each instance dict includes both scalar fields and filter fields so
+        the dedicated filter section can read and write them alongside the
+        regular scalar fields.
         """
         with self._lock:
             data = _read_config(self.config_path)
@@ -338,7 +420,10 @@ class ConfigUiOutput(Output):
             instances = _as_instance_list(section.get(type_name)) or [{}]
             fields = _scalar_fields(cls)
             result[type_name] = [
-                {f["name"]: instance.get(f["name"], f["default"]) for f in fields}
+                {
+                    **{f["name"]: instance.get(f["name"], f["default"]) for f in fields},
+                    **_get_filter_values(instance),
+                }
                 for instance in instances
             ]
         return result
@@ -358,6 +443,16 @@ class ConfigUiOutput(Output):
                 if type_name not in OUTPUT_CONFIG_TYPES:
                     continue
                 self._merge_output_instances(data, type_name, instances)
+
+            # Validate filter fields before any write.
+            filter_error = _validate_filter_fields(data)
+            if filter_error:
+                logger.warning("Rejected config form save (filter): %s", filter_error)
+                return filter_error
+
+            # Strip filter fields that are at their no-restriction defaults
+            # so existing config files stay tidy.
+            _clean_output_filter_defaults(data)
 
             try:
                 Config.from_dict(data)
@@ -592,38 +687,26 @@ class ConfigUiOutput(Output):
         thread.join(timeout=5)
         loop.close()
 
-    def _auth_warning_html(self) -> str:
-        """Return the auth-warning banner HTML to inject into the config
-        form, or an empty string if auth is enabled or the request is from
-        the local machine (loopback only).
-
-        The warning is shown to any non-loopback caller when auth is off,
-        because the config form has read+write access to config.yaml
-        including all stored credentials.
+    def _show_auth_warning(self) -> bool:
+        """Whether the config form should show its auth-warning banner (see
+        templates/config_ui/index.html): shown to any non-loopback caller
+        when auth is off, because the config form has read+write access to
+        config.yaml including all stored credentials.
         """
         if self.auth_config and self.auth_config.enabled:
-            return ""
-        if is_loopback_address(request.remote_addr):
-            return ""
-        return (
-            '<div class="auth-warning">'
-            "<strong>No authentication.</strong> "
-            "This page and all credentials in it are accessible to anyone on your network. "
-            "Set <code>auth.enabled: true</code> in config.yaml to require a login, "
-            "or set <code>outputs.config.host: 127.0.0.1</code> to restrict access "
-            "to this machine only. "
-            'See <a href="https://github.com/rawburt1/media-display/blob/master/SECURITY.md">'
-            "SECURITY.md</a>."
-            "</div>"
-        )
+            return False
+        return not is_loopback_address(request.remote_addr)
 
     def _build_app(self) -> Flask:
         app = Flask(__name__)
 
         @app.get("/")
         def index():
-            page = _DASHBOARD_HTML if self.config.ui == "dashboard" else _INDEX_HTML
-            return page.replace("<!-- __AUTH_WARNING__ -->", self._auth_warning_html())
+            if self.config.ui == "dashboard":
+                return render_template("config_ui/dashboard.html")
+            return render_template(
+                "config_ui/index.html", show_auth_warning=self._show_auth_warning()
+            )
 
         # Both views are always reachable on every instance, regardless of
         # `ui` - only the page served at "/" (the instance's default)
@@ -631,11 +714,13 @@ class ConfigUiOutput(Output):
         # form (and vice versa) without running a second output instance.
         @app.get("/form")
         def form_page():
-            return _INDEX_HTML.replace("<!-- __AUTH_WARNING__ -->", self._auth_warning_html())
+            return render_template(
+                "config_ui/index.html", show_auth_warning=self._show_auth_warning()
+            )
 
         @app.get("/dashboard")
         def dashboard_page():
-            return _DASHBOARD_HTML
+            return render_template("config_ui/dashboard.html")
 
         @app.get("/api/schema")
         def schema():
@@ -719,7 +804,7 @@ class ConfigUiOutput(Output):
 
         @app.get("/library")
         def library_page():
-            return _LIBRARY_HTML
+            return render_template("config_ui/library.html")
 
         @app.get("/api/library/stats")
         def library_stats():
@@ -751,7 +836,7 @@ class ConfigUiOutput(Output):
 
         @app.get("/overrides")
         def overrides_page():
-            return _OVERRIDES_HTML
+            return render_template("config_ui/overrides.html")
 
         @app.get("/api/overrides")
         def overrides_list():

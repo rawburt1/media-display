@@ -70,3 +70,16 @@ def _in_active_hours(active_hours: str) -> bool:
 def _parse_hhmm(s: str) -> datetime.time:
     h, m = s.strip().split(":")
     return datetime.time(int(h), int(m))
+
+
+def validate_active_hours(value: str) -> str | None:
+    """Return None if *value* is a valid active_hours string, or an error message."""
+    if not value:
+        return None
+    try:
+        start_str, end_str = value.split("-", 1)
+        _parse_hhmm(start_str)
+        _parse_hhmm(end_str)
+        return None
+    except (ValueError, AttributeError):
+        return f"invalid format {value!r} — expected HH:MM-HH:MM (e.g. '08:00-22:00')"

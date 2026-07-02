@@ -36,15 +36,15 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, render_template, request, send_file
 from flask_sock import Sock
+from markupsafe import Markup
 
 from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.config import AuthConfig, WebConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
-from mediainfo.outputs.web_templates import _HEALTH_HTML, _INDEX_HTML
 from mediainfo.outputs.websocket_push import broadcast, register_websocket_route, send_to_one
 from mediainfo.transforms import parse_pipeline
 from mediainfo.web_auth import install_auth
@@ -81,11 +81,10 @@ class WebOutput(Output):
         self.auth_config = auth_config
         self.rotation_interval_seconds = rotation_interval_seconds
         self.transform_pipeline = parse_pipeline(config.transforms)
-        self._index_html = (
-            _INDEX_HTML
-            .replace("/* __TRANSITIONS_CSS__ */", transitions.transitions_css())
-            .replace("/* __TRANSITIONS_JS__ */", transitions.transitions_js(config.transition_exclude))
-        )
+        # Markup: the transitions CSS/JS is code, not text - autoescaping it
+        # would corrupt it (see templates/web/index.html).
+        self._transitions_css = Markup(transitions.transitions_css())
+        self._transitions_js = Markup(transitions.transitions_js(config.transition_exclude))
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         # Set at construction so idle wallpapers can resolve images even
@@ -331,7 +330,11 @@ class WebOutput(Output):
 
         @app.get("/")
         def index():
-            return self._index_html
+            return render_template(
+                "web/index.html",
+                transitions_css=self._transitions_css,
+                transitions_js=self._transitions_js,
+            )
 
         @app.get("/health/live")
         def health_live():
@@ -344,7 +347,7 @@ class WebOutput(Output):
                 ["application/json", "text/html"]
             )
             if best == "text/html":
-                return _HEALTH_HTML, 200, {"Content-Type": "text/html; charset=utf-8"}
+                return render_template("web/health.html")
             if self._health_fn is None:
                 return jsonify({"status": "starting"})
             return jsonify(self._health_fn())

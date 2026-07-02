@@ -62,6 +62,7 @@ from mediainfo.config.shared import (
     LibraryConfig,
     LoggingConfig,
     OverridesConfig,
+    PostersConfig,
 )
 from mediainfo.config.sources import (
     SOURCE_CONFIG_TYPES,
@@ -114,6 +115,7 @@ __all__ = [
     "OmdbConfig",
     "OUTPUT_CONFIG_TYPES",
     "OverridesConfig",
+    "PostersConfig",
     "PexelsWallpaperConfig",
     "PixooConfig",
     "PlexConfig",
@@ -205,6 +207,7 @@ class Config:
     nothing_playing_grace_seconds: float = 2
     alerts: AlertConfig = dataclasses.field(default_factory=AlertConfig)
     overrides: OverridesConfig = dataclasses.field(default_factory=OverridesConfig)
+    posters: PostersConfig = dataclasses.field(default_factory=PostersConfig)
     # Order to try enabled idle wallpaper sources in (e.g. ["pexels",
     # "local", "unsplash"]) - mirrors the top-level `priority` list above,
     # but for idle sources. Any enabled idle source not listed here is
@@ -295,6 +298,7 @@ class Config:
             nothing_playing_grace_seconds=raw.get("nothing_playing_grace_seconds", 2),
             alerts=AlertConfig(**(raw.get("alerts") or {})),
             overrides=OverridesConfig(**(raw.get("overrides") or {})),
+            posters=PostersConfig(**(raw.get("posters") or {})),
             idle_priority=raw.get("idle_priority", []),
             idle_mode=raw.get("idle_mode", "priority"),
         )

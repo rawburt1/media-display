@@ -77,6 +77,15 @@ class OverridesConfig:
 
 
 @dataclasses.dataclass
+class PostersConfig:
+    # Static poster images stored in `dir`, matched per show by title and
+    # optionally source (see mediainfo/poster_store.py).
+    enabled: bool = True
+    dir: str = "./posters"
+    entries: list = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
 class LoggingConfig:
     # Python logging level name: DEBUG, INFO, WARNING, ERROR, or CRITICAL.
     level: str = "INFO"
