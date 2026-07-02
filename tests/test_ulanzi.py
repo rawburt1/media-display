@@ -194,3 +194,31 @@ def test_request_error_is_caught(mock_post):
     )
 
     _output().on_new_item(now_playing, MagicMock())
+
+
+# ---------------------------------------------------------------------------
+# Power/brightness scheduling (see display_schedule.py)
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.outputs.ulanzi.requests.post")
+def test_schedule_tick_without_schedule_sends_nothing(mock_post):
+    output = _output()
+    output.on_schedule_tick()
+    mock_post.assert_not_called()
+
+
+@patch("mediainfo.outputs.ulanzi.requests.post")
+def test_schedule_tick_drives_power_and_brightness_endpoints(mock_post):
+    import datetime
+
+    output = _output(screen_off_hours="23:00-07:00", brightness_schedule=["20:00-23:00=10"])
+    output._scheduler.tick(datetime.time(21, 0))
+
+    calls = {call.args[0]: call.kwargs.get("json") for call in mock_post.call_args_list}
+    assert calls["http://192.168.1.30/api/settings"] == {"BRI": 10}
+    assert calls["http://192.168.1.30/api/power"] == {"power": True}
+
+    mock_post.reset_mock()
+    output._scheduler.tick(datetime.time(23, 30))
+    assert mock_post.call_args.args[0] == "http://192.168.1.30/api/power"
+    assert mock_post.call_args.kwargs["json"] == {"power": False}

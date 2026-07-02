@@ -380,3 +380,30 @@ def test_hitster_safe_suppresses_music_but_not_lower_priority_movie():
     output = orch.outputs[0]
     output.on_new_item.assert_called_once()
     assert output.on_new_item.call_args.args[0].source == "kodi"
+
+
+# ---------------------------------------------------------------------------
+# Schedule ticks (display power/brightness scheduling)
+# ---------------------------------------------------------------------------
+
+def test_on_schedule_tick_called_for_every_output_even_filtered():
+    movie = _movie(source="kodi")
+    playing = _output()
+    filtered = _output(_FilterConfig(allow_sources=["sonos"]))
+    orch = _orchestrator([_Source("kodi", movie)], [playing, filtered])
+
+    orch._tick()
+    orch._tick()
+
+    assert playing.on_schedule_tick.call_count == 2
+    assert filtered.on_schedule_tick.call_count == 2
+
+
+def test_schedule_tick_error_does_not_break_the_tick():
+    output = _output()
+    output.on_schedule_tick.side_effect = RuntimeError("device gone")
+    orch = _orchestrator([_Source("kodi", _movie())], [output])
+
+    orch._tick()  # must not raise
+
+    output.on_new_item.assert_called_once()
