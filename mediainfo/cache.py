@@ -113,13 +113,41 @@ class ImageCache:
             )
             return None
 
-        content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
-        extension = _EXTENSIONS.get(content_type, _DEFAULT_EXTENSION)
-
-        path = base_dir / f"{key}{extension}"
-        path.write_bytes(response.content)
+        jpeg = self._as_jpeg(response.content)
+        if jpeg is not None:
+            path = base_dir / f"{key}.jpg"
+            path.write_bytes(jpeg)
+        else:
+            content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            extension = _EXTENSIONS.get(content_type, _DEFAULT_EXTENSION)
+            path = base_dir / f"{key}{extension}"
+            path.write_bytes(response.content)
         logger.info("Cached artwork %r -> %s", artwork.label or artwork.url, path.name)
         return path
+
+    @staticmethod
+    def _as_jpeg(content: bytes) -> Optional[bytes]:
+        """Return `content` as JPEG bytes, or None if it can't be decoded.
+
+        Downloads are normalized to JPEG so the cache holds one predictable
+        format regardless of what each source/enricher happens to serve
+        (PNG, WebP, GIF, ...) - physical displays and their transform
+        pipelines don't all handle every format equally well. Content
+        that's already JPEG is stored byte-for-byte rather than re-encoded:
+        recompressing an existing JPEG only loses quality and often grows
+        the file. None (an undecodable payload) tells the caller to fall
+        back to storing the raw bytes under a Content-Type-derived
+        extension, the pre-normalization behavior.
+        """
+        try:
+            img = Image.open(io.BytesIO(content))
+            if img.format == "JPEG":
+                return content
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=95)
+            return buf.getvalue()
+        except Exception:
+            return None
 
     def _meets_minimum_size(self, content: bytes) -> bool:
         """True if the image meets the minimum dimensions, or if its size
@@ -166,9 +194,13 @@ class ImageCache:
             )
             return None
 
+        jpeg = self._as_jpeg(response.content)
+        if jpeg is not None:
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+                f.write(jpeg)
+            return Path(f.name)
         content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
         extension = _EXTENSIONS.get(content_type, _DEFAULT_EXTENSION)
-
         with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as f:
             f.write(response.content)
         return Path(f.name)
