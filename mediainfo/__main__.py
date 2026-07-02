@@ -20,6 +20,7 @@ from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.validation import validate_config
 from mediainfo.wiring import (
     build_artwork_overrides,
+    build_poster_store,
     instantiate_outputs,
     start_orchestrator,
     wire_artwork_overrides,
@@ -79,7 +80,8 @@ def main() -> None:
     config_mtime = _file_mtime(config_path)
     library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
     overrides = build_artwork_overrides(config)
-    orch = _start_and_wire(config, outputs, cache, library, overrides)
+    poster_store = build_poster_store(config)
+    orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store)
     wire_artwork_overrides(outputs, overrides)
 
     try:
@@ -102,6 +104,7 @@ def main() -> None:
             validate_config(new_config)
             library_config_changed = new_config.library != config.library
             overrides_config_changed = new_config.overrides != config.overrides
+            posters_config_changed = new_config.posters != config.posters
             config = new_config
 
             orch.stop()
@@ -115,7 +118,9 @@ def main() -> None:
             if overrides_config_changed:
                 overrides = build_artwork_overrides(config)
                 wire_artwork_overrides(outputs, overrides)
-            orch = _start_and_wire(config, outputs, cache, library, overrides)
+            if posters_config_changed:
+                poster_store = build_poster_store(config)
+            orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store)
             logger.info("Config reloaded successfully")
     finally:
         logger.info("Shutting down ...")
@@ -152,8 +157,8 @@ def _build_cache(config: Config) -> ImageCache:
     )
 
 
-def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: MusicLibrary, overrides):
-    orch = start_orchestrator(config, outputs, cache, library, overrides)
+def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: MusicLibrary, overrides, poster_store=None):
+    orch = start_orchestrator(config, outputs, cache, library, overrides, poster_store)
     wire_health_providers(outputs, orch, config)
     wire_hitster_safe(outputs, orch)
     return orch

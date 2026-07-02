@@ -24,6 +24,7 @@ from mediainfo.orchestrator_health import _BackoffState, _HealthTracker
 from mediainfo.orchestrator_idle import _IdleBatchManager
 from mediainfo.output_filter import passes_filter
 from mediainfo.outputs.base import Output
+from mediainfo.poster_store import PosterStore
 from mediainfo.sources.base import MediaSource
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,7 @@ class Orchestrator:
         nothing_playing_grace_seconds: float = _DEFAULT_NOTHING_PLAYING_GRACE_SECONDS,
         alert_config: Optional[AlertConfig] = None,
         overrides: Optional[ArtworkOverrideStore] = None,
+        poster_store: Optional[PosterStore] = None,
     ):
         self.sources = sources
         self.enrichers = enrichers
@@ -161,6 +163,7 @@ class Orchestrator:
         self._alerts = AlertManager(alert_config or AlertConfig())
         self._last_alert_check: Optional[float] = None
         self._overrides = overrides
+        self._poster_store = poster_store
 
     def get_hitster_safe(self) -> bool:
         with self._hitster_safe_lock:
@@ -275,6 +278,7 @@ class Orchestrator:
         for enricher in self.enrichers:
             self._safe_call(enricher.enrich, now_playing)
 
+        self._apply_poster_store(now_playing)
         self._apply_artwork_override(now_playing)
 
         logger.info(
@@ -307,6 +311,22 @@ class Orchestrator:
         for index, output in enumerate(self.outputs):
             if index not in self._filtered_outputs:
                 self._show_image_for_output(index, output)
+
+    def _apply_poster_store(self, now_playing: NowPlaying) -> None:
+        """If a static poster is configured for this title (and optionally
+        source), replace enriched artwork with it.  Artwork overrides
+        (see _apply_artwork_override) run after this and therefore win.
+        """
+        if self._poster_store is None:
+            return
+        try:
+            poster = self._poster_store.get(now_playing)
+        except Exception:
+            logger.exception("Error checking poster store for %s", now_playing.title)
+            return
+        if poster is not None:
+            logger.debug("Using stored poster for %s", now_playing.title)
+            now_playing.images = [poster]
 
     def _apply_artwork_override(self, now_playing: NowPlaying) -> None:
         """If a manual override is pinned for this title/subtitle (see

@@ -833,3 +833,29 @@ alerts:
 overrides:
   enabled: true
   dir: ./overrides
+
+
+# ---------------------------------------------------------------------------
+# Poster store
+# ---------------------------------------------------------------------------
+# Static poster images stored in `dir` that are shown for specific TV shows
+# or other media titles.  Unlike artwork overrides (which are pinned per
+# title+subtitle via the config UI), posters match by show title and
+# optionally by source, so the same poster shows for every episode of a
+# series without needing a separate override for each one.
+#
+# When a poster matches, it replaces whatever enrichers found for that item.
+# Artwork overrides (above) are applied after posters and therefore win if
+# both match.
+#
+# source:  the source name as it appears in priority (e.g. "shield", "kodi",
+#          "appletv").  Omit to match any source.
+# file:    filename inside `dir`.
+
+posters:
+  enabled: true
+  dir: ./posters
+  entries:
+    # - title: Morgonstudion
+    #   source: shield    # optional: restrict to a specific source
+    #   file: SVT-Morgonstudion.png
