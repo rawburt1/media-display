@@ -59,6 +59,7 @@ from mediainfo.config.shared import (
     AlertConfig,
     AuthConfig,
     CacheConfig,
+    HistoryConfig,
     LibraryConfig,
     LoggingConfig,
     OverridesConfig,
@@ -96,6 +97,7 @@ __all__ = [
     "FeedConfig",
     "FingerprintConfig",
     "FolderConfig",
+    "HistoryConfig",
     "HomeAssistantConfig",
     "IDLE_CONFIG_TYPES",
     "InfoConfig",
@@ -207,6 +209,7 @@ class Config:
     nothing_playing_grace_seconds: float = 2
     alerts: AlertConfig = dataclasses.field(default_factory=AlertConfig)
     overrides: OverridesConfig = dataclasses.field(default_factory=OverridesConfig)
+    history: HistoryConfig = dataclasses.field(default_factory=HistoryConfig)
     posters: PostersConfig = dataclasses.field(default_factory=PostersConfig)
     # Order to try enabled idle wallpaper sources in (e.g. ["pexels",
     # "local", "unsplash"]) - mirrors the top-level `priority` list above,
@@ -298,6 +301,7 @@ class Config:
             nothing_playing_grace_seconds=raw.get("nothing_playing_grace_seconds", 2),
             alerts=AlertConfig(**(raw.get("alerts") or {})),
             overrides=OverridesConfig(**(raw.get("overrides") or {})),
+            history=HistoryConfig(**(raw.get("history") or {})),
             posters=PostersConfig(**(raw.get("posters") or {})),
             idle_priority=raw.get("idle_priority", []),
             idle_mode=raw.get("idle_mode", "priority"),
