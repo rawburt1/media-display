@@ -23,6 +23,9 @@
     #subtitle { font-size: 1.3em; opacity: 0.8; margin-top: 0.2em; }
     #rating { font-size: 1.1em; margin-top: 0.4em; opacity: 0.9; }
     #rating:empty { display: none; }
+    #progress { display: none; height: 4px; margin-top: 0.9em;
+                background: rgba(255, 255, 255, 0.25); border-radius: 2px; overflow: hidden; }
+    #progress-fill { width: 0%; height: 100%; background: #fff; border-radius: 2px; }
     #summary { font-size: 1.1em; line-height: 1.5; margin-top: 1em; opacity: 0.95; }
   </style>
 </head>
@@ -36,6 +39,7 @@
       <div id="title"></div>
       <div id="subtitle"></div>
       <div id="rating"></div>
+      <div id="progress"><div id="progress-fill"></div></div>
       <div id="summary"></div>
     </div>
   </div>
@@ -83,7 +87,33 @@
       subtitle.textContent = data.subtitle || "";
       rating.textContent = data.rating ? "★ " + data.rating + "/10" : "";
       summary.textContent = data.summary || "";
+      setProgress(data);
     }
+
+    // Payloads only arrive on item changes and rotation ticks, so the bar
+    // advances locally at 1s/s from the last reported position; each new
+    // payload re-anchors it (correcting for pauses/seeks within one tick).
+    let progress = null;
+
+    function setProgress(data) {
+      progress = (typeof data.position_seconds === "number" && data.duration_seconds > 0)
+        ? { position: data.position_seconds, duration: data.duration_seconds, at: Date.now() }
+        : null;
+      renderProgress();
+    }
+
+    function renderProgress() {
+      const bar = document.getElementById("progress");
+      if (progress === null) {
+        bar.style.display = "none";
+        return;
+      }
+      const pos = Math.min(progress.position + (Date.now() - progress.at) / 1000, progress.duration);
+      bar.style.display = "block";
+      document.getElementById("progress-fill").style.width = (100 * pos / progress.duration) + "%";
+    }
+
+    setInterval(renderProgress, 1000);
 
     function connect() {
       const ws = new WebSocket("ws://" + location.host + "/ws");

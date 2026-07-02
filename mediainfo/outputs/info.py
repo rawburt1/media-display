@@ -23,7 +23,11 @@ from mediainfo.config import AuthConfig, InfoConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
-from mediainfo.outputs.websocket_push import broadcast, register_websocket_route
+from mediainfo.outputs.websocket_push import (
+    add_playback_position,
+    broadcast,
+    register_websocket_route,
+)
 from mediainfo.transforms import parse_pipeline
 from mediainfo.web_auth import install_auth
 
@@ -88,6 +92,7 @@ class InfoOutput(Output):
             "rating": now_playing.rating,
             "art_label": artwork.label if artwork else "",
         }
+        add_playback_position(payload, now_playing)
         if image_path is not None:
             payload["image"] = f"/image/current?v={image_path.stem}"
         return payload
