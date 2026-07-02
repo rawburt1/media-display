@@ -122,7 +122,7 @@ class MqttOutput(Output):
             "name": "mediainfo",
             "manufacturer": "mediainfo",
         }
-        sensors = {
+        sensors: dict[str, dict] = {
             "now_playing": {
                 "name": "Now playing",
                 "unique_id": f"{node}_now_playing",
