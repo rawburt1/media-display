@@ -8,14 +8,14 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, render_template, send_file
+from markupsafe import Markup
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import AuthConfig, VideoOutputConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
-from mediainfo.outputs.video_templates import _INDEX_HTML
 from mediainfo.video.base import VideoClip, VideoSource
 from mediainfo.web_auth import install_auth
 
@@ -48,11 +48,10 @@ class VideoOutput(Output):
     def __init__(self, config: VideoOutputConfig, auth_config: Optional[AuthConfig] = None):
         self.config = config
         self.auth_config = auth_config
-        self._index_html = (
-            _INDEX_HTML
-            .replace("/* __TRANSITIONS_CSS__ */", transitions.transitions_css("#art-wrap"))
-            .replace("/* __TRANSITIONS_JS__ */", transitions.transitions_js(config.transition_exclude))
-        )
+        # Markup: the transitions CSS/JS is code, not text - autoescaping it
+        # would corrupt it (see templates/video/index.html).
+        self._transitions_css = Markup(transitions.transitions_css("#art-wrap"))
+        self._transitions_js = Markup(transitions.transitions_js(config.transition_exclude))
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         self._artwork: Optional[Artwork] = None
@@ -131,7 +130,11 @@ class VideoOutput(Output):
 
         @app.get("/")
         def index():
-            return self._index_html
+            return render_template(
+                "video/index.html",
+                transitions_css=self._transitions_css,
+                transitions_js=self._transitions_js,
+            )
 
         @app.get("/api/state")
         def state():
