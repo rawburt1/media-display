@@ -1367,7 +1367,7 @@ def test_lower_priority_source_is_polled_when_higher_priority_is_backed_off():
 
     result = orch._poll_sources()
 
-    assert result is item
+    assert result == [item]
 
 
 def test_backoff_does_not_affect_unrelated_source():
@@ -1384,7 +1384,7 @@ def test_backoff_does_not_affect_unrelated_source():
 
         # static source has no concept of backoff/calls tracking here, but
         # it must still be reachable (returns its item) on every tick.
-        assert orch._poll_sources() is item
+        assert orch._poll_sources() == [item]
 
 
 def test_get_health_includes_source_backoff_seconds():
@@ -1495,14 +1495,14 @@ def test_classify_new_item_when_nothing_was_playing():
 
     orch = _orch_with_current(None)
     now_playing = _movie_item()
-    assert orch._classify(now_playing) is _Transition.NEW_ITEM
+    assert orch._classify(orch._groups[0], now_playing) is _Transition.NEW_ITEM
 
 
 def test_classify_new_item_when_identity_differs():
     orch = _orch_with_current(_movie_item(title="Old Movie"))
     now_playing = _movie_item(title="New Movie")
     from mediainfo.orchestrator import _Transition
-    assert orch._classify(now_playing) is _Transition.NEW_ITEM
+    assert orch._classify(orch._groups[0], now_playing) is _Transition.NEW_ITEM
 
 
 def test_classify_same_item_rotate_when_identity_matches_and_has_images():
@@ -1515,7 +1515,7 @@ def test_classify_same_item_rotate_when_identity_matches_and_has_images():
     orch = _orch_with_current(current)
     now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception")
 
-    assert orch._classify(now_playing) is _Transition.SAME_ITEM_ROTATE
+    assert orch._classify(orch._groups[0], now_playing) is _Transition.SAME_ITEM_ROTATE
 
 
 def test_classify_same_item_no_artwork_when_identity_matches_and_no_images():
@@ -1525,7 +1525,7 @@ def test_classify_same_item_no_artwork_when_identity_matches_and_no_images():
     orch = _orch_with_current(current)
     now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception")
 
-    assert orch._classify(now_playing) is _Transition.SAME_ITEM_NO_ARTWORK
+    assert orch._classify(orch._groups[0], now_playing) is _Transition.SAME_ITEM_NO_ARTWORK
 
 
 def test_classify_does_not_mutate_state():
@@ -1533,7 +1533,7 @@ def test_classify_does_not_mutate_state():
     orch = _orch_with_current(current)
     now_playing = _movie_item(title="Inception")
 
-    orch._classify(now_playing)
+    orch._classify(orch._groups[0], now_playing)
 
     assert orch._current is current  # unchanged - classify is read-only
 
