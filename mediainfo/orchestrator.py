@@ -22,7 +22,7 @@ from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
 from mediainfo.orchestrator_health import _BackoffState, _HealthTracker
 from mediainfo.orchestrator_idle import _IdleBatchManager
-from mediainfo.output_filter import passes_filter
+from mediainfo.output_filter import ContentRules, passes_filter
 from mediainfo.outputs.base import Output
 from mediainfo.poster_store import PosterStore
 from mediainfo.sources.base import MediaSource
@@ -94,12 +94,16 @@ class _RouteGroup:
     rotation through that item's images, and the "nothing playing" grace
     clock.
 
-    Currently a single group holds every output, which reproduces the
-    previous single-`_current` global-winner behavior exactly; per-group
-    routing assigns each group its own highest-priority match.
+    With no filters configured every output has the same (empty) rules and
+    lands in one group, which reproduces the previous single-`_current`
+    global-winner behavior exactly.
     """
 
     output_indices: List[int]
+    # The group key: which items this group's outputs accept. active_hours
+    # is deliberately not part of it (it gates display, not routing) - see
+    # ContentRules and _recheck_filters.
+    signature: ContentRules = ContentRules()
     current: Optional[NowPlaying] = None
     rotation_state: Dict[int, _RotationState] = dataclasses.field(default_factory=dict)
     # Member output indices currently blocked by their content filter
@@ -154,11 +158,8 @@ class Orchestrator:
         self.backoff_max_seconds = backoff_max_seconds
         self.nothing_playing_grace_seconds = nothing_playing_grace_seconds
         # Route groups (see _RouteGroup): every output lives in exactly one
-        # group; a group's outputs share the item they show. A single group
-        # holding all outputs reproduces the original global-winner behavior.
-        self._groups: List[_RouteGroup] = [
-            _RouteGroup(output_indices=list(range(len(outputs))))
-        ]
+        # group; a group's outputs share the item they show.
+        self._groups: List[_RouteGroup] = self._build_groups(outputs)
         self._last_cache_purge: Optional[float] = None
         # "Hitster-safe" mode: while enabled, music now-playing (songs,
         # artists, albums) is treated as if nothing were playing on every
@@ -184,6 +185,23 @@ class Orchestrator:
         self._last_alert_check: Optional[float] = None
         self._overrides = overrides
         self._poster_store = poster_store
+
+    @staticmethod
+    def _build_groups(outputs: List[Output]) -> List[_RouteGroup]:
+        """Group outputs by their content-rule signature. Outputs are
+        fixed for the life of the process (see __main__.py), so this is
+        computed once. Always returns at least one group so the
+        single-group aliases below stay valid even with no outputs.
+        """
+        by_signature: Dict[ContentRules, _RouteGroup] = {}
+        for index, output in enumerate(outputs):
+            signature = ContentRules.from_config(getattr(output, "config", None))
+            group = by_signature.get(signature)
+            if group is None:
+                group = _RouteGroup(output_indices=[], signature=signature)
+                by_signature[signature] = group
+            group.output_indices.append(index)
+        return list(by_signature.values()) or [_RouteGroup(output_indices=[])]
 
     # -- single-group state aliases -----------------------------------------
     # The orchestrator's original single-item attributes, aliased to the
@@ -247,7 +265,70 @@ class Orchestrator:
             if item.media_type == "music":
                 item.title = _strip_parenthetical(item.title)
 
-        self._tick_group(self._groups[0], results[0] if results else None)
+        # Route: each group gets the highest-priority result it accepts.
+        # `prepared` deduplicates enrichment when several groups pick the
+        # same item this tick (see _prepare_item).
+        prepared: Dict[tuple, NowPlaying] = {}
+        for group in self._groups:
+            routed = next((r for r in results if self._group_accepts(group, r)), None)
+            self._tick_group(group, self._prepare_item(group, routed, prepared))
+
+        # Idle wallpapers go to whichever outputs ended this tick unbound
+        # (or bound to an artwork-less item) - decided after every group
+        # has settled, so one group going idle never touches another
+        # group's outputs.
+        self._show_idle()
+        self._maybe_clear_stale_idle_state()
+
+    def _prepare_item(
+        self,
+        group: _RouteGroup,
+        item: Optional[NowPlaying],
+        prepared: Dict[tuple, NowPlaying],
+    ) -> Optional[NowPlaying]:
+        """Return the item _tick_group should see for `group`, enriching a
+        genuinely new item exactly once per tick even when several groups
+        pick it.
+
+        Sources return a fresh (unenriched) NowPlaying every poll. For a
+        group already playing the same identity that's fine - the SAME_ITEM
+        path only reads position/duration off it. For a group *newly*
+        binding it, prefer (in order): the object another group picking it
+        this tick already enriched, the already-enriched `current` of a
+        group that was playing it before this tick, or - only when neither
+        exists - enrich the fresh object now.
+        """
+        if item is None:
+            return None
+        if group.current is not None and group.current.identity == item.identity:
+            return item
+        if item.identity in prepared:
+            return prepared[item.identity]
+        donor = next(
+            (
+                g.current
+                for g in self._groups
+                if g.current is not None and g.current.identity == item.identity
+            ),
+            None,
+        )
+        if donor is not None:
+            # Keep the donor's enrichment; carry over the fresh poll's
+            # playback position (the donor group's own SAME_ITEM refresh
+            # would do this anyway, but group order isn't guaranteed).
+            donor.position_seconds = item.position_seconds
+            donor.duration_seconds = item.duration_seconds
+            prepared[item.identity] = donor
+            return donor
+        self._enrich_item(item)
+        prepared[item.identity] = item
+        return item
+
+    def _enrich_item(self, now_playing: NowPlaying) -> None:
+        for enricher in self.enrichers:
+            self._safe_call(enricher.enrich, now_playing)
+        self._apply_poster_store(now_playing)
+        self._apply_artwork_override(now_playing)
 
     def _tick_group(self, group: _RouteGroup, now_playing: Optional[NowPlaying]) -> None:
         """Advance one route group given the item routed to it this tick
@@ -257,7 +338,6 @@ class Orchestrator:
             return
 
         group.nothing_playing_since = None
-        self._maybe_clear_stale_idle_state(now_playing)
 
         transition = self._classify(group, now_playing)
         if transition is _Transition.SAME_ITEM_ROTATE:
@@ -265,9 +345,9 @@ class Orchestrator:
             self._maybe_rotate(group)
         elif transition is _Transition.SAME_ITEM_NO_ARTWORK:
             self._refresh_position(group, now_playing)
-            # Same no-artwork item: keep idle wallpapers running on image
-            # outputs without notifying text-only outputs to go idle.
-            self._show_idle_wallpaper(notify_idle=False)
+            # Same no-artwork item: the group's image outputs stay in the
+            # idle-wallpaper set computed at the end of _tick, without
+            # text-only outputs being notified to go idle.
         else:
             self._handle_new_item(group, now_playing)
 
@@ -287,8 +367,13 @@ class Orchestrator:
         results = self._poll_sources()
         return results[0] if results else None
 
-    def _maybe_clear_stale_idle_state(self, now_playing: NowPlaying) -> None:
-        self._idle.clear_if_stale(now_playing)
+    def _maybe_clear_stale_idle_state(self) -> None:
+        """Drop the idle batch only once *every* group is showing real
+        artwork again - clearing while any group is still idle (or showing
+        wallpapers for an artwork-less item) would blank its outputs.
+        """
+        if all(g.current is not None and g.current.images for g in self._groups):
+            self._idle.clear_if_stale()
 
     def _classify(self, group: _RouteGroup, now_playing: NowPlaying) -> _Transition:
         """Pure: decide what kind of tick this is for `group` from
@@ -317,15 +402,12 @@ class Orchestrator:
             group.rotation_state = {}
             group.filtered_outputs = set()
             group.nothing_playing_since = None
-        self._show_idle_wallpaper()
+        # Idle wallpapers themselves are pushed at the end of _tick (see
+        # _show_idle), once every group has settled.
 
     def _handle_new_item(self, group: _RouteGroup, now_playing: NowPlaying) -> None:
-        for enricher in self.enrichers:
-            self._safe_call(enricher.enrich, now_playing)
-
-        self._apply_poster_store(now_playing)
-        self._apply_artwork_override(now_playing)
-
+        # Enrichment already happened in _prepare_item (shared across
+        # groups picking the same item this tick).
         logger.info(
             "Now playing changed: [%s] %s - %s (%d image(s))",
             now_playing.source,
@@ -348,7 +430,8 @@ class Orchestrator:
         if not now_playing.images:
             logger.warning("No artwork available for %s", now_playing.title)
             group.rotation_state = {}
-            self._show_idle_wallpaper(notify_idle=False)
+            # The group's image outputs join the idle-wallpaper set at the
+            # end of this same _tick (see _idle_targets).
             return
 
         group.rotation_state = self._build_rotation_states(
@@ -557,14 +640,31 @@ class Orchestrator:
             group.current.title, len(images),
         )
 
-    def _show_idle_wallpaper(self, notify_idle: bool = True) -> None:
-        """Show idle wallpapers on image-capable outputs.
+    def _idle_targets(self) -> tuple[set, set]:
+        """Which outputs idle handling may touch this tick.
 
-        notify_idle controls whether on_idle() is called (set to False when
-        something is playing but has no artwork, so outputs keep their current
-        display instead of clearing).
+        Returns (notify_indices, wallpaper_indices): outputs of fully idle
+        groups get both on_idle() notifications and wallpapers; outputs of
+        groups whose current item has no artwork get wallpapers only, so
+        e.g. a text output keeps showing the item's title. Outputs of a
+        group inside its nothing-playing grace window (current still set)
+        are in neither - they keep their display untouched, exactly the
+        pre-routing grace behavior.
         """
-        self._idle.show(time.monotonic(), notify_idle=notify_idle)
+        notify: set = set()
+        wallpaper: set = set()
+        for group in self._groups:
+            if group.current is None:
+                notify.update(group.output_indices)
+                wallpaper.update(group.output_indices)
+            elif not group.current.images:
+                wallpaper.update(group.output_indices)
+        return notify, wallpaper
+
+    def _show_idle(self) -> None:
+        notify, wallpaper = self._idle_targets()
+        if notify or wallpaper:
+            self._idle.show(time.monotonic(), notify, wallpaper)
 
     def _poll_sources(self) -> List[NowPlaying]:
         """Poll sources in priority order, collecting the active results
@@ -617,10 +717,10 @@ class Orchestrator:
 
     @staticmethod
     def _group_accepts(group: _RouteGroup, item: NowPlaying) -> bool:
-        """Whether `item` could be this group's current item. Per-group
-        routing checks the group's content-rule signature here; the single
-        all-outputs group accepts everything."""
-        return True
+        """Whether `item` could be this group's current item - its
+        content-rule signature alone; active_hours is applied per output
+        at display time (see _compute_filtered/_recheck_filters)."""
+        return group.signature.accepts(item)
 
     def _next_backoff(self, previous: Optional["_BackoffState"], now: float) -> "_BackoffState":
         if previous is None:
