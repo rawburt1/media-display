@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `outputs.mqtt[].ha_discovery` (default off): publish retained Home
+  Assistant MQTT discovery configs on every (re)connect, so a
+  "mediainfo" device with two sensors (now-playing state with the full
+  payload as attributes, plus a bare title sensor) appears in HA
+  automatically - no YAML on the HA side. Includes an availability topic
+  with a last-will so the entities show "unavailable" when the process
+  is down. The published now-playing payload itself is unchanged.
+  `ha_discovery_prefix` covers non-default HA discovery prefixes.
 - **Display power/brightness scheduling** for the `pixoo` and `ulanzi`
   outputs: `screen_off_hours: "23:00-07:00"` actually powers the LED
   panel down during the window (unlike `active_hours`, which only
