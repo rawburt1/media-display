@@ -879,6 +879,23 @@ overrides:
 
 
 # ---------------------------------------------------------------------------
+# Playback history
+# ---------------------------------------------------------------------------
+# On by default. A persistent log of everything that has played - across
+# every source, not just music - browsable at the web output's /history
+# page (e.g. http://<host>:8090/history), with thumbnails resolved from
+# the regular artwork cache. Each genuinely new item gets one row; a
+# repeat of the most recent entry within dedupe_window_seconds (e.g. a
+# source blip that stops and resumes the same track) is not logged twice.
+
+history:
+  enabled: true
+  db_path: ./library/history.db
+  max_entries: 1000              # oldest rows beyond this are pruned
+  dedupe_window_seconds: 600
+
+
+# ---------------------------------------------------------------------------
 # Poster store
 # ---------------------------------------------------------------------------
 # Static poster images stored in `dir` that are shown for specific TV shows

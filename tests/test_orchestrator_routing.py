@@ -407,3 +407,51 @@ def test_schedule_tick_error_does_not_break_the_tick():
     orch._tick()  # must not raise
 
     output.on_new_item.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Playback history recording
+# ---------------------------------------------------------------------------
+
+def test_history_records_each_new_item_once(tmp_path):
+    from mediainfo.history import PlaybackHistory
+
+    store = PlaybackHistory(str(tmp_path / "history.db"))
+    kodi = _Source("kodi", _movie(source="kodi"))
+    sonos = _Source("sonos", _music(source="sonos"))
+    # Three groups: two share the kodi item (logged once), one binds sonos.
+    orch = _orchestrator(
+        [kodi, sonos],
+        [
+            _output(),
+            _output(_FilterConfig(allow_sources=["kodi"])),
+            _output(_FilterConfig(allow_sources=["sonos"])),
+        ],
+    )
+    orch._history = store
+
+    orch._tick()
+    orch._tick()  # same items still playing: nothing new logged
+
+    entries = store.list()
+    assert sorted(e["source"] for e in entries) == ["kodi", "sonos"]
+
+
+def test_history_not_recorded_when_group_rebinds_running_item(tmp_path):
+    from mediainfo.history import PlaybackHistory
+
+    store = PlaybackHistory(str(tmp_path / "history.db"))
+    kodi = _Source("kodi", _movie(source="kodi"))
+    sonos = _Source("sonos", _music(source="sonos"))
+    orch = _orchestrator(
+        [sonos, kodi],
+        [_output(), _output(_FilterConfig(deny_media_types=["music"]))],
+    )
+    orch._history = store
+
+    orch._tick()
+    sonos.item = None
+    orch._tick()  # unfiltered group falls through to the running kodi item
+
+    # kodi was already playing on the other group - no third entry.
+    assert len(store.list()) == 2

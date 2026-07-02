@@ -14,6 +14,7 @@ from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config
 from mediainfo.health import make_health_provider
+from mediainfo.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.musiclibrary import MusicLibrary
@@ -118,6 +119,16 @@ def build_poster_store(config: Config) -> Optional[PosterStore]:
     return PosterStore(config.posters.dir, config.posters.entries)
 
 
+def build_history(config: Config) -> Optional[PlaybackHistory]:
+    if not config.history.enabled:
+        return None
+    return PlaybackHistory(
+        config.history.db_path,
+        max_entries=config.history.max_entries,
+        dedupe_window_seconds=config.history.dedupe_window_seconds,
+    )
+
+
 def start_orchestrator(
     config: Config,
     outputs: list,
@@ -125,6 +136,7 @@ def start_orchestrator(
     library: Optional[MusicLibrary] = None,
     overrides: Optional[ArtworkOverrideStore] = None,
     poster_store: Optional[PosterStore] = None,
+    history: Optional[PlaybackHistory] = None,
 ) -> Orchestrator:
     orch = Orchestrator(
         sources=build_sources(config),
@@ -140,9 +152,21 @@ def start_orchestrator(
         alert_config=config.alerts,
         overrides=overrides,
         poster_store=poster_store,
+        history=history,
     )
     orch.start()
     return orch
+
+
+def wire_history(outputs: list, history: Optional[PlaybackHistory]) -> None:
+    """Register the playback history store on every WebOutput instance,
+    so its /history page can list entries and serve their artwork. None
+    (history.enabled: false) makes the page report the feature disabled."""
+    from mediainfo.outputs.web import WebOutput
+
+    for output in outputs:
+        if isinstance(output, WebOutput):
+            output.set_history(history)
 
 
 def wire_health_providers(outputs: list, orch: Orchestrator, config: Config) -> None:

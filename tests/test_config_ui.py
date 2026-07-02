@@ -68,7 +68,15 @@ def library_config_path(tmp_path):
 def test_schema_includes_all_categories(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/schema").get_json()
-    assert set(data.keys()) == {"general", "cache", "sources", "outputs", "enrichers", "idle", "filter_meta"}
+    assert set(data.keys()) == {"general", "cache", "history", "sources", "outputs", "enrichers", "idle", "filter_meta"}
+
+
+def test_form_saves_history_section(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/config/form", json={"values": {"history.max_entries": 500}})
+    saved = config_path.read_text()
+    assert "max_entries: 500" in saved
 
 
 def test_schema_includes_known_source_types(config_path):

@@ -86,6 +86,7 @@ from mediainfo.config import (
     CacheConfig,
     Config,
     ConfigUiConfig,
+    HistoryConfig,
 )
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
@@ -136,6 +137,7 @@ _GENERAL_FIELDS = [
 # not "cache.<type_name>.dir".
 _FLAT_SECTIONS: Dict[str, type] = {
     "cache": CacheConfig,
+    "history": HistoryConfig,
 }
 
 # List-typed fields simple enough (a flat list of strings) to edit as a
