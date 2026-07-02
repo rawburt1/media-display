@@ -471,3 +471,145 @@ def test_download_temp_returns_none_for_undersized_image(mock_get, tmp_path):
     path = cache.download_temp(Artwork(url="http://example.com/thumb.jpg"))
 
     assert path is None
+
+
+# ---------------------------------------------------------------------------
+# JPEG normalization: non-JPEG downloads are converted, JPEGs kept as-is
+# ---------------------------------------------------------------------------
+
+def _image_bytes(fmt, size=(640, 480), mode="RGB"):
+    import io as _io
+    from PIL import Image as _Image
+
+    buf = _io.BytesIO()
+    _Image.new(mode, size, color="blue").save(buf, format=fmt)
+    return buf.getvalue()
+
+
+def _mock_response(content, content_type):
+    response = MagicMock()
+    response.headers = {"Content-Type": content_type}
+    response.content = content
+    response.raise_for_status = MagicMock()
+    return response
+
+
+@patch("mediainfo.cache.requests.get")
+def test_png_download_is_cached_as_jpeg(mock_get, tmp_path):
+    from PIL import Image
+
+    mock_get.return_value = _mock_response(_image_bytes("PNG"), "image/png")
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/art.png"))
+
+    assert path.suffix == ".jpg"
+    with Image.open(path) as img:
+        assert img.format == "JPEG"
+        assert img.size == (640, 480)
+
+
+@patch("mediainfo.cache.requests.get")
+def test_webp_download_is_cached_as_jpeg(mock_get, tmp_path):
+    from PIL import Image
+
+    mock_get.return_value = _mock_response(_image_bytes("WEBP"), "image/webp")
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/art.webp"))
+
+    assert path.suffix == ".jpg"
+    with Image.open(path) as img:
+        assert img.format == "JPEG"
+
+
+@patch("mediainfo.cache.requests.get")
+def test_rgba_png_converts_without_error(mock_get, tmp_path):
+    # JPEG has no alpha channel - conversion must not raise on RGBA input.
+    from PIL import Image
+
+    mock_get.return_value = _mock_response(
+        _image_bytes("PNG", mode="RGBA"), "image/png"
+    )
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/logo.png"))
+
+    assert path.suffix == ".jpg"
+    with Image.open(path) as img:
+        assert img.format == "JPEG"
+
+
+@patch("mediainfo.cache.requests.get")
+def test_jpeg_download_is_stored_byte_for_byte(mock_get, tmp_path):
+    # Already-JPEG content must not be recompressed (quality loss).
+    content = _jpeg_bytes(640, 480)
+    mock_get.return_value = _mock_response(content, "image/jpeg")
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/art.jpg"))
+
+    assert path.suffix == ".jpg"
+    assert path.read_bytes() == content
+
+
+@patch("mediainfo.cache.requests.get")
+def test_undecodable_download_falls_back_to_raw_bytes(mock_get, tmp_path):
+    # Content PIL can't open keeps the old behavior: raw bytes, extension
+    # from the Content-Type header.
+    mock_get.return_value = _mock_response(b"not-an-image", "image/png")
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/art"))
+
+    assert path.suffix == ".png"
+    assert path.read_bytes() == b"not-an-image"
+
+
+@patch("mediainfo.cache.requests.get")
+def test_download_temp_converts_png_to_jpeg(mock_get, tmp_path):
+    from PIL import Image
+
+    mock_get.return_value = _mock_response(_image_bytes("PNG"), "image/png")
+
+    cache = ImageCache(tmp_path)
+    path = cache.download_temp(Artwork(url="http://example.com/art.png"))
+
+    try:
+        assert path.suffix == ".jpg"
+        with Image.open(path) as img:
+            assert img.format == "JPEG"
+    finally:
+        path.unlink()
+
+
+@patch("mediainfo.cache.requests.get")
+def test_download_temp_keeps_jpeg_bytes_unchanged(mock_get, tmp_path):
+    content = _jpeg_bytes(640, 480)
+    mock_get.return_value = _mock_response(content, "image/jpeg")
+
+    cache = ImageCache(tmp_path)
+    path = cache.download_temp(Artwork(url="http://example.com/art.jpg"))
+
+    try:
+        assert path.read_bytes() == content
+    finally:
+        path.unlink()
+
+
+@patch("mediainfo.cache.requests.get")
+def test_existing_cached_file_with_other_extension_is_still_found(mock_get, tmp_path):
+    # Files cached before JPEG normalization (e.g. key.png) must still
+    # resolve without a re-download - lookup is by key, not extension.
+    import hashlib
+
+    url = "http://example.com/old.png"
+    key = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    old = tmp_path / f"{key}.png"
+    old.write_bytes(b"pre-normalization-bytes")
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url=url))
+
+    assert path == old
+    assert mock_get.call_count == 0
