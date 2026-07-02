@@ -1367,7 +1367,7 @@ def test_lower_priority_source_is_polled_when_higher_priority_is_backed_off():
 
     result = orch._poll_sources()
 
-    assert result is item
+    assert result == [item]
 
 
 def test_backoff_does_not_affect_unrelated_source():
@@ -1384,7 +1384,7 @@ def test_backoff_does_not_affect_unrelated_source():
 
         # static source has no concept of backoff/calls tracking here, but
         # it must still be reachable (returns its item) on every tick.
-        assert orch._poll_sources() is item
+        assert orch._poll_sources() == [item]
 
 
 def test_get_health_includes_source_backoff_seconds():

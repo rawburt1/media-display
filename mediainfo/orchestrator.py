@@ -240,13 +240,14 @@ class Orchestrator:
         self._maybe_purge_cache()
         self._maybe_check_alerts()
 
-        now_playing = self._resolve_now_playing()
+        results = self._poll_sources()
         # Stripped here, once per poll result, rather than per group - so
         # groups sharing an item never double-process it.
-        if now_playing is not None and now_playing.media_type == "music":
-            now_playing.title = _strip_parenthetical(now_playing.title)
+        for item in results:
+            if item.media_type == "music":
+                item.title = _strip_parenthetical(item.title)
 
-        self._tick_group(self._groups[0], now_playing)
+        self._tick_group(self._groups[0], results[0] if results else None)
 
     def _tick_group(self, group: _RouteGroup, now_playing: Optional[NowPlaying]) -> None:
         """Advance one route group given the item routed to it this tick
@@ -281,19 +282,10 @@ class Orchestrator:
         group.current.duration_seconds = now_playing.duration_seconds
 
     def _resolve_now_playing(self) -> Optional[NowPlaying]:
-        """Poll sources and apply the Hitster-safe filter - the one
-        decision that has to happen before we can compare against
-        self._current, since it can turn a real poll result into "nothing
-        playing".
-        """
-        now_playing = self._poll_sources()
-        if (
-            now_playing is not None
-            and now_playing.media_type == "music"
-            and self.get_hitster_safe()
-        ):
-            return None
-        return now_playing
+        """The highest-priority routed result, or None - the single-item
+        view of _poll_sources(), kept for tests that predate routing."""
+        results = self._poll_sources()
+        return results[0] if results else None
 
     def _maybe_clear_stale_idle_state(self, now_playing: NowPlaying) -> None:
         self._idle.clear_if_stale(now_playing)
@@ -574,9 +566,29 @@ class Orchestrator:
         """
         self._idle.show(time.monotonic(), notify_idle=notify_idle)
 
-    def _poll_sources(self) -> Optional[NowPlaying]:
+    def _poll_sources(self) -> List[NowPlaying]:
+        """Poll sources in priority order, collecting the active results
+        the route groups need, highest priority first.
+
+        Polling stops as soon as every group is satisfied by something
+        already collected - with a single unfiltered group that means the
+        first active source, exactly the pre-routing behavior. Sources
+        that are idle or backed off never block a lower-priority source
+        from being offered to the groups.
+
+        Hitster-safe applies here, per result: while enabled, a music
+        result is discarded outright - it isn't offered to any group and
+        doesn't satisfy one - so song titles never leak onto a display,
+        while a lower-priority non-music item (e.g. a movie) can still
+        show.
+        """
         now = time.monotonic()
+        results: List[NowPlaying] = []
+        active_source_name: Optional[str] = None
+        unsatisfied = list(self._groups)
         for source in self.sources:
+            if not unsatisfied:
+                break
             name = getattr(source, "name", type(source).__name__)
 
             backoff = self._health.source_backoff.get(name)
@@ -591,11 +603,24 @@ class Orchestrator:
             elif backoff is not None:
                 self._health.clear_backoff(name)
 
-            if result is not None:
-                self._health.set_active_source(name)
-                return result
-        self._health.set_active_source(None)
-        return None
+            if result is None:
+                continue
+            if result.media_type == "music" and self.get_hitster_safe():
+                continue
+            if active_source_name is None:
+                active_source_name = name
+            results.append(result)
+            unsatisfied = [g for g in unsatisfied if not self._group_accepts(g, result)]
+
+        self._health.set_active_source(active_source_name)
+        return results
+
+    @staticmethod
+    def _group_accepts(group: _RouteGroup, item: NowPlaying) -> bool:
+        """Whether `item` could be this group's current item. Per-group
+        routing checks the group's content-rule signature here; the single
+        all-outputs group accepts everything."""
+        return True
 
     def _next_backoff(self, previous: Optional["_BackoffState"], now: float) -> "_BackoffState":
         if previous is None:
