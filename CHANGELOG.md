@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Display power/brightness scheduling** for the `pixoo` and `ulanzi`
+  outputs: `screen_off_hours: "23:00-07:00"` actually powers the LED
+  panel down during the window (unlike `active_hours`, which only
+  switches to idle content on a still-lit screen), and
+  `brightness_schedule` entries like `"20:00-08:00=15"` dim it on a
+  daily schedule (units are device-native: Pixoo 0-100, AWTRIX3 0-255).
+  Commands are sent only when the desired state changes, and a failed
+  command against an unreachable device retries at most once a minute.
 - **Per-output source routing**: each output now shows the
   highest-priority active item its content filters accept, instead of
   every output following one global winner. Two sources playing at once

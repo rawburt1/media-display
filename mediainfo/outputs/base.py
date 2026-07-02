@@ -40,3 +40,11 @@ class Output(ABC):
         its available images (not just the one currently shown/rotated).
         Default: do nothing.
         """
+
+    def on_schedule_tick(self) -> None:
+        """Called every orchestrator poll tick, regardless of what's
+        playing or whether this output is filtered - the hook for
+        time-based device housekeeping like power/brightness scheduling
+        (see display_schedule.py). Implementations must be cheap when
+        nothing needs doing and must not raise. Default: do nothing.
+        """

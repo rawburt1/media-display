@@ -256,3 +256,34 @@ def test_pixoo_config_preview_path_defaults_empty():
 
 def test_only_shows_album_art_for_music():
     assert PixooOutput.music_album_art_only is True
+
+
+# ---------------------------------------------------------------------------
+# Power/brightness scheduling (see display_schedule.py)
+# ---------------------------------------------------------------------------
+
+def test_schedule_tick_without_schedule_sends_nothing():
+    output = PixooOutput(_config())
+    with patch("mediainfo.outputs.pixoo.requests.post") as mock_post:
+        output.on_schedule_tick()
+    mock_post.assert_not_called()
+
+
+def test_schedule_tick_sends_power_and_brightness_commands():
+    import datetime
+
+    output = PixooOutput(_config(
+        screen_off_hours="23:00-07:00", brightness_schedule=["20:00-23:00=15"],
+    ))
+    with patch("mediainfo.outputs.pixoo.requests.post") as mock_post:
+        output._scheduler.tick(datetime.time(21, 0))
+
+    payloads = [call.kwargs["json"] for call in mock_post.call_args_list]
+    assert {"Command": "Channel/SetBrightness", "Brightness": 15} in payloads
+    assert {"Command": "Channel/OnOffScreen", "OnOff": 1} in payloads
+
+    with patch("mediainfo.outputs.pixoo.requests.post") as mock_post:
+        output._scheduler.tick(datetime.time(23, 30))
+    assert mock_post.call_args.kwargs["json"] == {
+        "Command": "Channel/OnOffScreen", "OnOff": 0,
+    }

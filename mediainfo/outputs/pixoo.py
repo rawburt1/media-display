@@ -14,6 +14,7 @@ import requests
 from PIL import Image, ImageEnhance, ImageFilter
 
 from mediainfo.config import PixooConfig
+from mediainfo.display_schedule import DisplaySchedule, ScheduledDisplay
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 from mediainfo.transforms import parse_pipeline
@@ -32,6 +33,21 @@ class PixooOutput(Output):
         self.config = config
         self._url = f"http://{config.ip}/post"
         self.transform_pipeline = parse_pipeline(config.transforms)
+        self._scheduler = ScheduledDisplay(
+            DisplaySchedule(config.screen_off_hours, config.brightness_schedule),
+            set_power=self._set_power,
+            set_brightness=self._set_brightness,
+            label=f"Pixoo {config.ip}",
+        )
+
+    def on_schedule_tick(self) -> None:
+        self._scheduler.tick()
+
+    def _set_power(self, on: bool) -> None:
+        self._post({"Command": "Channel/OnOffScreen", "OnOff": 1 if on else 0})
+
+    def _set_brightness(self, level: int) -> None:
+        self._post({"Command": "Channel/SetBrightness", "Brightness": level})
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         size = self.config.size

@@ -143,7 +143,10 @@ _FLAT_SECTIONS: Dict[str, type] = {
 # YAML editor. `transforms` is deliberately excluded - it's a list of
 # differently-shaped objects (see config.example.yaml), not a flat list of
 # strings, so a generic form field can't represent it usefully.
-_SIMPLE_LIST_FIELDS = {"speaker_ips", "blacklist", "device_ips", "ignore_apps", "transition_exclude"}
+_SIMPLE_LIST_FIELDS = {
+    "speaker_ips", "blacklist", "device_ips", "ignore_apps",
+    "transition_exclude", "brightness_schedule",
+}
 
 _yaml = YAML()
 _yaml.preserve_quotes = True

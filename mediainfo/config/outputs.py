@@ -51,6 +51,16 @@ class PixooConfig(_OutputFilterMixin):
     # When set, save a 512×512 nearest-neighbour preview of the final image
     # here after each update (useful for visual QA).
     preview_path: str = ""
+    # Turn the panel off during this daily window ("HH:MM-HH:MM", wraps
+    # midnight, e.g. "23:00-07:00") and back on outside it. Unlike
+    # active_hours (which switches to idle content), this actually powers
+    # the LED matrix down. Empty = always on.
+    screen_off_hours: str = ""
+    # Daily brightness windows, one "HH:MM-HH:MM=<level>" string per entry
+    # (e.g. "08:00-20:00=90", "20:00-08:00=15"). First matching window
+    # wins; outside all windows the brightness is left alone. Level is
+    # the Pixoo's native 0-100 range.
+    brightness_schedule: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -138,6 +148,16 @@ class UlanziConfig(_OutputFilterMixin):
     # Optional HTTP basic auth, if configured in AWTRIX3's settings.
     username: str = ""
     password: str = ""
+    # Turn the matrix off during this daily window ("HH:MM-HH:MM", wraps
+    # midnight, e.g. "23:00-07:00") and back on outside it, via AWTRIX3's
+    # /api/power. Empty = always on.
+    screen_off_hours: str = ""
+    # Daily brightness windows, one "HH:MM-HH:MM=<level>" string per entry
+    # (e.g. "08:00-20:00=180", "20:00-08:00=10"). First matching window
+    # wins; outside all windows the brightness is left alone. Level is
+    # AWTRIX3's native 0-255 range, applied via /api/settings BRI - only
+    # effective while AWTRIX3's own auto-brightness (ABRI) is off.
+    brightness_schedule: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
