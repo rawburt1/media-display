@@ -106,16 +106,16 @@ LIBRARY_AWARE_ENRICHER_NAMES = {
 
 # Config attributes to include per output type in the /health response.
 OUTPUT_DETAIL_FIELDS: dict = {
-    "config":   ["port"],
-    "feed":     ["port"],
-    "folder":   ["dir"],
-    "info":     ["port"],
-    "mqtt":     ["host", "port", "topic"],
-    "nest_hub": ["device_ip", "server_port"],
-    "pixoo":    ["ip"],
-    "ulanzi":   ["device_ip"],
-    "video":    ["port"],
-    "web":      ["port"],
+    "config":   ["label", "port"],
+    "feed":     ["label", "port"],
+    "folder":   ["label", "dir"],
+    "info":     ["label", "port"],
+    "mqtt":     ["label", "host", "port", "topic"],
+    "nest_hub": ["label", "device_ip", "server_port"],
+    "pixoo":    ["label", "ip"],
+    "ulanzi":   ["label", "device_ip"],
+    "video":    ["label", "port"],
+    "web":      ["label", "port"],
 }
 
 

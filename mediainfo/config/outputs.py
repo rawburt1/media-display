@@ -34,6 +34,10 @@ class _OutputFilterMixin:
     # "HH:MM-HH:MM" local-time window during which this output is active.
     # Leave empty (default) for always-on.
     active_hours: str = ""
+    # Cosmetic display name for this instance, shown instead of "#2" etc.
+    # in the config UI when a type has multiple instances - has no effect
+    # on behavior. Purely a UI convenience, not related to filtering.
+    label: str = ""
 
 
 @dataclasses.dataclass
