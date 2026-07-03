@@ -346,76 +346,86 @@ See `config.example.yaml` for all options. Key things to fill in:
   Ulanzi displays in different rooms, or web servers on different ports. If
   you add multiple `web` or `nest_hub` instances, make sure each one uses a
   distinct `port`/`server_port` and update `docker-compose.yml` accordingly.
-- **`outputs.config`**: `host`/`port` (default 8094) for a web page that
-  edits config.yaml itself - every source/output/enricher/idle source and
-  the top-level polling intervals, generated automatically from their
-  config dataclasses. Outputs (the only category that supports multiple
-  instances of the same type, e.g. two `ulanzi` displays) get "+ Add
-  instance" / "- Remove last" controls in the form - instances can only be
-  appended/removed from the end, not reordered, so that non-form fields
-  like `transforms` on existing instances stay attached to the right one.
-  Simple list fields (`speaker_ips`, `blacklist`, `device_ips`,
-  `ignore_apps`, `transition_exclude`) are editable too, as a one-value-
-  per-line text box. `transforms` is the one list field still not shown
-  individually - it's a list of differently-shaped objects (see
-  config.example.yaml), not a flat list of values a generic form field can
-  represent - use the page's "Advanced" raw-YAML editor for that one.
-  Saves are validated before being written, and the
-  running process picks up the change via its existing hot-reload within
-  a few seconds. This output can read and write config.yaml, including any
-  credentials in it, with no authentication of its own - see SECURITY.md
-  before exposing it beyond a trusted local network. The page also has a
-  "Restart" button - sources/enrichers/idle sources apply automatically
-  via hot-reload, but `outputs` changes (added/removed/reconfigured
-  instances) only take effect after a restart, since outputs are only
-  instantiated once at startup. It works by sending SIGTERM to the
-  process - the same signal `docker stop`/Ctrl-C already trigger - so it
-  comes back up automatically under a supervisor (Docker's
-  `restart: unless-stopped`, already set up in docker-compose.yml) but
-  just exits if run unsupervised. The `appletv` source's card also has a
-  "Pair" button that drives the same pairing flow as
-  `python -m mediainfo auth appletv` (scan, begin pairing, enter the PIN
-  or confirm one shown on screen, finish) and saves the resulting
-  credentials directly - no shell/docker-exec access needed.
-  `ui: dashboard` (default `form`) switches this instance from the
-  editable form to a status overview instead - every source/output/
-  enricher as a card with a live status badge (active, idle, enabled,
-  disabled, error, unavailable), filter chips per status, a "Test
-  connection" button, and an "Edit" button on each card, plus a
-  "Restart mediainfo" button in the header (same `/api/restart` the
-  form's Restart button uses). Sources are tested by constructing them
-  from the live config and polling once via `get_now_playing()` - the
-  same call the orchestrator itself makes; enrichers by calling their
-  own internal lookup method against a stable real item (e.g. "Queen");
-  outputs by a plain TCP/HTTP reachability check against the host/port
-  already shown, which never sends an update to physical displays.
-  Manually testing a source that's configured but not responding (e.g.
-  `appletv` when the device is unreachable) flips its badge to
-  "unavailable" - this is separate from the automatic `error` status
-  (which only appears once the orchestrator's own background polling has
-  actually attempted and backed off that source - a source can sit idle
-  without ever being polled if a higher-priority source is active, so
-  manually testing it is the only way to know it's unreachable before
-  it's ever your turn). The override clears on a successful retest, or
-  once the orchestrator's own polling reports a concrete status (active
-  or error) for that source. "Edit" turns a card's detail line into
-  input fields (using the same `/api/schema` and `/api/config/form` the
-  editable form uses) for that one source/enricher/output instance, with
-  Save/Cancel buttons - so it can read AND write config.yaml just like
-  the form, including credentials; it's not a lower-risk port to expose
-  just because it defaults to the status view - see SECURITY.md before
-  exposing either view beyond a trusted local network. Each card also
-  shows its non-secret config values (host, port, etc.) even without
-  editing, and a source that's currently failing to connect (in backoff
-  after `last_poll_failed`) shows that failure inline next to its badge
-  automatically, without needing to click "Test connection" first. A
-  manual test result also survives the page's 10-second auto-refresh
-  instead of being silently cleared mid-test. Both views (`/form` and
-  `/dashboard`) are always reachable on every instance regardless of
-  its `ui` setting - only the page served at `/` (the instance's
-  default) differs - with a nav link on each page to the other, so a
-  single instance on one port gives full access to both the editable
-  form and the status dashboard.
+- **`outputs.config`**: `host`/`port` (default 8094) for a guided web app
+  that configures mediainfo without needing to know YAML - a single-page
+  shell (sidebar nav on desktop, a hamburger menu on narrow screens) with
+  nine sections: Overview, Media sources, Displays & outputs, Artwork &
+  metadata, Idle screen, Automation & schedules, Library & overrides,
+  System status, and Advanced configuration. It's generated automatically
+  from the source/output/enricher/idle config dataclasses, so a new plugin
+  type gets a card with no UI code to write - only a friendly label/
+  description/help text needs adding (see `_TYPE_INFO`/`_FIELD_HELP` in
+  `mediainfo/outputs/config_ui.py`) for it to read well, and it still works
+  without those.
+  - **Overview** is the everyday home page: current health, what's
+    playing, enabled-item counts, and a "needs attention" list (an enabled
+    source missing from priority, a plugin missing a required setting, an
+    unreachable source/output, outputs changed but not yet restarted, or
+    this page reachable beyond your LAN with no login) - each with a
+    one-click fix.
+  - **Media sources** has one card per source type (essential fields up
+    front, the rest under "Advanced settings"), a secret field shows
+    "Configured"/"Not set" rather than the credential itself (see
+    "Secrets" below), a "Test connection" button, and the `appletv` card's
+    pairing wizard (same flow as `python -m mediainfo auth appletv` - scan,
+    pair, enter/confirm PIN - with no shell/docker-exec access needed). A
+    dedicated **Source priority** panel lists enabled sources in priority
+    order (drag-and-drop, or the ↑/↓/Remove buttons) and flags any enabled
+    source that isn't in the list, since - per `priority:` below - such a
+    source is simply never used.
+  - **Displays & outputs** groups instances under their output type, with
+    add/duplicate/remove per instance, an optional cosmetic display name
+    (`label`, so "Living room Pixoo" replaces "Instance #2" in the UI),
+    content filters (media type/source allow-or-block, active hours) under
+    their own "Advanced" toggle with plain-language controls instead of
+    raw allow/deny lists, and a screen-off-hours/brightness-schedule editor
+    built from time pickers instead of hand-typed "HH:MM-HH:MM=N" strings.
+    Instances can only be appended/removed from the end (not reordered),
+    so non-form fields like `transforms` on existing instances stay
+    attached to the right one.
+  - **Artwork & metadata** groups enrichers by purpose (movie/TV artwork,
+    ratings & summaries, music artwork & artist info, local media
+    services) alongside the cache and poster-store settings.
+  - **Idle screen** covers `idle_mode` (priority/random) and an idle-source
+    priority panel identical in spirit to source priority, plus one card
+    per idle wallpaper source.
+  - **Automation & schedules** covers the global timing knobs (poll/
+    rotation intervals, backoff, the nothing-playing grace period) and
+    failure-alert thresholds - per-display schedules (active hours,
+    screen-off hours, brightness) live on that display's own card under
+    Displays & outputs instead, since that's where the data actually is.
+  - **Library & overrides** and **System status** are, respectively, the
+    settings for and a link to the library browser/artwork-overrides pages
+    (below), and a read-focused status grid (search, status filters, a
+    "retrying" vs. "unavailable" distinction instead of treating routine
+    backoff retries as full-blown errors, and per-item "Test connection").
+  - **Advanced configuration** holds authentication and logging settings,
+    plus the raw-YAML editor for anything the guided UI doesn't cover yet
+    (`transforms`, `posters.entries`, and any hand-edited comments) - saves
+    from here go through the exact same `Config.from_dict()` validation as
+    the guided form, so nothing invalid can be written from either place.
+  - **Secrets** (`api_key`, `token`, `password`, ...) are never sent to the
+    browser in cleartext: the API reports only whether one is currently
+    set, and leaving a secret field alone preserves it unchanged - you only
+    ever overwrite one by typing a new value, or explicitly clicking
+    "Clear".
+  - A sticky save bar appears whenever there are unsaved changes, with
+    Save/Discard and a plain-language note on whether the change applies
+    within a few seconds or needs a restart. `outputs` changes (added/
+    removed/reconfigured instances) always need a restart, since outputs
+    are only instantiated once at startup - sources/enrichers/idle sources
+    apply via the existing hot-reload instead. The "Restart now" action
+    sends SIGTERM to this process - the same signal `docker stop`/Ctrl-C
+    already trigger - so it comes back up automatically under a supervisor
+    (Docker's `restart: unless-stopped`, already set up in
+    docker-compose.yml) but just exits if run unsupervised.
+  - `ui: dashboard` (default `form`) only changes which section this
+    instance's `/` shows by default (System status instead of Overview) -
+    every section is always reachable on every instance via the sidebar
+    (or `/form`/`/dashboard` directly), regardless of `ui`. Neither view is
+    lower-risk to expose - both can read and write config.yaml, including
+    credentials - see SECURITY.md before exposing either beyond a trusted
+    local network.
 - **`outputs.pixoo`**: IP address of your Pixoo64 (Divoom app → device
   settings).
 - **`outputs.web`**: host/port for the local web page. Each browser/screen
