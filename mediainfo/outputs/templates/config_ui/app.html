@@ -695,7 +695,7 @@ function renderOverview() {
   } else {
     html += '<ul class="warning-list">' + warnings.map(function(w, i) {
       return '<li class="warning-item' + (w.danger ? ' danger' : '') + '">' + esc(w.text)
-        + '<button type="button" class="btn small secondary fix-btn" onclick="overviewWarningFix(' + i + ')">' + esc(w.fixLabel) + '</button></li>';
+        + '<button type="button" class="btn small ' + (w.danger ? 'danger' : 'secondary') + ' fix-btn" onclick="overviewWarningFix(' + i + ')">' + esc(w.fixLabel) + '</button></li>';
     }).join('') + '</ul>';
   }
   window._overviewWarnings = warnings;
