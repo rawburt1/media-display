@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Config UI redesign**: the config output's editable form and separate
+  read-only dashboard are now one guided single-page app
+  (`outputs.config`, still on port 8094 by default) with a sidebar nav
+  across nine sections (Overview, Media sources, Displays & outputs,
+  Artwork & metadata, Idle screen, Automation & schedules, Library &
+  overrides, System status, Advanced configuration), essential-vs-advanced
+  field grouping with plain-language help text, source/idle priority
+  reordering, per-output content filter and schedule pickers, and a
+  sticky save bar. Secrets (API keys, tokens, passwords) are never sent to
+  the browser in cleartext - only whether one is configured. See
+  [PR #18](https://github.com/rawburt1/media-display/pull/18).
+
 ### Fixed
 - Docker: the container ran in UTC, so every time-of-day option
   (`active_hours`, `screen_off_hours`, `brightness_schedule`) fired
