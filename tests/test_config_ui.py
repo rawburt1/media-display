@@ -68,7 +68,15 @@ def library_config_path(tmp_path):
 def test_schema_includes_all_categories(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/schema").get_json()
-    assert set(data.keys()) == {"general", "cache", "history", "sources", "outputs", "enrichers", "idle", "filter_meta"}
+    # One key per _FLAT_SECTIONS entry (cache/history/library/overrides/
+    # posters/alerts/auth/logging), the four per-type-registry categories,
+    # plus filter_meta and the presentation-metadata keys the guided UI
+    # needs (flat_sections/type_info/category_info/enricher_groups).
+    assert set(data.keys()) == {
+        "general", "cache", "history", "library", "overrides", "posters", "alerts", "auth", "logging",
+        "sources", "outputs", "enrichers", "idle", "filter_meta",
+        "flat_sections", "type_info", "category_info", "enricher_groups",
+    }
 
 
 def test_form_saves_history_section(config_path):
@@ -191,7 +199,7 @@ def test_save_form_updates_value(config_path):
     out = _output(config_path)
     client = out.app.test_client()
     resp = client.post("/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.99"}})
-    assert resp.get_json() == {"ok": True}
+    assert resp.get_json() == {"ok": True, "restart_required": False}
 
     cfg = Config.load(config_path)
     assert cfg.sources["kodi"].host == "10.0.0.99"
@@ -428,7 +436,7 @@ outputs:
             },
         },
     )
-    assert resp.get_json() == {"ok": True}
+    assert resp.get_json() == {"ok": True, "restart_required": True}
 
     cfg = Config.load(config_path)
     ips = [c.device_ip for c in cfg.outputs["ulanzi"]]
@@ -513,7 +521,7 @@ def test_save_form_rejects_unknown_category(config_path):
     out = _output(config_path)
     client = out.app.test_client()
     resp = client.post("/api/config/form", json={"values": {"bogus.kodi.host": "x"}})
-    assert resp.get_json() == {"ok": True}  # unknown keys are silently ignored, not an error
+    assert resp.get_json() == {"ok": True, "restart_required": False}  # unknown keys are silently ignored, not an error
 
     cfg = Config.load(config_path)
     assert cfg.sources["kodi"].host == "192.168.1.21"  # unchanged
@@ -523,7 +531,7 @@ def test_save_form_empty_values_is_noop(config_path):
     out = _output(config_path)
     client = out.app.test_client()
     resp = client.post("/api/config/form", json={"values": {}})
-    assert resp.get_json() == {"ok": True}
+    assert resp.get_json() == {"ok": True, "restart_required": False}
 
 
 # ---------------------------------------------------------------------------
@@ -535,7 +543,9 @@ def test_save_raw_writes_valid_yaml(config_path):
     client = out.app.test_client()
     new_yaml = "poll_interval_seconds: 7\nrotation_interval_seconds: 30\npriority: []\n"
     resp = client.post("/api/config/raw", json={"yaml": new_yaml})
-    assert resp.get_json() == {"ok": True}
+    # A raw save can change anything, including outputs - always flagged as
+    # possibly needing a restart, rather than trying to diff what changed.
+    assert resp.get_json() == {"ok": True, "restart_required": True}
     assert config_path.read_text() == new_yaml
 
 
@@ -1003,55 +1013,65 @@ def test_auth_not_required_for_private_address_when_enabled(config_path):
 
 
 # ---------------------------------------------------------------------------
-# Dashboard UI (ui: dashboard)
+# Single-page shell (templates/config_ui/app.html), served identically at
+# "/", "/form", and "/dashboard" - only the initially-selected nav section
+# (encoded as `data-initial-section` on <body>, read by client JS) differs
+# by route/`ui`. This replaced the old two-separate-templates design (a
+# full editable form vs. a read-only dashboard) with one guided app shell;
+# these tests check the new contract instead of the old templates' markup.
 # ---------------------------------------------------------------------------
 
 def test_form_ui_is_default_index_page(config_path):
     out = ConfigUiOutput(_config(), config_path)
     resp = out.app.test_client().get("/")
-    assert b"configuration" in resp.data
-    assert b"mediainfo status" not in resp.data
+    assert b'data-initial-section="overview"' in resp.data
 
 
 def test_dashboard_ui_serves_dashboard_page(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = out.app.test_client().get("/")
     assert resp.status_code == 200
-    assert b"mediainfo status" in resp.data
+    assert b'data-initial-section="status"' in resp.data
 
 
 def test_form_page_reachable_on_dashboard_instance(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = out.app.test_client().get("/form")
     assert resp.status_code == 200
-    assert b"mediainfo configuration" in resp.data
+    assert b'data-initial-section="overview"' in resp.data
 
 
 def test_dashboard_page_reachable_on_form_instance(config_path):
     out = ConfigUiOutput(_config(), config_path)
     resp = out.app.test_client().get("/dashboard")
     assert resp.status_code == 200
-    assert b"mediainfo status" in resp.data
+    assert b'data-initial-section="status"' in resp.data
 
 
-def test_form_page_links_to_dashboard(config_path):
+def test_all_nav_sections_present_on_every_route(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/form")
-    assert b'href="/dashboard"' in resp.data
+    client = out.app.test_client()
+    expected_sections = [
+        "overview", "sources", "outputs", "artwork", "idle",
+        "automation", "library", "status", "advanced",
+    ]
+    for route in ("/", "/form", "/dashboard"):
+        data = client.get(route).data
+        for section in expected_sections:
+            assert f'data-section="{section}"'.encode() in data, f"{section} missing from nav on {route}"
 
 
-def test_dashboard_page_links_to_form(config_path):
+def test_editing_capability_lives_in_guided_sections_not_status(config_path):
+    # Editing moved from an old "read-only dashboard with inline edit
+    # cards" design to the dedicated Media sources/Displays & outputs/
+    # Artwork & metadata sections - the shell still ships one JS function
+    # that writes field edits (setValue/setOutputField), used by all of
+    # them, rather than a status-page-only edit mode.
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = out.app.test_client().get("/dashboard")
-    assert b'href="/form"' in resp.data
-
-
-def test_dashboard_page_has_inline_edit_controls(config_path):
-    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = out.app.test_client().get("/dashboard")
-    assert b"startEdit" in resp.data
-    assert b"saveEdit" in resp.data
-    assert b"editBtn.textContent = 'Edit'" in resp.data
+    assert b"function setValue(" in resp.data
+    assert b"function setOutputField(" in resp.data
+    assert b"function renderStatus()" in resp.data
 
 
 def test_dashboard_instance_can_read_schema_and_config_for_editing(config_path):
@@ -1073,29 +1093,30 @@ def test_dashboard_instance_can_save_form_edits(config_path):
         "/api/config/form",
         json={"values": {"sources.kodi.host": "192.168.50.50"}},
     )
-    assert resp.get_json() == {"ok": True}
+    assert resp.get_json() == {"ok": True, "restart_required": False}
 
 
 def test_dashboard_page_has_restart_button(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = out.app.test_client().get("/dashboard")
-    assert b"restartDashboard" in resp.data
+    assert b"function restartNow(" in resp.data
     assert b"/api/restart" in resp.data
-    assert b"Restart mediainfo" in resp.data
+    assert b"Restart now" in resp.data or b"Restart mediainfo" in resp.data
 
 
 def test_dashboard_page_marks_failed_source_test_as_unavailable(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = out.app.test_client().get("/dashboard")
-    assert b"statusOverrides[key] = 'unavailable'" in resp.data
+    assert b"statusOverrides[key" in resp.data
+    assert b"'unavailable'" in resp.data
     assert b"b-unavailable" in resp.data
-    assert b'data-filter="unavailable"' in resp.data
+    assert b"'unavailable'" in resp.data and b"data-filter=" in resp.data
 
 
 def test_api_status_returns_empty_lists_without_health_provider(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = out.app.test_client().get("/api/status")
-    assert resp.get_json() == {"sources": [], "outputs": [], "enrichers": []}
+    assert resp.get_json() == {"sources": [], "outputs": [], "enrichers": [], "idle_sources": []}
 
 
 def test_api_status_returns_health_provider_data(config_path):
@@ -1370,7 +1391,7 @@ def test_save_form_saves_allow_media_types(config_path):
                                                   "deny_sources": [], "idle_when_filtered": False,
                                                   "active_hours": ""}]}},
     )
-    assert resp.get_json() == {"ok": True}
+    assert resp.get_json() == {"ok": True, "restart_required": True}
     cfg = Config.load(config_path)
     assert cfg.outputs["web"][0].allow_media_types == ["music", "movie"]
 
@@ -1451,6 +1472,6 @@ def test_save_form_accepts_valid_active_hours_with_midnight_wrap(config_path):
                                                   "idle_when_filtered": False,
                                                   "active_hours": "22:00-06:00"}]}},
     )
-    assert resp.get_json() == {"ok": True}
+    assert resp.get_json() == {"ok": True, "restart_required": True}
     cfg = Config.load(config_path)
     assert cfg.outputs["web"][0].active_hours == "22:00-06:00"

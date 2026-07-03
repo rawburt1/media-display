@@ -398,12 +398,17 @@ outputs:
     ip: 192.168.1.32
     size: 64        # 64 for Pixoo64 (default), 16 for Pixoo 16×16
 
-  # Multiple Pixoo displays — one in the living room, one on the desk:
+  # Multiple Pixoo displays — one in the living room, one on the desk. The
+  # optional `label` field (any output type) is purely cosmetic - a display
+  # name shown in the config UI (e.g. "Living room") instead of "Instance
+  # #2" - it has no effect on behavior.
   # pixoo:
   #   - enabled: true
   #     ip: 192.168.1.32
+  #     label: Living room
   #   - enabled: true
   #     ip: 192.168.1.33
+  #     label: Desk
 
   # ---------------------------------------------------------------------------
   # Per-output content filters (optional, applies to every output type)
