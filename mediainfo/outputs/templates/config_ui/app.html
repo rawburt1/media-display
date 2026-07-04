@@ -7,14 +7,22 @@
 <style>
   :root {
     --bg: #080d1a; --panel: #0d1629; --border: #1a2540; --text: #c0ccdf; --bright: #e8f0ff;
-    --muted: #6b7fa8; --muted2: #4a5f7a; --accent: #2563eb; --accent-hover: #1d4ed8;
+    --muted: #8798bc; --muted2: #4a5f7a; --accent: #2563eb; --accent-hover: #1d4ed8; --accent2: #7c3aed;
     --chip-bg: #1a2540; --mono-bg: #050810; --danger: #f87171; --warn: #f59e0b; --ok: #22c55e;
+    --danger-strong: #b91c1c; --control-border: #4a6693; --link: #5b9bff;
     --sidebar-w: 232px;
   }
   html[data-theme="light"] {
     --bg: #f3f5fa; --panel: #ffffff; --border: #dde3ee; --text: #2a3550; --bright: #0f172a;
     --muted: #5b6a85; --muted2: #6b7fa8; --accent: #2563eb; --accent-hover: #1d4ed8;
     --chip-bg: #eef1f8; --mono-bg: #0f172a;
+    /* Text-on-background colors only - these need to stay readable against
+       a light page, unlike the dark-theme values above which were tuned for
+       a near-black background. --danger-strong (a fixed white-on-red badge
+       fill) and --control-border are handled separately below/at :root since
+       they're not simple text-color swaps. */
+    --danger: #b42318; --warn: #92400e; --ok: #15803d;
+    --control-border: #7789a5; --link: var(--accent);
   }
   *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -23,12 +31,17 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 14px; line-height: 1.45;
   }
-  a { color: var(--accent); }
+  a { color: var(--link); }
   button, input, select, textarea { font: inherit; color: inherit; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ::placeholder { color: var(--muted); opacity: 1; }
   h1 { font-size: 18px; font-weight: 700; color: var(--bright); }
   h2 { font-size: 15px; font-weight: 700; color: var(--bright); margin: 0 0 4px; }
   h3 { font-size: 13px; font-weight: 700; color: var(--bright); margin: 0; }
+  /* Same look as h3 - used where a card title needs to be an <h2> to avoid
+     skipping a heading level (nothing else in the page uses <h2> for a
+     card-scoped title, only for section-level .group-title groupings). */
+  .heading-sm { font-size: 13px; font-weight: 700; color: var(--bright); margin: 0; }
   p.lede { color: var(--muted); font-size: 13px; max-width: 72ch; margin: 4px 0 18px; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
@@ -49,7 +62,7 @@
   #nav button:hover { background: var(--chip-bg); color: var(--bright); }
   #nav button.active { background: var(--accent); color: #fff; }
   #nav button .nav-badge {
-    float: right; background: var(--danger); color: #fff; border-radius: 999px;
+    float: right; background: var(--danger-strong); color: #fff; border-radius: 999px;
     font-size: 10px; padding: 1px 6px; font-weight: 700;
   }
   .sidebar-footer { display: flex; flex-direction: column; gap: 6px; }
@@ -58,7 +71,7 @@
     border-radius: 8px; padding: 7px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
   }
   .sidebar-footer button:hover { border-color: var(--accent); }
-  .sidebar-footer button.active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+  .sidebar-footer button.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
 
   #topbar { display: none; align-items: center; gap: 10px; padding: 12px 16px;
             background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
@@ -88,7 +101,7 @@
   .field-help { font-size: 11.5px; color: var(--muted); margin-top: 4px; max-width: 56ch; }
   .field-error { font-size: 11.5px; color: var(--danger); margin-top: 4px; }
   input[type=text], input[type=number], input[type=password], input[type=time], select, textarea {
-    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+    width: 100%; background: var(--bg); border: 1px solid var(--control-border); border-radius: 7px;
     color: var(--bright); padding: 7px 10px; font-size: 13px;
   }
   textarea { min-height: 68px; font-family: ui-monospace, monospace; resize: vertical; }
@@ -126,7 +139,7 @@
   button.btn.danger { background: #7f1d1d; color: #fff; }
   button.btn.danger:hover { background: #991b1b; }
   button.btn.small { padding: 5px 11px; font-size: 12px; }
-  button.btn:disabled { opacity: 0.55; cursor: default; }
+  button.btn:disabled { opacity: 0.65; cursor: default; }
 
   /* -- status badges -- */
   .badge { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase;
@@ -204,7 +217,7 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
   .status-card-name { font-size: 13px; font-weight: 600; color: var(--bright); flex: 1;
                        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .status-card-detail { font-size: 11px; color: var(--muted2); font-family: ui-monospace, monospace; margin: 6px 0 8px; min-height: 14px; }
+  .status-card-detail { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; margin: 6px 0 8px; min-height: 14px; }
 
   /* -- save bar -- */
   #savebar { position: fixed; left: var(--sidebar-w); right: 0; bottom: 0; background: var(--panel);
@@ -260,7 +273,7 @@
 
   <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
     <div id="topbar">
-      <button type="button" id="hamburger" aria-label="Open navigation" onclick="toggleNav()">&#9776;</button>
+      <button type="button" id="hamburger" aria-label="Open navigation" aria-expanded="false" onclick="toggleNav()">&#9776;</button>
       <span class="topbar-title" id="topbar-title">Overview</span>
     </div>
 
@@ -269,29 +282,74 @@
       <div class="auth-warning"><strong>No authentication.</strong> This page and all credentials in it are accessible to anyone on your network. Turn on authentication and/or restrict this page to this machine only under <a href="#" onclick="goToSection('advanced'); return false;">Advanced configuration</a>. See <a href="https://github.com/rawburt1/media-display/blob/master/SECURITY.md">SECURITY.md</a>.</div>
       {% endif %}
 
-      <div class="section" id="section-overview"><h1>Overview</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-sources"><h1>Media sources</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-outputs"><h1>Displays &amp; outputs</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-artwork"><h1>Artwork &amp; metadata</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-idle"><h1>Idle screen</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-automation"><h1>Automation &amp; schedules</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-library"><h1>Library &amp; overrides</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-status"><h1>System status</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-advanced"><h1>Advanced configuration</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-overview" tabindex="-1"><h1>Overview</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-sources" tabindex="-1"><h1>Media sources</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-outputs" tabindex="-1"><h1>Displays &amp; outputs</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-artwork" tabindex="-1"><h1>Artwork &amp; metadata</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-idle" tabindex="-1"><h1>Idle screen</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-automation" tabindex="-1"><h1>Automation &amp; schedules</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-library" tabindex="-1"><h1>Library &amp; overrides</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-status" tabindex="-1"><h1>System status</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-advanced" tabindex="-1"><h1>Advanced configuration</h1><p class="lede">Loading…</p></div>
     </main>
   </div>
 </div>
 
 <div id="savebar">
-  <span class="savebar-msg" id="savebar-msg">You have unsaved changes.</span>
-  <span id="save-status"></span>
+  <span class="savebar-msg" id="savebar-msg" role="status" aria-live="polite">You have unsaved changes.</span>
+  <span id="save-status" role="status" aria-live="polite"></span>
   <button type="button" class="btn secondary" onclick="discardChanges()">Discard</button>
   <button type="button" class="btn" onclick="saveAll()">Save changes</button>
-  <div class="savebar-warnings" id="savebar-warnings" hidden></div>
+  <div class="savebar-warnings" id="savebar-warnings" role="status" aria-live="polite" hidden></div>
 </div>
 
 <script>
 'use strict';
+
+// Attribute pair for async-result elements built via string concatenation,
+// so a screen reader hears save/test/restore/pairing outcomes without the
+// user having to re-focus that exact spot. Always "polite" - nothing in
+// this config UI is urgent enough to justify cutting off other speech.
+var LIVE = ' role="status" aria-live="polite"';
+
+// ---------------------------------------------------------------------
+// Focus preservation across innerHTML-based re-renders
+// ---------------------------------------------------------------------
+// There's no virtual DOM here - every render*() function rebuilds its
+// section from a string. captureFocus()/restoreFocus() bridge that by
+// snapshotting a stable identity for the focused element (its `id`, or a
+// `data-fid` attribute on elements that don't have one) before the swap,
+// then finding the matching element afterward. If nothing matches (e.g.
+// the focused element was itself just removed, like a deleted output
+// instance), fall back to `container` itself, which callers give
+// `tabindex="-1"` so it's always a valid, present focus target - keyboard
+// users land somewhere sane instead of silently dropping to <body>.
+function captureFocus(container) {
+  var a = document.activeElement;
+  if (!a || !container.contains(a) || a === container) return null;
+  var snap = { id: a.id || null, fid: a.getAttribute('data-fid') };
+  if ('selectionStart' in a) {
+    try { snap.selStart = a.selectionStart; snap.selEnd = a.selectionEnd; } catch (e) {}
+  }
+  return snap;
+}
+function restoreFocus(container, snap) {
+  var el = null;
+  if (snap) {
+    if (snap.id) el = document.getElementById(snap.id);
+    if (!el && snap.fid) el = container.querySelector('[data-fid="' + snap.fid.replace(/"/g, '\\"') + '"]');
+  }
+  if (!el) el = container;
+  el.focus({ preventScroll: true });
+  if (snap && snap.selStart != null && 'setSelectionRange' in el) {
+    try { el.setSelectionRange(snap.selStart, snap.selEnd); } catch (e) {}
+  }
+}
+function setSectionHTML(el, html) {
+  var snap = captureFocus(el);
+  el.innerHTML = html;
+  restoreFocus(el, snap);
+}
 
 // ---------------------------------------------------------------------
 // Global state
@@ -347,6 +405,9 @@ var NAV_TITLES = {
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('mediainfo-theme', theme);
+  var btn = document.getElementById('theme-toggle');
+  btn.textContent = theme === 'light' ? 'Theme: light' : 'Theme: dark';
+  btn.setAttribute('aria-pressed', String(theme === 'light'));
 }
 function toggleTheme() {
   var current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
@@ -354,7 +415,45 @@ function toggleTheme() {
 }
 applyTheme(localStorage.getItem('mediainfo-theme') || 'dark');
 
-function toggleNav() { document.body.classList.toggle('nav-open'); }
+// The mobile nav drawer (#sidebar, shown as a fixed overlay under 860px)
+// needs to behave like a real dialog for keyboard/AT users: background
+// content marked inert while it's open, Escape closes it, and Tab wraps
+// within it instead of escaping into the (visually obscured) page behind.
+function openNav() {
+  document.body.classList.add('nav-open');
+  document.getElementById('hamburger').setAttribute('aria-expanded', 'true');
+  var main = document.getElementById('main');
+  main.setAttribute('inert', '');
+  main.setAttribute('aria-hidden', 'true');
+  var firstNavBtn = document.querySelector('#sidebar button');
+  if (firstNavBtn) firstNavBtn.focus();
+}
+function closeNav() {
+  var sidebar = document.getElementById('sidebar');
+  var focusWasInSidebar = sidebar.contains(document.activeElement);
+  document.body.classList.remove('nav-open');
+  document.getElementById('hamburger').setAttribute('aria-expanded', 'false');
+  var main = document.getElementById('main');
+  main.removeAttribute('inert');
+  main.removeAttribute('aria-hidden');
+  // Only steal focus back if it would otherwise be stranded on a now-hidden
+  // sidebar button (e.g. Escape, or clicking a nav item) - not needed when
+  // closeNav() is called from elsewhere with focus already outside #sidebar.
+  if (focusWasInSidebar) document.getElementById('hamburger').focus();
+}
+function toggleNav() {
+  if (document.body.classList.contains('nav-open')) closeNav(); else openNav();
+}
+document.addEventListener('keydown', function(e) {
+  if (!document.body.classList.contains('nav-open')) return;
+  if (e.key === 'Escape') { closeNav(); return; }
+  if (e.key !== 'Tab') return;
+  var focusables = Array.prototype.slice.call(document.querySelectorAll('#sidebar button'));
+  if (!focusables.length) return;
+  var first = focusables[0], last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 
 // ---------------------------------------------------------------------
 // Hitster-safe (unchanged behaviour, ported as-is)
@@ -364,6 +463,7 @@ function renderHitsterSafeButton() {
   var btn = document.getElementById('hitster-safe-btn');
   btn.textContent = hitsterSafeEnabled ? 'Hitster-safe: ON' : 'Hitster-safe';
   btn.classList.toggle('active', hitsterSafeEnabled);
+  btn.setAttribute('aria-pressed', String(hitsterSafeEnabled));
 }
 function toggleHitsterSafe() {
   fetch('/api/hitster-safe', {
@@ -389,7 +489,7 @@ function goToSection(name) {
     s.classList.toggle('active', s.id === 'section-' + name);
   });
   document.getElementById('topbar-title').textContent = NAV_TITLES[name] || '';
-  document.body.classList.remove('nav-open');
+  if (document.body.classList.contains('nav-open')) closeNav();
   renderSection(name);
 }
 
@@ -424,10 +524,15 @@ function textareaToList(text) { return text.split('\n').map(function(s) { return
 // scope: {get(field)->value, set(field,value), key(field)->dotted key, secretKey(field)->key into secretsSet}
 function renderField(field, scope) {
   var key = scope.key(field.name);
+  var labelId = key + '__label';
   var value = scope.get(field.name);
   var help = field.help ? '<div class="field-help">' + esc(field.help) + '</div>' : '';
-  var reqMark = field.required ? '<span class="req" title="Required for this to work">*</span>' : '';
-  var control;
+  // The asterisk is decorative; " required" (visually hidden) is what
+  // actually reaches the accessible name, instead of a hover-only title.
+  var reqMark = field.required
+    ? '<span class="req" aria-hidden="true" title="Required for this to work">*</span><span class="visually-hidden"> required</span>'
+    : '';
+  var control, labelFor = '';
 
   if (field.secret) {
     var isSet = !!secretsSet[scope.secretKey ? scope.secretKey(field.name) : key];
@@ -438,67 +543,74 @@ function renderField(field, scope) {
       // oninput (fires every keystroke) would make the input vanish after
       // the very first character typed. rawInput() just records the value.
       control = '<div class="secret-box">'
-        + '<input type="password" autocomplete="new-password" placeholder="Enter new value" '
+        + '<input type="password" id="' + key + '" autocomplete="new-password" placeholder="Enter new value" '
+        + 'aria-label="' + esc(field.label) + ' - new value" '
         + 'value="' + esc(value) + '" oninput="' + scope.rawInput(field.name) + '">'
-        + '<button type="button" class="link-btn" onclick="' + scope.stopReplacing(field.name) + '">Cancel</button>'
+        + '<button type="button" class="link-btn" data-fid="secret-cancel:' + key + '" onclick="' + scope.stopReplacing(field.name) + '">Cancel</button>'
         + '</div>';
+      labelFor = ' for="' + key + '"';
     } else {
       control = '<div class="secret-box">'
         + '<span class="secret-badge ' + (isSet ? 'set' : 'unset') + '">' + (isSet ? 'Configured' : 'Not set') + '</span>'
-        + '<button type="button" class="link-btn" onclick="' + scope.startReplacing(field.name) + '">Replace' + (isSet ? '…' : '') + '</button>'
-        + (isSet ? '<button type="button" class="link-btn" onclick="' + scope.onInput(field.name, "''") + '">Clear</button>' : '')
+        + '<button type="button" class="link-btn" data-fid="secret-replace:' + key + '" onclick="' + scope.startReplacing(field.name) + '">Replace' + (isSet ? '…' : '') + '</button>'
+        + (isSet ? '<button type="button" class="link-btn" data-fid="secret-clear:' + key + '" onclick="' + scope.onInput(field.name, "''") + '">Clear</button>' : '')
         + '</div>';
     }
   } else if (field.type === 'bool') {
     control = '<input type="checkbox" id="' + key + '" ' + (value ? 'checked' : '') + ' '
       + 'onchange="' + scope.onInput(field.name, 'this.checked') + '">';
+    labelFor = ' for="' + key + '"';
   } else if (field.choices) {
     control = '<select id="' + key + '" onchange="' + scope.onInput(field.name, 'this.value') + '">'
       + field.choices.map(function(c) { return '<option value="' + esc(c) + '"' + (c === value ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('')
       + '</select>';
+    labelFor = ' for="' + key + '"';
   } else if (field.widget === 'time_range') {
     var parts = (value || '').split('-');
     var start = parts[0] || '', end = parts[1] || '';
-    control = '<div class="time-range-row">'
-      + '<input type="time" value="' + esc(start) + '" onchange="' + scope.onTimeRange(field.name) + '" data-part="start">'
-      + '<span>to</span>'
-      + '<input type="time" value="' + esc(end) + '" onchange="' + scope.onTimeRange(field.name) + '" data-part="end">'
+    control = '<div class="time-range-row" role="group" aria-labelledby="' + labelId + '">'
+      + '<input type="time" value="' + esc(start) + '" aria-label="' + esc(field.label) + ' start time" onchange="' + scope.onTimeRange(field.name) + '" data-part="start">'
+      + '<span aria-hidden="true">to</span>'
+      + '<input type="time" value="' + esc(end) + '" aria-label="' + esc(field.label) + ' end time" onchange="' + scope.onTimeRange(field.name) + '" data-part="end">'
       + '<button type="button" class="link-btn" onclick="' + scope.onInput(field.name, "''") + '">Clear</button>'
       + '</div>';
   } else if (field.widget === 'brightness_schedule') {
-    control = renderBrightnessScheduleWidget(field, value || [], scope);
+    control = renderBrightnessScheduleWidget(field, value || [], scope, labelId);
   } else if (field.type === 'list') {
-    control = '<textarea placeholder="One per line" onchange="' + scope.onInput(field.name, 'textareaToList(this.value)') + '">'
+    control = '<textarea id="' + key + '" placeholder="One per line" onchange="' + scope.onInput(field.name, 'textareaToList(this.value)') + '">'
       + esc(listToTextarea(value)) + '</textarea>';
+    labelFor = ' for="' + key + '"';
   } else {
     var inputType = (field.type === 'int' || field.type === 'float') ? 'number' : 'text';
     control = '<input type="' + inputType + '" id="' + key + '" value="' + esc(value) + '" '
       + 'onchange="' + scope.onInput(field.name, inputType === 'number' ? 'Number(this.value || 0)' : 'this.value') + '">';
+    labelFor = ' for="' + key + '"';
   }
 
   return '<div class="field"><div class="field-row">'
-    + '<label class="field-label">' + esc(field.label) + reqMark + '</label>'
+    + '<label class="field-label" id="' + labelId + '"' + labelFor + '>' + esc(field.label) + reqMark + '</label>'
     + '<div class="field-control">' + control + help + '</div>'
     + '</div></div>';
 }
 
-function renderBrightnessScheduleWidget(field, rows, scope) {
+function renderBrightnessScheduleWidget(field, rows, scope, labelId) {
+  var key = scope.key(field.name);
   var parsed = rows.map(function(s) {
     var m = /^(\d{2}:\d{2})-(\d{2}:\d{2})=(\d+)$/.exec(s || '');
     return m ? { start: m[1], end: m[2], level: m[3] } : { start: '', end: '', level: '' };
   });
   var body = parsed.map(function(r, i) {
-    return '<div class="schedule-row">'
-      + '<input type="time" value="' + esc(r.start) + '" data-i="' + i + '" data-part="start" onchange="' + scope.onScheduleRow(field.name) + '">'
-      + '<span>to</span>'
-      + '<input type="time" value="' + esc(r.end) + '" data-i="' + i + '" data-part="end" onchange="' + scope.onScheduleRow(field.name) + '">'
-      + '<span>brightness</span>'
-      + '<input type="number" min="0" value="' + esc(r.level) + '" data-i="' + i + '" data-part="level" onchange="' + scope.onScheduleRow(field.name) + '">'
-      + '<button type="button" class="link-btn" onclick="' + scope.onScheduleRemove(field.name, i) + '">Remove</button>'
+    return '<div class="schedule-row" role="group" aria-label="Time window ' + (i + 1) + '">'
+      + '<input type="time" value="' + esc(r.start) + '" aria-label="Start time" data-i="' + i + '" data-part="start" onchange="' + scope.onScheduleRow(field.name) + '">'
+      + '<span aria-hidden="true">to</span>'
+      + '<input type="time" value="' + esc(r.end) + '" aria-label="End time" data-i="' + i + '" data-part="end" onchange="' + scope.onScheduleRow(field.name) + '">'
+      + '<span aria-hidden="true">brightness</span>'
+      + '<input type="number" min="0" value="' + esc(r.level) + '" aria-label="Brightness level" data-i="' + i + '" data-part="level" onchange="' + scope.onScheduleRow(field.name) + '">'
+      + '<button type="button" class="link-btn" data-fid="schedule-remove:' + key + ':' + i + '" onclick="' + scope.onScheduleRemove(field.name, i) + '">Remove</button>'
       + '</div>';
   }).join('');
-  return '<div class="schedule-rows">' + body
-    + '<button type="button" class="btn secondary small" style="align-self:flex-start" onclick="' + scope.onScheduleAdd(field.name) + '">+ Add time window</button>'
+  return '<div class="schedule-rows" role="group" aria-labelledby="' + labelId + '">' + body
+    + '<button type="button" class="btn secondary small" style="align-self:flex-start" data-fid="schedule-add:' + key + '" onclick="' + scope.onScheduleAdd(field.name) + '">+ Add time window</button>'
     + '</div>';
 }
 
@@ -533,6 +645,7 @@ function updateSaveBar() {
   var n = Object.keys(dirty.outputTypes).length;
   badge.hidden = n === 0;
   badge.textContent = n;
+  badge.setAttribute('aria-label', n + (n === 1 ? ' unsaved output change' : ' unsaved output changes'));
 }
 
 function setValue(key, value) {
@@ -696,7 +809,7 @@ function renderOverview() {
     + statTile(counts.idle_enabled, 'Idle providers enabled')
     + '</div>';
 
-  html += '<div class="group-title">Needs attention</div>';
+  html += '<h2 class="group-title">Needs attention</h2>';
   if (warnings.length === 0) {
     html += '<div class="card"><span style="color:var(--ok);font-size:13px;">Everything looks good.</span></div>';
   } else {
@@ -711,12 +824,12 @@ function renderOverview() {
     + '<button type="button" class="btn" onclick="goToSection(\'sources\')">Add media source</button>'
     + '<button type="button" class="btn" onclick="goToSection(\'outputs\')">Add display/output</button>'
     + '<button type="button" class="btn secondary" onclick="testAllEnabled()">Test connections</button>'
-    + (isDirty() ? '<button type="button" class="btn" onclick="saveAll()">Save changes</button>' : '')
+    + (isDirty() ? '<button type="button" class="btn" id="overview-save-btn" onclick="saveAll()">Save changes</button>' : '')
     + '<button type="button" class="btn ' + (overviewData && overviewData.restart_required ? 'danger' : 'secondary') + '" onclick="restartNow()">Restart mediainfo</button>'
     + '</div>'
-    + '<div class="test-result show" id="overview-test-result" style="display:none;margin-top:12px;"></div>';
+    + '<div class="test-result show" id="overview-test-result"' + LIVE + ' style="display:none;margin-top:12px;"></div>';
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
 }
 
 function overviewWarningFix(i) {
@@ -793,7 +906,7 @@ function renderHiddenTypesRow(category, hiddenNames) {
     + '<span class="field-help" style="margin:0;">Hidden (' + sorted.length + '):</span>'
     + sorted.map(function(name) {
         return '<span class="chip active">' + esc(typeLabel(category, name))
-          + ' <button type="button" class="link-btn" title="Unhide" onclick="setTypeHidden(\'' + category + '\',\'' + name + '\', false)">&times;</button></span>';
+          + ' <button type="button" class="link-btn" title="Unhide" aria-label="Unhide ' + esc(typeLabel(category, name)) + '" data-fid="unhide:' + category + ':' + name + '" onclick="setTypeHidden(\'' + category + '\',\'' + name + '\', false)">&times;</button></span>';
       }).join('')
     + '</div>';
 }
@@ -805,7 +918,7 @@ function renderOrderList(idPrefix, allNames, category, key, extra) {
   var missing = allNames.filter(function(n) { return order.indexOf(n) === -1 && isEnabled(category, n); });
 
   var html = '<div class="card">'
-    + '<h3>' + esc(extra.title) + '</h3>'
+    + '<h2 class="heading-sm">' + esc(extra.title) + '</h2>'
     + '<p class="field-help" style="margin:6px 0 12px;">' + esc(extra.help) + '</p>';
 
   if (order.length === 0) {
@@ -817,9 +930,9 @@ function renderOrderList(idPrefix, allNames, category, key, extra) {
         + 'ondrop="orderDrop(event,\'' + idPrefix + '\',\'' + category + '\',\'' + key + '\')">'
         + '<span class="grip" aria-hidden="true">☰</span>'
         + '<span class="name">' + (i + 1) + '. ' + esc(typeLabel(category, name)) + '</span>'
-        + '<button type="button" aria-label="Move up" onclick="orderMove(\'' + key + '\',\'' + name + '\',-1,\'' + category + '\')" ' + (i === 0 ? 'disabled' : '') + '>↑</button>'
-        + '<button type="button" aria-label="Move down" onclick="orderMove(\'' + key + '\',\'' + name + '\',1,\'' + category + '\')" ' + (i === order.length - 1 ? 'disabled' : '') + '>↓</button>'
-        + '<button type="button" aria-label="Remove from priority" onclick="orderRemove(\'' + key + '\',\'' + name + '\')">Remove</button>'
+        + '<button type="button" aria-label="Move up" data-fid="order-up:' + key + ':' + name + '" onclick="orderMove(\'' + key + '\',\'' + name + '\',-1,\'' + category + '\')" ' + (i === 0 ? 'disabled' : '') + '>↑</button>'
+        + '<button type="button" aria-label="Move down" data-fid="order-down:' + key + ':' + name + '" onclick="orderMove(\'' + key + '\',\'' + name + '\',1,\'' + category + '\')" ' + (i === order.length - 1 ? 'disabled' : '') + '>↓</button>'
+        + '<button type="button" aria-label="Remove from priority" data-fid="order-remove:' + key + ':' + name + '" onclick="orderRemove(\'' + key + '\',\'' + name + '\')">Remove</button>'
         + '</li>';
     }).join('') + '</ul>';
   }
@@ -827,7 +940,7 @@ function renderOrderList(idPrefix, allNames, category, key, extra) {
   if (missing.length) {
     html += '<div class="missing-priority">' + missing.map(function(name) {
       return esc(typeLabel(category, name)) + ' is enabled but not in priority - '
-        + '<button type="button" class="link-btn" onclick="addToPriority(\'' + key + '\',\'' + name + '\'); renderSection(currentSection);">add it</button>';
+        + '<button type="button" class="link-btn" data-fid="order-add:' + key + ':' + name + '" onclick="addToPriority(\'' + key + '\',\'' + name + '\'); renderSection(currentSection);">add it</button>';
     }).join('<br>') + '</div>';
   }
 
@@ -883,7 +996,7 @@ function renderAppletvPairing() {
   } else if (s.step === 'starting') {
     rows = '<span>Scanning and starting pairing…</span>';
   } else if (s.step === 'need_pin') {
-    rows = '<div class="row-inline"><input type="text" id="appletv-pin" inputmode="numeric" placeholder="PIN shown on device" style="width:140px;">'
+    rows = '<div class="row-inline"><input type="text" id="appletv-pin" inputmode="numeric" placeholder="PIN shown on device" aria-label="Pairing PIN" style="width:140px;">'
       + '<button type="button" class="btn secondary small" onclick="appletvPairSubmit()">Submit PIN</button>'
       + '<button type="button" class="btn secondary small" onclick="appletvPairCancel()">Cancel</button></div>';
   } else if (s.step === 'need_manual_entry') {
@@ -897,12 +1010,15 @@ function renderAppletvPairing() {
       + '<button type="button" class="btn secondary small" onclick="appletvPairReset()">Pair again</button>';
   }
   var error = s.error ? '<p class="field-error">' + esc(s.error) + '</p>' : '';
-  return '<div class="field" id="appletv-pairing"><div class="field-label">Pairing wizard</div><div class="field-control">' + error + rows + '</div></div>';
+  return '<div class="field" id="appletv-pairing"><div class="field-label">Pairing wizard</div><div class="field-control"' + LIVE + '>' + error + rows + '</div></div>';
 }
 var appletvState = { step: 'idle', protocol: 'companion', devicePin: null, error: null };
 function appletvRerender() {
   var el = document.getElementById('appletv-pairing');
-  if (el) el.outerHTML = renderAppletvPairing();
+  if (!el) return;
+  var snap = captureFocus(document.body);
+  el.outerHTML = renderAppletvPairing();
+  restoreFocus(document.body, snap);
 }
 function appletvPairStart() {
   var hostKey = 'sources.appletv.host';
@@ -945,7 +1061,7 @@ function renderTestButton(kind, id) {
   var key = kind + ':' + id;
   var prior = testResults[key];
   return '<button type="button" class="btn secondary small" onclick="runInlineTest(\'' + kind + '\',\'' + id + '\',this)">Test connection</button>'
-    + '<div class="test-result' + (prior ? ' show ' + (prior.ok ? 'ok' : 'fail') : '') + '" id="test-' + kind + '-' + id + '">' + (prior ? esc(prior.message) : '') + '</div>';
+    + '<div class="test-result' + (prior ? ' show ' + (prior.ok ? 'ok' : 'fail') : '') + '" id="test-' + kind + '-' + id + '"' + LIVE + '>' + (prior ? esc(prior.message) : '') + '</div>';
 }
 
 function runInlineTest(kind, id, btn) {
@@ -992,8 +1108,8 @@ function renderSources() {
       + '</div>'
       + '<div class="toggle-row">'
       + (enabled ? '<span class="priority-pill ' + (inPriority ? 'in' : '') + '">' + (inPriority ? 'In priority' : 'Not in priority') + '</span>' : '')
-      + '<label class="toggle-row"><input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'' + enabledKey + '\', this.checked); renderSection(currentSection);"> Enabled</label>'
-      + '<button type="button" class="link-btn" title="Hide this from the list" onclick="setTypeHidden(\'sources\',\'' + name + '\', true)">Hide</button>'
+      + '<label class="toggle-row"><input type="checkbox" id="' + enabledKey + '" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'' + enabledKey + '\', this.checked); renderSection(currentSection);"> Enabled</label>'
+      + '<button type="button" class="link-btn" title="Hide this from the list" data-fid="hide:sources:' + name + '" onclick="setTypeHidden(\'sources\',\'' + name + '\', true)">Hide</button>'
       + '</div></div>';
 
     html += renderFieldGroup(fields.filter(function(f) { return f.name !== 'enabled'; }), scope, 'sources-' + name);
@@ -1002,7 +1118,7 @@ function renderSources() {
     html += '</div>';
   });
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
   if (document.getElementById('appletv-pairing')) appletvRerender();
 }
 
@@ -1131,6 +1247,7 @@ function renderOutputFilters(typeName, idx) {
     return ['all', 'allow', 'deny'].map(function(m) {
       var lbl = { all: 'Show everything', allow: 'Only show', deny: 'Never show' }[m];
       return '<button type="button" class="btn small ' + (m === current ? '' : 'secondary') + '" '
+        + 'data-fid="filter-mode:' + typeName + ':' + idx + ':' + kind + ':' + m + '" '
         + 'onclick="setFilterMode(\'' + typeName + '\',' + idx + ',\'' + kind + '\',\'' + m + '\')">' + lbl + '</button>';
     }).join(' ');
   }
@@ -1142,7 +1259,7 @@ function renderOutputFilters(typeName, idx) {
     var activeTypes = typeMode === 'allow' ? inst.allow_media_types : inst.deny_media_types;
     html += '<div class="row-inline" style="margin-top:8px;">' + fm.media_types.map(function(t) {
       var active = activeTypes.indexOf(t) !== -1;
-      return '<button type="button" class="btn small ' + (active ? '' : 'secondary') + '" onclick="toggleFilterMediaType(\'' + typeName + '\',' + idx + ',\'' + t + '\')">' + esc(t) + '</button>';
+      return '<button type="button" class="btn small ' + (active ? '' : 'secondary') + '" data-fid="filter-type:' + typeName + ':' + idx + ':' + t + '" onclick="toggleFilterMediaType(\'' + typeName + '\',' + idx + ',\'' + t + '\')">' + esc(t) + '</button>';
     }).join('') + '</div>';
   }
   html += '</div></div></div>';
@@ -1152,9 +1269,9 @@ function renderOutputFilters(typeName, idx) {
   if (srcMode !== 'all') {
     var activeSrc = srcMode === 'allow' ? inst.allow_sources : inst.deny_sources;
     html += '<div class="row-inline" style="margin-top:8px;">' + activeSrc.map(function(s) {
-      return '<span class="chip active">' + esc(s) + ' <button type="button" class="link-btn" onclick="removeFilterSource(\'' + typeName + '\',' + idx + ',\'' + s + '\')">&times;</button></span>';
+      return '<span class="chip active">' + esc(s) + ' <button type="button" class="link-btn" aria-label="Remove ' + esc(s) + ' from filter" data-fid="filter-src-remove:' + typeName + ':' + idx + ':' + s + '" onclick="removeFilterSource(\'' + typeName + '\',' + idx + ',\'' + s + '\')">&times;</button></span>';
     }).join('')
-      + '<select onchange="addFilterSource(\'' + typeName + '\',' + idx + ',this)"><option value="">+ Add source</option>'
+      + '<select id="' + outputScope(typeName, idx).key('filter-add') + '" aria-label="Add a source to the filter" onchange="addFilterSource(\'' + typeName + '\',' + idx + ',this)"><option value="">+ Add source</option>'
       + fm.known_sources.map(function(s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('') + '</select></div>';
   }
   html += '</div></div></div>';
@@ -1254,7 +1371,7 @@ function renderOutputsSection() {
       + '<div class="type-card-title">' + esc(typeLabel('outputs', typeName)) + '</div>'
       + '<div class="type-card-desc">' + esc(typeDescription('outputs', typeName)) + '</div>'
       + '</div>'
-      + '<button type="button" class="link-btn" title="Hide this from the list" onclick="setTypeHidden(\'outputs\',\'' + typeName + '\', true)">Hide</button>'
+      + '<button type="button" class="link-btn" title="Hide this from the list" data-fid="hide:outputs:' + typeName + '" onclick="setTypeHidden(\'outputs\',\'' + typeName + '\', true)">Hide</button>'
       + '</div>';
 
     instances.forEach(function(inst, idx) {
@@ -1262,9 +1379,10 @@ function renderOutputsSection() {
       var name = inst.label || ('Instance #' + (idx + 1));
       html += '<div class="instance-block">'
         + '<div class="instance-head">'
-        + '<input type="text" class="label-input" placeholder="Display name (optional)" value="' + esc(inst.label) + '" '
+        + '<input type="text" class="label-input" id="' + scope.key('label') + '" placeholder="Display name (optional)" '
+        + 'aria-label="' + esc(typeLabel('outputs', typeName)) + ' instance ' + (idx + 1) + ' display name" value="' + esc(inst.label) + '" '
         + 'onchange="setOutputField(\'' + typeName + '\',' + idx + ',\'label\', this.value); renderSection(currentSection);">'
-        + '<label class="row-inline"><input type="checkbox" ' + (inst.enabled ? 'checked' : '') + ' onchange="setOutputField(\'' + typeName + '\',' + idx + ',\'enabled\', this.checked); renderSection(currentSection);"> Enabled</label>'
+        + '<label class="row-inline"><input type="checkbox" id="' + scope.key('enabled') + '" ' + (inst.enabled ? 'checked' : '') + ' onchange="setOutputField(\'' + typeName + '\',' + idx + ',\'enabled\', this.checked); renderSection(currentSection);"> Enabled</label>'
         + '<span class="field-help">' + esc(outputSummary(typeName, inst)) + '</span>'
         + '</div>';
       html += renderFieldGroup(fields.filter(function(f) { return f.name !== 'enabled'; }), scope, 'outputs-' + typeName + '-' + idx);
@@ -1280,7 +1398,7 @@ function renderOutputsSection() {
     html += '</div>';
   });
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
   // Wire up the generic output test buttons to actually POST the instance fields.
   names.forEach(function(typeName) {
     (outputsData[typeName] || []).forEach(function(inst, idx) {
@@ -1312,8 +1430,8 @@ function renderArtwork() {
   var el = document.getElementById('section-artwork');
   var html = '<h1>Artwork &amp; metadata</h1><p class="lede">' + esc(schema.category_info.enrichers.description) + '</p>';
 
-  html += '<div class="group-title">Cache</div><div class="card">' + renderFieldGroup(schema.cache, scopeForSingle('cache'), 'cache') + '</div>';
-  html += '<div class="group-title">Poster store</div><div class="card">' + renderFieldGroup(schema.posters, scopeForSingle('posters'), 'posters') + '</div>';
+  html += '<h2 class="group-title">Cache</h2><div class="card">' + renderFieldGroup(schema.cache, scopeForSingle('cache'), 'cache') + '</div>';
+  html += '<h2 class="group-title">Poster store</h2><div class="card">' + renderFieldGroup(schema.posters, scopeForSingle('posters'), 'posters') + '</div>';
 
   var hidden = hiddenTypes.enrichers || [];
   html += renderHiddenTypesRow('enrichers', hidden);
@@ -1321,7 +1439,7 @@ function renderArtwork() {
   Object.keys(schema.enricher_groups).forEach(function(group) {
     var groupNames = schema.enricher_groups[group].filter(function(n) { return schema.enrichers[n] && hidden.indexOf(n) === -1; });
     if (!groupNames.length) return;
-    html += '<div class="group-title">' + esc(group) + '</div>';
+    html += '<h2 class="group-title">' + esc(group) + '</h2>';
     groupNames.forEach(function(name) {
       var fields = schema.enrichers[name];
       var scope = scopeForSingle('enrichers.' + name);
@@ -1330,8 +1448,8 @@ function renderArtwork() {
         + '<div class="type-card-title">' + esc(typeLabel('enrichers', name)) + '</div>'
         + '<div class="type-card-desc">' + esc(typeDescription('enrichers', name)) + '</div>'
         + '</div><div class="toggle-row">'
-        + '<label class="toggle-row"><input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'enrichers.' + name + '.enabled\', this.checked); renderSection(currentSection);"> Enabled</label>'
-        + '<button type="button" class="link-btn" title="Hide this from the list" onclick="setTypeHidden(\'enrichers\',\'' + name + '\', true)">Hide</button>'
+        + '<label class="toggle-row"><input type="checkbox" id="enrichers.' + name + '.enabled" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'enrichers.' + name + '.enabled\', this.checked); renderSection(currentSection);"> Enabled</label>'
+        + '<button type="button" class="link-btn" title="Hide this from the list" data-fid="hide:enrichers:' + name + '" onclick="setTypeHidden(\'enrichers\',\'' + name + '\', true)">Hide</button>'
         + '</div></div>';
       html += renderFieldGroup(fields.filter(function(f) { return f.name !== 'enabled'; }), scope, 'enrichers-' + name);
       html += '<div class="instance-actions">' + renderTestButton('enricher', name) + '</div>';
@@ -1339,7 +1457,7 @@ function renderArtwork() {
     });
   });
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
 }
 
 // ---------------------------------------------------------------------
@@ -1370,12 +1488,12 @@ function renderIdle() {
       + '<div class="type-card-title">' + esc(typeLabel('idle', name)) + '</div>'
       + '<div class="type-card-desc">' + esc(typeDescription('idle', name))
       + (rotation ? ' Refreshes a new batch every ' + rotation + ' seconds while idle.' : '') + '</div>'
-      + '</div><label class="toggle-row"><input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'idle.' + name + '.enabled\', this.checked); renderSection(currentSection);"> Enabled</label></div>';
+      + '</div><label class="toggle-row"><input type="checkbox" id="idle.' + name + '.enabled" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'idle.' + name + '.enabled\', this.checked); renderSection(currentSection);"> Enabled</label></div>';
     html += renderFieldGroup(fields.filter(function(f) { return f.name !== 'enabled'; }), scope, 'idle-' + name);
     html += '</div>';
   });
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
 }
 
 // ---------------------------------------------------------------------
@@ -1391,9 +1509,9 @@ function renderAutomation() {
   var general = schema.general.filter(function(f) { return ['poll_interval_seconds', 'rotation_interval_seconds', 'nothing_playing_grace_seconds', 'backoff_initial_seconds', 'backoff_max_seconds'].indexOf(f.name) !== -1; });
   html += '<div class="card">' + renderFieldGroup(general, scope, 'automation-general') + '</div>';
 
-  html += '<div class="group-title">Failure alerts</div><div class="card">' + renderFieldGroup(schema.alerts, scopeForSingle('alerts'), 'alerts') + '</div>';
+  html += '<h2 class="group-title">Failure alerts</h2><div class="card">' + renderFieldGroup(schema.alerts, scopeForSingle('alerts'), 'alerts') + '</div>';
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
 }
 
 // ---------------------------------------------------------------------
@@ -1403,13 +1521,13 @@ function renderLibrary() {
   var el = document.getElementById('section-library');
   var html = '<h1>Library &amp; overrides</h1><p class="lede">Local caches and manual artwork pins, plus their own dedicated browser pages.</p>';
 
-  html += '<div class="card-row" style="margin-bottom:10px;"><h3>Music library cache</h3><a class="btn secondary small" href="/library">Open library browser &rarr;</a></div>'
+  html += '<div class="card-row" style="margin-bottom:10px;"><h2 class="heading-sm">Music library cache</h2><a class="btn secondary small" href="/library">Open library browser &rarr;</a></div>'
     + '<div class="card">' + renderFieldGroup(schema.library, scopeForSingle('library'), 'library') + '</div>';
 
-  html += '<div class="card-row" style="margin:18px 0 10px;"><h3>Artwork overrides</h3><a class="btn secondary small" href="/overrides">Open overrides &rarr;</a></div>'
+  html += '<div class="card-row" style="margin:18px 0 10px;"><h2 class="heading-sm">Artwork overrides</h2><a class="btn secondary small" href="/overrides">Open overrides &rarr;</a></div>'
     + '<div class="card">' + renderFieldGroup(schema.overrides, scopeForSingle('overrides'), 'overrides') + '</div>';
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
 }
 
 // ---------------------------------------------------------------------
@@ -1459,7 +1577,7 @@ function renderStatusGrid(items, kind) {
       + '</div><div class="status-card-detail">' + esc(statusDetailText(item)) + '</div>'
       + (item.last_error ? '<div class="test-result show fail">⚠ ' + esc(item.last_error) + '</div>' : '')
       + (kind !== 'idle' ? '<button type="button" class="btn secondary small" onclick="runStatusTest(\'' + kind + '\',\'' + esc(id) + '\', this)">Test connection</button>'
-        + '<div class="test-result' + (prior ? ' show ' + (prior.ok ? 'ok' : 'fail') : '') + '">' + (prior ? esc(prior.message) : '') + '</div>' : '')
+        + '<div class="test-result' + (prior ? ' show ' + (prior.ok ? 'ok' : 'fail') : '') + '"' + LIVE + '>' + (prior ? esc(prior.message) : '') + '</div>' : '')
       + '</div>';
   }).join('') + '</div>';
 }
@@ -1486,24 +1604,23 @@ function renderStatus() {
 
   html += '<div class="filters">'
     + ['all', 'active', 'idle', 'enabled', 'disabled', 'unavailable'].map(function(f) {
-      return '<div class="chip' + (statusFilter === f ? ' active' : '') + '" data-filter="' + f + '">' + f.charAt(0).toUpperCase() + f.slice(1) + '</div>';
+      return '<button type="button" class="chip' + (statusFilter === f ? ' active' : '') + '" data-filter="' + f + '">' + f.charAt(0).toUpperCase() + f.slice(1) + '</button>';
     }).join('')
-    + '<input type="text" id="status-search" placeholder="Search…" value="' + esc(statusSearch) + '">'
+    + '<input type="text" id="status-search" placeholder="Search…" aria-label="Search sources, outputs, and enrichers by name" value="' + esc(statusSearch) + '">'
     + '</div>';
   html += '<div class="status-meta">Last updated: ' + (statusLastUpdated ? statusLastUpdated.toLocaleTimeString() : 'never') + '</div>';
 
-  html += '<div class="group-title">Sources</div>' + renderStatusGrid(statusData.sources, 'source');
-  html += '<div class="group-title">Outputs</div>' + renderStatusGrid(statusData.outputs, 'output');
-  html += '<div class="group-title">Enrichers</div>' + renderStatusGrid(statusData.enrichers, 'enricher');
-  html += '<div class="group-title">Idle providers</div>' + renderStatusGrid(statusData.idle_sources || [], 'idle');
+  html += '<h2 class="group-title">Sources</h2>' + renderStatusGrid(statusData.sources, 'source');
+  html += '<h2 class="group-title">Outputs</h2>' + renderStatusGrid(statusData.outputs, 'output');
+  html += '<h2 class="group-title">Enrichers</h2>' + renderStatusGrid(statusData.enrichers, 'enricher');
+  html += '<h2 class="group-title">Idle providers</h2>' + renderStatusGrid(statusData.idle_sources || [], 'idle');
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
   el.querySelectorAll('.chip').forEach(function(chip) {
     chip.addEventListener('click', function() { statusFilter = chip.dataset.filter; renderStatus(); });
   });
   var search = document.getElementById('status-search');
   search.addEventListener('input', function() { statusSearch = search.value; renderStatus(); });
-  search.focus(); search.selectionStart = search.selectionEnd = search.value.length;
 }
 
 function fetchStatus() {
@@ -1520,31 +1637,31 @@ function renderAdvanced() {
   var el = document.getElementById('section-advanced');
   var html = '<h1>Advanced configuration</h1><p class="lede">Security and system settings, plus a raw YAML editor covering everything else (image transforms, poster entries, and anything not yet in the guided pages). Saving here still validates the whole file before writing anything.</p>';
 
-  html += '<div class="group-title">Security</div>'
+  html += '<h2 class="group-title">Security</h2>'
     + '<p class="field-help" style="margin:-4px 0 8px;">Changes here need a restart to take effect - '
     + 'the login check only runs once, at startup. Locked out and can’t reach this page at all? '
     + 'Reset the password from the command line: <code>python -m mediainfo set-password --config config.yaml</code> '
     + '(see the README’s “Resetting the config UI password” section).</p>'
     + '<div class="card">' + renderFieldGroup(schema.auth, scopeForSingle('auth'), 'auth') + '</div>';
 
-  html += '<div class="group-title">Backups</div>'
+  html += '<h2 class="group-title">Backups</h2>'
     + '<p class="field-help" style="margin:-4px 0 8px;">A backup of config.yaml is taken automatically '
     + 'before every save (from here, <code>set-password</code>, or Apple TV pairing) - the 10 most recent '
     + 'are kept. Restoring backs up the current config.yaml first too, so a restore can itself be undone. '
     + 'Same list as <code>python -m mediainfo restore-backup --list --config config.yaml</code>.</p>'
     + '<div class="card">' + renderBackupsList() + '</div>';
 
-  html += '<div class="group-title">Logging</div><div class="card">' + renderFieldGroup(schema.logging, scopeForSingle('logging'), 'logging') + '</div>';
+  html += '<h2 class="group-title">Logging</h2><div class="card">' + renderFieldGroup(schema.logging, scopeForSingle('logging'), 'logging') + '</div>';
 
-  html += '<div class="group-title">Raw YAML editor</div>'
+  html += '<h2 class="group-title">Raw YAML editor</h2>'
     + '<div class="card">'
-    + '<textarea id="raw-yaml">' + esc(rawYaml) + '</textarea>'
+    + '<textarea id="raw-yaml" aria-label="Raw YAML configuration">' + esc(rawYaml) + '</textarea>'
     + '<div class="instance-actions">'
     + '<button type="button" class="btn" onclick="saveRawYaml()">Save raw YAML</button>'
-    + '<span id="raw-status"></span>'
+    + '<span id="raw-status"' + LIVE + '></span>'
     + '</div></div>';
 
-  el.innerHTML = html;
+  setSectionHTML(el, html);
   if (configBackups === null) {
     fetchConfigBackups().then(function() { if (currentSection === 'advanced') renderAdvanced(); });
   }
@@ -1559,13 +1676,13 @@ function renderBackupsList() {
     var when = new Date(b.mtime * 1000).toLocaleString();
     return '<div class="card-row">'
       + '<span>' + esc(when) + ' <span class="field-help" style="margin:0;">(' + esc(b.filename) + ')</span></span>'
-      + '<button type="button" class="btn secondary small" onclick="restoreConfigBackup(\'' + esc(b.filename) + '\')">Restore</button>'
+      + '<button type="button" class="btn secondary small" data-fid="backup-restore:' + esc(b.filename) + '" onclick="restoreConfigBackup(\'' + esc(b.filename) + '\')">Restore</button>'
       + '</div>';
   }).join('');
   var prior = backupRestoreResult;
   return rows
     + '<div class="instance-actions">'
-    + '<span id="backups-status" class="' + (prior ? prior.cls : '') + '">' + (prior ? esc(prior.text) : '') + '</span>'
+    + '<span id="backups-status" class="' + (prior ? prior.cls : '') + '"' + LIVE + '>' + (prior ? esc(prior.text) : '') + '</span>'
     + '</div>';
 }
 
