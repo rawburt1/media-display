@@ -334,14 +334,18 @@ function captureFocus(container) {
   return snap;
 }
 function restoreFocus(container, snap) {
+  // No snap means nothing in this container was focused before the
+  // re-render (e.g. a fresh render on page load or after a nav click) -
+  // leave focus wherever it already is instead of yanking it into the
+  // container. Only fall back to the container when something WAS
+  // focused here and the re-render removed it out from under the user.
+  if (!snap) return;
   var el = null;
-  if (snap) {
-    if (snap.id) el = document.getElementById(snap.id);
-    if (!el && snap.fid) el = container.querySelector('[data-fid="' + snap.fid.replace(/"/g, '\\"') + '"]');
-  }
+  if (snap.id) el = document.getElementById(snap.id);
+  if (!el && snap.fid) el = container.querySelector('[data-fid="' + snap.fid.replace(/"/g, '\\"') + '"]');
   if (!el) el = container;
   el.focus({ preventScroll: true });
-  if (snap && snap.selStart != null && 'setSelectionRange' in el) {
+  if (snap.selStart != null && 'setSelectionRange' in el) {
     try { el.setSelectionRange(snap.selStart, snap.selEnd); } catch (e) {}
   }
 }
