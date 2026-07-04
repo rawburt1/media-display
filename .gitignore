@@ -20,6 +20,7 @@ logs/
 
 # Folder output: mirrored artwork for whatever's currently playing
 artwork/
+pixoo_16/
 
 # ADB keys for the Shield source (private key material)
 adb_keys/

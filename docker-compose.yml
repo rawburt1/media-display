@@ -46,6 +46,7 @@ services:
       - ./logs:/app/logs
       - ./adb_keys:/app/adb_keys
       - ./artwork:/app/artwork
+      - ./pixoo_16:/app/pixoo_16  # 16x16-resized artwork mirror (outputs.folder second instance)
       - ./spotify_cache:/app/spotify_cache  # Spotify OAuth token; only needed if Spotify is enabled
       - ./overrides:/app/overrides  # Manual artwork overrides; only needed if overrides.enabled
       - ./posters:/app/posters  # Static show posters; only needed if posters.entries is non-empty
