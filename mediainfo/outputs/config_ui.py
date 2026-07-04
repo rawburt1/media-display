@@ -57,11 +57,18 @@ whatever keys are present in the POST body - so an untouched secret is
 never overwritten.
 
 `self._restart_required` is set whenever a save touches `outputs` (the
-one category that can't hot-reload), and cleared when /api/restart is
-called - it's surfaced via /api/overview so the Overview page can show a
-"Restart needed" banner. This is a coarse flag (any outputs save sets it,
-even a no-op resubmission) rather than a real diff - simpler, and errs
-towards nagging rather than missing a real restart-required change.
+one category that can't hot-reload) or `auth` (every Flask-based output's
+HTTP Basic Auth check closes over the AuthConfig instance from process
+startup - see install_auth() in _build_app() - so a changed password
+doesn't take effect until the process actually restarts), and cleared
+when /api/restart is called - it's surfaced via /api/overview so the
+Overview page can show a "Restart needed" banner. This is a coarse flag
+(any outputs/auth save sets it, even a no-op resubmission) rather than a
+real diff - simpler, and errs towards nagging rather than missing a real
+restart-required change. If you're locked out and can't reach this page
+at all, `python -m mediainfo set-password` (see __main__.py) resets
+auth.username/auth.password directly in config.yaml from the command
+line - same restart caveat applies.
 
 Known cosmetic limitation: when a brand-new instance is appended to an
 output type that already has trailing comments after its last existing
@@ -129,6 +136,7 @@ from mediainfo.config import (
     OverridesConfig,
     PostersConfig,
 )
+from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.base import Output
@@ -951,10 +959,19 @@ class ConfigUiOutput(Output):
                 return str(exc)
 
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            backup_config_file(self.config_path)
             with self.config_path.open("w", encoding="utf-8") as f:
                 f.write(_dump_config(data))
 
-            if outputs:
+            # `outputs` (added/removed/reconfigured instances) and `auth`
+            # both need a restart - outputs are only instantiated once at
+            # startup, and every Flask-based output's HTTP Basic Auth
+            # check (install_auth(), see _build_app()) closes over the
+            # AuthConfig instance passed in at that same startup, which
+            # the regular hot-reload never re-wires onto already-running
+            # servers. Everything else (sources/enrichers/idle/general/
+            # cache/etc.) picks up via hot-reload without a restart.
+            if outputs or any(key.startswith("auth.") for key in values):
                 self._restart_required = True
         return None
 
@@ -1038,10 +1055,32 @@ class ConfigUiOutput(Output):
 
         with self._lock:
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            backup_config_file(self.config_path)
             with self.config_path.open("w", encoding="utf-8") as f:
                 f.write(raw_yaml)
             # A raw save can change anything, including outputs - safest to
             # assume a restart might be needed rather than silently miss one.
+            self._restart_required = True
+        return None
+
+    def _restore_backup(self, filename: str) -> Optional[str]:
+        """Restore config.yaml from one of its automatic backups (see
+        mediainfo.config_backup), resolving `filename` by exact match
+        against list_backups() - never as a raw path, since the client
+        only ever supplies a name we ourselves listed. Returns an error
+        message on failure, or None on success.
+        """
+        with self._lock:
+            backups = list_backups(self.config_path)
+            if not backups:
+                return "No backups available to restore."
+            matches = [b for b in backups if b.name == filename]
+            if not matches:
+                return f"Unknown backup: {filename!r}."
+            restore_backup(self.config_path, matches[0])
+            # A restored config.yaml can change anything, including outputs
+            # and auth - safest to assume a restart might be needed, same
+            # reasoning as _save_raw's raw-YAML save.
             self._restart_required = True
         return None
 
@@ -1172,6 +1211,7 @@ class ConfigUiOutput(Output):
             Config.from_dict(data)
 
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            backup_config_file(self.config_path)
             with self.config_path.open("w", encoding="utf-8") as f:
                 f.write(_dump_config(data))
 
@@ -1267,6 +1307,35 @@ class ConfigUiOutput(Output):
             if error:
                 return jsonify({"ok": False, "error": error}), 400
             return jsonify({"ok": True, "restart_required": self._restart_required})
+
+        @app.get("/api/config/backups")
+        def list_config_backups():
+            backups = list_backups(self.config_path)
+            return jsonify({
+                "backups": [{"filename": b.name, "mtime": b.stat().st_mtime} for b in backups]
+            })
+
+        @app.post("/api/config/backups/restore")
+        def restore_config_backup():
+            body = request.get_json(silent=True) or {}
+            filename = (body.get("filename") or "").strip()
+            if not filename:
+                return jsonify({"ok": False, "error": "No backup filename given."}), 400
+            error = self._restore_backup(filename)
+            if error:
+                return jsonify({"ok": False, "error": error}), 400
+            response: Dict[str, Any] = {"ok": True, "restart_required": self._restart_required}
+            try:
+                Config.load(self.config_path)
+            except Exception as exc:
+                # Backup was valid when captured, but schema/plugins may have
+                # moved on since - warn, don't block: this route exists for
+                # disaster recovery, and refusing would leave the user stuck.
+                response["warning"] = (
+                    f"Restored, but the result fails to load ({exc}) - restore a "
+                    "different (e.g. older) backup, or fix config.yaml by hand."
+                )
+            return jsonify(response)
 
         @app.post("/api/restart")
         def restart():

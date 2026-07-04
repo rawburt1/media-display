@@ -215,6 +215,9 @@
   #save-status { font-size: 12px; }
   #save-status.ok { color: var(--ok); }
   #save-status.err { color: var(--danger); }
+  #backups-status { font-size: 12px; }
+  #backups-status.ok { color: var(--ok); }
+  #backups-status.err { color: var(--danger); }
 
   textarea#raw-yaml { width: 100%; min-height: 440px; }
 
@@ -302,6 +305,8 @@ var overviewData = null;
 var statusData = { sources: [], outputs: [], enrichers: [], idle_sources: [] };
 var currentSection = 'overview';
 var statusFilter = 'all';
+var configBackups = null;        // null = not yet fetched; [] = fetched, empty
+var backupRestoreResult = null;  // { text, cls } of the last restore attempt, survives re-render
 var statusSearch = '';
 var statusLastUpdated = null;
 var testResults = {};       // "kind:name" -> {ok, message}
@@ -642,7 +647,7 @@ function computeWarnings() {
   });
   if (overviewData) {
     if (overviewData.restart_required) {
-      warnings.push({ text: 'Display/output settings changed - a restart is needed to apply them.', fixLabel: 'Restart now', fix: restartNow, danger: true });
+      warnings.push({ text: 'Display/output or authentication settings changed - a restart is needed to apply them.', fixLabel: 'Restart now', fix: restartNow, danger: true });
     }
     if (overviewData.exposed_without_auth) {
       warnings.push({ text: 'This configuration page is reachable beyond this machine with no login required.', fixLabel: 'Review', fix: function() { goToSection('advanced'); }, danger: true });
@@ -1464,7 +1469,20 @@ function renderAdvanced() {
   var el = document.getElementById('section-advanced');
   var html = '<h1>Advanced configuration</h1><p class="lede">Security and system settings, plus a raw YAML editor covering everything else (image transforms, poster entries, and anything not yet in the guided pages). Saving here still validates the whole file before writing anything.</p>';
 
-  html += '<div class="group-title">Security</div><div class="card">' + renderFieldGroup(schema.auth, scopeForSingle('auth'), 'auth') + '</div>';
+  html += '<div class="group-title">Security</div>'
+    + '<p class="field-help" style="margin:-4px 0 8px;">Changes here need a restart to take effect - '
+    + 'the login check only runs once, at startup. Locked out and can’t reach this page at all? '
+    + 'Reset the password from the command line: <code>python -m mediainfo set-password --config config.yaml</code> '
+    + '(see the README’s “Resetting the config UI password” section).</p>'
+    + '<div class="card">' + renderFieldGroup(schema.auth, scopeForSingle('auth'), 'auth') + '</div>';
+
+  html += '<div class="group-title">Backups</div>'
+    + '<p class="field-help" style="margin:-4px 0 8px;">A backup of config.yaml is taken automatically '
+    + 'before every save (from here, <code>set-password</code>, or Apple TV pairing) - the 10 most recent '
+    + 'are kept. Restoring backs up the current config.yaml first too, so a restore can itself be undone. '
+    + 'Same list as <code>python -m mediainfo restore-backup --list --config config.yaml</code>.</p>'
+    + '<div class="card">' + renderBackupsList() + '</div>';
+
   html += '<div class="group-title">Logging</div><div class="card">' + renderFieldGroup(schema.logging, scopeForSingle('logging'), 'logging') + '</div>';
 
   html += '<div class="group-title">Raw YAML editor</div>'
@@ -1476,6 +1494,65 @@ function renderAdvanced() {
     + '</div></div>';
 
   el.innerHTML = html;
+  if (configBackups === null) {
+    fetchConfigBackups().then(function() { if (currentSection === 'advanced') renderAdvanced(); });
+  }
+}
+
+function renderBackupsList() {
+  if (configBackups === null) return '<p class="field-help">Loading…</p>';
+  if (!configBackups.length) {
+    return '<p class="field-help">No backups yet - one will be created automatically before the next save.</p>';
+  }
+  var rows = configBackups.map(function(b) {
+    var when = new Date(b.mtime * 1000).toLocaleString();
+    return '<div class="card-row">'
+      + '<span>' + esc(when) + ' <span class="field-help" style="margin:0;">(' + esc(b.filename) + ')</span></span>'
+      + '<button type="button" class="btn secondary small" onclick="restoreConfigBackup(\'' + esc(b.filename) + '\')">Restore</button>'
+      + '</div>';
+  }).join('');
+  var prior = backupRestoreResult;
+  return rows
+    + '<div class="instance-actions">'
+    + '<span id="backups-status" class="' + (prior ? prior.cls : '') + '">' + (prior ? esc(prior.text) : '') + '</span>'
+    + '</div>';
+}
+
+function fetchConfigBackups() {
+  return fetch('/api/config/backups').then(function(r) { return r.json(); }).then(function(d) {
+    configBackups = d.backups || [];
+  }).catch(function() { configBackups = []; });
+}
+
+function restoreConfigBackup(filename) {
+  if (!confirm('Restore config.yaml from this backup? The current config.yaml is itself backed up '
+    + 'first, so this can be undone the same way. Some changes may need a restart to take effect.')) return;
+  var statusEl = document.getElementById('backups-status');
+  statusEl.textContent = 'Restoring…'; statusEl.className = '';
+  fetch('/api/config/backups/restore', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: filename }),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) {
+      backupRestoreResult = { text: d.error, cls: 'err' };
+    } else if (d.warning) {
+      backupRestoreResult = { text: d.warning, cls: 'err' };
+    } else {
+      backupRestoreResult = {
+        text: d.restart_required ? 'Restored - a restart is needed for this to fully take effect.' : 'Restored.',
+        cls: 'ok',
+      };
+    }
+    if (d.ok) {
+      configBackups = null;
+      loadAll().then(function() { renderSection(currentSection); });
+    } else {
+      renderSection(currentSection);
+    }
+  }).catch(function() {
+    backupRestoreResult = { text: 'Request failed.', cls: 'err' };
+    renderSection(currentSection);
+  });
 }
 
 function saveRawYaml() {
@@ -1484,7 +1561,7 @@ function saveRawYaml() {
   statusEl.textContent = 'Saving…'; statusEl.className = '';
   fetch('/api/config/raw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ yaml: text }) })
     .then(function(r) { return r.json(); }).then(function(d) {
-      statusEl.textContent = d.ok ? 'Saved - changes take effect within a few seconds (or after a restart, for outputs).' : d.error;
+      statusEl.textContent = d.ok ? 'Saved - most changes take effect within a few seconds (outputs and authentication need a restart).' : d.error;
       statusEl.className = d.ok ? 'ok' : 'err';
       if (d.ok) loadAll();
     }).catch(function() { statusEl.textContent = 'Request failed.'; statusEl.className = 'err'; });
@@ -1534,7 +1611,7 @@ function saveAll() {
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (!d.ok) { statusEl.textContent = d.error; statusEl.className = 'err'; return; }
     statusEl.textContent = d.restart_required
-      ? 'Saved. Changes to displays/outputs need a restart to take effect.'
+      ? 'Saved. A restart is needed for this to take effect (displays/outputs and authentication changes only apply after a restart).'
       : 'Saved - changes take effect within a few seconds.';
     statusEl.className = 'ok';
     dirty = { values: {}, outputTypes: {} };
