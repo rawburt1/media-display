@@ -1,5 +1,7 @@
 """Entry point: python -m mediainfo [--config config.yaml]
               python -m mediainfo auth {appletv,spotify} [--config config.yaml]
+              python -m mediainfo set-password [--config config.yaml]
+              python -m mediainfo restore-backup [--config config.yaml]
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from typing import Optional
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config, LoggingConfig
+from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.validation import validate_config
 from mediainfo.wiring import (
@@ -56,6 +59,12 @@ def main() -> None:
         return
     if len(sys.argv) >= 2 and sys.argv[1] == "validate-config":
         _validate_config_main(sys.argv[2:])
+        return
+    if len(sys.argv) >= 2 and sys.argv[1] == "set-password":
+        _set_password_main(sys.argv[2:])
+        return
+    if len(sys.argv) >= 2 and sys.argv[1] == "restore-backup":
+        _restore_backup_main(sys.argv[2:])
         return
 
     parser = argparse.ArgumentParser(description="Pixoo64 / web media art display")
@@ -265,6 +274,206 @@ def _validate_config_main(argv: list) -> None:
         sys.exit(1)
 
     print("Config OK")
+
+
+# ---------------------------------------------------------------------------
+# set-password subcommand
+# ---------------------------------------------------------------------------
+
+def _set_password_main(argv: list) -> None:
+    """Set or reset auth.username/auth.password directly in config.yaml,
+    without needing to hand-edit YAML or reach a UI you may be locked out
+    of (the config UI's own "Security" card can't help if you've forgotten
+    the password it's asking for):
+      python -m mediainfo set-password --config config.yaml
+
+    Preserves comments/formatting (ruamel.yaml, like the config UI's own
+    save path) and validates the result with Config.from_dict() before
+    writing anything - same guarantee as every other way of editing
+    config.yaml in this codebase.
+
+    auth.enabled is left untouched unless --enable is passed, so running
+    this to merely change an existing password can't accidentally turn
+    authentication on for someone who had it off. A restart is required
+    for the new credentials to take effect - see the "Restart" button in
+    the config UI, or send SIGTERM/`docker compose restart mediainfo` -
+    because the running process's already-started servers were wired up
+    with the auth config as it was at startup.
+    """
+    import getpass
+
+    from ruamel.yaml import YAML
+
+    parser = argparse.ArgumentParser(
+        prog="python -m mediainfo set-password",
+        description="Set or reset the config UI / web outputs' HTTP Basic Auth credentials",
+    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
+    parser.add_argument("--username", help="New username (defaults to the existing one, if any)")
+    parser.add_argument(
+        "--password",
+        help="New password (omit to be prompted instead - safer, since a "
+        "command-line argument can end up in your shell history)",
+    )
+    parser.add_argument(
+        "--enable", action="store_true",
+        help="Also set auth.enabled: true (by default this command only changes the credentials)",
+    )
+    args = parser.parse_args(argv)
+
+    config_path = Path(args.config)
+    if not config_path.exists():
+        print(f"Error: config file not found: {config_path}", file=sys.stderr)
+        sys.exit(1)
+
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    with config_path.open("r", encoding="utf-8") as f:
+        data = yaml.load(f) or yaml.map()
+
+    auth = data.setdefault("auth", {})
+
+    username = args.username or auth.get("username") or ""
+    if not username:
+        username = input("Username: ").strip()
+    if not username:
+        print("Error: a username is required.", file=sys.stderr)
+        sys.exit(1)
+
+    password = args.password
+    if not password:
+        password = getpass.getpass("New password: ")
+        if password != getpass.getpass("Confirm password: "):
+            print("Error: passwords did not match.", file=sys.stderr)
+            sys.exit(1)
+    if not password:
+        print("Error: a password is required.", file=sys.stderr)
+        sys.exit(1)
+
+    auth["username"] = username
+    auth["password"] = password
+    if args.enable:
+        auth["enabled"] = True
+
+    try:
+        Config.from_dict(data)
+    except Exception as exc:
+        print(f"Error: refusing to save - config would be invalid: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    backup_config_file(config_path)
+    with config_path.open("w", encoding="utf-8") as f:
+        yaml.dump(data, f)
+
+    print(f"\nPassword set for user '{username}' in {config_path}.")
+    if auth.get("enabled"):
+        print("Authentication is enabled.")
+    else:
+        print(
+            "Authentication is NOT enabled (auth.enabled is still false) - "
+            "this only matters once you turn it on (--enable, the config "
+            "UI, or by hand in config.yaml)."
+        )
+    print(
+        "A restart is required for this to take effect - it isn't picked "
+        "up by the regular config hot-reload (SIGTERM/Ctrl-C/"
+        "`docker compose restart mediainfo`, or the config UI's Restart "
+        "button, if you can still reach it)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# restore-backup subcommand
+# ---------------------------------------------------------------------------
+
+def _restore_backup_main(argv: list) -> None:
+    """Restore config.yaml from one of the automatic backups taken before
+    every save (config UI, `set-password`, or Apple TV pairing) - see
+    mediainfo.config_backup.backup_config_file:
+      python -m mediainfo restore-backup --config config.yaml
+
+    With no --backup given, lists the available backups (newest first) and
+    prompts for which one to restore. The current config.yaml is itself
+    backed up first, so restoring can be undone the same way.
+    """
+    parser = argparse.ArgumentParser(
+        prog="python -m mediainfo restore-backup",
+        description="Restore config.yaml from an automatic pre-save backup",
+    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
+    parser.add_argument("--list", action="store_true", help="List available backups and exit")
+    parser.add_argument(
+        "--backup",
+        help="Backup filename (as printed by --list) to restore, or 'latest' "
+        "for the most recent one - omit to be prompted interactively",
+    )
+    parser.add_argument(
+        "--yes", action="store_true", help="Skip the confirmation prompt (for scripting)"
+    )
+    args = parser.parse_args(argv)
+
+    config_path = Path(args.config)
+    backups = list_backups(config_path)
+    if not backups:
+        print(f"Error: no backups found for {config_path}.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.list:
+        for backup in backups:
+            print(backup.name)
+        return
+
+    if args.backup:
+        if args.backup == "latest":
+            chosen = backups[0]
+        else:
+            matches = [b for b in backups if b.name == args.backup]
+            if not matches:
+                print(
+                    f"Error: no backup named {args.backup!r} for {config_path} - "
+                    "run with --list to see available backups.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            chosen = matches[0]
+    else:
+        print("Available backups (newest first):")
+        for i, backup in enumerate(backups, start=1):
+            print(f"  {i}. {backup.name}")
+        choice = input(f"Restore which one? [1-{len(backups)}]: ").strip()
+        try:
+            index = int(choice)
+            if not (1 <= index <= len(backups)):
+                raise ValueError
+        except ValueError:
+            print("Error: invalid selection.", file=sys.stderr)
+            sys.exit(1)
+        chosen = backups[index - 1]
+
+    if not args.yes:
+        confirm = input(f"Restore {chosen.name} over {config_path}? [y/N]: ").strip().lower()
+        if confirm != "y":
+            print("Aborted - nothing was changed.")
+            return
+
+    restore_backup(config_path, chosen)
+    print(f"Restored {config_path} from {chosen.name} (the previous contents were themselves backed up first).")
+
+    try:
+        Config.load(config_path)
+    except Exception as exc:
+        print(
+            f"Warning: the restored config.yaml fails to load: {exc}\n"
+            "Run this command again to restore a different (e.g. older) backup.",
+            file=sys.stderr,
+        )
+
+    print(
+        "Most settings hot-reload within a few seconds; if the restored "
+        "config changes `outputs` or `auth`, restart to pick those up "
+        "(SIGTERM/Ctrl-C/`docker compose restart mediainfo`, or the config "
+        "UI's Restart button)."
+    )
 
 
 # ---------------------------------------------------------------------------

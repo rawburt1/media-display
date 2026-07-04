@@ -213,6 +213,27 @@ To update later: `git pull && pip install -r requirements.txt`.
   under "Configuration" below (`python -m mediainfo auth spotify` /
   `auth appletv`) - run via `docker compose run --rm mediainfo python -m
   mediainfo auth spotify --config config/config.yaml` if using Docker.
+- **Forgot the config UI password / locked out**: `python -m mediainfo
+  set-password --config config.yaml` resets it from the command line - see
+  "Resetting the config UI password" under `auth` in Configuration below.
+- **A save left config.yaml broken/wrong**: every save (from the config UI,
+  or `set-password`) copies the previous config.yaml into a `.config_backups/`
+  folder right next to it before writing - e.g.
+  `config/.config_backups/config.yaml.20260704T101530.bak`. Restore one with:
+  ```bash
+  python -m mediainfo restore-backup --config config.yaml
+  # or, running under Docker:
+  docker compose run --rm mediainfo python -m mediainfo restore-backup --config config/config.yaml
+  ```
+  With no `--backup`, it lists the available backups (newest first) and
+  prompts for which one to restore; pass `--backup latest` (or a filename
+  from `--list`) plus `--yes` to script it non-interactively. The config.yaml
+  being replaced is itself backed up first, so a restore can always be
+  undone the same way. The last 10 backups are kept; older ones are pruned
+  automatically. Restart afterwards if the restored config changes
+  `outputs` or `auth` - everything else hot-reloads within a few seconds.
+  No shell access? The config UI's "Advanced configuration" page has the
+  same list under a "Backups" panel, with a Restore button per entry.
 
 ## Configuration
 
@@ -400,7 +421,9 @@ See `config.example.yaml` for all options. Key things to fill in:
     "retrying" vs. "unavailable" distinction instead of treating routine
     backoff retries as full-blown errors, and per-item "Test connection").
   - **Advanced configuration** holds authentication and logging settings,
-    plus the raw-YAML editor for anything the guided UI doesn't cover yet
+    a **Backups** panel to restore config.yaml from an automatic pre-save
+    backup (same list as `python -m mediainfo restore-backup --list`), and
+    the raw-YAML editor for anything the guided UI doesn't cover yet
     (`transforms`, `posters.entries`, and any hand-edited comments) - saves
     from here go through the exact same `Config.from_dict()` validation as
     the guided form, so nothing invalid can be written from either place.
@@ -631,7 +654,31 @@ See `config.example.yaml` for all options. Key things to fill in:
   no login prompt either way. Turn this on if you're exposing one of
   these outputs beyond your LAN (port-forwarding, a reverse proxy, a VPN
   you don't fully trust, ...). One shared username/password applies to
-  all of them. See SECURITY.md for more on this.
+  all of them. See SECURITY.md for more on this. Changing `auth` (from
+  the config UI's "Advanced configuration" page, or by hand) needs a
+  restart to take effect - every Flask-based output's login check is only
+  set up once, at startup.
+
+  #### Resetting the config UI password
+
+  If you've forgotten the password (or are locked out of the page that
+  would otherwise let you change it), reset it from the command line
+  instead of hand-editing config.yaml:
+
+  ```bash
+  python -m mediainfo set-password --config config.yaml
+  # or, running under Docker:
+  docker compose run --rm mediainfo python -m mediainfo set-password --config config/config.yaml
+  ```
+
+  Prompts for a new password (twice, to confirm) so it never appears in
+  your shell history; pass `--username NAME` to also change the username,
+  or `--password` non-interactively if you're scripting this. Preserves
+  comments/formatting in config.yaml and validates the result before
+  writing, same as every other way of editing it. Leaves `auth.enabled`
+  untouched unless you pass `--enable` - so resetting an existing password
+  can't accidentally turn authentication on. **Restart afterwards** (same
+  caveat as above) for the new password to actually take effect.
 - **`alerts`**: off by default (`enabled: false`). When enabled, `webhook_url`
   gets a JSON POST once an output has been continuously failing for at
   least `error_threshold_seconds` (default 5 minutes) - e.g. a Pixoo64

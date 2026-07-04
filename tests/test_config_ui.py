@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from mediainfo.config import Config, ConfigUiConfig
+from mediainfo.config_backup import backup_config_file, list_backups
 from mediainfo.outputs.config_ui import ConfigUiOutput, _restart_process
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
@@ -212,6 +213,28 @@ def test_save_form_updates_general_field(config_path):
 
     cfg = Config.load(config_path)
     assert cfg.poll_interval_seconds == 42
+
+
+def test_save_form_requires_restart_for_auth_change(config_path):
+    # Every Flask-based output's HTTP Basic Auth check is wired up once at
+    # process startup (install_auth() closes over the AuthConfig instance
+    # passed in then) - a changed password never reaches an already-running
+    # server via the regular hot-reload, so this must be flagged just like
+    # an `outputs` change is.
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/config/form", json={"values": {"auth.password": "new-secret"}})
+
+    assert resp.get_json() == {"ok": True, "restart_required": True}
+    assert Config.load(config_path).auth.password == "new-secret"
+
+
+def test_save_form_no_restart_required_when_auth_untouched(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.post("/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.1"}})
+
+    assert resp.get_json() == {"ok": True, "restart_required": False}
 
 
 def test_schema_includes_cache_section(config_path):
@@ -571,6 +594,128 @@ def test_save_raw_rejects_malformed_source_section(config_path):
     )
     assert resp.get_json()["ok"] is False
     assert config_path.read_text() == original
+
+
+# ---------------------------------------------------------------------------
+# Config backups (list + restore from the UI)
+# ---------------------------------------------------------------------------
+
+def test_list_config_backups_empty_when_no_backups(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    resp = client.get("/api/config/backups")
+    assert resp.get_json() == {"backups": []}
+
+
+def test_list_config_backups_returns_entries_with_filename_and_mtime(config_path):
+    backup_config_file(config_path)
+    backup_config_file(config_path)
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.get("/api/config/backups")
+    data = resp.get_json()
+
+    expected_names = {b.name for b in list_backups(config_path)}
+    assert {entry["filename"] for entry in data["backups"]} == expected_names
+    assert all(isinstance(entry["mtime"], (int, float)) for entry in data["backups"])
+
+
+def test_restore_backup_writes_backup_content_and_is_readable_via_config_load(config_path):
+    original_text = config_path.read_text()
+    backup_config_file(config_path)
+    config_path.write_text("poll_interval_seconds: 999\npriority: []\n")
+
+    out = _output(config_path)
+    client = out.app.test_client()
+    filename = list_backups(config_path)[0].name
+
+    resp = client.post("/api/config/backups/restore", json={"filename": filename})
+
+    assert resp.get_json()["ok"] is True
+    assert config_path.read_text() == original_text
+    assert Config.load(config_path).auth is not None
+
+
+def test_restore_backup_sets_restart_required(config_path):
+    backup_config_file(config_path)
+    config_path.write_text("poll_interval_seconds: 999\npriority: []\n")
+    out = _output(config_path)
+    client = out.app.test_client()
+    filename = list_backups(config_path)[0].name
+
+    resp = client.post("/api/config/backups/restore", json={"filename": filename})
+
+    assert resp.get_json()["restart_required"] is True
+
+
+def test_restore_backup_rejects_unknown_filename(config_path):
+    backup_config_file(config_path)
+    original = config_path.read_text()
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.post("/api/config/backups/restore", json={"filename": "not-a-real-backup.bak"})
+
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert "unknown backup" in data["error"].lower()
+    assert config_path.read_text() == original
+
+
+def test_restore_backup_errors_when_no_backups_exist(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.post("/api/config/backups/restore", json={"filename": "config.yaml.20260101T000000.bak"})
+
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert "no backups available" in data["error"].lower()
+
+
+def test_restore_backup_missing_filename_returns_400(config_path):
+    backup_config_file(config_path)
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.post("/api/config/backups/restore", json={})
+
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert "no backup filename given" in data["error"].lower()
+
+
+def test_restore_backup_itself_creates_a_new_undo_backup(config_path):
+    backup_config_file(config_path)
+    out = _output(config_path)
+    client = out.app.test_client()
+    filename = list_backups(config_path)[0].name
+    before_count = len(list_backups(config_path))
+
+    client.post("/api/config/backups/restore", json={"filename": filename})
+
+    assert len(list_backups(config_path)) == before_count + 1
+
+
+def test_restore_backup_warns_but_still_restores_when_result_fails_to_validate(config_path):
+    backup_config_file(config_path)  # backup of the valid example config
+    backup_dir = config_path.parent / ".config_backups"
+    broken = backup_dir / f"{config_path.name}.20200101T000000.bak"
+    broken.write_text("not: [valid, yaml, at, all")
+
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.post("/api/config/backups/restore", json={"filename": broken.name})
+    data = resp.get_json()
+
+    assert data["ok"] is True
+    assert "warning" in data
+    assert config_path.read_text() == "not: [valid, yaml, at, all"
 
 
 # ---------------------------------------------------------------------------
