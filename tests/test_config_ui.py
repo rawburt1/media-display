@@ -193,6 +193,97 @@ def test_get_config_outputs_unconfigured_type_has_one_default_instance(config_pa
 
 
 # ---------------------------------------------------------------------------
+# Hidden types (hide/unhide individual sources/outputs/enrichers cards)
+# ---------------------------------------------------------------------------
+
+def test_get_config_hidden_types_empty_by_default(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert data["hidden_types"] == {"sources": [], "outputs": [], "enrichers": []}
+
+
+def test_hide_type_adds_it_to_hidden_types(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.post("/api/config/hidden-types", json={"category": "sources", "name": "sonos", "hidden": True})
+
+    assert resp.get_json() == {"ok": True, "hidden_types": {"sources": ["sonos"], "outputs": [], "enrichers": []}}
+    assert client.get("/api/config").get_json()["hidden_types"]["sources"] == ["sonos"]
+
+
+def test_unhide_type_removes_it_from_hidden_types(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/config/hidden-types", json={"category": "sources", "name": "sonos", "hidden": True})
+
+    resp = client.post("/api/config/hidden-types", json={"category": "sources", "name": "sonos", "hidden": False})
+
+    assert resp.get_json() == {"ok": True, "hidden_types": {"sources": [], "outputs": [], "enrichers": []}}
+
+
+def test_hide_type_persists_across_instances(config_path):
+    out1 = _output(config_path)
+    out1.app.test_client().post(
+        "/api/config/hidden-types", json={"category": "enrichers", "name": "discogs", "hidden": True}
+    )
+
+    out2 = _output(config_path)
+    data = out2.app.test_client().get("/api/config").get_json()
+    assert data["hidden_types"]["enrichers"] == ["discogs"]
+
+
+def test_hide_type_does_not_require_restart(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    client.post("/api/config/hidden-types", json={"category": "outputs", "name": "pixoo64", "hidden": True})
+
+    assert client.get("/api/overview").get_json()["restart_required"] is False
+
+
+def test_hide_type_rejects_unknown_category(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.post("/api/config/hidden-types", json={"category": "idle", "name": "clock", "hidden": True})
+
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+def test_hide_type_rejects_missing_name(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+
+    resp = client.post("/api/config/hidden-types", json={"category": "sources", "hidden": True})
+
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+def test_hiding_same_type_twice_is_a_noop(config_path):
+    out = _output(config_path)
+    client = out.app.test_client()
+    client.post("/api/config/hidden-types", json={"category": "sources", "name": "sonos", "hidden": True})
+
+    resp = client.post("/api/config/hidden-types", json={"category": "sources", "name": "sonos", "hidden": True})
+
+    assert resp.get_json()["hidden_types"]["sources"] == ["sonos"]
+
+
+def test_hidden_types_written_under_ui_hidden_types_key(config_path):
+    out = _output(config_path)
+    out.app.test_client().post("/api/config/hidden-types", json={"category": "sources", "name": "sonos", "hidden": True})
+
+    text = config_path.read_text()
+    assert "ui_hidden_types:" in text
+    # Config.from_dict() ignores the unknown top-level key entirely - it's a
+    # UI-only preference, so the rest of the config still loads unaffected.
+    assert Config.load(config_path).auth is not None
+
+
+# ---------------------------------------------------------------------------
 # /api/config/form (POST)
 # ---------------------------------------------------------------------------
 

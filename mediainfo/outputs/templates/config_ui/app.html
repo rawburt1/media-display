@@ -303,6 +303,7 @@ var serverOutputsData = {}; // last-saved snapshot, for discard/dirty diffing
 var rawYaml = '';
 var overviewData = null;
 var statusData = { sources: [], outputs: [], enrichers: [], idle_sources: [] };
+var hiddenTypes = { sources: [], outputs: [], enrichers: [] }; // type names hidden from their section's cards
 var currentSection = 'overview';
 var statusFilter = 'all';
 var configBackups = null;        // null = not yet fetched; [] = fetched, empty
@@ -765,6 +766,37 @@ function isEnabled(category, name) {
   return !!v;
 }
 
+// ---------------------------------------------------------------------
+// Hide/unhide individual plugin types (Media sources / Displays &
+// outputs / Artwork & metadata) - a purely cosmetic, no-restart-needed
+// preference so a household only sees the sources/displays/enrichers it
+// actually uses. Saved server-side (see /api/config/hidden-types) so it
+// applies no matter which device opens the config UI.
+// ---------------------------------------------------------------------
+function isTypeHidden(category, name) {
+  return (hiddenTypes[category] || []).indexOf(name) !== -1;
+}
+function setTypeHidden(category, name, hidden) {
+  fetch('/api/config/hidden-types', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category: category, name: name, hidden: hidden }),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) hiddenTypes = d.hidden_types;
+    renderSection(currentSection);
+  }).catch(function() {});
+}
+function renderHiddenTypesRow(category, hiddenNames) {
+  if (!hiddenNames.length) return '';
+  var sorted = hiddenNames.slice().sort(function(a, b) { return typeLabel(category, a).localeCompare(typeLabel(category, b)); });
+  return '<div class="card-row" style="margin-bottom:16px;flex-wrap:wrap;gap:8px;">'
+    + '<span class="field-help" style="margin:0;">Hidden (' + sorted.length + '):</span>'
+    + sorted.map(function(name) {
+        return '<span class="chip active">' + esc(typeLabel(category, name))
+          + ' <button type="button" class="link-btn" title="Unhide" onclick="setTypeHidden(\'' + category + '\',\'' + name + '\', false)">&times;</button></span>';
+      }).join('')
+    + '</div>';
+}
+
 function renderOrderList(idPrefix, allNames, category, key, extra) {
   var order = currentPriorityList(key).filter(function(n) { return allNames.indexOf(n) !== -1; });
   // Only flag names that are both enabled and missing from priority - a
@@ -939,7 +971,11 @@ function renderSources() {
     help: 'When more than one source is active at once, the highest one in this list wins. A source you enable below but don’t add here is simply never used.',
   });
 
-  var names = allNames.slice().sort(function(a, b) { return typeLabel('sources', a).localeCompare(typeLabel('sources', b)); });
+  var hidden = hiddenTypes.sources || [];
+  html += renderHiddenTypesRow('sources', hidden);
+
+  var names = allNames.filter(function(n) { return hidden.indexOf(n) === -1; })
+    .sort(function(a, b) { return typeLabel('sources', a).localeCompare(typeLabel('sources', b)); });
   names.forEach(function(name) {
     var fields = schema.sources[name];
     var scope = scopeForSingle('sources.' + name);
@@ -956,6 +992,7 @@ function renderSources() {
       + '<div class="toggle-row">'
       + (enabled ? '<span class="priority-pill ' + (inPriority ? 'in' : '') + '">' + (inPriority ? 'In priority' : 'Not in priority') + '</span>' : '')
       + '<label class="toggle-row"><input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'' + enabledKey + '\', this.checked); renderSection(currentSection);"> Enabled</label>'
+      + '<button type="button" class="link-btn" title="Hide this from the list" onclick="setTypeHidden(\'sources\',\'' + name + '\', true)">Hide</button>'
       + '</div></div>';
 
     html += renderFieldGroup(fields.filter(function(f) { return f.name !== 'enabled'; }), scope, 'sources-' + name);
@@ -1204,14 +1241,20 @@ function renderOutputsSection() {
       + '<button type="button" class="btn small danger fix-btn" onclick="restartNow()">Restart now</button></div>';
   }
 
-  var names = Object.keys(schema.outputs).sort(function(a, b) { return typeLabel('outputs', a).localeCompare(typeLabel('outputs', b)); });
+  var hidden = hiddenTypes.outputs || [];
+  html += renderHiddenTypesRow('outputs', hidden);
+
+  var names = Object.keys(schema.outputs).filter(function(n) { return hidden.indexOf(n) === -1; })
+    .sort(function(a, b) { return typeLabel('outputs', a).localeCompare(typeLabel('outputs', b)); });
   names.forEach(function(typeName) {
     var fields = schema.outputs[typeName];
     var instances = outputsData[typeName] || [];
     html += '<div class="type-card"><div class="type-card-head"><div>'
       + '<div class="type-card-title">' + esc(typeLabel('outputs', typeName)) + '</div>'
       + '<div class="type-card-desc">' + esc(typeDescription('outputs', typeName)) + '</div>'
-      + '</div></div>';
+      + '</div>'
+      + '<button type="button" class="link-btn" title="Hide this from the list" onclick="setTypeHidden(\'outputs\',\'' + typeName + '\', true)">Hide</button>'
+      + '</div>';
 
     instances.forEach(function(inst, idx) {
       var scope = outputScope(typeName, idx);
@@ -1271,17 +1314,24 @@ function renderArtwork() {
   html += '<div class="group-title">Cache</div><div class="card">' + renderFieldGroup(schema.cache, scopeForSingle('cache'), 'cache') + '</div>';
   html += '<div class="group-title">Poster store</div><div class="card">' + renderFieldGroup(schema.posters, scopeForSingle('posters'), 'posters') + '</div>';
 
+  var hidden = hiddenTypes.enrichers || [];
+  html += renderHiddenTypesRow('enrichers', hidden);
+
   Object.keys(schema.enricher_groups).forEach(function(group) {
+    var groupNames = schema.enricher_groups[group].filter(function(n) { return schema.enrichers[n] && hidden.indexOf(n) === -1; });
+    if (!groupNames.length) return;
     html += '<div class="group-title">' + esc(group) + '</div>';
-    schema.enricher_groups[group].forEach(function(name) {
-      if (!schema.enrichers[name]) return;
+    groupNames.forEach(function(name) {
       var fields = schema.enrichers[name];
       var scope = scopeForSingle('enrichers.' + name);
       var enabled = scope.get('enabled');
       html += '<div class="type-card"><div class="type-card-head"><div>'
         + '<div class="type-card-title">' + esc(typeLabel('enrichers', name)) + '</div>'
         + '<div class="type-card-desc">' + esc(typeDescription('enrichers', name)) + '</div>'
-        + '</div><label class="toggle-row"><input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'enrichers.' + name + '.enabled\', this.checked); renderSection(currentSection);"> Enabled</label></div>';
+        + '</div><div class="toggle-row">'
+        + '<label class="toggle-row"><input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="setValue(\'enrichers.' + name + '.enabled\', this.checked); renderSection(currentSection);"> Enabled</label>'
+        + '<button type="button" class="link-btn" title="Hide this from the list" onclick="setTypeHidden(\'enrichers\',\'' + name + '\', true)">Hide</button>'
+        + '</div></div>';
       html += renderFieldGroup(fields.filter(function(f) { return f.name !== 'enabled'; }), scope, 'enrichers-' + name);
       html += '<div class="instance-actions">' + renderTestButton('enricher', name) + '</div>';
       html += '</div>';
@@ -1650,6 +1700,7 @@ function loadAll() {
     serverOutputsData = results[1].outputs;
     outputsData = JSON.parse(JSON.stringify(serverOutputsData));
     rawYaml = results[1].raw_yaml;
+    hiddenTypes = results[1].hidden_types || { sources: [], outputs: [], enrichers: [] };
     return fetchOverview();
   }).then(fetchStatus);
 }

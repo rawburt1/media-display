@@ -384,6 +384,14 @@ See `config.example.yaml` for all options. Key things to fill in:
     unreachable source/output, outputs changed but not yet restarted, or
     this page reachable beyond your LAN with no login) - each with a
     one-click fix.
+  - Every card in **Media sources**, **Displays & outputs**, and **Artwork
+    & metadata** has a "Hide" link if you don't use that plugin type - it
+    disappears from the list (and doesn't affect whether it's enabled).
+    Hidden ones collapse into a small "Hidden (N)" row at the top of the
+    section with one click each to bring them back. This is a per-instance
+    config-UI preference (`ui_hidden_types` in config.yaml, not modeled by
+    `Config` at all), so it applies no matter which device opens the page
+    and never needs a restart.
   - **Media sources** has one card per source type (essential fields up
     front, the rest under "Advanced settings"), a secret field shows
     "Configured"/"Not set" rather than the credential itself (see

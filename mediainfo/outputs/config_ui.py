@@ -172,6 +172,10 @@ _LABEL_FIELD_NAME = "label"
 
 _KNOWN_MEDIA_TYPES = ["music", "movie", "episode", "game"]
 
+# Categories whose type cards can be hidden from view (Media sources,
+# Displays & outputs, Artwork & metadata) - see _get_hidden_types().
+_HIDDEN_TYPE_CATEGORIES = ("sources", "outputs", "enrichers")
+
 # Categories where each type has exactly one configured instance.
 _SINGLE_INSTANCE_CATEGORIES: Dict[str, Dict[str, type]] = {
     "sources": SOURCE_CONFIG_TYPES,
@@ -866,6 +870,53 @@ class ConfigUiOutput(Output):
             result[type_name] = out_instances
         return result, secrets_set
 
+    def _get_hidden_types(self) -> Dict[str, List[str]]:
+        """Plugin type names hidden from the Media sources/Displays &
+        outputs/Artwork & metadata cards - purely a display preference
+        (doesn't affect whether a type is enabled/used), stored under the
+        `ui_hidden_types` top-level key, which Config doesn't model at all
+        (unknown top-level keys are silently ignored by Config.from_dict)
+        so this never needs a restart or touches any plugin's behavior.
+        """
+        with self._lock:
+            data = _read_config(self.config_path)
+        raw = data.get("ui_hidden_types") or {}
+        return {
+            category: [n for n in (raw.get(category) or []) if isinstance(n, str)]
+            for category in _HIDDEN_TYPE_CATEGORIES
+        }
+
+    def _set_hidden_type(self, category: str, name: str, hidden: bool) -> Optional[str]:
+        """Add/remove `name` from the hidden-types list for `category`.
+        Returns an error message on failure, or None on success.
+        """
+        with self._lock:
+            data = _read_config(self.config_path)
+            section = data.setdefault("ui_hidden_types", {})
+            names = [n for n in (section.get(category) or []) if isinstance(n, str)]
+            if hidden and name not in names:
+                names.append(name)
+            elif not hidden and name in names:
+                names.remove(name)
+            if names:
+                section[category] = names
+            else:
+                section.pop(category, None)
+            if not section:
+                data.pop("ui_hidden_types", None)
+
+            try:
+                Config.from_dict(data)
+            except Exception as exc:
+                logger.warning("Rejected hidden-types update: %s", exc)
+                return str(exc)
+
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            backup_config_file(self.config_path)
+            with self.config_path.open("w", encoding="utf-8") as f:
+                f.write(_dump_config(data))
+        return None
+
     def _compute_overview(self) -> Dict[str, Any]:
         """Data for the Overview page: health summary, enabled-item counts,
         and the two "needs your attention" flags this output can determine
@@ -1286,6 +1337,7 @@ class ConfigUiOutput(Output):
                 "outputs": outputs,
                 "raw_yaml": raw_yaml,
                 "secrets_set": {**values_secrets, **output_secrets},
+                "hidden_types": self._get_hidden_types(),
             })
 
         @app.get("/api/overview")
@@ -1307,6 +1359,19 @@ class ConfigUiOutput(Output):
             if error:
                 return jsonify({"ok": False, "error": error}), 400
             return jsonify({"ok": True, "restart_required": self._restart_required})
+
+        @app.post("/api/config/hidden-types")
+        def set_hidden_type():
+            body = request.get_json(silent=True) or {}
+            category = body.get("category")
+            name = body.get("name")
+            hidden = bool(body.get("hidden"))
+            if category not in _HIDDEN_TYPE_CATEGORIES or not isinstance(name, str) or not name:
+                return jsonify({"ok": False, "error": "Invalid category or name."}), 400
+            error = self._set_hidden_type(category, name, hidden)
+            if error:
+                return jsonify({"ok": False, "error": error}), 400
+            return jsonify({"ok": True, "hidden_types": self._get_hidden_types()})
 
         @app.get("/api/config/backups")
         def list_config_backups():
