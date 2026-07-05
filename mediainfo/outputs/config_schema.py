@@ -21,6 +21,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Dict, List, Optional
 
+import pydantic
+
 from mediainfo.config import (
     ENRICHER_CONFIG_TYPES,
     IDLE_CONFIG_TYPES,
@@ -435,6 +437,12 @@ def _scalar_fields(
         if f.type not in ("bool", "int", "float", "str"):
             continue
         default = f.default if f.default is not dataclasses.MISSING else ""
+        # A pydantic dataclass field declared with pydantic.Field(...)
+        # (e.g. for a range constraint) reports that FieldInfo object as
+        # its dataclasses.fields() default rather than the plain value -
+        # unwrap it so the schema still reports the actual default.
+        if isinstance(default, pydantic.fields.FieldInfo):
+            default = default.default
         entry: Dict[str, Any] = {
             "name": f.name,
             "type": f.type,

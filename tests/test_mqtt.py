@@ -3,6 +3,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 from mediainfo.config import MqttConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -226,3 +227,40 @@ def test_discovery_not_published_on_failed_connect(MockClient):
     output._on_connect(mock_client, None, {}, 5)  # rc != 0: refused
 
     mock_client.publish.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# MqttConfig validation (pydantic dataclass spike - see mediainfo/config/
+# outputs.py's MqttConfig docstring)
+# ---------------------------------------------------------------------------
+
+def test_port_out_of_range_raises_validation_error():
+    with pytest.raises(ValueError, match="port"):
+        _config(port=99999)
+
+
+def test_qos_out_of_range_raises_validation_error():
+    with pytest.raises(ValueError, match="qos"):
+        _config(qos=5)
+
+
+def test_boundary_values_are_accepted():
+    cfg = _config(port=65535, qos=2)
+    assert cfg.port == 65535
+    assert cfg.qos == 2
+
+
+def test_unknown_field_raises_validation_error():
+    with pytest.raises(ValueError, match="no_such_field"):
+        _config(no_such_field="x")
+
+
+def test_schema_reports_plain_int_defaults_not_field_info():
+    from mediainfo.config import MqttConfig
+    from mediainfo.outputs.config_schema import _scalar_fields
+
+    fields = {f["name"]: f for f in _scalar_fields(MqttConfig, "outputs", "mqtt")}
+    assert fields["port"]["default"] == 1883
+    assert isinstance(fields["port"]["default"], int)
+    assert fields["qos"]["default"] == 0
+    assert isinstance(fields["qos"]["default"], int)
