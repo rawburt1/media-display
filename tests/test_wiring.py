@@ -10,6 +10,7 @@ from mediainfo.wiring import (
     build_enrichers,
     build_idle_source,
     build_sources,
+    build_text_enrichers,
     instantiate_outputs,
     start_orchestrator,
     wire_artwork_overrides,
@@ -25,6 +26,7 @@ def _minimal_config(**kwargs):
     cfg.priority = []
     cfg.sources = {}
     cfg.enrichers = {}
+    cfg.text_enrichers = {}
     cfg.idle = {}
     cfg.idle_priority = []
     cfg.idle_mode = "priority"
@@ -150,6 +152,47 @@ def test_build_enrichers_passes_library_to_library_aware_enrichers():
         result = build_enrichers(cfg, fake_library)
 
     fake_cls.assert_called_once_with(enc_cfg, fake_library)
+    assert result == [fake_cls.return_value]
+
+
+# ---------------------------------------------------------------------------
+# build_text_enrichers (roadmap item 7 foundation - no real plugin yet)
+# ---------------------------------------------------------------------------
+
+def test_build_text_enrichers_empty_by_default():
+    cfg = _minimal_config()
+    assert build_text_enrichers(cfg) == []
+
+
+def test_build_text_enrichers_skips_disabled():
+    text_cfg = MagicMock()
+    text_cfg.enabled = False
+    cfg = _minimal_config(text_enrichers={"lrclib": text_cfg})
+    assert build_text_enrichers(cfg) == []
+
+
+def test_build_text_enrichers_skips_unknown(caplog):
+    import logging
+
+    text_cfg = MagicMock()
+    text_cfg.enabled = True
+    cfg = _minimal_config(text_enrichers={"nonexistent": text_cfg})
+    with caplog.at_level(logging.WARNING, logger="mediainfo.wiring"):
+        result = build_text_enrichers(cfg)
+    assert result == []
+    assert any("nonexistent" in r.message for r in caplog.records)
+
+
+def test_build_text_enrichers_instantiates_enabled():
+    text_cfg = MagicMock()
+    text_cfg.enabled = True
+    fake_cls = MagicMock(return_value=MagicMock())
+    cfg = _minimal_config(text_enrichers={"lrclib": text_cfg})
+
+    with patch("mediainfo.registries.TEXT_ENRICHER_CLASSES", {"lrclib": fake_cls}):
+        result = build_text_enrichers(cfg)
+
+    fake_cls.assert_called_once_with(text_cfg)
     assert result == [fake_cls.return_value]
 
 

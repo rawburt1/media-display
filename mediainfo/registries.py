@@ -85,6 +85,12 @@ ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "wikipedia": "mediainfo.enrichers.wikipedia.WikipediaEnricher",
 }
 
+# Empty for now - foundation for roadmap items 8/9 (lyrics / AI-generated
+# text enrichers, see mediainfo/enrichers/text_base.py). Adding the first
+# such plugin means adding one entry here (dotted class path) plus its
+# config dataclass in mediainfo.config.TEXT_ENRICHER_CONFIG_TYPES.
+TEXT_ENRICHER_CLASSES: dict[str, Union[str, type]] = {}
+
 IDLE_CLASSES: dict[str, Union[str, type]] = {
     "lastfm": "mediainfo.idle.lastfm.LastFmWallpaperSource",
     "library": "mediainfo.idle.library.LibraryWallpaperSource",
@@ -145,6 +151,10 @@ def get_output_class(name: str) -> Optional[type]:
 
 def get_enricher_class(name: str) -> Optional[type]:
     return _resolve_entry(ENRICHER_CLASSES.get(name))
+
+
+def get_text_enricher_class(name: str) -> Optional[type]:
+    return _resolve_entry(TEXT_ENRICHER_CLASSES.get(name))
 
 
 def get_idle_class(name: str) -> Optional[type]:

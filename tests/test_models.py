@@ -49,6 +49,18 @@ def test_defaults_are_empty():
     assert np.summary == ""
     assert np.discography == []
     assert np.rating is None
+    assert np.lyrics == ""
+    assert np.synced_lyrics == ""
+    assert np.ai_text == {}
+
+
+def test_lyrics_and_ai_text_fields_are_independent_per_instance():
+    # default_factory={} guards against the classic mutable-default bug -
+    # confirm two instances don't share the same dict.
+    a = _now_playing()
+    b = _now_playing()
+    a.ai_text["mood"] = "melancholy"
+    assert b.ai_text == {}
 
 
 def test_artwork_defaults():

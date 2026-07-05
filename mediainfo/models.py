@@ -67,6 +67,20 @@ class NowPlaying:
     # (e.g. Kodi). None means "unknown", not "at the start".
     position_seconds: Optional[float] = None
     duration_seconds: Optional[float] = None
+    # Plain lyrics text, e.g. from a future LRCLIB/.lrc/embedded-metadata
+    # TextEnricher (see mediainfo/enrichers/text_base.py). Empty when not
+    # looked up or unavailable - never populated if the licensing/source
+    # situation is unclear (see roadmap item 8).
+    lyrics: str = ""
+    # Time-synced lyrics, raw LRC-formatted text ("[mm:ss.xx]line" per
+    # line) - left for an output to parse if it wants to highlight the
+    # current line, rather than parsed into a structured type here.
+    synced_lyrics: str = ""
+    # Free-form AI-generated text, e.g. from a future local Ollama-backed
+    # TextEnricher (see roadmap item 9) - keyed by whatever the enricher
+    # calls its own output ("mood", "fun_fact", "context", ...) rather than
+    # fixed fields, since the exact set is still to be decided.
+    ai_text: Dict[str, str] = field(default_factory=dict)
 
     @property
     def identity(self) -> tuple:

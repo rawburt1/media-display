@@ -18,6 +18,7 @@ from typing import Callable, Dict, List, Optional
 from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.enrichers.base import ArtworkEnricher
+from mediainfo.enrichers.text_base import TextEnricher
 from mediainfo.history import PlaybackHistory
 from mediainfo.models import NowPlaying
 from mediainfo.orchestrator_state import _RotationState, _RouteGroup
@@ -37,8 +38,10 @@ class _ArtworkPipeline:
         safe_call: Callable[..., None],
         poster_store: Optional[PosterStore] = None,
         overrides: Optional[ArtworkOverrideStore] = None,
+        text_enrichers: Optional[List[TextEnricher]] = None,
     ):
         self.enrichers = enrichers
+        self.text_enrichers = text_enrichers or []
         self.cache = cache
         self.rotation_interval_seconds = rotation_interval_seconds
         self._call_output = call_output
@@ -103,6 +106,8 @@ class _ArtworkPipeline:
             self._safe_call(enricher.enrich, now_playing)
         self.apply_poster_store(now_playing)
         self.apply_artwork_override(now_playing)
+        for text_enricher in self.text_enrichers:
+            self._safe_call(text_enricher.enrich, now_playing)
 
     def apply_poster_store(self, now_playing: NowPlaying) -> None:
         """If a static poster is configured for this title (and optionally

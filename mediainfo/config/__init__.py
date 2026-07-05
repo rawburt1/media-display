@@ -129,6 +129,7 @@ __all__ = [
     "SOURCE_CONFIG_TYPES",
     "SpotifyConfig",
     "SvtConfig",
+    "TEXT_ENRICHER_CONFIG_TYPES",
     "TheTvDbConfig",
     "TmdbConfig",
     "UlanziConfig",
@@ -139,6 +140,14 @@ __all__ = [
     "WikipediaConfig",
     "YoutubeConfig",
 ]
+
+# Empty for now - foundation for roadmap items 8/9 (lyrics / AI-generated
+# text enrichers, see mediainfo/enrichers/text_base.py). Adding the first
+# such plugin means adding its config dataclass (its own module, mirroring
+# enrichers.py, once there's more than one or two) and registering it
+# here - Config.from_dict(), wiring.build_text_enrichers(), and the
+# orchestrator's text-enrichment step all already handle it generically.
+TEXT_ENRICHER_CONFIG_TYPES: dict[str, type] = {}
 
 _logger = logging.getLogger(__name__)
 
@@ -189,6 +198,9 @@ class Config:
     # several instances side by side.
     outputs: dict[str, list[Any]]
     enrichers: dict[str, Any]
+    # Foundation for roadmap items 8/9 - see TEXT_ENRICHER_CONFIG_TYPES.
+    # Always empty today since no text enricher plugin is registered yet.
+    text_enrichers: dict[str, Any]
     idle: dict[str, Any]
     cache: CacheConfig
     library: LibraryConfig
@@ -275,6 +287,15 @@ class Config:
                 continue
             enrichers[name] = ENRICHER_CONFIG_TYPES[name](**values)
 
+        text_enrichers = {}
+        for name, values in (raw.get("text_enrichers") or {}).items():
+            if name not in TEXT_ENRICHER_CONFIG_TYPES:
+                _logger.warning(
+                    "Unknown text enricher plugin %r in config — ignored. Check for typos.", name
+                )
+                continue
+            text_enrichers[name] = TEXT_ENRICHER_CONFIG_TYPES[name](**values)
+
         idle = {}
         for name, values in (raw.get("idle") or {}).items():
             if name not in IDLE_CONFIG_TYPES:
@@ -291,6 +312,7 @@ class Config:
             sources=sources,
             outputs=outputs,
             enrichers=enrichers,
+            text_enrichers=text_enrichers,
             idle=idle,
             cache=CacheConfig(**(raw.get("cache") or {})),
             library=LibraryConfig(**(raw.get("library") or {})),
