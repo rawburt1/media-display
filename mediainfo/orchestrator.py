@@ -1,5 +1,12 @@
-"""Polling loop: picks the highest-priority active source, enriches it with
-extra artwork, and rotates through the available images on enabled outputs.
+"""Orchestrator: owns the poll loop's lifecycle and wires together the
+collaborators that do the actual work - source polling
+(orchestrator_polling), artwork/enrichment (orchestrator_artwork),
+per-tick routing (orchestrator_routing), idle-wallpaper batching
+(orchestrator_idle), and output health tracking (orchestrator_health).
+
+Also keeps a handful of thin wrapper methods (_tick, _poll_sources,
+_classify, the _groups property) purely so existing tests that reach into
+Orchestrator internals by name keep working unchanged.
 """
 
 from __future__ import annotations
