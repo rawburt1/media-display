@@ -98,6 +98,16 @@ class Orchestrator:
         # reader/writer.
         self._hitster_safe = False
         self._hitster_safe_lock = threading.Lock()
+        # Set cross-thread (e.g. by an MQTT "refresh artwork" command) to
+        # ask the next tick to re-enrich and re-push whatever is currently
+        # playing - see request_artwork_refresh(). Checked and cleared on
+        # the orchestrator's own thread in _tick(), same reasoning as
+        # hitster-safe above: route-group state (group.current,
+        # rotation_state, ...) has no locking of its own because only the
+        # orchestrator thread ever touches it, so acting on the request
+        # must happen there too rather than immediately on the caller's
+        # thread.
+        self._refresh_artwork_requested = threading.Event()
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._health = _HealthTracker()
@@ -177,6 +187,16 @@ class Orchestrator:
             self._hitster_safe = enabled
         logger.info("Hitster-safe mode %s", "enabled" if enabled else "disabled")
 
+    def request_artwork_refresh(self) -> None:
+        """Ask the orchestrator to re-enrich and re-push artwork for
+        whatever is currently playing on its very next tick, without
+        waiting for a track change - e.g. for a "refresh artwork" button
+        (see the mqtt output's Home Assistant discovery). Safe to call
+        from any thread; the actual work happens on the orchestrator's
+        own thread (see _tick()).
+        """
+        self._refresh_artwork_requested.set()
+
     def start(self) -> None:
         self._thread.start()
 
@@ -197,6 +217,10 @@ class Orchestrator:
     def _tick(self) -> None:
         self._maybe_purge_cache()
         self._maybe_check_alerts()
+
+        if self._refresh_artwork_requested.is_set():
+            self._refresh_artwork_requested.clear()
+            self._refresh_artwork()
 
         # Time-based device housekeeping (power/brightness schedules) runs
         # for every output every tick, filtered or not - via _safe_call
@@ -226,6 +250,25 @@ class Orchestrator:
 
     def _classify(self, group: _RouteGroup, now_playing: NowPlaying) -> _Transition:
         return _classify_group(group, now_playing)
+
+    def _refresh_artwork(self) -> None:
+        """Re-enrich and re-push each group's current item, if any - see
+        request_artwork_refresh(). Deliberately doesn't call
+        output.on_new_item() (the item itself hasn't changed, just its
+        artwork), matching how _maybe_rotate's periodic re-push works.
+        """
+        for group in self._groups:
+            if group.current is None:
+                continue
+            self._artwork.enrich_item(group.current)
+            if not group.current.images:
+                continue
+            group.rotation_state = self._artwork.build_rotation_states(
+                len(group.current.images), group.output_indices
+            )
+            for index in group.output_indices:
+                if index not in group.filtered_outputs:
+                    self._artwork.show_image_for_output(group, index, self.outputs[index])
 
     def _maybe_purge_cache(self) -> None:
         now = time.monotonic()
