@@ -13,6 +13,7 @@ from mediainfo.wiring import (
     instantiate_outputs,
     start_orchestrator,
     wire_artwork_overrides,
+    wire_artwork_refresh,
     wire_health_providers,
     wire_hitster_safe,
 )
@@ -354,12 +355,14 @@ def test_wire_artwork_overrides_passes_through_none():
 # wire_health_providers
 # ---------------------------------------------------------------------------
 
-def test_wire_health_providers_wires_web_and_config_ui_outputs():
+def test_wire_health_providers_wires_web_config_ui_and_mqtt_outputs():
     from mediainfo.outputs.config_ui import ConfigUiOutput
+    from mediainfo.outputs.mqtt import MqttOutput
     from mediainfo.outputs.web import WebOutput
 
     web_output = MagicMock(spec=WebOutput)
     config_output = MagicMock(spec=ConfigUiOutput)
+    mqtt_output = MagicMock(spec=MqttOutput)
     other_output = MagicMock()
 
     orch = MagicMock()
@@ -378,10 +381,11 @@ def test_wire_health_providers_wires_web_and_config_ui_outputs():
     cfg.enrichers = {}
     cfg.idle = {}
 
-    wire_health_providers([web_output, config_output, other_output], orch, cfg)
+    wire_health_providers([web_output, config_output, mqtt_output, other_output], orch, cfg)
 
     web_output.set_health_provider.assert_called_once()
     config_output.set_health_provider.assert_called_once()
+    mqtt_output.set_health_provider.assert_called_once()
     assert not other_output.set_health_provider.called
 
 
@@ -389,24 +393,50 @@ def test_wire_health_providers_wires_web_and_config_ui_outputs():
 # wire_hitster_safe
 # ---------------------------------------------------------------------------
 
-def test_wire_hitster_safe_wires_config_ui_output_only():
+def test_wire_hitster_safe_wires_config_ui_and_mqtt_outputs_only():
     from mediainfo.outputs.config_ui import ConfigUiOutput
+    from mediainfo.outputs.mqtt import MqttOutput
     from mediainfo.outputs.web import WebOutput
 
     web_output = MagicMock(spec=WebOutput)
     config_output = MagicMock(spec=ConfigUiOutput)
+    mqtt_output = MagicMock(spec=MqttOutput)
     other_output = MagicMock()
 
     orch = MagicMock()
     orch.get_hitster_safe = MagicMock()
     orch.set_hitster_safe = MagicMock()
 
-    wire_hitster_safe([web_output, config_output, other_output], orch)
+    wire_hitster_safe([web_output, config_output, mqtt_output, other_output], orch)
 
     config_output.set_hitster_safe_handlers.assert_called_once_with(
         orch.get_hitster_safe, orch.set_hitster_safe
     )
+    mqtt_output.set_hitster_safe_handlers.assert_called_once_with(
+        orch.get_hitster_safe, orch.set_hitster_safe
+    )
     # WebOutput has no set_hitster_safe_handlers method at all (its spec mock
     # would raise AttributeError if code tried to call it) - confirming only
-    # ConfigUiOutput got wired.
+    # ConfigUiOutput/MqttOutput got wired.
     assert not other_output.set_hitster_safe_handlers.called
+
+
+# ---------------------------------------------------------------------------
+# wire_artwork_refresh
+# ---------------------------------------------------------------------------
+
+def test_wire_artwork_refresh_wires_mqtt_output_only():
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+    from mediainfo.outputs.mqtt import MqttOutput
+
+    config_output = MagicMock(spec=ConfigUiOutput)
+    mqtt_output = MagicMock(spec=MqttOutput)
+    other_output = MagicMock()
+
+    orch = MagicMock()
+    orch.request_artwork_refresh = MagicMock()
+
+    wire_artwork_refresh([config_output, mqtt_output, other_output], orch)
+
+    mqtt_output.set_refresh_artwork_handler.assert_called_once_with(orch.request_artwork_refresh)
+    assert not other_output.set_refresh_artwork_handler.called

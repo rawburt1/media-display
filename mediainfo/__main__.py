@@ -28,6 +28,7 @@ from mediainfo.wiring import (
     instantiate_outputs,
     start_orchestrator,
     wire_artwork_overrides,
+    wire_artwork_refresh,
     wire_health_providers,
     wire_history,
     wire_hitster_safe,
@@ -182,6 +183,7 @@ def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: M
     orch = start_orchestrator(config, outputs, cache, library, overrides, poster_store, history)
     wire_health_providers(outputs, orch, config)
     wire_hitster_safe(outputs, orch)
+    wire_artwork_refresh(outputs, orch)
     return orch
 
 

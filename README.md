@@ -504,7 +504,12 @@ See `config.example.yaml` for all options. Key things to fill in:
   every `refresh_interval_seconds` (Pixabay is capped at 20 per request).
 - **`outputs.mqtt`**: publishes the current now-playing state as JSON to
   `topic` on the broker at `host`/`port` (with optional `username`/
-  `password`/`qos`) - useful for Home Assistant or other automation.
+  `password`/`qos`) - useful for Home Assistant or other automation. Set
+  `ha_discovery: true` for a deeper HA integration: a "mediainfo" device
+  with now-playing/artist/album/source sensors, a health-problem
+  binary_sensor, a hitster-safe switch HA can read *and* set, and a
+  refresh-artwork button - all via MQTT Discovery, no YAML needed on the
+  HA side.
 - **`outputs.feed`**: serves RSS (`/rss`) and Atom (`/atom`) feeds
   describing only the currently playing item (single entry, replaced
   whenever it changes, empty while idle), with artwork as an enclosure,
