@@ -2,6 +2,7 @@
 outputs from config, and wiring cross-cutting state onto outputs.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from mediainfo.wiring import (
@@ -9,6 +10,7 @@ from mediainfo.wiring import (
     build_enrichers,
     build_idle_source,
     build_sources,
+    instantiate_outputs,
     start_orchestrator,
     wire_artwork_overrides,
     wire_health_providers,
@@ -28,6 +30,43 @@ def _minimal_config(**kwargs):
     for k, v in kwargs.items():
         setattr(cfg, k, v)
     return cfg
+
+
+# ---------------------------------------------------------------------------
+# instantiate_outputs
+# ---------------------------------------------------------------------------
+
+def test_instantiate_outputs_calls_start_on_each():
+    output_cfg = MagicMock()
+    output_cfg.enabled = True
+    fake_instance = MagicMock()
+    fake_cls = MagicMock(return_value=fake_instance)
+    cfg = _minimal_config(outputs={"pixoo": [output_cfg]})
+
+    with (
+        patch("mediainfo.registries.OUTPUT_CLASSES", {"pixoo": fake_cls}),
+        patch("mediainfo.registries.OUTPUT_EXTRA_ARGS", {}),
+    ):
+        result = instantiate_outputs(cfg, Path("config.yaml"), MagicMock())
+
+    fake_instance.start.assert_called_once_with()
+    assert result == [fake_instance]
+
+
+def test_instantiate_outputs_skips_disabled():
+    output_cfg = MagicMock()
+    output_cfg.enabled = False
+    fake_cls = MagicMock(return_value=MagicMock())
+    cfg = _minimal_config(outputs={"pixoo": [output_cfg]})
+
+    with (
+        patch("mediainfo.registries.OUTPUT_CLASSES", {"pixoo": fake_cls}),
+        patch("mediainfo.registries.OUTPUT_EXTRA_ARGS", {}),
+    ):
+        result = instantiate_outputs(cfg, Path("config.yaml"), MagicMock())
+
+    fake_cls.assert_not_called()
+    assert result == []
 
 
 # ---------------------------------------------------------------------------

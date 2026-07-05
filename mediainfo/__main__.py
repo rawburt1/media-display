@@ -194,7 +194,12 @@ def _file_mtime(path: Path) -> Optional[float]:
 
 
 def _warn_output_changes(old: Config, new: Config) -> None:
-    """Log a warning if output config changed (outputs are not restarted on reload)."""
+    """Log a warning if output config changed (outputs are not restarted on
+    reload). Output.reload(config) exists for a future version of this
+    function to call instead of just warning - not done yet, since
+    matching a changed config entry back to the right (possibly
+    multi-instance) existing output object isn't solved yet.
+    """
     if old.outputs != new.outputs:
         logger.warning(
             "Output configuration changed — restart the service for output changes to take effect"
@@ -202,8 +207,12 @@ def _warn_output_changes(old: Config, new: Config) -> None:
 
 
 def _shutdown_outputs(outputs: list) -> None:
-    """Tell every output to go idle before the process exits."""
+    """Tell every output to stop and go idle before the process exits."""
     for output in outputs:
+        try:
+            output.stop()
+        except Exception:
+            logger.debug("Output stop() raised during shutdown", exc_info=True)
         try:
             output.on_idle()
         except Exception:

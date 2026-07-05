@@ -37,7 +37,9 @@ def instantiate_outputs(config: Config, config_path: Path, cache: ImageCache) ->
         for output_config in output_configs:
             if not output_config.enabled:
                 continue
-            outputs.append(output_cls(output_config, *extra_args))
+            output = output_cls(output_config, *extra_args)
+            output.start()
+            outputs.append(output)
     return outputs
 
 
