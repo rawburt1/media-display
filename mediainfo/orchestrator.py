@@ -5,19 +5,20 @@ extra artwork, and rotates through the available images on enabled outputs.
 from __future__ import annotations
 
 import logging
-import random
+import random  # noqa: F401 - unused directly; kept so tests' patch("mediainfo.orchestrator.random...") still resolves
 import threading
 import time
 from typing import Dict, List, Optional
 
 from mediainfo.alerting import AlertManager
 from mediainfo.artwork_overrides import ArtworkOverrideStore
-from mediainfo.cache import CacheTier, ImageCache
+from mediainfo.cache import ImageCache
 from mediainfo.config import AlertConfig
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
+from mediainfo.orchestrator_artwork import _ArtworkPipeline
 from mediainfo.orchestrator_health import _HealthTracker
 from mediainfo.orchestrator_idle import _IdleBatchManager
 from mediainfo.orchestrator_polling import _group_accepts, _SourcePoller
@@ -108,18 +109,27 @@ class Orchestrator:
             backoff_initial_seconds=backoff_initial_seconds,
             backoff_max_seconds=backoff_max_seconds,
         )
+        self._artwork = _ArtworkPipeline(
+            enrichers=self.enrichers,
+            cache=self.cache,
+            rotation_interval_seconds=self.rotation_interval_seconds,
+            call_output=self._call_output,
+            safe_call=self._safe_call,
+            poster_store=poster_store,
+            overrides=overrides,
+        )
         self._idle = _IdleBatchManager(
             outputs=self.outputs,
             cache=self.cache,
             rotation_interval_seconds=self.rotation_interval_seconds,
             call_output=self._call_output,
-            build_rotation_states=self._build_rotation_states,
+            build_rotation_states=self._artwork.build_rotation_states,
             idle_source=idle_source,
         )
         self._alerts = AlertManager(alert_config or AlertConfig())
         self._last_alert_check: Optional[float] = None
-        self._overrides = overrides
-        self._poster_store = poster_store
+        # Note: reassignable after construction (see tests) - _tick reads
+        # it fresh each call rather than handing it to _artwork once.
         self._history = history
 
     # -- single-group state aliases -----------------------------------------
@@ -201,7 +211,10 @@ class Orchestrator:
         prepared: Dict[tuple, NowPlaying] = {}
         for group in self._groups:
             routed = next((r for r in results if _group_accepts(group, r)), None)
-            self._tick_group(group, self._prepare_item(group, routed, prepared))
+            prepared_item = self._artwork.prepare_item(
+                self._groups, group, routed, prepared, self._history
+            )
+            self._tick_group(group, prepared_item)
 
         # Idle wallpapers go to whichever outputs ended this tick unbound
         # (or bound to an artwork-less item) - decided after every group
@@ -209,62 +222,6 @@ class Orchestrator:
         # group's outputs.
         self._show_idle()
         self._maybe_clear_stale_idle_state()
-
-    def _prepare_item(
-        self,
-        group: _RouteGroup,
-        item: Optional[NowPlaying],
-        prepared: Dict[tuple, NowPlaying],
-    ) -> Optional[NowPlaying]:
-        """Return the item _tick_group should see for `group`, enriching a
-        genuinely new item exactly once per tick even when several groups
-        pick it.
-
-        Sources return a fresh (unenriched) NowPlaying every poll. For a
-        group already playing the same identity that's fine - the SAME_ITEM
-        path only reads position/duration off it. For a group *newly*
-        binding it, prefer (in order): the object another group picking it
-        this tick already enriched, the already-enriched `current` of a
-        group that was playing it before this tick, or - only when neither
-        exists - enrich the fresh object now.
-        """
-        if item is None:
-            return None
-        if group.current is not None and group.current.identity == item.identity:
-            return item
-        if item.identity in prepared:
-            return prepared[item.identity]
-        donor = next(
-            (
-                g.current
-                for g in self._groups
-                if g.current is not None and g.current.identity == item.identity
-            ),
-            None,
-        )
-        if donor is not None:
-            # Keep the donor's enrichment; carry over the fresh poll's
-            # playback position (the donor group's own SAME_ITEM refresh
-            # would do this anyway, but group order isn't guaranteed).
-            donor.position_seconds = item.position_seconds
-            donor.duration_seconds = item.duration_seconds
-            prepared[item.identity] = donor
-            return donor
-        self._enrich_item(item)
-        # Exactly here - a genuinely new item, once per identity per tick,
-        # after enrichment (so the logged artwork URL is the enriched
-        # pick). The donor/rebind paths above deliberately don't log:
-        # the item was already playing, just on another group.
-        if self._history is not None:
-            self._history.record(item)
-        prepared[item.identity] = item
-        return item
-
-    def _enrich_item(self, now_playing: NowPlaying) -> None:
-        for enricher in self.enrichers:
-            self._safe_call(enricher.enrich, now_playing)
-        self._apply_poster_store(now_playing)
-        self._apply_artwork_override(now_playing)
 
     def _tick_group(self, group: _RouteGroup, now_playing: Optional[NowPlaying]) -> None:
         """Advance one route group given the item routed to it this tick
@@ -360,44 +317,12 @@ class Orchestrator:
             # end of this same _tick (see _idle_targets).
             return
 
-        group.rotation_state = self._build_rotation_states(
+        group.rotation_state = self._artwork.build_rotation_states(
             len(now_playing.images), group.output_indices
         )
         for index in group.output_indices:
             if index not in group.filtered_outputs:
-                self._show_image_for_output(group, index, self.outputs[index])
-
-    def _apply_poster_store(self, now_playing: NowPlaying) -> None:
-        """If a static poster is configured for this title (and optionally
-        source), replace enriched artwork with it.  Artwork overrides
-        (see _apply_artwork_override) run after this and therefore win.
-        """
-        if self._poster_store is None:
-            return
-        try:
-            poster = self._poster_store.get(now_playing)
-        except Exception:
-            logger.exception("Error checking poster store for %s", now_playing.title)
-            return
-        if poster is not None:
-            logger.debug("Using stored poster for %s", now_playing.title)
-            now_playing.images = [poster]
-
-    def _apply_artwork_override(self, now_playing: NowPlaying) -> None:
-        """If a manual override is pinned for this title/subtitle (see
-        artwork_overrides.py), replace whatever enrichment found with just
-        that one image - a deliberate user choice overrides automatic
-        enrichment entirely, rather than just joining the rotation pool.
-        """
-        if self._overrides is None:
-            return
-        try:
-            override = self._overrides.get(now_playing.title, now_playing.subtitle)
-        except Exception:
-            logger.exception("Error checking artwork overrides for %s", now_playing.title)
-            return
-        if override is not None:
-            now_playing.images = [override]
+                self._artwork.show_image_for_output(group, index, self.outputs[index])
 
     def _maybe_purge_cache(self) -> None:
         now = time.monotonic()
@@ -421,33 +346,6 @@ class Orchestrator:
         self._last_alert_check = now
         labels = {i: type(output).__name__ for i, output in enumerate(self.outputs)}
         self._alerts.check(labels, self._health.output_error_since, now)
-
-    def _build_rotation_states(
-        self, num_images: int, output_indices: List[int]
-    ) -> Dict[int, _RotationState]:
-        """Build one _RotationState per output in `output_indices`, sharing
-        a single shuffled order but starting each output at a different
-        position in it - so outputs never start on the same picture (as
-        long as there are at least as many images as outputs) instead of
-        leaving that to chance via independent per-output shuffles, which
-        can (and visibly does, with a modest-sized image pool)
-        coincidentally collide.
-
-        Each output's rotation clock is also given its own random phase
-        within the interval, so they don't all advance to their next image
-        at the same instant either - otherwise every output would become
-        "due" to rotate on the exact same tick forever after.
-        """
-        order = list(range(num_images))
-        random.shuffle(order)
-        now = time.monotonic()
-        states = {}
-        for offset, index in enumerate(output_indices):
-            jitter = random.uniform(0, self.rotation_interval_seconds)
-            states[index] = _RotationState(
-                order=order, position=offset % num_images, last_rotation=now - jitter
-            )
-        return states
 
     def _maybe_rotate(self, group: _RouteGroup) -> None:
         """Advance (or, for a single-image item, simply re-push) each
@@ -479,7 +377,7 @@ class Orchestrator:
             if multi_image:
                 state.position = (state.position + 1) % len(state.order)
             state.last_rotation = now
-            self._show_image_for_output(group, index, self.outputs[index])
+            self._artwork.show_image_for_output(group, index, self.outputs[index])
 
     def _compute_filtered(self, group: _RouteGroup, now_playing: NowPlaying) -> set:
         """Return the group output indices that should be blocked for
@@ -529,42 +427,7 @@ class Orchestrator:
                 )
                 self._call_output(index, output.on_new_item, group.current, self.cache)
                 if group.current.images:
-                    self._show_image_for_output(group, index, output)
-
-    def _show_image_for_output(self, group: _RouteGroup, index: int, output: Output) -> None:
-        """Resolve and push the output's current rotation pick - falling
-        through the rest of the pool (in rotation order) if that pick fails
-        to fetch (e.g. rejected by the cache's minimum-size filter, or a
-        download error), rather than leaving the output showing nothing
-        until its next scheduled rotation, up to rotation_interval_seconds
-        later.
-        """
-        assert group.current is not None  # only called while something is playing
-        state = group.rotation_state[index]
-        images = group.current.images
-        tier: CacheTier = "music" if group.current.media_type == "music" else "default"
-
-        skip_artist_photos = output.music_album_art_only and group.current.media_type == "music"
-        for attempt in range(len(images)):
-            artwork = images[state.order[(state.position + attempt) % len(state.order)]]
-            if skip_artist_photos and artwork.is_artist_photo:
-                continue
-            try:
-                image_path = self.cache.get_path(artwork, tier=tier)
-                if image_path is None:
-                    continue
-                image_path = self.cache.get_transformed_path(image_path, output.transform_pipeline)
-            except Exception:
-                logger.exception("Failed to fetch artwork %s", artwork.url)
-                continue
-
-            self._call_output(index, output.update, group.current, artwork, image_path)
-            return
-
-        logger.warning(
-            "No fetchable artwork for %s (%d candidate(s) all failed)",
-            group.current.title, len(images),
-        )
+                    self._artwork.show_image_for_output(group, index, output)
 
     def _idle_targets(self) -> tuple[set, set]:
         """Which outputs idle handling may touch this tick.
