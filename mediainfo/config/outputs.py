@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import dataclasses
 
+import pydantic
+
 
 @dataclasses.dataclass
 class _OutputFilterMixin:
@@ -164,12 +166,25 @@ class UlanziConfig(_OutputFilterMixin):
     brightness_schedule: list = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MqttConfig(_OutputFilterMixin):
+    """Spike: this is the first config dataclass converted from plain
+    @dataclasses.dataclass to pydantic's dataclass integration (roadmap
+    item 4 - evaluating Pydantic for config validation), kept deliberately
+    small in scope. It stays a stdlib-compatible dataclass - dataclasses.
+    fields(MqttConfig) still works unchanged, so config_schema.py's schema
+    generation and health.py's config_detail_fields() need no changes -
+    but construction now raises pydantic.ValidationError (with per-field,
+    human-readable messages) instead of a generic TypeError on a bad
+    type, an out-of-range value, or an unknown/typo'd key (extra="forbid"
+    restores - and improves on - the implicit rejection stdlib dataclasses
+    already gave for typo'd keys).
+    """
+
     enabled: bool = False
     # Hostname or IP of the MQTT broker.
     host: str = "localhost"
-    port: int = 1883
+    port: int = pydantic.Field(default=1883, ge=1, le=65535)
     # Topic to publish now-playing events to.
     topic: str = "mediainfo/now_playing"
     # MQTT client identifier (must be unique per broker connection).
@@ -178,7 +193,7 @@ class MqttConfig(_OutputFilterMixin):
     username: str = ""
     password: str = ""
     # QoS level: 0 = at most once, 1 = at least once, 2 = exactly once.
-    qos: int = 0
+    qos: int = pydantic.Field(default=0, ge=0, le=2)
     # Retain the last published message so new subscribers immediately see
     # the current state.
     retain: bool = True
