@@ -73,6 +73,23 @@ def build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> l
     return enrichers
 
 
+def build_text_enrichers(config: Config) -> list:
+    """Build the configured text enrichers (lyrics, AI-generated text -
+    see mediainfo/enrichers/text_base.py). Always returns [] today since
+    no plugin is registered yet (roadmap items 8/9) - kept alongside
+    build_enrichers() so those items just add a registry entry."""
+    text_enrichers = []
+    for name, text_enricher_config in config.text_enrichers.items():
+        if not text_enricher_config.enabled:
+            continue
+        text_enricher_cls = registries.get_text_enricher_class(name)
+        if text_enricher_cls is None:
+            logger.warning("Unknown text enricher: %s", name)
+            continue
+        text_enrichers.append(text_enricher_cls(text_enricher_config))
+    return text_enrichers
+
+
 def build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
     """Build the configured idle wallpaper source(s).
 
@@ -143,6 +160,7 @@ def start_orchestrator(
     orch = Orchestrator(
         sources=build_sources(config),
         enrichers=build_enrichers(config, library),
+        text_enrichers=build_text_enrichers(config),
         outputs=outputs,
         cache=cache,
         poll_interval_seconds=config.poll_interval_seconds,

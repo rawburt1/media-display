@@ -1902,3 +1902,68 @@ def test_request_artwork_refresh_deferred_until_next_tick():
 
     orch.request_artwork_refresh()
     assert enricher.enrich.call_count == 0  # not acted on until the next _tick()
+
+
+# ---------------------------------------------------------------------------
+# text_enrichers (roadmap item 7 foundation - no real plugin yet, but the
+# pipeline is fully wired: config -> registry -> wiring -> orchestrator)
+# ---------------------------------------------------------------------------
+
+def test_text_enricher_is_invoked_on_new_item():
+    now_playing = NowPlaying(
+        source="kodi", media_type="music", title="Money",
+        images=[Artwork(url="https://example.com/original.jpg")],
+    )
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/art.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    text_enricher = MagicMock()
+    text_enricher.enrich.side_effect = lambda np: setattr(np, "lyrics", "la la la")
+
+    orch = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        text_enrichers=[text_enricher],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orch._tick()
+
+    text_enricher.enrich.assert_called_once()
+    assert orch._current.lyrics == "la la la"
+
+
+def test_text_enricher_error_does_not_break_the_tick():
+    now_playing = NowPlaying(
+        source="kodi", media_type="music", title="Money",
+        images=[Artwork(url="https://example.com/original.jpg")],
+    )
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/art.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    failing_text_enricher = MagicMock()
+    failing_text_enricher.enrich.side_effect = RuntimeError("lyrics API down")
+
+    orch = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        text_enrichers=[failing_text_enricher],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orch._tick()  # must not raise
+
+    output.update.assert_called_once()
+
+
+def test_no_text_enrichers_by_default():
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock())
+    assert orch.text_enrichers == []

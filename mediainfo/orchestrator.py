@@ -22,6 +22,7 @@ from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import AlertConfig
 from mediainfo.enrichers.base import ArtworkEnricher
+from mediainfo.enrichers.text_base import TextEnricher
 from mediainfo.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
@@ -77,9 +78,11 @@ class Orchestrator:
         overrides: Optional[ArtworkOverrideStore] = None,
         poster_store: Optional[PosterStore] = None,
         history: Optional[PlaybackHistory] = None,
+        text_enrichers: Optional[List[TextEnricher]] = None,
     ):
         self.sources = sources
         self.enrichers = enrichers
+        self.text_enrichers = text_enrichers or []
         self.outputs = outputs
         self.cache = cache
         self.poll_interval_seconds = poll_interval_seconds
@@ -125,6 +128,7 @@ class Orchestrator:
             safe_call=self._safe_call,
             poster_store=poster_store,
             overrides=overrides,
+            text_enrichers=text_enrichers,
         )
         self._idle = _IdleBatchManager(
             outputs=self.outputs,
