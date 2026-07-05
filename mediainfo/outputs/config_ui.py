@@ -95,18 +95,13 @@ directly with no supervisor does not - it'll just exit.
 
 The page can also pair an Apple TV (the same pyatv-based flow as
 `python -m mediainfo auth appletv`, see __main__.py), without needing
-shell/docker-exec access. Apple TV pairing is async (pyatv) and
-inherently a multi-step wizard (start -> enter/confirm PIN -> finish), so
-it gets its own short-lived background event loop thread per pairing
-attempt, created in `_appletv_pair_start` and torn down in
-`_appletv_pair_finish`/`_appletv_pair_cancel`. Only one pairing attempt is
-tracked at a time, which is fine for a single-operator local admin tool.
+shell/docker-exec access - see appletv_pairing.py (AppleTvPairingManager)
+for the pairing wizard itself.
 """
 
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import logging
 import os
 import signal
@@ -127,14 +122,15 @@ from mediainfo.config import (
     Config,
     ConfigUiConfig,
 )
-from mediainfo.config_backup import backup_config_file, list_backups
+from mediainfo.config_backup import list_backups
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.outputs.appletv_pairing import AppleTvPairingManager
 from mediainfo.outputs.base import Output
 from mediainfo.outputs.config_dashboard import test_enricher, test_output, test_source
 from mediainfo.outputs.config_schema import _HIDDEN_TYPE_CATEGORIES, _as_instance_list, _build_schema
 from mediainfo.outputs.config_store import ConfigStore
-from mediainfo.outputs.config_yaml_io import _dump_config, _read_config
+from mediainfo.outputs.config_yaml_io import _read_config
 from mediainfo.web_auth import install_auth, is_loopback_address
 
 logger = logging.getLogger(__name__)
@@ -147,22 +143,6 @@ _RESTART_DELAY_SECONDS = 0.5
 def _restart_process() -> None:
     logger.info("Restarting (SIGTERM to self) - requested via the config UI")
     os.kill(os.getpid(), signal.SIGTERM)
-
-
-@dataclasses.dataclass
-class _AppleTvSession:
-    """An in-progress pairing attempt, with the resources needed to finish
-    or cancel it. The event loop/thread must outlive the request that
-    started the pairing, since pyatv's PairingHandler keeps background
-    network state tied to the loop it was created on.
-    """
-
-    loop: asyncio.AbstractEventLoop
-    thread: threading.Thread
-    pairing: Any  # pyatv.interface.PairingHandler
-    protocol_name: str
-    device_name: str
-    manual_pin: Optional[int] = None
 
 
 class ConfigUiOutput(Output):
@@ -179,8 +159,12 @@ class ConfigUiOutput(Output):
         self.config_path = Path(config_path)
         self._lock = threading.Lock()
         self._store = ConfigStore(self.config_path, self._lock)
-        self._appletv_lock = threading.Lock()
-        self._appletv_session: Optional[_AppleTvSession] = None
+        self._appletv = AppleTvPairingManager(
+            config_path=self.config_path,
+            lock=self._lock,
+            run_async=self._run_appletv_async,
+            stop_loop=self._stop_appletv_loop,
+        )
         self._library: Optional[MusicLibrary] = None
         self._library_db_path: Optional[str] = None
         self._health_fn = None
@@ -311,135 +295,11 @@ class ConfigUiOutput(Output):
         return not is_loopback_address(self.config.host) and self.config.host != "localhost" and not auth_on
 
     # -- Apple TV pairing ---------------------------------------------
-
-    def _appletv_pair_start(self, host: str, protocol_name: str) -> dict:
-        with self._appletv_lock:
-            if self._appletv_session is not None:
-                raise RuntimeError(
-                    "A pairing attempt is already in progress - cancel it first."
-                )
-            loop = asyncio.new_event_loop()
-            thread = threading.Thread(target=loop.run_forever, daemon=True)
-            thread.start()
-
-        try:
-            result = self._run_appletv_async(
-                loop, self._do_appletv_pair_start(loop, host, protocol_name)
-            )
-        except Exception:
-            self._stop_appletv_loop(loop, thread)
-            raise
-
-        with self._appletv_lock:
-            self._appletv_session = _AppleTvSession(
-                loop=loop,
-                thread=thread,
-                pairing=result["pairing"],
-                protocol_name=protocol_name,
-                device_name=result["device_name"],
-                manual_pin=result["manual_pin"],
-            )
-
-        return {
-            "device_name": result["device_name"],
-            "protocol": protocol_name,
-            "device_provides_pin": result["device_provides_pin"],
-            "manual_pin": result["manual_pin"],
-        }
-
-    @staticmethod
-    async def _do_appletv_pair_start(loop, host: str, protocol_name: str) -> dict:
-        import pyatv
-
-        protocols = {"companion": pyatv.const.Protocol.Companion, "mrp": pyatv.const.Protocol.MRP}
-        protocol = protocols.get(protocol_name)
-        if protocol is None:
-            raise ValueError(f"Unknown protocol: {protocol_name!r} (expected companion or mrp)")
-
-        results = await pyatv.scan(loop, hosts=[host], timeout=5)
-        if not results:
-            raise RuntimeError(f"No Apple TV found at {host}")
-        conf = results[0]
-
-        pairing = await pyatv.pair(conf, protocol, loop)
-        await pairing.begin()
-
-        manual_pin = None
-        if not pairing.device_provides_pin:
-            manual_pin = 1234
-            pairing.pin(manual_pin)
-
-        return {
-            "pairing": pairing,
-            "device_name": conf.name,
-            "device_provides_pin": pairing.device_provides_pin,
-            "manual_pin": manual_pin,
-        }
-
-    def _appletv_pair_finish(self, pin: Optional[str]) -> dict:
-        with self._appletv_lock:
-            session = self._appletv_session
-        if session is None:
-            raise RuntimeError('No pairing in progress - click "Start pairing" first.')
-
-        try:
-            credentials = self._run_appletv_async(
-                session.loop, self._do_appletv_pair_finish(session, pin)
-            )
-        finally:
-            with self._appletv_lock:
-                self._appletv_session = None
-            self._stop_appletv_loop(session.loop, session.thread)
-
-        field = f"{session.protocol_name}_credentials"
-        self._save_appletv_credentials(field, credentials)
-        return {"protocol": session.protocol_name, "field": field, "credentials": credentials}
-
-    @staticmethod
-    async def _do_appletv_pair_finish(session: _AppleTvSession, pin: Optional[str]) -> str:
-        if session.pairing.device_provides_pin:
-            if not pin:
-                raise ValueError("Enter the PIN shown on the Apple TV.")
-            session.pairing.pin(int(pin))
-
-        await session.pairing.finish()
-
-        if not session.pairing.has_paired:
-            await session.pairing.close()
-            raise RuntimeError("Pairing failed - check the PIN and try again.")
-
-        credentials = session.pairing.service.credentials
-        await session.pairing.close()
-        return credentials
-
-    def _appletv_pair_cancel(self) -> None:
-        with self._appletv_lock:
-            session = self._appletv_session
-            self._appletv_session = None
-        if session is None:
-            return
-        try:
-            self._run_appletv_async(session.loop, session.pairing.close())
-        except Exception:
-            logger.exception("Error closing cancelled Apple TV pairing session")
-        self._stop_appletv_loop(session.loop, session.thread)
-
-    def _save_appletv_credentials(self, field: str, value: str) -> None:
-        with self._lock:
-            data = _read_config(self.config_path)
-            section = data.setdefault("sources", {})
-            entry = section.get("appletv")
-            entry = entry if isinstance(entry, dict) else {}
-            entry[field] = value
-            entry["enabled"] = True
-            section["appletv"] = entry
-
-            Config.from_dict(data)
-
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
-            backup_config_file(self.config_path)
-            with self.config_path.open("w", encoding="utf-8") as f:
-                f.write(_dump_config(data))
+    #
+    # The pairing state machine itself lives in AppleTvPairingManager
+    # (composed as self._appletv above); _run_appletv_async/
+    # _stop_appletv_loop stay defined here and are injected into it,
+    # since tests monkeypatch these two names directly on this class.
 
     @staticmethod
     def _run_appletv_async(loop: asyncio.AbstractEventLoop, coro, timeout: float = 30) -> Any:
@@ -613,7 +473,7 @@ class ConfigUiOutput(Output):
             if not host:
                 return jsonify({"ok": False, "error": "Enter the Apple TV's host/IP first."}), 400
             try:
-                result = self._appletv_pair_start(host, protocol)
+                result = self._appletv.start(host, protocol)
             except Exception as exc:
                 logger.warning("Apple TV pairing start failed: %s", exc)
                 return jsonify({"ok": False, "error": str(exc)}), 400
@@ -623,7 +483,7 @@ class ConfigUiOutput(Output):
         def appletv_pair_finish():
             body = request.get_json(silent=True) or {}
             try:
-                result = self._appletv_pair_finish(body.get("pin"))
+                result = self._appletv.finish(body.get("pin"))
             except Exception as exc:
                 logger.warning("Apple TV pairing finish failed: %s", exc)
                 return jsonify({"ok": False, "error": str(exc)}), 400
@@ -631,7 +491,7 @@ class ConfigUiOutput(Output):
 
         @app.post("/api/appletv/pair/cancel")
         def appletv_pair_cancel():
-            self._appletv_pair_cancel()
+            self._appletv.cancel()
             return jsonify({"ok": True})
 
         @app.get("/library")
