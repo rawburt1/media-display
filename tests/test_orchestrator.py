@@ -1828,3 +1828,77 @@ def test_regular_output_still_shows_artist_photo():
     output.update.assert_called_once()
     _, artwork, _ = output.update.call_args[0]
     assert artwork is artist_photo
+
+
+# ---------------------------------------------------------------------------
+# request_artwork_refresh() - e.g. an MQTT "refresh artwork" button
+# ---------------------------------------------------------------------------
+
+def test_request_artwork_refresh_reenriches_and_repushes_current_item():
+    now_playing = NowPlaying(
+        source="kodi", media_type="music", title="Money", subtitle="Pink Floyd",
+        images=[Artwork(url="https://example.com/original.jpg")],
+    )
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/art.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    enricher = MagicMock()
+    enricher.enrich.side_effect = lambda np: np.images.append(
+        Artwork(url="https://example.com/extra.jpg")
+    )
+
+    orch = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[enricher],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orch._tick()  # item becomes current; enriched once
+    assert enricher.enrich.call_count == 1
+    assert output.update.call_count == 1
+
+    orch.request_artwork_refresh()
+    orch._tick()  # SAME_ITEM_ROTATE tick, but refresh forces re-enrichment first
+
+    assert enricher.enrich.call_count == 2
+    assert output.update.call_count == 2
+
+
+def test_request_artwork_refresh_is_noop_when_nothing_playing():
+    output = MagicMock()
+    orch = _orchestrator(outputs=[output], cache=MagicMock())  # _FakeSource: nothing playing
+
+    orch.request_artwork_refresh()
+    orch._tick()  # must not raise
+
+    output.update.assert_not_called()
+
+
+def test_request_artwork_refresh_deferred_until_next_tick():
+    now_playing = NowPlaying(
+        source="kodi", media_type="music", title="Money",
+        images=[Artwork(url="https://example.com/original.jpg")],
+    )
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/art.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+    enricher = MagicMock()
+
+    orch = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[enricher],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orch._tick()
+    enricher.enrich.reset_mock()
+
+    orch.request_artwork_refresh()
+    assert enricher.enrich.call_count == 0  # not acted on until the next _tick()
