@@ -11,7 +11,7 @@ from mediainfo import registries
 from mediainfo.config import Config
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.orchestrator import Orchestrator
-from mediainfo.outputs.config_ui import _is_secret
+from mediainfo.outputs.config_schema import _is_secret
 
 
 def config_detail_fields(cfg: Any) -> dict:
