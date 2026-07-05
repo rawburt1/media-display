@@ -18,8 +18,9 @@ from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
-from mediainfo.orchestrator_health import _BackoffState, _HealthTracker
+from mediainfo.orchestrator_health import _HealthTracker
 from mediainfo.orchestrator_idle import _IdleBatchManager
+from mediainfo.orchestrator_polling import _group_accepts, _SourcePoller
 from mediainfo.orchestrator_state import (
     _RotationState,
     _RouteGroup,
@@ -56,17 +57,6 @@ _ALERT_CHECK_INTERVAL_SECONDS = 60
 # this only applies once something is already showing.
 _DEFAULT_NOTHING_PLAYING_GRACE_SECONDS = 2
 
-# Backoff for sources whose device/service couldn't be reached (see
-# MediaSource.last_poll_failed) - doubles after each consecutive failure,
-# capped at backoff_max_seconds, and resets the moment a poll succeeds
-# (connects fine, whether or not anything's playing). Sources that are
-# simply idle - no error, nothing playing - are polled every tick as usual;
-# only unreachable ones get backed off, so detection isn't delayed for
-# devices that are just sitting there idle but reachable. The starting
-# delay and cap are configurable (Config.backoff_initial_seconds/
-# backoff_max_seconds) so operators can tune how aggressively to retry a
-# flaky device vs. how much log/network noise that produces.
-_BACKOFF_MULTIPLIER = 2
 
 class Orchestrator:
     def __init__(
@@ -112,6 +102,12 @@ class Orchestrator:
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._health = _HealthTracker()
+        self._poller = _SourcePoller(
+            health=self._health,
+            get_hitster_safe=self.get_hitster_safe,
+            backoff_initial_seconds=backoff_initial_seconds,
+            backoff_max_seconds=backoff_max_seconds,
+        )
         self._idle = _IdleBatchManager(
             outputs=self.outputs,
             cache=self.cache,
@@ -204,7 +200,7 @@ class Orchestrator:
         # same item this tick (see _prepare_item).
         prepared: Dict[tuple, NowPlaying] = {}
         for group in self._groups:
-            routed = next((r for r in results if self._group_accepts(group, r)), None)
+            routed = next((r for r in results if _group_accepts(group, r)), None)
             self._tick_group(group, self._prepare_item(group, routed, prepared))
 
         # Idle wallpapers go to whichever outputs ended this tick unbound
@@ -597,67 +593,10 @@ class Orchestrator:
             self._idle.show(time.monotonic(), notify, wallpaper)
 
     def _poll_sources(self) -> List[NowPlaying]:
-        """Poll sources in priority order, collecting the active results
-        the route groups need, highest priority first.
-
-        Polling stops as soon as every group is satisfied by something
-        already collected - with a single unfiltered group that means the
-        first active source, exactly the pre-routing behavior. Sources
-        that are idle or backed off never block a lower-priority source
-        from being offered to the groups.
-
-        Hitster-safe applies here, per result: while enabled, a music
-        result is discarded outright - it isn't offered to any group and
-        doesn't satisfy one - so song titles never leak onto a display,
-        while a lower-priority non-music item (e.g. a movie) can still
-        show.
-        """
-        now = time.monotonic()
-        results: List[NowPlaying] = []
-        active_source_name: Optional[str] = None
-        unsatisfied = list(self._groups)
-        for source in self.sources:
-            if not unsatisfied:
-                break
-            name = getattr(source, "name", type(source).__name__)
-
-            backoff = self._health.source_backoff.get(name)
-            if backoff is not None and now < backoff.next_attempt:
-                continue  # backing off: skip polling this source this tick
-
-            self._health.record_poll(name, now)
-            result = source.get_now_playing()
-
-            if getattr(source, "last_poll_failed", False):
-                self._health.record_backoff(name, self._next_backoff(backoff, now))
-            elif backoff is not None:
-                self._health.clear_backoff(name)
-
-            if result is None:
-                continue
-            if result.media_type == "music" and self.get_hitster_safe():
-                continue
-            if active_source_name is None:
-                active_source_name = name
-            results.append(result)
-            unsatisfied = [g for g in unsatisfied if not self._group_accepts(g, result)]
-
-        self._health.set_active_source(active_source_name)
-        return results
-
-    @staticmethod
-    def _group_accepts(group: _RouteGroup, item: NowPlaying) -> bool:
-        """Whether `item` could be this group's current item - its
-        content-rule signature alone; active_hours is applied per output
-        at display time (see _compute_filtered/_recheck_filters)."""
-        return group.signature.accepts(item)
-
-    def _next_backoff(self, previous: Optional["_BackoffState"], now: float) -> "_BackoffState":
-        if previous is None:
-            delay = self.backoff_initial_seconds
-        else:
-            delay = min(previous.delay * _BACKOFF_MULTIPLIER, self.backoff_max_seconds)
-        return _BackoffState(delay=delay, next_attempt=now + delay)
+        """The route groups' view of this tick's active sources - a thin
+        wrapper kept for tests that predate the polling extraction; see
+        _SourcePoller.poll() for the actual logic."""
+        return self._poller.poll(self.sources, self._groups)
 
     def _call_output(self, index: int, func, *args) -> None:
         """Call an output method, recording any exception for health reporting."""
