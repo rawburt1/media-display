@@ -172,26 +172,41 @@ def wire_history(outputs: list, history: Optional[PlaybackHistory]) -> None:
 
 
 def wire_health_providers(outputs: list, orch: Orchestrator, config: Config) -> None:
-    """Register the health provider on every WebOutput and ConfigUiOutput
-    instance (the latter uses it for the dashboard UI's status overview -
-    see config_dashboard.py)."""
+    """Register the health provider on every WebOutput, ConfigUiOutput, and
+    MqttOutput instance (the latter publishes it as an HA "problem"
+    binary_sensor when ha_discovery is enabled - see config_ui uses it for
+    the dashboard UI's status overview, see config_dashboard.py)."""
     from mediainfo.outputs.config_ui import ConfigUiOutput
+    from mediainfo.outputs.mqtt import MqttOutput
     from mediainfo.outputs.web import WebOutput
 
     provider = make_health_provider(orch, config, outputs)
     for output in outputs:
-        if isinstance(output, (WebOutput, ConfigUiOutput)):
+        if isinstance(output, (WebOutput, ConfigUiOutput, MqttOutput)):
             output.set_health_provider(provider)
 
 
 def wire_hitster_safe(outputs: list, orch: Orchestrator) -> None:
     """Register the orchestrator's Hitster-safe get/set on every
-    ConfigUiOutput instance, so its button can read and toggle it."""
+    ConfigUiOutput instance (its own button) and MqttOutput instance (an
+    HA "switch" entity, when ha_discovery is enabled)."""
     from mediainfo.outputs.config_ui import ConfigUiOutput
+    from mediainfo.outputs.mqtt import MqttOutput
 
     for output in outputs:
-        if isinstance(output, ConfigUiOutput):
+        if isinstance(output, (ConfigUiOutput, MqttOutput)):
             output.set_hitster_safe_handlers(orch.get_hitster_safe, orch.set_hitster_safe)
+
+
+def wire_artwork_refresh(outputs: list, orch: Orchestrator) -> None:
+    """Register Orchestrator.request_artwork_refresh on every MqttOutput
+    instance, so an HA "button" entity (when ha_discovery is enabled) can
+    trigger it."""
+    from mediainfo.outputs.mqtt import MqttOutput
+
+    for output in outputs:
+        if isinstance(output, MqttOutput):
+            output.set_refresh_artwork_handler(orch.request_artwork_refresh)
 
 
 def wire_artwork_overrides(outputs: list, overrides: Optional[ArtworkOverrideStore]) -> None:

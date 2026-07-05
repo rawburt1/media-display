@@ -229,6 +229,244 @@ def test_discovery_not_published_on_failed_connect(MockClient):
     mock_client.publish.assert_not_called()
 
 
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_discovery_publishes_artist_album_source_sensors(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    output._on_connect(mock_client, None, {}, 0)
+
+    published = {call.args[0]: call for call in mock_client.publish.call_args_list}
+    artist = json.loads(published["homeassistant/sensor/test-client/artist/config"].args[1])
+    assert "value_json.subtitle" in artist["value_template"]
+    album = json.loads(published["homeassistant/sensor/test-client/album/config"].args[1])
+    assert "value_json.album" in album["value_template"]
+    source = json.loads(published["homeassistant/sensor/test-client/source/config"].args[1])
+    assert "value_json.source" in source["value_template"]
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_discovery_publishes_health_binary_sensor(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    output._on_connect(mock_client, None, {}, 0)
+
+    published = {call.args[0]: call for call in mock_client.publish.call_args_list}
+    config_topic = "homeassistant/binary_sensor/test-client/health/config"
+    assert config_topic in published
+    payload = json.loads(published[config_topic].args[1])
+    assert payload["device_class"] == "problem"
+    assert payload["state_topic"] == "mediainfo/now_playing/health/state"
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_discovery_publishes_hitster_safe_switch(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    output._on_connect(mock_client, None, {}, 0)
+
+    published = {call.args[0]: call for call in mock_client.publish.call_args_list}
+    config_topic = "homeassistant/switch/test-client/hitster_safe/config"
+    assert config_topic in published
+    payload = json.loads(published[config_topic].args[1])
+    assert payload["command_topic"] == "mediainfo/now_playing/hitster_safe/set"
+    assert payload["state_topic"] == "mediainfo/now_playing/hitster_safe/state"
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_discovery_publishes_refresh_artwork_button(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    output._on_connect(mock_client, None, {}, 0)
+
+    published = {call.args[0]: call for call in mock_client.publish.call_args_list}
+    config_topic = "homeassistant/button/test-client/refresh_artwork/config"
+    assert config_topic in published
+    payload = json.loads(published[config_topic].args[1])
+    assert payload["command_topic"] == "mediainfo/now_playing/refresh_artwork/set"
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_connect_subscribes_to_command_topics_when_discovery_enabled(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    output._on_connect(mock_client, None, {}, 0)
+
+    subscribed = {call.args[0] for call in mock_client.subscribe.call_args_list}
+    assert output._hitster_safe_command_topic in subscribed
+    assert output._refresh_artwork_command_topic in subscribed
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_connect_does_not_subscribe_when_discovery_disabled(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config())
+
+    output._on_connect(mock_client, None, {}, 0)
+
+    mock_client.subscribe.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Command topics: hitster-safe switch and refresh-artwork button
+# ---------------------------------------------------------------------------
+
+def _message(topic, payload):
+    msg = MagicMock()
+    msg.topic = topic
+    msg.payload = payload.encode("utf-8")
+    return msg
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_hitster_safe_command_toggles_via_handler(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+    set_fn = MagicMock()
+    output.set_hitster_safe_handlers(MagicMock(return_value=False), set_fn)
+    mock_client.publish.reset_mock()
+
+    output._on_message(mock_client, None, _message(output._hitster_safe_command_topic, "ON"))
+
+    set_fn.assert_called_once_with(True)
+    # State is republished immediately after a command, not just on a timer.
+    state_calls = [
+        c for c in mock_client.publish.call_args_list
+        if c.args[0] == output._hitster_safe_state_topic
+    ]
+    assert len(state_calls) == 1
+    assert state_calls[0].args[1] == "OFF"  # reflects the getter, not the command
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_hitster_safe_command_off(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+    set_fn = MagicMock()
+    output.set_hitster_safe_handlers(MagicMock(return_value=True), set_fn)
+
+    output._on_message(mock_client, None, _message(output._hitster_safe_command_topic, "OFF"))
+
+    set_fn.assert_called_once_with(False)
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_hitster_safe_command_ignored_when_not_wired(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    # Must not raise even though set_hitster_safe_handlers was never called.
+    output._on_message(mock_client, None, _message(output._hitster_safe_command_topic, "ON"))
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_refresh_artwork_command_calls_handler(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+    refresh_fn = MagicMock()
+    output.set_refresh_artwork_handler(refresh_fn)
+
+    output._on_message(mock_client, None, _message(output._refresh_artwork_command_topic, "PRESS"))
+
+    refresh_fn.assert_called_once_with()
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_refresh_artwork_command_ignored_when_not_wired(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    # Must not raise even though set_refresh_artwork_handler was never called.
+    output._on_message(mock_client, None, _message(output._refresh_artwork_command_topic, "PRESS"))
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_message_on_unrecognized_topic_is_ignored(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    # Must not raise.
+    output._on_message(mock_client, None, _message("some/other/topic", "x"))
+
+
+# ---------------------------------------------------------------------------
+# on_schedule_tick: periodic health/hitster-safe state republish
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_schedule_tick_noop_when_discovery_disabled(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config())
+    output.set_health_provider(MagicMock(return_value={"sources": [], "outputs": [], "enrichers": []}))
+    mock_client.publish.reset_mock()
+
+    output.on_schedule_tick()
+
+    mock_client.publish.assert_not_called()
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_schedule_tick_publishes_health_ok_when_no_errors(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+    output.set_health_provider(
+        MagicMock(return_value={
+            "sources": [{"status": "idle"}], "outputs": [{"status": "ok"}], "enrichers": [],
+        })
+    )
+    mock_client.publish.reset_mock()
+
+    output.on_schedule_tick()
+
+    health_calls = [
+        c for c in mock_client.publish.call_args_list if c.args[0] == output._health_state_topic
+    ]
+    assert len(health_calls) == 1
+    assert health_calls[0].args[1] == "OFF"
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_schedule_tick_publishes_health_problem_when_an_entry_errors(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+    output.set_health_provider(
+        MagicMock(return_value={
+            "sources": [{"status": "error"}], "outputs": [], "enrichers": [],
+        })
+    )
+    mock_client.publish.reset_mock()
+
+    output.on_schedule_tick()
+
+    health_calls = [
+        c for c in mock_client.publish.call_args_list if c.args[0] == output._health_state_topic
+    ]
+    assert len(health_calls) == 1
+    assert health_calls[0].args[1] == "ON"
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_schedule_tick_throttled_to_interval(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+    output.set_health_provider(MagicMock(return_value={"sources": [], "outputs": [], "enrichers": []}))
+
+    clock = iter([100.0, 100.5, 100.9])  # construction not clocked; two quick ticks
+    with patch("mediainfo.outputs.mqtt.time.monotonic", lambda: next(clock)):
+        mock_client.publish.reset_mock()
+        output.on_schedule_tick()
+        first_count = len(mock_client.publish.call_args_list)
+        output.on_schedule_tick()  # well within the interval: no-op
+        second_count = len(mock_client.publish.call_args_list)
+
+    assert first_count > 0
+    assert second_count == first_count
+
+
 # ---------------------------------------------------------------------------
 # MqttConfig validation (pydantic dataclass spike - see mediainfo/config/
 # outputs.py's MqttConfig docstring)
