@@ -2,6 +2,14 @@
 to know YAML - plus an "Advanced" raw-YAML editor for anything the guided
 UI doesn't cover.
 
+This module owns the ConfigUiOutput Output plugin, Flask app/routes, and
+the small bits of state (health/hitster-safe callbacks, restart_required,
+overview computation) tightly coupled to serving those routes. It composes
+three collaborators split into their own modules: config_schema.py (form
+schema generation and per-output filter helpers), config_store.py (reading
+and saving config.yaml), and appletv_pairing.py (the Apple TV pairing
+wizard) - plus the tiny config_yaml_io.py shared by the latter two.
+
 The page is a single-page app (templates/config_ui/app.html): one Flask-
 rendered shell with a sidebar nav and vanilla-JS client-side routing across
 nine sections (Overview, Media sources, Displays & outputs, Artwork &
