@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 class LibraryWallpaperSource(IdleWallpaperSource):
+    name = "library"
+
     def __init__(self, config: LibraryIdleConfig, library: Optional[MusicLibrary] = None):
         self.config = config
         self.library = library

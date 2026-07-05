@@ -28,6 +28,8 @@ _SIZE_PREFERENCE = ("extralarge", "large", "medium", "small")
 
 
 class LastFmWallpaperSource(IdleWallpaperSource):
+    name = "lastfm"
+
     def __init__(self, config: LastFmHistoryConfig):
         self.config = config
         self.rotation_interval_seconds = config.rotation_interval_seconds

@@ -177,7 +177,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
 
         active_idle_names: set = set()
         for instance in active_idle_instances:
-            name = type(instance).__name__.removesuffix("WallpaperSource").lower()
+            name = instance.name or type(instance).__name__.removesuffix("WallpaperSource").lower()
             active_idle_names.add(name)
             idle_sources.append({
                 "type": name,

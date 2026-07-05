@@ -23,6 +23,8 @@ _RANDOM_PHOTO_URL = "https://api.unsplash.com/photos/random"
 
 
 class UnsplashWallpaperSource(IdleWallpaperSource):
+    name = "unsplash"
+
     def __init__(self, config: UnsplashWallpaperConfig):
         self.config = config
         self.rotation_interval_seconds = config.rotation_interval_seconds
