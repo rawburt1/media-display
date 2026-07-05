@@ -31,7 +31,7 @@ from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 
 if TYPE_CHECKING:
-    from mediainfo.orchestrator import _RotationState
+    from mediainfo.orchestrator_state import _RotationState
 
 logger = logging.getLogger(__name__)
 
