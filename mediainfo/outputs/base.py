@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from mediainfo.cache import ImageCache
 from mediainfo.models import Artwork, NowPlaying
@@ -63,6 +63,40 @@ class Output(ABC):
         time-based device housekeeping like power/brightness scheduling
         (see display_schedule.py). Implementations must be cheap when
         nothing needs doing and must not raise. Default: do nothing.
+        """
+
+    # -- lifecycle ----------------------------------------------------
+    #
+    # Groundwork toward hot-reloading outputs (see wiring.instantiate_outputs()
+    # and __main__._warn_output_changes()) - outputs today do all their
+    # setup in __init__ and are built once for the life of the process;
+    # a config change to `outputs:` still needs a full restart. These
+    # three are called (start()/stop() only, for now - see below) but
+    # default to no-ops, so existing outputs that do everything in
+    # __init__ are unaffected.
+
+    def start(self) -> None:
+        """Called once, right after construction (see
+        wiring.instantiate_outputs()). Default: do nothing - existing
+        outputs that start background threads/servers in __init__ don't
+        need to change; new outputs can do that work here instead, as a
+        step toward eventually supporting stop()+start() instead of a
+        full process restart.
+        """
+
+    def stop(self) -> None:
+        """Called once during graceful shutdown, before on_idle() (see
+        __main__._shutdown_outputs()). Default: do nothing.
+        """
+
+    def reload(self, config: Any) -> None:
+        """Not yet called anywhere - declared now so a plugin can opt in
+        early. The intent is for a future config-file hot-reload to call
+        this with the plugin's new config instead of requiring a full
+        process restart for `outputs:` changes (see
+        __main__._warn_output_changes()); matching reloaded config
+        entries back to existing (possibly multi-instance) output objects
+        isn't solved yet. Default: do nothing.
         """
 
     def health_check(self) -> Optional[dict]:

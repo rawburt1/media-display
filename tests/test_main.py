@@ -93,11 +93,28 @@ def test_shutdown_outputs_calls_on_idle_on_all():
         out.on_idle.assert_called_once_with()
 
 
+def test_shutdown_outputs_calls_stop_before_on_idle_on_all():
+    outputs = [MagicMock(), MagicMock(), MagicMock()]
+    _shutdown_outputs(outputs)
+    for out in outputs:
+        out.stop.assert_called_once_with()
+
+
 def test_shutdown_outputs_continues_despite_one_failure():
     bad = MagicMock()
     bad.on_idle.side_effect = RuntimeError("device unreachable")
     good = MagicMock()
     _shutdown_outputs([bad, good])  # must not raise
+    good.on_idle.assert_called_once_with()
+
+
+def test_shutdown_outputs_continues_when_stop_raises():
+    bad = MagicMock()
+    bad.stop.side_effect = RuntimeError("device unreachable")
+    good = MagicMock()
+    _shutdown_outputs([bad, good])  # must not raise
+    bad.on_idle.assert_called_once_with()  # still called despite stop() failing
+    good.stop.assert_called_once_with()
     good.on_idle.assert_called_once_with()
 
 
