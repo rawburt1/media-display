@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 from mediainfo.cache import ImageCache
 from mediainfo.models import Artwork, NowPlaying
@@ -12,6 +12,22 @@ from mediainfo.models import Artwork, NowPlaying
 
 class Output(ABC):
     """Something that displays the current "now playing" artwork."""
+
+    # Registry key this output is known by (e.g. "pixoo") - None (the
+    # default) means "not self-declared", i.e. look it up via
+    # registries.output_name_for_class() as today.
+    name: Optional[str] = None
+
+    # Optional: the config dataclass (from mediainfo.config) that
+    # configures this output, for a plugin that wants to declare the
+    # pairing itself rather than relying on registries.py's OUTPUT_CLASSES
+    # and mediainfo.config's OUTPUT_CONFIG_TYPES staying in sync by
+    # registry key alone. None (the default) means "not declared".
+    config_class: Optional[type] = None
+
+    # Optional free-form feature flags - not consumed anywhere yet; a hook
+    # for future capability queries without another base-class change.
+    capabilities: frozenset = frozenset()
 
     # Set to False on text-only outputs (e.g. Ulanzi) so that idle wallpaper
     # images are not routed to them.
@@ -48,3 +64,21 @@ class Output(ABC):
         (see display_schedule.py). Implementations must be cheap when
         nothing needs doing and must not raise. Default: do nothing.
         """
+
+    def health_check(self) -> Optional[dict]:
+        """Optional self-reported health detail beyond what the
+        orchestrator already tracks generically (call success/error -
+        see orchestrator_health.py). None (the default) means nothing
+        extra to report.
+        """
+        return None
+
+    def test_connection(self) -> Tuple[bool, str]:
+        """Optional connectivity check for the config UI's "test
+        connection" button. Default: not implemented here - today this is
+        instead dispatched by type name in
+        mediainfo/outputs/config_dashboard.py (test_output()); migrating
+        an individual plugin's test logic to this method is a reasonable
+        future increment, one plugin at a time, rather than all at once.
+        """
+        return False, "No connection test available for this plugin"

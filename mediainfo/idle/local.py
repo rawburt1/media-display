@@ -31,6 +31,8 @@ _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
 
 
 class LocalWallpaperSource(IdleWallpaperSource):
+    name = "local"
+
     def __init__(self, config: LocalWallpaperConfig):
         self.config = config
         self.rotation_interval_seconds = config.rotation_interval_seconds
