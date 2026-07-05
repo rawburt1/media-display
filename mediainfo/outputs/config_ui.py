@@ -107,7 +107,6 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import io
 import logging
 import os
 import signal
@@ -116,7 +115,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from flask import Flask, jsonify, render_template, request, send_file
-from ruamel.yaml import YAML
 
 from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
@@ -147,12 +145,10 @@ from mediainfo.outputs.config_schema import (
     _scalar_fields,
     _validate_filter_fields,
 )
+from mediainfo.outputs.config_yaml_io import _dump_config, _read_config, _yaml
 from mediainfo.web_auth import install_auth, is_loopback_address
 
 logger = logging.getLogger(__name__)
-
-_yaml = YAML()
-_yaml.preserve_quotes = True
 
 # Give the HTTP response time to reach the browser before this process
 # receives SIGTERM and starts shutting down.
@@ -178,19 +174,6 @@ class _AppleTvSession:
     protocol_name: str
     device_name: str
     manual_pin: Optional[int] = None
-
-
-def _read_config(path: Path) -> Any:
-    if not path.exists():
-        return _yaml.map()
-    with path.open("r", encoding="utf-8") as f:
-        return _yaml.load(f) or _yaml.map()
-
-
-def _dump_config(data: Any) -> str:
-    buf = io.StringIO()
-    _yaml.dump(data, buf)
-    return buf.getvalue()
 
 
 class ConfigUiOutput(Output):
