@@ -39,10 +39,17 @@ import json
 import logging
 import re
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from mediainfo.config import MediaDataConfig
+
+# What a `_fetch_*` stub (or, later, a real implementation) returns:
+# (content_bytes, source_name) on success, or None if there's nothing new
+# (not found, unreachable, etc.) - the caller must not treat None as an
+# error, just "no update available right now".
+FetchResult = Optional[Tuple[bytes, str]]
 
 logger = logging.getLogger(__name__)
 
@@ -111,3 +118,102 @@ class MediaDataStore:
         tmp_path = path.with_name(path.name + ".tmp")
         tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         tmp_path.replace(path)
+
+    @staticmethod
+    def _atomic_write_bytes(path: Path, content: bytes) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = path.with_name(path.name + ".tmp")
+        tmp_path.write_bytes(content)
+        tmp_path.replace(path)
+
+    @staticmethod
+    def _now_iso() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _is_stale(entry: Dict[str, Any], max_age_days: Optional[int]) -> bool:
+        """True if `entry` (an artwork/lyrics metadata.json entry) is older
+        than `max_age_days` - or if it has no parseable `last_checked` at
+        all, which is treated as "definitely needs a check". max_age_days
+        of None means "never stale by age" (used for lyrics - see
+        get_track_lyrics)."""
+        if max_age_days is None:
+            return False
+        last_checked = entry.get("last_checked")
+        if not last_checked:
+            return True
+        try:
+            checked_at = datetime.fromisoformat(last_checked)
+        except ValueError:
+            return True
+        return datetime.now(timezone.utc) - checked_at > timedelta(days=max_age_days)
+
+    # -- cache-first + refresh-policy core -----------------------------------
+
+    def _resolve_artwork(
+        self,
+        item_dir: Path,
+        filename: str,
+        metadata_key: str,
+        max_age_days: Optional[int],
+        fetch_fn: Callable[[], FetchResult],
+    ) -> Optional[Path]:
+        """Shared cache-first/refresh algorithm for one piece of content
+        (an artwork file, or - via get_track_lyrics - a lyrics file) living
+        at `item_dir / filename`, tracked under metadata.json's
+        `artwork[metadata_key]` (or `lyrics` - see get_track_lyrics).
+
+        - Missing entirely: always calls fetch_fn(); returns the new path
+          on success, None if fetch_fn found nothing.
+        - Present and not stale (or config.refresh.enabled is False):
+          returns the local path immediately, without calling fetch_fn().
+        - Present but stale: calls fetch_fn() synchronously (see the
+          TODO below), always returns the *existing* local path right
+          away regardless of the fetch's outcome - a slow/failed refresh
+          never blocks or breaks the current call, it only affects what
+          the *next* call sees.
+        """
+        path = item_dir / filename
+        with self._lock:
+            metadata = self._read_metadata(item_dir)
+            artwork = metadata.setdefault("artwork", {})
+            entry = artwork.get(metadata_key)
+
+            if path.exists():
+                if not self.config.refresh.enabled:
+                    return path
+                if not self._is_stale(entry or {}, max_age_days):
+                    return path
+
+                # TODO(async-refresh): this blocks the caller until fetch_fn
+                # returns. A future version should hand this off to a
+                # background task (or defer it to the next enrichment
+                # pass) instead - see the plan this was built from.
+                result = fetch_fn()
+                now = self._now_iso()
+                if entry is None:
+                    entry = {"path": filename, "source": "", "last_checked": now, "last_updated": now}
+                entry["last_checked"] = now
+                if result is not None:
+                    content, source = result
+                    self._atomic_write_bytes(path, content)
+                    entry["source"] = source
+                    entry["last_updated"] = now
+                artwork[metadata_key] = entry
+                self._write_metadata(item_dir, metadata)
+                return path
+
+            # Missing entirely - always attempt a fetch, regardless of
+            # config.refresh.enabled (that flag only gates re-checking
+            # something we already have, not the first fetch).
+            result = fetch_fn()
+            if result is None:
+                return None
+            content, source = result
+            self._atomic_write_bytes(path, content)
+            now = self._now_iso()
+            artwork[metadata_key] = {
+                "path": filename, "source": source, "last_checked": now, "last_updated": now,
+            }
+            self._write_metadata(item_dir, metadata)
+            return path

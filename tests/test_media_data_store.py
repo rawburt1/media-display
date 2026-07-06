@@ -2,12 +2,17 @@
 metadata cache, not yet wired into the live app (see the module's own
 docstring)."""
 
-from mediainfo.config import MediaDataConfig
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock
+
+from mediainfo.config import MediaDataConfig, MediaDataRefreshConfig
 from mediainfo.media_data_store import MediaDataStore
 
 
-def _store(tmp_path, **kwargs):
-    return MediaDataStore(MediaDataConfig(path=str(tmp_path), **kwargs))
+def _store(tmp_path, refresh=None, **kwargs):
+    return MediaDataStore(
+        MediaDataConfig(path=str(tmp_path), refresh=refresh or MediaDataRefreshConfig(), **kwargs)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -175,3 +180,151 @@ def test_write_metadata_overwrites_previous_content(tmp_path):
     assert store._read_metadata(item_dir) == {
         "title": "Alien", "year": 1979, "external_ids": {"tmdb": "348"},
     }
+
+
+# ---------------------------------------------------------------------------
+# _resolve_artwork: cache-first + refresh-policy core
+# ---------------------------------------------------------------------------
+
+def _seed_stale_entry(store, item_dir, filename, metadata_key, days_old, content=b"old-bytes"):
+    """Write an existing artwork file plus a metadata.json entry whose
+    last_checked is `days_old` days in the past."""
+    path = item_dir / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    old_ts = (datetime.now(timezone.utc) - timedelta(days=days_old)).isoformat()
+    store._write_metadata(item_dir, {
+        "artwork": {metadata_key: {
+            "path": filename, "source": "tmdb", "last_checked": old_ts, "last_updated": old_ts,
+        }},
+    })
+
+
+def test_resolve_artwork_fetches_when_missing(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    fetch_fn = MagicMock(return_value=(b"new-bytes", "tmdb"))
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    fetch_fn.assert_called_once()
+    assert result == item_dir / "poster.jpg"
+    assert result.read_bytes() == b"new-bytes"
+    metadata = store._read_metadata(item_dir)
+    entry = metadata["artwork"]["poster"]
+    assert entry["source"] == "tmdb"
+    assert entry["last_checked"] == entry["last_updated"]
+
+
+def test_resolve_artwork_returns_none_when_missing_and_fetch_finds_nothing(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    fetch_fn = MagicMock(return_value=None)
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    assert result is None
+    assert not (item_dir / "poster.jpg").exists()
+
+
+def test_resolve_artwork_uses_cache_without_fetching_when_fresh(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=1)
+    fetch_fn = MagicMock()
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    fetch_fn.assert_not_called()
+    assert result == item_dir / "poster.jpg"
+    assert result.read_bytes() == b"old-bytes"
+
+
+def test_resolve_artwork_refreshes_when_stale(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=200)
+    fetch_fn = MagicMock(return_value=(b"refreshed-bytes", "tmdb"))
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    fetch_fn.assert_called_once()
+    assert result.read_bytes() == b"refreshed-bytes"
+    entry = store._read_metadata(item_dir)["artwork"]["poster"]
+    assert entry["last_checked"] == entry["last_updated"]
+
+
+def test_resolve_artwork_keeps_old_file_when_refresh_fetch_fails(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=200)
+    fetch_fn = MagicMock(return_value=None)
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    fetch_fn.assert_called_once()
+    assert result.read_bytes() == b"old-bytes"  # unchanged
+
+
+def test_resolve_artwork_bumps_last_checked_but_not_last_updated_when_fetch_fails(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=200)
+    old_entry = store._read_metadata(item_dir)["artwork"]["poster"]
+    fetch_fn = MagicMock(return_value=None)
+
+    store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    new_entry = store._read_metadata(item_dir)["artwork"]["poster"]
+    assert new_entry["last_checked"] != old_entry["last_checked"]
+    assert new_entry["last_updated"] == old_entry["last_updated"]
+
+
+def test_resolve_artwork_bumps_both_timestamps_when_fetch_succeeds(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=200)
+    old_entry = store._read_metadata(item_dir)["artwork"]["poster"]
+    fetch_fn = MagicMock(return_value=(b"new-bytes", "tmdb"))
+
+    store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    new_entry = store._read_metadata(item_dir)["artwork"]["poster"]
+    assert new_entry["last_checked"] != old_entry["last_checked"]
+    assert new_entry["last_updated"] != old_entry["last_updated"]
+
+
+def test_resolve_artwork_does_not_refresh_when_refresh_disabled(tmp_path):
+    store = _store(tmp_path, refresh=MediaDataRefreshConfig(enabled=False))
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=200)
+    fetch_fn = MagicMock()
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    fetch_fn.assert_not_called()
+    assert result.read_bytes() == b"old-bytes"
+
+
+def test_resolve_artwork_still_fetches_when_missing_even_if_refresh_disabled(tmp_path):
+    store = _store(tmp_path, refresh=MediaDataRefreshConfig(enabled=False))
+    item_dir = store.movie_dir("Alien", 1979)
+    fetch_fn = MagicMock(return_value=(b"new-bytes", "tmdb"))
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    fetch_fn.assert_called_once()
+    assert result.read_bytes() == b"new-bytes"
+
+
+def test_resolve_artwork_with_max_age_none_never_refetches_once_present(tmp_path):
+    """max_age_days=None is the lyrics case: never stale by age."""
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "lyrics.lrc", "lyrics", days_old=10_000)
+    fetch_fn = MagicMock()
+
+    result = store._resolve_artwork(item_dir, "lyrics.lrc", "lyrics", None, fetch_fn)
+
+    fetch_fn.assert_not_called()
+    assert result.read_bytes() == b"old-bytes"
