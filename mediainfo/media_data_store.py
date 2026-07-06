@@ -31,6 +31,21 @@ timestamps per artwork/lyrics entry, rather than relying on file mtime like
 ImageCache/TextCache do - the point of this store is auditable, inspectable
 staleness state, and a file copy/backup bumping mtime shouldn't count as
 "we just checked".
+
+Public API (see MediaDataStore's methods for details):
+    get_movie_poster(title, year) / get_movie_fanart(title, year)
+    get_series_poster(title, year) / get_series_fanart(title, year)
+    get_album_art(artist, album, year) / get_album_fanart(artist, album, year)
+    get_track_lyrics(artist, album, title, year=None)
+    refresh_movie(title, year) / refresh_series(title, year)
+    refresh_album(artist, album, year) / refresh_track_lyrics(artist, album, title, year=None)
+
+Each `get_*` follows cache_first + the per-media-type refresh policy in
+MediaDataConfig.refresh (movies_days/series_days/music_days; lyrics never
+auto-refresh by age). Each `refresh_*` forces an immediate fetch attempt
+regardless of freshness - intended for a future config UI's "Refresh
+poster"/"Refresh fanart"/"Refresh lyrics" buttons - and returns whether
+anything was actually updated.
 """
 
 from __future__ import annotations

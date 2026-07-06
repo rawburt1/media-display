@@ -771,6 +771,29 @@ cache:
   min_width: 640
   min_height: 480
 
+# NOT YET USED BY THE RUNNING APP - foundation for a future unified,
+# human-browsable artwork/lyrics/metadata cache (mediainfo/media_data_store.py)
+# that would organize content as movies/<Title> (<Year>)/poster.jpg etc.
+# instead of the flat cache/ directory above. Nothing reads this section
+# yet; documented here only so the shape is visible ahead of it being wired
+# into the app.
+mediadata:
+  path: ./mediadata
+  # Prefer cached content over a fresh external check - a refresh is
+  # attempted afterwards (synchronously, for now) rather than blocking.
+  cache_first: true
+  refresh:
+    enabled: true
+    # A released movie's poster/fanart rarely changes.
+    movies_days: 180
+    # Checked more often than movies - a still-airing show's poster/
+    # fanart can change when a new season is announced/released.
+    series_days: 30
+    # An album's art essentially never changes once released.
+    music_days: 365
+    # (Lyrics are never auto-refreshed by age - only fetched once if
+    # missing, or via an explicit manual refresh.)
+
 # Local SQLite database of artist/album/track metadata (MusicBrainz ids,
 # cached cover art URLs, artist photos) - queried before the musicbrainz,
 # fanarttv, discogs, and lastfm enrichers make an external API call, so
