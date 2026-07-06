@@ -1590,7 +1590,7 @@ def test_schema_filter_meta_has_media_types_and_known_sources(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/schema").get_json()
     fm = data["filter_meta"]
-    assert set(fm["media_types"]) == {"music", "movie", "episode", "game"}
+    assert set(fm["media_types"]) == {"music", "movie", "episode"}
     assert "kodi" in fm["known_sources"]
     assert "plex" in fm["known_sources"]
 

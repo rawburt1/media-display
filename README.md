@@ -25,13 +25,11 @@ Currently implemented:
   (audio recognition via [vinyl_recognizer](vinyl_recognizer/) + AudD),
   Home Assistant (polls a single media_player entity via HA's REST API -
   a fallback for devices a more specific source can't read directly, e.g.
-  a tvOS app that doesn't populate Apple's own now-playing API), PlayStation
-  5 (via PSNAWP, reads your account's own PSN presence for the game poster -
-  no console pairing needed), generic Chromecast/Cast (polls any configured
-  Cast device's media status directly, so anything cast to it - Netflix,
-  Disney+, YouTube, Spotify Connect, etc. - is picked up regardless of which
-  app is casting, unlike the Shield source which only sees apps running
-  locally on that device)
+  a tvOS app that doesn't populate Apple's own now-playing API), generic
+  Chromecast/Cast (polls any configured Cast device's media status
+  directly, so anything cast to it - Netflix, Disney+, YouTube, Spotify
+  Connect, etc. - is picked up regardless of which app is casting, unlike
+  the Shield source which only sees apps running locally on that device)
 - **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
   movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
   Discogs also add (and prefer) album covers for music, matched via
@@ -140,7 +138,6 @@ entirely optional - skip any row for a feature you don't care about.
 | Jellyfin | Dashboard → Advanced → API Keys → New API Key | `sources.jellyfin` |
 | Emby | the equivalent Emby settings page | `sources.emby` |
 | Spotify | [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) (free app) | `sources.spotify` |
-| PlayStation 5 | [PSN `npsso` cookie](https://ca.account.sony.com/api/v1/ssocookie) (login first) | `sources.ps5` |
 | Vinyl recognition | [AudD](https://audd.io/) - see [vinyl_recognizer/README.md](vinyl_recognizer/) | `sources.vinyl` |
 | fanart.tv | [fanart.tv/get-an-api-key](https://fanart.tv/get-an-api-key/) | `enrichers.fanarttv` |
 | TheTVDB | [thetvdb.com/dashboard/account/apikey](https://thetvdb.com/dashboard/account/apikey) | `enrichers.thetvdb` |
@@ -363,18 +360,6 @@ See `config.example.yaml` for all options. Key things to fill in:
   (or similar USB audio interface) is connected to, listens to a turntable's
   output, and identifies the playing track via [AudD](https://audd.io/). See
   `vinyl_recognizer/README.md` for setup.
-- **`sources.ps5`**: `npsso` is a long-lived PSN auth cookie - log into
-  https://www.playstation.com in a browser, then visit
-  https://ca.account.sony.com/api/v1/ssocookie and copy the `npsso` value
-  from the JSON response (expires after ~2 months; repeat to get a fresh
-  one if this source starts failing). Reads your own account's PSN
-  presence - the same "currently playing `<game>`" shown to friends - via
-  [PSNAWP](https://github.com/isFakeAccount/psnawp), so no pairing with or
-  network access to the console itself is needed. Reports `media_type:
-  "game"` (not music/movie/episode); outputs without game-specific
-  formatting just fall back to showing the title plain. Only games
-  launched on PS5 itself are reported - if the same account also plays on
-  PS4/PSPC, those are ignored.
 - Any entry under `outputs` can be a single config (as below) or a list of
   configs, to run multiple instances of that output at once - e.g. several
   Ulanzi displays in different rooms, or web servers on different ports. If

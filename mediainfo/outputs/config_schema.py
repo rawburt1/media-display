@@ -38,7 +38,7 @@ from mediainfo.config import (
     PostersConfig,
 )
 
-_SECRET_HINTS = ("password", "token", "secret", "api_key", "key", "credentials", "pin", "npsso")
+_SECRET_HINTS = ("password", "token", "secret", "api_key", "key", "credentials", "pin")
 
 # Filter fields live on _OutputFilterMixin (inherited by every output config).
 # They are handled by a dedicated UI section instead of the auto-generated
@@ -63,7 +63,7 @@ _FILTER_DEFAULTS: Dict[str, Any] = {
 # field) rather than through _scalar_fields().
 _LABEL_FIELD_NAME = "label"
 
-_KNOWN_MEDIA_TYPES = ["music", "movie", "episode", "game"]
+_KNOWN_MEDIA_TYPES = ["music", "movie", "episode"]
 
 # Categories whose type cards can be hidden from view (Media sources,
 # Displays & outputs, Artwork & metadata) - see ConfigStore.get_hidden_types().
@@ -185,7 +185,6 @@ _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
         "jellyfin": {"label": "Jellyfin", "description": "Reads now-playing sessions from a Jellyfin media server."},
         "kodi": {"label": "Kodi", "description": "Reads now-playing info from a Kodi media center over its JSON-RPC API."},
         "plex": {"label": "Plex", "description": "Reads now-playing sessions from a Plex Media Server."},
-        "ps5": {"label": "PlayStation 5", "description": "Reads what's playing on a PS5 using your PlayStation Network account cookie."},
         "shield": {"label": "Nvidia Shield (Android TV)", "description": "Reads the foreground app on an Android TV device (e.g. Nvidia Shield) over ADB."},
         "sonos": {"label": "Sonos", "description": "Reads what's playing on Sonos speakers on your network."},
         "spotify": {"label": "Spotify", "description": "Reads your current Spotify playback via the Spotify Web API."},
@@ -247,7 +246,7 @@ _ENRICHER_GROUPS: Dict[str, List[str]] = {
 _ESSENTIAL_FIELD_NAMES = frozenset({
     "enabled", "host", "ip", "device_ip", "device_ips", "server_host", "port",
     "server_port", "api_key", "token", "client_id", "client_secret", "username",
-    "password", "npsso", "dir", "speaker_ips", "topic", "entity_id", "queries",
+    "password", "dir", "speaker_ips", "topic", "entity_id", "queries",
     "size", "adb_key_path", "webhook_url",
     # The Automation & schedules page's core timing knobs - kept visible
     # up front there rather than collapsed, since they're the whole point
@@ -268,7 +267,6 @@ _REQUIRED_FIELDS: Dict[str, Dict[str, frozenset]] = {
         "jellyfin": frozenset({"host", "api_key"}),
         "kodi": frozenset({"host"}),
         "plex": frozenset({"host", "token"}),
-        "ps5": frozenset({"npsso"}),
         "shield": frozenset({"host"}),
         "spotify": frozenset({"client_id", "client_secret"}),
         "vinyl": frozenset({"host"}),
@@ -329,7 +327,6 @@ _FIELD_HELP: Dict[str, str] = {
 # Overrides for specific "<category>.<type>.<field>" combinations, where
 # the generic help text above isn't specific enough.
 _FIELD_HELP_OVERRIDES: Dict[str, str] = {
-    "sources.ps5.npsso": "Long-lived PSN auth cookie. While logged into playstation.com in a browser, visit ca.account.sony.com/api/v1/ssocookie and copy the \"npsso\" value. Expires after about 2 months.",
     "sources.spotify.redirect_uri": "Must exactly match the redirect URI registered in your Spotify developer dashboard app.",
     "sources.homeassistant.entity_id": "The media_player entity to watch, e.g. media_player.apple_tv_4k - find it under Settings → Devices & Services → Entities in Home Assistant.",
     "sources.chromecast.ignore_apps": "Cast app names to ignore (e.g. screensaver apps). Also list any Nest Hub used as an output here, to avoid it detecting its own cast image as \"now playing\".",
@@ -365,7 +362,7 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
 # word when turning a field name into a friendly label.
 _ACRONYMS = {
     "ip": "IP", "ips": "IPs", "id": "ID", "url": "URL", "mqtt": "MQTT",
-    "qos": "QoS", "ha": "HA", "tv": "TV", "npsso": "NPSSO", "adb": "ADB",
+    "qos": "QoS", "ha": "HA", "tv": "TV", "adb": "ADB",
     "rss": "RSS", "ssl": "SSL", "db": "DB", "mbid": "MBID", "api": "API",
 }
 

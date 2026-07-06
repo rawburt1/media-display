@@ -60,7 +60,6 @@ priority:
   - sonos
   - spotify
   - vinyl
-  - ps5
   - chromecast
 
 
@@ -193,19 +192,6 @@ sources:
     enabled: true
     host: 192.168.1.40       # Machine the UCA202 is connected to
     port: 8091               # Port the vinyl_recognizer service listens on
-
-  # PlayStation 5 - shows the poster of whatever game is currently being
-  # played, via PSNAWP reading your account's own PSN presence (the same
-  # "currently playing <game>" shown to friends). No console pairing or
-  # network access to the console needed.
-  # Get an npsso cookie: log into https://www.playstation.com in a
-  # browser, then visit https://ca.account.sony.com/api/v1/ssocookie and
-  # copy the "npsso" value from the JSON response. Expires after ~2
-  # months; repeat these steps for a fresh one if this source starts
-  # failing.
-  ps5:
-    enabled: true
-    npsso: YOUR_NPSSO_COOKIE
 
   # Generic Chromecast/Cast source - polls Cast devices' media status
   # directly, so anything cast to them (Netflix, Disney+, YouTube, Spotify
@@ -489,7 +475,7 @@ outputs:
   #     idle_when_filtered: true    # go to idle screen when filtered out
   #     active_hours: "08:00-22:00" # only active 08:00–22:00; wraps midnight
   #
-  # Example: Nest Hub shows only film, TV and games, never music
+  # Example: Nest Hub shows only film and TV, never music
   # nest_hub:
   #   enabled: true
   #   device_ip: 192.168.1.50
@@ -498,12 +484,11 @@ outputs:
   #   allow_media_types:
   #     - movie
   #     - episode
-  #     - game
   #   idle_when_filtered: true
   #
-  # media_type values: music, movie, episode, game
+  # media_type values: music, movie, episode
   # source values: kodi, plex, jellyfin, emby, sonos, spotify, vinyl,
-  #                appletv, homeassistant, youtube, shield, chromecast, ps5
+  #                appletv, homeassistant, youtube, shield, chromecast
   # active_hours: "HH:MM-HH:MM" local time; wrap-around supported
   #   e.g. "22:00-06:00" is active from 22:00 through 06:00 the next morning
   # ---------------------------------------------------------------------------

@@ -28,7 +28,7 @@ class NowPlaying:
     """A snapshot of what a source is currently playing."""
 
     source: str
-    media_type: str  # "music" | "movie" | "episode" | "game"
+    media_type: str  # "music" | "movie" | "episode"
     title: str
     subtitle: str = ""
     # Album name, for music (used to look up artwork by name when no

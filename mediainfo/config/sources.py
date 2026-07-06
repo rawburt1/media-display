@@ -157,15 +157,6 @@ class HomeAssistantConfig:
     entity_id: str = ""
 
 
-@dataclasses.dataclass
-class Ps5Config:
-    enabled: bool = False
-    # Long-lived PSN auth cookie - while logged into https://www.playstation.com
-    # in a browser, visit https://ca.account.sony.com/api/v1/ssocookie and
-    # copy the "npsso" value from the JSON response.  Expires after ~2 months;
-    # repeat the steps above to get a fresh one if this source starts failing.
-    npsso: str = ""
-
 
 # Registry mapping config section names to their dataclass types. Adding a
 # new source starts here.
@@ -177,7 +168,6 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
     "jellyfin": JellyfinConfig,
     "kodi": KodiConfig,
     "plex": PlexConfig,
-    "ps5": Ps5Config,
     "shield": ShieldConfig,
     "sonos": SonosConfig,
     "spotify": SpotifyConfig,

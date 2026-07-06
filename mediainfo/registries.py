@@ -28,7 +28,6 @@ SOURCE_CLASSES: dict[str, Union[str, type]] = {
     "jellyfin": "mediainfo.sources.jellyfin.JellyfinSource",
     "kodi": "mediainfo.sources.kodi.KodiSource",
     "plex": "mediainfo.sources.plex.PlexSource",
-    "ps5": "mediainfo.sources.ps5.Ps5Source",
     "shield": "mediainfo.sources.shield.ShieldSource",
     "sonos": "mediainfo.sources.sonos.SonosSource",
     "spotify": "mediainfo.sources.spotify.SpotifySource",
