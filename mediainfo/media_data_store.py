@@ -150,19 +150,23 @@ class MediaDataStore:
 
     # -- cache-first + refresh-policy core -----------------------------------
 
-    def _resolve_artwork(
+    def _resolve_content(
         self,
         item_dir: Path,
         filename: str,
-        metadata_key: str,
+        get_entry: Callable[[Dict[str, Any]], Optional[Dict[str, Any]]],
+        set_entry: Callable[[Dict[str, Any], Dict[str, Any]], None],
         max_age_days: Optional[int],
         fetch_fn: Callable[[], FetchResult],
         force: bool = False,
     ) -> Optional[Path]:
         """Shared cache-first/refresh algorithm for one piece of content
-        (an artwork file, or - via get_track_lyrics - a lyrics file) living
-        at `item_dir / filename`, tracked under metadata.json's
-        `artwork[metadata_key]` (or `lyrics` - see get_track_lyrics).
+        living at `item_dir / filename`. `get_entry`/`set_entry` locate
+        that content's tracking entry within the metadata dict - a flat
+        `artwork[key]` for artwork (see _resolve_artwork), or a nested
+        `tracks[title]["lyrics"]` for lyrics (see _resolve_track_lyrics) -
+        so this method itself doesn't need to know which shape it's
+        working with.
 
         - Missing entirely: always calls fetch_fn(); returns the new path
           on success, None if fetch_fn found nothing.
@@ -178,8 +182,7 @@ class MediaDataStore:
         path = item_dir / filename
         with self._lock:
             metadata = self._read_metadata(item_dir)
-            artwork = metadata.setdefault("artwork", {})
-            entry = artwork.get(metadata_key)
+            entry = get_entry(metadata)
 
             if path.exists():
                 if not force:
@@ -202,7 +205,7 @@ class MediaDataStore:
                     self._atomic_write_bytes(path, content)
                     entry["source"] = source
                     entry["last_updated"] = now
-                artwork[metadata_key] = entry
+                set_entry(metadata, entry)
                 self._write_metadata(item_dir, metadata)
                 return path
 
@@ -215,11 +218,55 @@ class MediaDataStore:
             content, source = result
             self._atomic_write_bytes(path, content)
             now = self._now_iso()
-            artwork[metadata_key] = {
-                "path": filename, "source": source, "last_checked": now, "last_updated": now,
-            }
+            entry = {"path": filename, "source": source, "last_checked": now, "last_updated": now}
+            set_entry(metadata, entry)
             self._write_metadata(item_dir, metadata)
             return path
+
+    def _resolve_artwork(
+        self,
+        item_dir: Path,
+        filename: str,
+        metadata_key: str,
+        max_age_days: Optional[int],
+        fetch_fn: Callable[[], FetchResult],
+        force: bool = False,
+    ) -> Optional[Path]:
+        """_resolve_content() for a flat metadata.json artwork[metadata_key]
+        entry - see _resolve_content's docstring for the actual algorithm."""
+
+        def get_entry(metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            return metadata.get("artwork", {}).get(metadata_key)
+
+        def set_entry(metadata: Dict[str, Any], entry: Dict[str, Any]) -> None:
+            metadata.setdefault("artwork", {})[metadata_key] = entry
+
+        return self._resolve_content(
+            item_dir, filename, get_entry, set_entry, max_age_days, fetch_fn, force,
+        )
+
+    def _resolve_track_lyrics(
+        self,
+        item_dir: Path,
+        filename: str,
+        title: str,
+        fetch_fn: Callable[[], FetchResult],
+        force: bool = False,
+    ) -> Optional[Path]:
+        """_resolve_content() for a nested metadata.json
+        tracks[title]["lyrics"] entry (nested, unlike artwork's flat
+        dict, since one album has many tracks) - always max_age_days=None
+        (lyrics are never auto-refreshed by age, see get_track_lyrics)."""
+
+        def get_entry(metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            return metadata.get("tracks", {}).get(title, {}).get("lyrics")
+
+        def set_entry(metadata: Dict[str, Any], entry: Dict[str, Any]) -> None:
+            metadata.setdefault("tracks", {}).setdefault(title, {})["lyrics"] = entry
+
+        return self._resolve_content(
+            item_dir, filename, get_entry, set_entry, None, fetch_fn, force,
+        )
 
     def _was_updated_by(self, item_dir: Path, metadata_key: str, action: Callable[[], Any]) -> bool:
         """Run `action` (a _resolve_artwork(..., force=True) call) and
@@ -355,6 +402,51 @@ class MediaDataStore:
         """STUB - always returns None. A real implementation would call
         MusicBrainz/fanart.tv/discogs here for `kind` ("albumart" or
         "fanart") - see the module docstring."""
+        return None
+
+    # -- lyrics -------------------------------------------------------------
+    #
+    # Unlike artwork, lyrics are never auto-refreshed by age - only a
+    # missing file, or an explicit refresh_track_lyrics() call, ever
+    # triggers a fetch (see _resolve_track_lyrics's max_age_days=None).
+    # `year` is optional (unlike refresh_album's) to match the manual
+    # refresh API the roadmap specified exactly
+    # (store.refresh_track_lyrics(artist, album, title)); pass it too if
+    # known, so lyrics land in the same year'd album directory as its
+    # artwork rather than a separate no-year one.
+
+    def get_track_lyrics(
+        self, artist: str, album: str, title: str, year: Optional[int] = None
+    ) -> Optional[str]:
+        item_dir = self.album_dir(artist, album, year)
+        filename = f"{_sanitize(title)}.lrc"
+        path = self._resolve_track_lyrics(
+            item_dir, filename, title, lambda: self._fetch_lyrics(artist, album, title),
+        )
+        return path.read_text(encoding="utf-8") if path is not None else None
+
+    def refresh_track_lyrics(
+        self, artist: str, album: str, title: str, year: Optional[int] = None
+    ) -> bool:
+        """Force a lyrics refetch attempt, regardless of whether lyrics
+        are already cached. Returns True if lyrics were actually updated."""
+        item_dir = self.album_dir(artist, album, year)
+        filename = f"{_sanitize(title)}.lrc"
+
+        def _entry() -> Optional[Dict[str, Any]]:
+            return self._read_metadata(item_dir).get("tracks", {}).get(title, {}).get("lyrics")
+
+        before = (_entry() or {}).get("last_updated")
+        self._resolve_track_lyrics(
+            item_dir, filename, title, lambda: self._fetch_lyrics(artist, album, title), force=True,
+        )
+        after = (_entry() or {}).get("last_updated")
+        return after != before
+
+    def _fetch_lyrics(self, artist: str, album: str, title: str) -> FetchResult:
+        """STUB - always returns None. A real implementation would call
+        LRCLIB here (see mediainfo/enrichers/lrclib.py for the existing
+        pattern this project already uses for lyrics lookups)."""
         return None
 
     # -- year-discovered-later migration ----------------------------------
