@@ -402,6 +402,22 @@ outputs:
     ip: 192.168.1.32
     size: 64        # 64 for Pixoo64 (default), 16 for Pixoo 16×16
 
+  # LED-preparation settings (optional) — how artwork is cropped, enhanced,
+  # and reduced to a small palette before being sent to the display. Shown
+  # here with their defaults, which favour bold, readable "pixel art" over a
+  # blurred-down photo, especially on the 16×16 frame.
+  # pixoo:
+  #   enabled: true
+  #   ip: 192.168.1.32
+  #   size: 16
+  #   crop_strategy: automatic    # automatic | center | poster_top
+  #   palette_size: 24            # fewer = bolder colour blocks (try 8-16 for 16x16)
+  #   dithering: none             # none | ordered | floyd_steinberg
+  #   contrast_boost: medium      # off | low | medium | high
+  #   saturation_boost: medium    # off | low | medium | high
+  #   dark_image_boost: true      # lift brightness on naturally dark artwork
+  #   pixel_art_mode: true        # crisp two-stage downsample vs. a single smooth resize
+
   # Multiple Pixoo displays — one in the living room, one on the desk. The
   # optional `label` field (any output type) is purely cosmetic - a display
   # name shown in the config UI (e.g. "Living room") instead of "Instance

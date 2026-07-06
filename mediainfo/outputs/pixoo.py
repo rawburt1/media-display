@@ -7,21 +7,28 @@ Supports any Pixoo display size — configure `size: 64` for the Pixoo64
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import logging
 from pathlib import Path
 
 import requests
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image
 
+from mediainfo.cache import ImageCache
 from mediainfo.config import PixooConfig
 from mediainfo.display_schedule import DisplaySchedule, ScheduledDisplay
+from mediainfo.led_image import prepare_led_image
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 from mediainfo.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
 
-_PALETTE_COLORS = 24
+# Bump when mediainfo.led_image's pipeline logic changes in a way that
+# should invalidate previously cached derivatives, even though none of the
+# user-facing settings below changed.
+_LED_PIPELINE_VERSION = 1
 
 
 class PixooOutput(Output):
@@ -29,8 +36,9 @@ class PixooOutput(Output):
     # bio photo (Wikipedia, Last.fm) worth showing — only show album art.
     music_album_art_only = True
 
-    def __init__(self, config: PixooConfig):
+    def __init__(self, config: PixooConfig, cache: ImageCache):
         self.config = config
+        self.cache = cache
         self._url = f"http://{config.ip}/post"
         self.transform_pipeline = parse_pipeline(config.transforms)
         self._scheduler = ScheduledDisplay(
@@ -52,8 +60,22 @@ class PixooOutput(Output):
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         size = self.config.size
         try:
-            image = Image.open(image_path).convert("RGB")
-            image = _prepare_for_led(image, size)
+            led_path = self.cache.get_derived_path(
+                image_path,
+                self._led_cache_key(),
+                lambda img: prepare_led_image(
+                    img,
+                    size=size,
+                    crop_strategy=self.config.crop_strategy,
+                    palette_size=self.config.palette_size,
+                    dithering=self.config.dithering,
+                    contrast_boost=self.config.contrast_boost,
+                    saturation_boost=self.config.saturation_boost,
+                    dark_image_boost=self.config.dark_image_boost,
+                    pixel_art_mode=self.config.pixel_art_mode,
+                ),
+            )
+            image = Image.open(led_path).convert("RGB")
             pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
 
             if self.config.preview_path:
@@ -76,42 +98,28 @@ class PixooOutput(Output):
         except Exception:
             logger.exception("Failed to send image to Pixoo at %s", self.config.ip)
 
+    def _led_cache_key(self) -> str:
+        """Stable hash of every setting that affects prepare_led_image's
+        output, plus _LED_PIPELINE_VERSION - so changing a setting (or the
+        pipeline's own logic) invalidates the cached derivative, and
+        unrelated instances/settings never collide on the same file.
+        """
+        spec = {
+            "version": _LED_PIPELINE_VERSION,
+            "size": self.config.size,
+            "crop_strategy": self.config.crop_strategy,
+            "palette_size": self.config.palette_size,
+            "dithering": self.config.dithering,
+            "contrast_boost": self.config.contrast_boost,
+            "saturation_boost": self.config.saturation_boost,
+            "dark_image_boost": self.config.dark_image_boost,
+            "pixel_art_mode": self.config.pixel_art_mode,
+        }
+        return hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()[:16]
+
     def _post(self, payload: dict) -> None:
         response = requests.post(self._url, json=payload, timeout=5)
         response.raise_for_status()
-
-
-def _prepare_for_led(image: Image.Image, size: int = 64) -> Image.Image:
-    """Process a full-resolution image for an LED matrix of the given size.
-
-    Pipeline:
-      1. Center-crop to square so the subject fills the frame.
-      2. Boost contrast before downscaling (makes colours pop at low res).
-      3. Unsharp mask to preserve edge sharpness through the downscale.
-      4. Downsample to size×size with LANCZOS.
-      5. Quantize to ~24 colours so the LED shows bold, clean blocks.
-    """
-    # 1. Center-crop to square
-    w, h = image.size
-    s = min(w, h)
-    left = (w - s) // 2
-    top = (h - s) // 2
-    image = image.crop((left, top, left + s, top + s))
-
-    # 2. Contrast boost
-    image = ImageEnhance.Contrast(image).enhance(1.3)
-
-    # 3. Unsharp mask — radius is relative to the source size, so use a
-    #    moderate value that sharpens without adding noise.
-    image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=120, threshold=3))
-
-    # 4. Downsample
-    image = image.resize((size, size), Image.Resampling.LANCZOS)
-
-    # 5. Palette reduction → bold colour blocks
-    image = image.quantize(colors=_PALETTE_COLORS).convert("RGB")
-
-    return image
 
 
 def _save_preview(image: Image.Image, path: Path) -> None:
