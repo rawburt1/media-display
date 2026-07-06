@@ -63,6 +63,8 @@ from mediainfo.config.shared import (
     HistoryConfig,
     LibraryConfig,
     LoggingConfig,
+    MediaDataConfig,
+    MediaDataRefreshConfig,
     OverridesConfig,
     PostersConfig,
 )
@@ -119,6 +121,8 @@ __all__ = [
     "LocalWallpaperConfig",
     "LoggingConfig",
     "LrclibConfig",
+    "MediaDataConfig",
+    "MediaDataRefreshConfig",
     "MqttConfig",
     "MusicBrainzConfig",
     "NestHubConfig",
@@ -236,6 +240,9 @@ class Config:
     # source, never mixed" rule, but a source is picked at random each
     # batch instead of always preferring the highest-priority one.
     idle_mode: str = "priority"
+    # Foundation for a future unified artwork/lyrics/metadata cache (see
+    # mediainfo/media_data_store.py) - not read by anything yet.
+    mediadata: MediaDataConfig = dataclasses.field(default_factory=MediaDataConfig)
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "Config":
@@ -306,6 +313,16 @@ class Config:
                 continue
             idle[name] = IDLE_CONFIG_TYPES[name](**values)
 
+        # Nested `refresh:` block - unlike the flat sections above, this one
+        # doesn't fit the plain Cls(**raw) pattern since MediaDataConfig
+        # itself nests another dataclass.
+        media_data_raw = raw.get("mediadata") or {}
+        mediadata = MediaDataConfig(
+            path=media_data_raw.get("path", "./mediadata"),
+            cache_first=media_data_raw.get("cache_first", True),
+            refresh=MediaDataRefreshConfig(**(media_data_raw.get("refresh") or {})),
+        )
+
         return cls(
             poll_interval_seconds=raw.get("poll_interval_seconds", 5),
             rotation_interval_seconds=raw.get("rotation_interval_seconds", 30),
@@ -328,4 +345,5 @@ class Config:
             posters=PostersConfig(**(raw.get("posters") or {})),
             idle_priority=raw.get("idle_priority", []),
             idle_mode=raw.get("idle_mode", "priority"),
+            mediadata=mediadata,
         )
