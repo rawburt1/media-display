@@ -304,6 +304,7 @@ _ENUM_CHOICES: Dict[str, List[str]] = {
     "dithering": ["none", "ordered", "floyd_steinberg"],
     "contrast_boost": ["off", "low", "medium", "high"],
     "saturation_boost": ["off", "low", "medium", "high"],
+    "text_removal_method": ["inpaint", "soft_fill", "crop_preference"],
 }
 
 # Generic help text shared by fields of the same name across many plugin
@@ -343,6 +344,12 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "outputs.pixoo.saturation_boost": "Saturation applied before downscaling.",
     "outputs.pixoo.dark_image_boost": "Lift brightness on naturally dark artwork so it isn't mostly black on the LEDs.",
     "outputs.pixoo.pixel_art_mode": "Downsample in two stages for crisp, intentional pixel blocks instead of a single blurrier resize.",
+    "outputs.pixoo.text_detection_enabled": "Detect and remove small poster/cover text (credits, subtitles) before downscaling. Requires text_detection_model_path.",
+    "outputs.pixoo.text_detection_model_path": "Path to a frozen_east_text_detection.pb file (OpenCV's EAST text detector) - not bundled, you'll need to provide your own.",
+    "outputs.pixoo.remove_small_text": "Remove small, non-essential detected text (credits, subtitles, track listings).",
+    "outputs.pixoo.preserve_large_logos": "Keep large titles/logos that remain legible at the final LED size instead of removing them.",
+    "outputs.pixoo.text_removal_method": "\"inpaint\" gives the best reconstruction; \"soft_fill\" needs no extra dependency; \"crop_preference\" nudges the crop to avoid text instead of editing pixels.",
+    "outputs.pixoo.max_logo_area_percent": "A detected text region larger than this is treated as too big to be a normal logo and left alone.",
     "outputs.ulanzi.screen_off_hours": "Turn the display off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
     "outputs.mqtt.ha_discovery": "Automatically add a mediainfo device with now-playing sensors to Home Assistant.",
     "outputs.mqtt.qos": "0 = at most once, 1 = at least once, 2 = exactly once. 0 is fine for most setups.",

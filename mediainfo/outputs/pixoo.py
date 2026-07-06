@@ -21,6 +21,7 @@ from mediainfo.display_schedule import DisplaySchedule, ScheduledDisplay
 from mediainfo.led_image import prepare_led_image
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
+from mediainfo.text_removal import maybe_remove_text
 from mediainfo.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
@@ -60,21 +61,7 @@ class PixooOutput(Output):
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         size = self.config.size
         try:
-            led_path = self.cache.get_derived_path(
-                image_path,
-                self._led_cache_key(),
-                lambda img: prepare_led_image(
-                    img,
-                    size=size,
-                    crop_strategy=self.config.crop_strategy,
-                    palette_size=self.config.palette_size,
-                    dithering=self.config.dithering,
-                    contrast_boost=self.config.contrast_boost,
-                    saturation_boost=self.config.saturation_boost,
-                    dark_image_boost=self.config.dark_image_boost,
-                    pixel_art_mode=self.config.pixel_art_mode,
-                ),
-            )
+            led_path = self.cache.get_derived_path(image_path, self._led_cache_key(), self._build_led_image)
             image = Image.open(led_path).convert("RGB")
             pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
 
@@ -98,8 +85,38 @@ class PixooOutput(Output):
         except Exception:
             logger.exception("Failed to send image to Pixoo at %s", self.config.ip)
 
+    def _build_led_image(self, img: Image.Image) -> tuple:
+        """The get_derived_path build callback: optional text removal, then
+        the LED-preparation pipeline. Returns (image, decision-record) so
+        the text-removal decision (if the stage ran) is persisted as a
+        `{cache_key}.json` sidecar next to the cached derivative.
+        """
+        img, decision = maybe_remove_text(
+            img,
+            target_size=self.config.size,
+            enabled=self.config.text_detection_enabled,
+            model_path=self.config.text_detection_model_path,
+            remove_small_text=self.config.remove_small_text,
+            preserve_large_logos=self.config.preserve_large_logos,
+            removal_method=self.config.text_removal_method,
+            max_logo_area_percent=self.config.max_logo_area_percent,
+            crop_strategy=self.config.crop_strategy,
+        )
+        final = prepare_led_image(
+            img,
+            size=self.config.size,
+            crop_strategy=self.config.crop_strategy,
+            palette_size=self.config.palette_size,
+            dithering=self.config.dithering,
+            contrast_boost=self.config.contrast_boost,
+            saturation_boost=self.config.saturation_boost,
+            dark_image_boost=self.config.dark_image_boost,
+            pixel_art_mode=self.config.pixel_art_mode,
+        )
+        return final, decision
+
     def _led_cache_key(self) -> str:
-        """Stable hash of every setting that affects prepare_led_image's
+        """Stable hash of every setting that affects _build_led_image's
         output, plus _LED_PIPELINE_VERSION - so changing a setting (or the
         pipeline's own logic) invalidates the cached derivative, and
         unrelated instances/settings never collide on the same file.
@@ -114,6 +131,12 @@ class PixooOutput(Output):
             "saturation_boost": self.config.saturation_boost,
             "dark_image_boost": self.config.dark_image_boost,
             "pixel_art_mode": self.config.pixel_art_mode,
+            "text_detection_enabled": self.config.text_detection_enabled,
+            "text_detection_model_path": self.config.text_detection_model_path,
+            "remove_small_text": self.config.remove_small_text,
+            "preserve_large_logos": self.config.preserve_large_logos,
+            "text_removal_method": self.config.text_removal_method,
+            "max_logo_area_percent": self.config.max_logo_area_percent,
         }
         return hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()[:16]
 

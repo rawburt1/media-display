@@ -613,3 +613,86 @@ def test_existing_cached_file_with_other_extension_is_still_found(mock_get, tmp_
 
     assert path == old
     assert mock_get.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# get_derived_path (generic disk-cached derivative, e.g. Pixoo's LED prep)
+# ---------------------------------------------------------------------------
+
+def _save_source_image(path, size=(64, 64), color=(1, 2, 3)):
+    from PIL import Image
+
+    Image.new("RGB", size, color).save(path, format="JPEG")
+    return path
+
+
+def test_get_derived_path_builds_once_and_caches(tmp_path):
+    from PIL import Image
+
+    original = _save_source_image(tmp_path / "art.jpg")
+    cache = ImageCache(tmp_path / "cache")
+    calls = []
+
+    def build(img):
+        calls.append(1)
+        return Image.new("RGB", (16, 16), (9, 9, 9))
+
+    path1 = cache.get_derived_path(original, "abc123", build)
+    path2 = cache.get_derived_path(original, "abc123", build)
+
+    assert path1 == path2
+    assert path1.suffix == ".png"
+    assert len(calls) == 1
+
+
+def test_get_derived_path_saves_as_png_not_jpeg(tmp_path):
+    from PIL import Image
+
+    original = _save_source_image(tmp_path / "art.jpg")
+    cache = ImageCache(tmp_path / "cache")
+
+    path = cache.get_derived_path(original, "key1", lambda img: Image.new("RGB", (16, 16)))
+
+    assert path.suffix == ".png"
+    assert Image.open(path).format == "PNG"
+
+
+def test_get_derived_path_different_keys_produce_different_files(tmp_path):
+    from PIL import Image
+
+    original = _save_source_image(tmp_path / "art.jpg")
+    cache = ImageCache(tmp_path / "cache")
+
+    path1 = cache.get_derived_path(original, "key1", lambda img: Image.new("RGB", (16, 16)))
+    path2 = cache.get_derived_path(original, "key2", lambda img: Image.new("RGB", (16, 16)))
+
+    assert path1 != path2
+
+
+def test_get_derived_path_writes_metadata_sidecar_when_build_returns_a_tuple(tmp_path):
+    from PIL import Image
+
+    original = _save_source_image(tmp_path / "art.jpg")
+    cache = ImageCache(tmp_path / "cache")
+
+    def build(img):
+        return Image.new("RGB", (16, 16)), {"removed_count": 2, "method": "inpaint"}
+
+    path = cache.get_derived_path(original, "key1", build)
+
+    sidecar = path.with_suffix(".json")
+    assert sidecar.exists()
+    import json
+
+    assert json.loads(sidecar.read_text()) == {"removed_count": 2, "method": "inpaint"}
+
+
+def test_get_derived_path_no_sidecar_when_build_returns_plain_image(tmp_path):
+    from PIL import Image
+
+    original = _save_source_image(tmp_path / "art.jpg")
+    cache = ImageCache(tmp_path / "cache")
+
+    path = cache.get_derived_path(original, "key1", lambda img: Image.new("RGB", (16, 16)))
+
+    assert not path.with_suffix(".json").exists()

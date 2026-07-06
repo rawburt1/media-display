@@ -418,6 +418,26 @@ outputs:
   #   dark_image_boost: true      # lift brightness on naturally dark artwork
   #   pixel_art_mode: true        # crisp two-stage downsample vs. a single smooth resize
 
+  # Optional text-detection stage (runs before the crop/enhance/downscale
+  # steps above) - removes small poster/cover typography (credits,
+  # subtitles, track listings) that would otherwise survive downscaling as
+  # unreadable noise, while keeping large titles/logos that are still
+  # legible at the final size. Off by default: it requires OpenCV's EAST
+  # text-detection model, which is NOT bundled or auto-downloaded - you
+  # must provide your own `frozen_east_text_detection.pb` file (a
+  # well-known pretrained OpenCV DNN model - search for that exact
+  # filename) and point `text_detection_model_path` at it. If the model
+  # can't be loaded, this stage is silently skipped.
+  # pixoo:
+  #   enabled: true
+  #   ip: 192.168.1.32
+  #   text_detection_enabled: true
+  #   text_detection_model_path: /path/to/frozen_east_text_detection.pb
+  #   remove_small_text: true      # remove small/non-essential detected text
+  #   preserve_large_logos: true   # keep large titles/logos if still legible at final size
+  #   text_removal_method: inpaint # inpaint | soft_fill | crop_preference
+  #   max_logo_area_percent: 25    # regions larger than this % are left alone (likely not text)
+
   # Multiple Pixoo displays — one in the living room, one on the desk. The
   # optional `label` field (any output type) is purely cosmetic - a display
   # name shown in the config UI (e.g. "Living room") instead of "Instance

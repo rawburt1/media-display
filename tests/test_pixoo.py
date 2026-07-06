@@ -242,6 +242,33 @@ def test_pixoo_config_led_defaults():
     assert cfg.pixel_art_mode is True
 
 
+def test_pixoo_config_text_detection_defaults():
+    cfg = PixooConfig(enabled=True, ip="192.168.1.32")
+    assert cfg.text_detection_enabled is False
+    assert cfg.text_detection_model_path == ""
+    assert cfg.remove_small_text is True
+    assert cfg.preserve_large_logos is True
+    assert cfg.text_removal_method == "inpaint"
+    assert cfg.max_logo_area_percent == 25.0
+
+
+def test_text_detection_disabled_by_default_does_not_call_detector(tmp_path):
+    img_path = _save_image(tmp_path / "art.jpg")
+    output = PixooOutput(_config(), _cache(tmp_path))
+
+    with patch.object(output, "_post"), patch("mediainfo.text_removal.detect_text_regions") as mock_detect:
+        output.update(_now_playing(), _artwork(), img_path)
+
+    mock_detect.assert_not_called()
+
+
+def test_text_detection_settings_change_the_led_cache_key(tmp_path):
+    output_a = PixooOutput(_config(text_detection_enabled=False), _cache(tmp_path))
+    output_b = PixooOutput(_config(text_detection_enabled=True, text_detection_model_path="/x.pb"), _cache(tmp_path))
+
+    assert output_a._led_cache_key() != output_b._led_cache_key()
+
+
 def test_only_shows_album_art_for_music():
     assert PixooOutput.music_album_art_only is True
 

@@ -136,6 +136,7 @@ from mediainfo.config import (
 )
 from mediainfo.config_backup import list_backups
 from mediainfo.led_image import _crop_square, prepare_led_image
+from mediainfo.text_removal import maybe_remove_text
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.appletv_pairing import AppleTvPairingManager
@@ -652,9 +653,20 @@ class ConfigUiOutput(Output):
             size = int(opts.get("size", 64))
             crop_strategy = opts.get("crop_strategy", "automatic")
 
-            cropped = _crop_square(original, crop_strategy)
-            final = prepare_led_image(
+            text_cleaned, _decision = maybe_remove_text(
                 original,
+                target_size=size,
+                enabled=bool(opts.get("text_detection_enabled", False)),
+                model_path=opts.get("text_detection_model_path", ""),
+                remove_small_text=bool(opts.get("remove_small_text", True)),
+                preserve_large_logos=bool(opts.get("preserve_large_logos", True)),
+                removal_method=opts.get("text_removal_method", "inpaint"),
+                max_logo_area_percent=float(opts.get("max_logo_area_percent", 25.0)),
+                crop_strategy=crop_strategy,
+            )
+            cropped = _crop_square(text_cleaned, crop_strategy)
+            final = prepare_led_image(
+                text_cleaned,
                 size=size,
                 crop_strategy=crop_strategy,
                 palette_size=int(opts.get("palette_size", 24)),
