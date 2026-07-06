@@ -81,6 +81,7 @@ from mediainfo.config.sources import (
     VinylConfig,
     YoutubeConfig,
 )
+from mediainfo.config.text_enrichers import TEXT_ENRICHER_CONFIG_TYPES, LrclibConfig
 
 __all__ = [
     "AlertConfig",
@@ -111,6 +112,7 @@ __all__ = [
     "LidarrConfig",
     "LocalWallpaperConfig",
     "LoggingConfig",
+    "LrclibConfig",
     "MqttConfig",
     "MusicBrainzConfig",
     "NestHubConfig",
@@ -140,14 +142,6 @@ __all__ = [
     "WikipediaConfig",
     "YoutubeConfig",
 ]
-
-# Empty for now - foundation for roadmap items 8/9 (lyrics / AI-generated
-# text enrichers, see mediainfo/enrichers/text_base.py). Adding the first
-# such plugin means adding its config dataclass (its own module, mirroring
-# enrichers.py, once there's more than one or two) and registering it
-# here - Config.from_dict(), wiring.build_text_enrichers(), and the
-# orchestrator's text-enrichment step all already handle it generically.
-TEXT_ENRICHER_CONFIG_TYPES: dict[str, type] = {}
 
 _logger = logging.getLogger(__name__)
 
@@ -198,8 +192,8 @@ class Config:
     # several instances side by side.
     outputs: dict[str, list[Any]]
     enrichers: dict[str, Any]
-    # Foundation for roadmap items 8/9 - see TEXT_ENRICHER_CONFIG_TYPES.
-    # Always empty today since no text enricher plugin is registered yet.
+    # Lyrics/AI-generated-text plugins (see TEXT_ENRICHER_CONFIG_TYPES and
+    # mediainfo/enrichers/text_base.py) - "lrclib" today.
     text_enrichers: dict[str, Any]
     idle: dict[str, Any]
     cache: CacheConfig

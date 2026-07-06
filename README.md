@@ -612,6 +612,12 @@ See `config.example.yaml` for all options. Key things to fill in:
   just one). List it before the other music enrichers in `enrichers:` so
   that if it fills in the album name unambiguously, they get a chance to
   also contribute art for it.
+- **`text_enrichers.lrclib`**: no API key required (free public
+  https://lrclib.net API). Looks up plain and time-synced lyrics for the
+  currently playing music track (`NowPlaying.lyrics`/`synced_lyrics`),
+  cached locally under `cache.dir/text`. Never shows a guessed or
+  fuzzy-matched result - if LRCLIB has nothing for the track (or it's
+  instrumental), lyrics are simply left blank.
 - **`cache.dir`**: where downloaded artwork is stored.
 - **`cache.min_width`** / **`cache.min_height`**: any downloaded image
   smaller than this (default 640×480) is rejected - not cached, and
