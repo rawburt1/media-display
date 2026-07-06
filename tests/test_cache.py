@@ -4,7 +4,7 @@ import os
 import time
 from unittest.mock import MagicMock, patch
 
-from mediainfo.cache import ImageCache
+from mediainfo.cache import ImageCache, flatten_transparency
 from mediainfo.models import Artwork
 
 
@@ -538,6 +538,71 @@ def test_rgba_png_converts_without_error(mock_get, tmp_path):
     assert path.suffix == ".jpg"
     with Image.open(path) as img:
         assert img.format == "JPEG"
+
+
+@patch("mediainfo.cache.requests.get")
+def test_transparent_png_is_not_flattened_to_black(mock_get, tmp_path):
+    # A common real-world pattern (e.g. many Wikipedia/Wikimedia thumbnails):
+    # an opaque subject on an otherwise fully transparent background, with
+    # the encoder zeroing out RGB under alpha=0. A naive convert("RGB")
+    # exposes that zeroed RGB as solid black - this must composite onto a
+    # background instead (see flatten_transparency's docstring).
+    from PIL import Image
+    import io
+
+    img = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
+    for x in range(150, 250):
+        for y in range(150, 250):
+            img.putpixel((x, y), (200, 30, 30, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    mock_get.return_value = _mock_response(buf.getvalue(), "image/png")
+
+    cache = ImageCache(tmp_path)
+    path = cache.get_path(Artwork(url="http://example.com/wiki-thumb.png"))
+
+    with Image.open(path) as result:
+        # A corner, well outside the opaque subject, must be white
+        # (background), not black (naive alpha discard).
+        assert result.convert("RGB").getpixel((10, 10)) != (0, 0, 0)
+
+
+def test_flatten_transparency_composites_onto_white():
+    from PIL import Image
+
+    img = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+    img.putpixel((5, 5), (10, 20, 30, 255))
+
+    result = flatten_transparency(img)
+
+    assert result.mode == "RGB"
+    assert result.getpixel((0, 0)) == (255, 255, 255)
+    assert result.getpixel((5, 5)) == (10, 20, 30)
+
+
+def test_flatten_transparency_is_a_no_op_for_opaque_rgb():
+    from PIL import Image
+
+    img = Image.new("RGB", (10, 10), (5, 6, 7))
+    result = flatten_transparency(img)
+    assert result.getpixel((0, 0)) == (5, 6, 7)
+
+
+def test_flatten_transparency_handles_paletted_transparency():
+    from PIL import Image
+
+    img = Image.new("P", (10, 10))
+    img.putpalette([0, 0, 0, 200, 30, 30] + [0] * (256 * 3 - 6))
+    img.putpixel((0, 0), 0)  # background palette entry
+    img.putpixel((5, 5), 1)  # subject palette entry
+    img.info["transparency"] = 0  # palette index 0 is transparent
+
+    result = flatten_transparency(img)
+
+    assert result.mode == "RGB"
+    assert result.getpixel((0, 0)) == (255, 255, 255)
+    assert result.getpixel((5, 5)) == (200, 30, 30)
 
 
 @patch("mediainfo.cache.requests.get")

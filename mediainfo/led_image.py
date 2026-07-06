@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from PIL import Image, ImageEnhance, ImageFilter, ImageStat
 
+from mediainfo.cache import flatten_transparency
+
 # off/low/medium/high -> PIL ImageEnhance factor. "medium" matches the
 # pipeline's original hardcoded contrast boost (1.3).
 _ENHANCEMENT_FACTORS = {"off": 1.0, "low": 1.15, "medium": 1.3, "high": 1.5}
@@ -84,7 +86,7 @@ def prepare_led_image(
          final size). Otherwise: a single LANCZOS pass straight to size.
       5. Dithering + palette reduction to `palette_size` colours.
     """
-    image = image.convert("RGB")
+    image = flatten_transparency(image)
 
     if image.size == (size, size) and image.getcolors(maxcolors=palette_size) is not None:
         return image
