@@ -20,6 +20,7 @@ from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
 from mediainfo.poster_store import PosterStore
+from mediainfo.text_cache import TextCache
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +76,10 @@ def build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> l
 
 def build_text_enrichers(config: Config) -> list:
     """Build the configured text enrichers (lyrics, AI-generated text -
-    see mediainfo/enrichers/text_base.py). Always returns [] today since
-    no plugin is registered yet (roadmap items 8/9) - kept alongside
-    build_enrichers() so those items just add a registry entry."""
+    see mediainfo/enrichers/text_base.py), each sharing one TextCache
+    instance under cache.dir/text (same retention as artwork, mirroring
+    ImageCache's own idle/music subdirectories)."""
+    text_cache = TextCache(Path(config.cache.dir) / "text", max_age_days=config.cache.max_age_days)
     text_enrichers = []
     for name, text_enricher_config in config.text_enrichers.items():
         if not text_enricher_config.enabled:
@@ -86,7 +88,7 @@ def build_text_enrichers(config: Config) -> list:
         if text_enricher_cls is None:
             logger.warning("Unknown text enricher: %s", name)
             continue
-        text_enrichers.append(text_enricher_cls(text_enricher_config))
+        text_enrichers.append(text_enricher_cls(text_enricher_config, text_cache))
     return text_enrichers
 
 

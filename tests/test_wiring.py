@@ -2,9 +2,11 @@
 outputs from config, and wiring cross-cutting state onto outputs.
 """
 
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from mediainfo.text_cache import TextCache
 from mediainfo.wiring import (
     build_artwork_overrides,
     build_enrichers,
@@ -30,6 +32,12 @@ def _minimal_config(**kwargs):
     cfg.idle = {}
     cfg.idle_priority = []
     cfg.idle_mode = "priority"
+    # Real values (not a bare MagicMock attribute) - build_text_enrichers()
+    # constructs a real TextCache(Path(config.cache.dir)/"text", ...),
+    # which creates that directory on disk; a MagicMock-derived path would
+    # otherwise get mkdir'd for real under a garbage name.
+    cfg.cache.dir = tempfile.gettempdir()
+    cfg.cache.max_age_days = 30
     for k, v in kwargs.items():
         setattr(cfg, k, v)
     return cfg
@@ -192,8 +200,26 @@ def test_build_text_enrichers_instantiates_enabled():
     with patch("mediainfo.registries.TEXT_ENRICHER_CLASSES", {"lrclib": fake_cls}):
         result = build_text_enrichers(cfg)
 
-    fake_cls.assert_called_once_with(text_cfg)
+    args, _ = fake_cls.call_args
+    assert args[0] is text_cfg
+    assert isinstance(args[1], TextCache)
     assert result == [fake_cls.return_value]
+
+
+def test_build_text_enrichers_shares_one_cache_across_plugins():
+    lrclib_cfg = MagicMock()
+    lrclib_cfg.enabled = True
+    other_cfg = MagicMock()
+    other_cfg.enabled = True
+    fake_cls = MagicMock(side_effect=lambda cfg, cache: MagicMock(cache=cache))
+    cfg = _minimal_config(text_enrichers={"lrclib": lrclib_cfg, "other": other_cfg})
+
+    with patch(
+        "mediainfo.registries.TEXT_ENRICHER_CLASSES", {"lrclib": fake_cls, "other": fake_cls}
+    ):
+        result = build_text_enrichers(cfg)
+
+    assert result[0].cache is result[1].cache
 
 
 def test_build_idle_source_returns_none_when_disabled():

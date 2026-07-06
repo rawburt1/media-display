@@ -702,6 +702,22 @@ enrichers:
 
 
 # ---------------------------------------------------------------------------
+# Text enrichers (lyrics, and in future AI-generated text) - added to
+# NowPlaying.lyrics/synced_lyrics/ai_text, cached locally under
+# cache.dir/text (see below).
+# ---------------------------------------------------------------------------
+
+text_enrichers:
+  # LRCLIB — free, public lyrics lookup (https://lrclib.net), no API key
+  # needed. Looks up both plain and time-synced lyrics for the currently
+  # playing music track by artist/title/album/duration. Only ever shows
+  # what LRCLIB itself returns - never a guessed or fuzzy-matched result,
+  # and instrumental tracks correctly show nothing.
+  lrclib:
+    enabled: false
+
+
+# ---------------------------------------------------------------------------
 # Cache
 # ---------------------------------------------------------------------------
 
