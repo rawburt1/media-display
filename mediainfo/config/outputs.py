@@ -95,6 +95,35 @@ class PixooConfig(_OutputFilterMixin):
     # result reads as intentional pixel art rather than a blurred photo.
     # When disabled, a single LANCZOS pass produces smoother output.
     pixel_art_mode: bool = True
+    # Detect and remove small poster/cover typography (credits, subtitles,
+    # track listings) before cropping and downscaling, so it doesn't
+    # survive as unreadable noise at 16x16/64x64. Off by default - requires
+    # `text_detection_model_path` to point at a locally-provided EAST text-
+    # detection model file (not bundled/auto-downloaded). See
+    # mediainfo/text_removal.py.
+    text_detection_enabled: bool = False
+    # Path to a frozen_east_text_detection.pb model file (OpenCV's EAST
+    # text detector). Required for text_detection_enabled - if missing or
+    # unloadable, the text-removal stage is skipped and a warning is
+    # logged, same as if this were left disabled.
+    text_detection_model_path: str = ""
+    # Remove small/non-essential detected text (credits, subtitles, track
+    # listings).
+    remove_small_text: bool = True
+    # Keep large titles/logos that remain legible at the final LED size
+    # instead of removing them like small text.
+    preserve_large_logos: bool = True
+    # How detected text is actually removed: "inpaint" (best quality,
+    # falls back to soft_fill if OpenCV is unavailable at removal time),
+    # "soft_fill" (Pillow-only blurred local fill, no extra dependency),
+    # or "crop_preference" (don't edit pixels - instead nudge the square
+    # crop to avoid the text, when there's slack to do so).
+    text_removal_method: str = "inpaint"
+    # A detected text region larger than this percentage of the image is
+    # treated as too big to be a normal logo ("uncertain") and left alone,
+    # rather than being classified as a large logo or removed - see
+    # mediainfo/text_removal.py's classify_regions().
+    max_logo_area_percent: float = 25.0
 
 
 @dataclasses.dataclass

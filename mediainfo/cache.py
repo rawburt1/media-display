@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import logging
 import tempfile
 import time
@@ -237,7 +238,7 @@ class ImageCache:
         self,
         original_path: Path,
         cache_key: str,
-        build: Callable[[Image.Image], Image.Image],
+        build: Callable[[Image.Image], Union[Image.Image, tuple]],
     ) -> Path:
         """Return a path to a derived image, built by `build` and cached on
         disk keyed by (original stem, cache_key) - same cache-hit scheme as
@@ -251,6 +252,13 @@ class ImageCache:
         already reflect every setting that affects `build`'s output (plus a
         version marker for the build logic itself), since it's the sole
         cache-invalidation signal here.
+
+        `build` may return either an Image, or an `(Image, metadata)` tuple
+        where `metadata` is a JSON-serialisable dict (or None) - when a dict
+        is given, it's written alongside the image as a `{key}.json`
+        sidecar (e.g. Pixoo's text-removal decision record). Only written
+        once, at build time - a cache hit skips `build` entirely and simply
+        reuses whatever sidecar (if any) was written the first time.
         """
         base_dir = original_path.parent
         key = f"{original_path.stem}_{cache_key}"
@@ -258,10 +266,16 @@ class ImageCache:
         if existing is not None:
             return existing
 
-        image = build(Image.open(original_path))
+        result = build(Image.open(original_path))
+        if isinstance(result, tuple):
+            image, metadata = result
+        else:
+            image, metadata = result, None
 
         out_path = base_dir / f"{key}.png"
         image.save(out_path, format="PNG")
+        if metadata is not None:
+            (base_dir / f"{key}.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         return out_path
 
     def purge_expired(self) -> None:

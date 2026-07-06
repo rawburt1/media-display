@@ -12,3 +12,10 @@ pyatv~=0.17.0
 ruamel.yaml~=0.19.1
 PSNAWP~=3.0.3
 pydantic~=2.13.4
+# Optional Pixoo text-detection stage (mediainfo/text_removal.py) - only
+# exercised when outputs.pixoo.text_detection_enabled is set, but always
+# installed (matches this project's flat-requirements convention - no
+# optional-extras groups) so the feature works out of the box once a user
+# supplies a model file, no separate install step needed.
+opencv-python-headless~=5.0.0
+numpy~=2.2.6
