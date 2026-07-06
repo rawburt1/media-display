@@ -41,6 +41,26 @@ _DEFAULT_MIN_WIDTH = 400
 _DEFAULT_MIN_HEIGHT = 400
 
 
+def flatten_transparency(img: Image.Image, background: str = "white") -> Image.Image:
+    """Convert `img` to RGB, compositing onto `background` first if it has
+    an alpha channel.
+
+    A naive `img.convert("RGB")` discards alpha but keeps whatever RGB
+    values were stored underneath it - many PNG encoders zero those out
+    for fully-transparent pixels (a very common pattern for e.g. Wikipedia/
+    Wikimedia thumbnails: an opaque subject on an otherwise fully
+    transparent background). Left uncorrected, that turns into a mostly or
+    entirely *black* image once flattened, cropped, and downscaled -
+    exactly the "just a black picture" symptom this fixes.
+    """
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        rgba = img.convert("RGBA")
+        flattened = Image.new("RGB", rgba.size, background)
+        flattened.paste(rgba, mask=rgba.split()[3])
+        return flattened
+    return img.convert("RGB")
+
+
 class ImageCache:
     """Downloads artwork once per URL and reuses the cached file afterwards."""
 
@@ -145,7 +165,7 @@ class ImageCache:
             if img.format == "JPEG":
                 return content
             buf = io.BytesIO()
-            img.convert("RGB").save(buf, format="JPEG", quality=95)
+            flatten_transparency(img).save(buf, format="JPEG", quality=95)
             return buf.getvalue()
         except Exception:
             return None
@@ -231,7 +251,7 @@ class ImageCache:
             img = transform.apply(img)
 
         out_path = base_dir / f"{key}.jpg"
-        img.convert("RGB").save(out_path, format="JPEG", quality=95)
+        flatten_transparency(img).save(out_path, format="JPEG", quality=95)
         return out_path
 
     def get_derived_path(

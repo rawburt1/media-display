@@ -41,6 +41,22 @@ def test_rgba_input_is_handled_safely():
     assert result.mode == "RGB"
 
 
+def test_transparent_source_is_not_flattened_to_black():
+    # A subject on an otherwise fully transparent background (RGB zeroed
+    # under alpha=0, as many encoders do) must composite onto white, not
+    # collapse into a mostly-black result - see flatten_transparency.
+    img = Image.new("RGBA", (300, 300), (0, 0, 0, 0))
+    for x in range(100, 200):
+        for y in range(100, 200):
+            img.putpixel((x, y), (200, 30, 30, 255))
+
+    result = prepare_led_image(img, size=16, dark_image_boost=False, crop_strategy="center")
+
+    colors = result.getcolors(maxcolors=256)
+    mean_brightness = sum(sum(c) * count for count, c in colors) / (16 * 16 * 3)
+    assert mean_brightness > 60  # would be near-black (~14) without the fix
+
+
 def test_portrait_and_landscape_sources_both_produce_correct_size():
     assert prepare_led_image(Image.new("RGB", (100, 200), (0, 255, 0)), size=16).size == (16, 16)
     assert prepare_led_image(Image.new("RGB", (200, 100), (0, 0, 255)), size=16).size == (16, 16)

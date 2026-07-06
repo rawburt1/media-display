@@ -124,7 +124,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from PIL import Image, UnidentifiedImageError
 
 from mediainfo.artwork_overrides import ArtworkOverrideStore
-from mediainfo.cache import ImageCache
+from mediainfo.cache import ImageCache, flatten_transparency
 from mediainfo.config import (
     ENRICHER_CONFIG_TYPES,
     IDLE_CONFIG_TYPES,
@@ -638,7 +638,7 @@ class ConfigUiOutput(Output):
                 return jsonify({"ok": False, "error": "An image file is required"}), 400
 
             try:
-                original = Image.open(io.BytesIO(file.read())).convert("RGB")
+                original = flatten_transparency(Image.open(io.BytesIO(file.read())))
             except (UnidentifiedImageError, OSError):
                 return jsonify({"ok": False, "error": "Could not read that image"}), 400
 
