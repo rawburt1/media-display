@@ -702,7 +702,7 @@ enrichers:
 
 
 # ---------------------------------------------------------------------------
-# Text enrichers (lyrics, and in future AI-generated text) - added to
+# Text enrichers (lyrics, AI-generated text) - added to
 # NowPlaying.lyrics/synced_lyrics/ai_text, cached locally under
 # cache.dir/text (see below).
 # ---------------------------------------------------------------------------
@@ -715,6 +715,22 @@ text_enrichers:
   # and instrumental tracks correctly show nothing.
   lrclib:
     enabled: false
+
+  # Ollama — optional, local AI-generated text (mood/description/"did you
+  # know"/album-artist context) about the playing song, added to
+  # NowPlaying.ai_text. Requires a local Ollama instance
+  # (https://ollama.com) already running with `model` already pulled
+  # (e.g. `ollama pull llama3.2`) - this enricher only calls it, it
+  # doesn't install/manage Ollama or models itself. Only uses metadata
+  # (artist/title/album/genres/year) - never sends lyrics to the model.
+  # Off by default: local inference can take several seconds, and it's an
+  # extra thing to have running.
+  ollama_text:
+    enabled: false
+    host: localhost
+    port: 11434
+    model: llama3.2
+    timeout_seconds: 30
 
 
 # ---------------------------------------------------------------------------

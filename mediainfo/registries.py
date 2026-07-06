@@ -91,6 +91,7 @@ ENRICHER_CLASSES: dict[str, Union[str, type]] = {
 # mediainfo.config.TEXT_ENRICHER_CONFIG_TYPES.
 TEXT_ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "lrclib": "mediainfo.enrichers.lrclib.LrclibEnricher",
+    "ollama_text": "mediainfo.enrichers.ollama_text.OllamaTextEnricher",
 }
 
 IDLE_CLASSES: dict[str, Union[str, type]] = {
