@@ -26,7 +26,6 @@ _REQUIRED_CREDENTIAL_FIELDS: dict[tuple, list] = {
     ("sources", "emby"): ["api_key"],
     ("sources", "homeassistant"): ["token", "entity_id"],
     ("sources", "jellyfin"): ["api_key"],
-    ("sources", "ps5"): ["npsso"],
     ("sources", "spotify"): ["client_id", "client_secret"],
     ("enrichers", "fanarttv"): ["api_key"],
     ("enrichers", "thetvdb"): ["api_key"],

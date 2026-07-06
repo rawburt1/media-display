@@ -10,7 +10,6 @@ paho-mqtt~=2.1.0
 flask-sock~=0.7.0
 pyatv~=0.17.0
 ruamel.yaml~=0.19.1
-PSNAWP~=3.0.3
 pydantic~=2.13.4
 # Optional Pixoo text-detection stage (mediainfo/text_removal.py) - only
 # exercised when outputs.pixoo.text_detection_enabled is set, but always

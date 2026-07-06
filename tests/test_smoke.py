@@ -36,8 +36,6 @@ def no_side_effects(monkeypatch):
         "mediainfo.sources.youtube.YoutubeSource._load_or_create_signer",
         lambda self, path: MagicMock(),
     )
-    # Avoid a real PSN network call (PSNAWP.__init__ calls .me() eagerly).
-    monkeypatch.setattr("mediainfo.sources.ps5.PSNAWP", MagicMock())
     # Avoid a real MQTT broker connection attempt.
     monkeypatch.setattr("mediainfo.outputs.mqtt.mqtt.Client", MagicMock())
 
@@ -64,7 +62,7 @@ def test_build_sources_from_example_config(example_config):
     names = {s.name for s in sources}
     assert names == {
         "kodi", "appletv", "homeassistant", "youtube", "shield",
-        "plex", "sonos", "spotify", "vinyl", "ps5", "chromecast",
+        "plex", "sonos", "spotify", "vinyl", "chromecast",
     }
 
 
