@@ -513,3 +513,119 @@ def test_relocate_to_year_dir_is_noop_when_dirs_are_identical(tmp_path):
     store._relocate_to_year_dir(same_dir, same_dir)  # must not raise or delete anything
 
     assert (same_dir / "poster.jpg").read_bytes() == b"poster-bytes"
+
+
+# ---------------------------------------------------------------------------
+# Lyrics
+# ---------------------------------------------------------------------------
+
+def test_get_track_lyrics_fetches_when_missing(tmp_path):
+    store = _store(tmp_path)
+    lrc = "[00:01.00]The Song Remains The Same"
+    with patch.object(store, "_fetch_lyrics", return_value=(lrc.encode(), "lrclib")) as fetch:
+        result = store.get_track_lyrics(
+            "Led Zeppelin", "Houses of the Holy", "The Song Remains The Same", year=1973
+        )
+
+    fetch.assert_called_once_with("Led Zeppelin", "Houses of the Holy", "The Song Remains The Same")
+    assert result == lrc
+    lrc_path = (
+        store.album_dir("Led Zeppelin", "Houses of the Holy", 1973)
+        / "The Song Remains The Same.lrc"
+    )
+    assert lrc_path.read_text(encoding="utf-8") == lrc
+
+
+def test_get_track_lyrics_returns_none_when_fetch_finds_nothing(tmp_path):
+    store = _store(tmp_path)
+    result = store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "The Rain Song")
+    assert result is None  # real stub, always None
+
+
+def test_get_track_lyrics_records_tracks_entry_in_album_metadata(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"lyrics", "lrclib")):
+        store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "The Ocean", year=1973)
+
+    metadata = store._read_metadata(store.album_dir("Led Zeppelin", "Houses of the Holy", 1973))
+    entry = metadata["tracks"]["The Ocean"]["lyrics"]
+    assert entry["path"] == "The Ocean.lrc"
+    assert entry["source"] == "lrclib"
+    assert entry["last_checked"] == entry["last_updated"]
+
+
+def test_lyrics_never_auto_refreshed_by_age(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.album_dir("Led Zeppelin", "Houses of the Holy", None)
+    item_dir.mkdir(parents=True)
+    (item_dir / "Dancing Days.lrc").write_text("[00:01.00]old lyrics", encoding="utf-8")
+    ancient = (datetime.now(timezone.utc) - timedelta(days=10_000)).isoformat()
+    store._write_metadata(item_dir, {
+        "tracks": {"Dancing Days": {"lyrics": {
+            "path": "Dancing Days.lrc", "source": "lrclib",
+            "last_checked": ancient, "last_updated": ancient,
+        }}},
+    })
+
+    with patch.object(store, "_fetch_lyrics") as fetch:
+        result = store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "Dancing Days")
+
+    fetch.assert_not_called()
+    assert result == "[00:01.00]old lyrics"
+
+
+def test_refresh_track_lyrics_forces_fetch_even_when_cached(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"first version", "lrclib")):
+        store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "No Quarter", year=1973)
+
+    with patch.object(store, "_fetch_lyrics", return_value=(b"corrected version", "lrclib")) as fetch:
+        updated = store.refresh_track_lyrics(
+            "Led Zeppelin", "Houses of the Holy", "No Quarter", year=1973
+        )
+
+    fetch.assert_called_once()
+    assert updated is True
+    assert store.get_track_lyrics(
+        "Led Zeppelin", "Houses of the Holy", "No Quarter", year=1973
+    ) == "corrected version"
+
+
+def test_refresh_track_lyrics_keeps_old_file_when_fetch_fails(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"good lyrics", "lrclib")):
+        store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "The Crunge", year=1973)
+
+    updated = store.refresh_track_lyrics(
+        "Led Zeppelin", "Houses of the Holy", "The Crunge", year=1973
+    )  # real stub: fetch returns None
+
+    assert updated is False
+    assert store.get_track_lyrics(
+        "Led Zeppelin", "Houses of the Holy", "The Crunge", year=1973
+    ) == "good lyrics"
+
+
+def test_track_title_with_special_characters_gets_safe_lrc_filename(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"lyrics", "lrclib")):
+        result = store.get_track_lyrics("Prince", "Parade", 'Girls & Boys: "Live"/Mix', year=1986)
+
+    assert result == "lyrics"
+    item_dir = store.album_dir("Prince", "Parade", 1986)
+    lrc_files = list(item_dir.glob("*.lrc"))
+    assert len(lrc_files) == 1
+    assert "/" not in lrc_files[0].name
+    assert '"' not in lrc_files[0].name
+
+
+def test_lyrics_and_artwork_share_the_same_album_metadata_file(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_album_artwork", return_value=(b"art", "musicbrainz")):
+        store.get_album_art("Led Zeppelin", "Houses of the Holy", 1973)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"lyrics", "lrclib")):
+        store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "The Ocean", year=1973)
+
+    metadata = store._read_metadata(store.album_dir("Led Zeppelin", "Houses of the Holy", 1973))
+    assert "albumart" in metadata["artwork"]
+    assert "The Ocean" in metadata["tracks"]
