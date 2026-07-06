@@ -62,7 +62,7 @@ def test_build_sources_from_example_config(example_config):
     names = {s.name for s in sources}
     assert names == {
         "kodi", "appletv", "homeassistant", "youtube", "shield",
-        "plex", "sonos", "spotify", "mopidy", "mpd", "vinyl", "chromecast",
+        "plex", "sonos", "spotify", "mopidy", "mpd", "lms", "vinyl", "chromecast",
     }
 
 

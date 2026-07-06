@@ -61,6 +61,7 @@ priority:
   - spotify
   - mopidy
   - mpd
+  - lms
   - vinyl
   - chromecast
 
@@ -130,6 +131,19 @@ sources:
     host: 192.168.1.32   # IP of the machine running MPD
     port: 6600
     password: ""         # leave blank unless MPD requires auth
+    timeout: 5           # per-request timeout, in seconds
+
+  # Logitech Media Server (LMS, formerly SqueezeCenter/SlimServer).
+  # If you have more than one Squeezebox player, set player_id explicitly -
+  # find it in the LMS web UI under Settings -> Information -> Player
+  # Information (it's the player's MAC address, e.g. "aa:bb:cc:dd:ee:ff").
+  # Leave blank for a single-player household: the first player currently
+  # playing is picked automatically, falling back to the first paused one.
+  lms:
+    enabled: true
+    host: 192.168.1.33
+    port: 9000
+    player_id: ""        # e.g. "aa:bb:cc:dd:ee:ff" - see above
     timeout: 5           # per-request timeout, in seconds
 
   # Plex Media Server.
@@ -511,7 +525,8 @@ outputs:
   #
   # media_type values: music, movie, episode
   # source values: kodi, plex, jellyfin, emby, sonos, spotify, mopidy, mpd,
-  #                vinyl, appletv, homeassistant, youtube, shield, chromecast
+  #                lms, vinyl, appletv, homeassistant, youtube, shield,
+  #                chromecast
   # active_hours: "HH:MM-HH:MM" local time; wrap-around supported
   #   e.g. "22:00-06:00" is active from 22:00 through 06:00 the next morning
   # ---------------------------------------------------------------------------
