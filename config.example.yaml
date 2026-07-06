@@ -59,6 +59,7 @@ priority:
   - plex
   - sonos
   - spotify
+  - mopidy
   - vinyl
   - chromecast
 
@@ -108,6 +109,16 @@ sources:
     port: 8080               # Kodi's HTTP API port (Settings → Services → Control)
     username: kodi           # HTTP API username (leave blank if auth is off)
     password: kodi           # HTTP API password
+
+  # Mopidy music server (https://mopidy.com/) - reads now-playing info via
+  # its core JSON-RPC API, over the same HTTP port as its web interface.
+  # Backend-agnostic: works the same whether Mopidy is actually playing via
+  # Mopidy-Spotify, local files, Mopidy-Subsonic, or any other backend.
+  mopidy:
+    enabled: true
+    host: 192.168.1.31   # IP of the machine running Mopidy
+    port: 6680
+    timeout: 5           # per-request timeout, in seconds
 
   # Plex Media Server.
   # See https://support.plex.tv/articles/204059436 to find your token.
@@ -487,7 +498,7 @@ outputs:
   #   idle_when_filtered: true
   #
   # media_type values: music, movie, episode
-  # source values: kodi, plex, jellyfin, emby, sonos, spotify, vinyl,
+  # source values: kodi, plex, jellyfin, emby, sonos, spotify, mopidy, vinyl,
   #                appletv, homeassistant, youtube, shield, chromecast
   # active_hours: "HH:MM-HH:MM" local time; wrap-around supported
   #   e.g. "22:00-06:00" is active from 22:00 through 06:00 the next morning

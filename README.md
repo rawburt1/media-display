@@ -14,7 +14,9 @@ Currently implemented:
 - **Sources**: Kodi (movie/episode posters+fanart, music), Plex (movie/episode
   posters+fanart, music), Jellyfin and Emby (movie/episode posters+fanart,
   music, via the Sessions API), Sonos (album art), Spotify (current playback
-  via the Web API), Apple TV (any app, via the Companion/MRP/AirPlay
+  via the Web API), Mopidy (music, via its core JSON-RPC API - backend-
+  agnostic, works the same regardless of which Mopidy backend is actually
+  playing), Apple TV (any app, via the Companion/MRP/AirPlay
   protocols), **the YouTube *app* on Android TV** (⚠️ not YouTube in
   general - this works only via ADB against an actual Android TV device
   running the YouTube app, e.g. an Nvidia Shield; it cannot see YouTube
