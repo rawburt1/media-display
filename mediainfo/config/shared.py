@@ -109,3 +109,30 @@ class LoggingConfig:
     max_bytes: int = 1_000_000
     # Number of rotated backup files to keep.
     backup_count: int = 3
+
+
+@dataclasses.dataclass
+class MediaDataRefreshConfig:
+    # When False, cached artwork is used forever once fetched - never
+    # checked for staleness (still fetched once if missing). See
+    # mediainfo/media_data_store.py.
+    enabled: bool = True
+    movies_days: int = 180
+    series_days: int = 30
+    # Longer than movies/series - a released album's art essentially never
+    # changes, unlike a still-airing TV series' poster/fanart.
+    music_days: int = 365
+
+
+@dataclasses.dataclass
+class MediaDataConfig:
+    # Foundation for a future unified on-disk artwork/lyrics/metadata cache
+    # (see mediainfo/media_data_store.py) - not yet wired into the running
+    # app; nothing reads this config today.
+    path: str = "./mediadata"
+    # Whether to prefer the local cache over an external re-check - True
+    # (the default) means cached content is served immediately even when
+    # stale; a refresh (see `refresh` below) happens (or is attempted)
+    # afterwards rather than blocking the caller.
+    cache_first: bool = True
+    refresh: MediaDataRefreshConfig = dataclasses.field(default_factory=MediaDataRefreshConfig)
