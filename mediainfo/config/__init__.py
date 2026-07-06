@@ -19,6 +19,7 @@ import yaml
 
 from mediainfo.config.enrichers import (
     ENRICHER_CONFIG_TYPES,
+    AiArtworkConfig,
     DiscogsConfig,
     FanartTvConfig,
     FingerprintConfig,
@@ -88,6 +89,7 @@ from mediainfo.config.text_enrichers import (
 )
 
 __all__ = [
+    "AiArtworkConfig",
     "AlertConfig",
     "AppleTvConfig",
     "AuthConfig",

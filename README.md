@@ -612,6 +612,14 @@ See `config.example.yaml` for all options. Key things to fill in:
   just one). List it before the other music enrichers in `enrichers:` so
   that if it fills in the album name unambiguously, they get a chance to
   also contribute art for it.
+- **`enrichers.ai_artwork`**: optional, off by default. Generates an
+  album-art-style image for the playing song via a local Stable-
+  Diffusion-WebUI-API-compatible instance (`host`/`port` -
+  AUTOMATIC1111 and most SD/SDXL forks; not ComfyUI, whose API is
+  shaped differently). Prompted from a short mood (if
+  `text_enrichers.ollama_text` populated one) and/or genre - never from
+  lyrics. Generated images are cached per song under
+  `cache.dir/ai_artwork`, so a song is only ever generated once.
 - **`text_enrichers.lrclib`**: no API key required (free public
   https://lrclib.net API). Looks up plain and time-synced lyrics for the
   currently playing music track (`NowPlaying.lyrics`/`synced_lyrics`),

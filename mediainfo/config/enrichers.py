@@ -130,9 +130,27 @@ class SvtConfig:
     sonarr_api_key: str = ""
 
 
+@dataclasses.dataclass
+class AiArtworkConfig:
+    # Off by default - requires a local Stable-Diffusion-WebUI-API-
+    # compatible instance the user has set up (and loaded a checkpoint
+    # into) themselves; see mediainfo/enrichers/ai_artwork.py.
+    enabled: bool = False
+    host: str = "localhost"
+    port: int = 7860
+    steps: int = 20
+    width: int = 512
+    height: int = 512
+    # Image generation can be slow depending on model/steps/hardware; this
+    # bounds how long one enrichment call may block the orchestrator's
+    # tick loop before giving up (see the enricher's module docstring).
+    timeout_seconds: int = 120
+
+
 # Registry mapping config section names to their dataclass types. Adding a
 # new enricher starts here.
 ENRICHER_CONFIG_TYPES: dict[str, type] = {
+    "ai_artwork": AiArtworkConfig,
     "discogs": DiscogsConfig,
     "fanarttv": FanartTvConfig,
     "fingerprint": FingerprintConfig,

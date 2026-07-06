@@ -69,6 +69,8 @@ def build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> l
             continue
         if name in registries.LIBRARY_AWARE_ENRICHER_NAMES:
             enrichers.append(enricher_cls(enricher_config, library))
+        elif name in registries.CACHE_AWARE_ENRICHER_NAMES:
+            enrichers.append(enricher_cls(enricher_config, Path(config.cache.dir) / "ai_artwork"))
         else:
             enrichers.append(enricher_cls(enricher_config))
     return enrichers

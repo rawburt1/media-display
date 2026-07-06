@@ -69,6 +69,7 @@ OUTPUT_EXTRA_ARGS = {
 }
 
 ENRICHER_CLASSES: dict[str, Union[str, type]] = {
+    "ai_artwork": "mediainfo.enrichers.ai_artwork.AiArtworkEnricher",
     "discogs": "mediainfo.enrichers.discogs.DiscogsEnricher",
     "fanarttv": "mediainfo.enrichers.fanarttv.FanartTvEnricher",
     "fingerprint": "mediainfo.enrichers.fingerprint.FingerprintEnricher",
@@ -112,6 +113,10 @@ LIBRARY_AWARE_IDLE_NAMES = {"library"}
 LIBRARY_AWARE_ENRICHER_NAMES = {
     "discogs", "fanarttv", "lastfm", "library", "musicbrainz",
 }
+
+# Enrichers that need a local directory to cache generated (rather than
+# downloaded) content into, by registry key - see wiring.build_enrichers().
+CACHE_AWARE_ENRICHER_NAMES = {"ai_artwork"}
 
 # Config attributes to include per output type in the /health response.
 OUTPUT_DETAIL_FIELDS: dict = {

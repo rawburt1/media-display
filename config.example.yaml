@@ -700,6 +700,22 @@ enrichers:
     enabled: true
     api_key: YOUR_OMDB_API_KEY
 
+  # AI-generated artwork — optional, off by default. Generates an album-
+  # art-style image via a local Stable-Diffusion-WebUI-API-compatible
+  # instance (AUTOMATIC1111 and most SD/SDXL forks; ComfyUI is NOT
+  # supported - different API shape). Prompted from a short mood/genre
+  # description only - never from lyrics. Adds to the artwork rotation
+  # pool alongside whatever else was found; generated images are cached
+  # per song under cache.dir/ai_artwork so they're only generated once.
+  ai_artwork:
+    enabled: false
+    host: localhost
+    port: 7860
+    steps: 20
+    width: 512
+    height: 512
+    timeout_seconds: 120
+
 
 # ---------------------------------------------------------------------------
 # Text enrichers (lyrics, AI-generated text) - added to
