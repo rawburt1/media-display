@@ -3,7 +3,7 @@ metadata cache, not yet wired into the live app (see the module's own
 docstring)."""
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from mediainfo.config import MediaDataConfig, MediaDataRefreshConfig
 from mediainfo.media_data_store import MediaDataStore
@@ -328,3 +328,188 @@ def test_resolve_artwork_with_max_age_none_never_refetches_once_present(tmp_path
 
     fetch_fn.assert_not_called()
     assert result.read_bytes() == b"old-bytes"
+
+
+# ---------------------------------------------------------------------------
+# Movies
+# ---------------------------------------------------------------------------
+
+def test_get_movie_poster_fetches_when_missing(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_movie_artwork", return_value=(b"poster-bytes", "tmdb")) as fetch:
+        result = store.get_movie_poster("Alien", 1979)
+
+    assert result == store.movie_dir("Alien", 1979) / "poster.jpg"
+    assert result.read_bytes() == b"poster-bytes"
+    fetch.assert_called_once_with("Alien", 1979, "poster")
+
+
+def test_get_movie_fanart_uses_a_separate_file_from_poster(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_movie_artwork", return_value=(b"fanart-bytes", "tmdb")):
+        result = store.get_movie_fanart("Alien", 1979)
+
+    assert result == store.movie_dir("Alien", 1979) / "fanart.jpg"
+
+
+def test_fetch_movie_artwork_stub_returns_none(tmp_path):
+    store = _store(tmp_path)
+    assert store._fetch_movie_artwork("Alien", 1979, "poster") is None
+
+
+def test_refresh_movie_forces_fetch_even_when_fresh(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=1)
+    _seed_stale_entry(store, item_dir, "fanart.jpg", "fanart", days_old=1)
+
+    with patch.object(
+        store, "_fetch_movie_artwork", return_value=(b"refreshed", "tmdb"),
+    ) as fetch:
+        updated = store.refresh_movie("Alien", 1979)
+
+    assert fetch.call_count == 2  # poster + fanart, despite both being fresh
+    assert updated is True
+    assert (item_dir / "poster.jpg").read_bytes() == b"refreshed"
+
+
+def test_refresh_movie_returns_false_when_stub_finds_nothing(tmp_path):
+    store = _store(tmp_path)
+    updated = store.refresh_movie("Alien", 1979)  # real stub, always None
+    assert updated is False
+
+
+# ---------------------------------------------------------------------------
+# Series
+# ---------------------------------------------------------------------------
+
+def test_get_series_poster_fetches_when_missing(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_series_artwork", return_value=(b"poster-bytes", "tvdb")) as fetch:
+        result = store.get_series_poster("Zero Day", 2025)
+
+    assert result == store.series_dir("Zero Day", 2025) / "poster.jpg"
+    fetch.assert_called_once_with("Zero Day", 2025, "poster")
+
+
+def test_refresh_series_forces_fetch_even_when_fresh(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.series_dir("Zero Day", 2025)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=1)
+    _seed_stale_entry(store, item_dir, "fanart.jpg", "fanart", days_old=1)
+
+    with patch.object(store, "_fetch_series_artwork", return_value=(b"refreshed", "tvdb")) as fetch:
+        updated = store.refresh_series("Zero Day", 2025)
+
+    assert fetch.call_count == 2
+    assert updated is True
+
+
+def test_series_uses_series_days_refresh_policy_not_movies(tmp_path):
+    """Series refreshes more often (30d default) than movies (180d) -
+    confirm get_series_poster checks staleness against series_days."""
+    store = _store(tmp_path)
+    item_dir = store.series_dir("Zero Day", 2025)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=45)  # stale for series, not movies
+
+    with patch.object(store, "_fetch_series_artwork", return_value=(b"new", "tvdb")) as fetch:
+        store.get_series_poster("Zero Day", 2025)
+
+    fetch.assert_called_once()  # would NOT have refetched at the movies_days=180 policy
+
+
+# ---------------------------------------------------------------------------
+# Music
+# ---------------------------------------------------------------------------
+
+def test_get_album_art_fetches_when_missing(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(
+        store, "_fetch_album_artwork", return_value=(b"art-bytes", "musicbrainz"),
+    ) as fetch:
+        result = store.get_album_art("Led Zeppelin", "Houses of the Holy", 1973)
+
+    assert result == store.album_dir("Led Zeppelin", "Houses of the Holy", 1973) / "albumart.jpg"
+    fetch.assert_called_once_with("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
+
+
+def test_refresh_album_forces_fetch_even_when_fresh(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.album_dir("Led Zeppelin", "Houses of the Holy", 1973)
+    _seed_stale_entry(store, item_dir, "albumart.jpg", "albumart", days_old=1)
+    _seed_stale_entry(store, item_dir, "fanart.jpg", "fanart", days_old=1)
+
+    with patch.object(store, "_fetch_album_artwork", return_value=(b"refreshed", "fanarttv")) as fetch:
+        updated = store.refresh_album("Led Zeppelin", "Houses of the Holy", 1973)
+
+    assert fetch.call_count == 2
+    assert updated is True
+
+
+def test_album_uses_music_days_refresh_policy(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.album_dir("Led Zeppelin", "Houses of the Holy", 1973)
+    # Stale for movies (180d)/series (30d) but not for music (365d default).
+    _seed_stale_entry(store, item_dir, "albumart.jpg", "albumart", days_old=200)
+
+    with patch.object(store, "_fetch_album_artwork") as fetch:
+        store.get_album_art("Led Zeppelin", "Houses of the Holy", 1973)
+
+    fetch.assert_not_called()  # still fresh under the 365-day music policy
+
+
+# ---------------------------------------------------------------------------
+# _relocate_to_year_dir
+# ---------------------------------------------------------------------------
+
+def test_relocate_to_year_dir_moves_files(tmp_path):
+    store = _store(tmp_path)
+    old_dir = store.movie_dir("Alien", None)
+    new_dir = store.movie_dir("Alien", 1979)
+    old_dir.mkdir(parents=True)
+    (old_dir / "poster.jpg").write_bytes(b"poster-bytes")
+    store._write_metadata(old_dir, {"title": "Alien", "year": None})
+
+    store._relocate_to_year_dir(old_dir, new_dir)
+
+    assert not old_dir.exists()
+    assert (new_dir / "poster.jpg").read_bytes() == b"poster-bytes"
+    assert store._read_metadata(new_dir)["year"] is None  # merged as-is; caller updates year
+
+
+def test_relocate_to_year_dir_merges_into_existing_destination_metadata(tmp_path):
+    store = _store(tmp_path)
+    old_dir = store.movie_dir("Alien", None)
+    new_dir = store.movie_dir("Alien", 1979)
+    old_dir.mkdir(parents=True)
+    (old_dir / "poster.jpg").write_bytes(b"old-poster")
+    store._write_metadata(old_dir, {"artwork": {"poster": {"path": "poster.jpg"}}})
+    new_dir.mkdir(parents=True)
+    store._write_metadata(new_dir, {"external_ids": {"tmdb": "348"}})
+
+    store._relocate_to_year_dir(old_dir, new_dir)
+
+    merged = store._read_metadata(new_dir)
+    assert merged["external_ids"] == {"tmdb": "348"}
+    assert merged["artwork"]["poster"]["path"] == "poster.jpg"
+
+
+def test_relocate_to_year_dir_is_noop_when_old_dir_missing(tmp_path):
+    store = _store(tmp_path)
+    old_dir = store.movie_dir("Alien", None)
+    new_dir = store.movie_dir("Alien", 1979)
+
+    store._relocate_to_year_dir(old_dir, new_dir)  # must not raise
+
+    assert not new_dir.exists()
+
+
+def test_relocate_to_year_dir_is_noop_when_dirs_are_identical(tmp_path):
+    store = _store(tmp_path)
+    same_dir = store.movie_dir("Alien", 1979)
+    same_dir.mkdir(parents=True)
+    (same_dir / "poster.jpg").write_bytes(b"poster-bytes")
+
+    store._relocate_to_year_dir(same_dir, same_dir)  # must not raise or delete anything
+
+    assert (same_dir / "poster.jpg").read_bytes() == b"poster-bytes"

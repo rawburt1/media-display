@@ -157,6 +157,7 @@ class MediaDataStore:
         metadata_key: str,
         max_age_days: Optional[int],
         fetch_fn: Callable[[], FetchResult],
+        force: bool = False,
     ) -> Optional[Path]:
         """Shared cache-first/refresh algorithm for one piece of content
         (an artwork file, or - via get_track_lyrics - a lyrics file) living
@@ -167,11 +168,12 @@ class MediaDataStore:
           on success, None if fetch_fn found nothing.
         - Present and not stale (or config.refresh.enabled is False):
           returns the local path immediately, without calling fetch_fn().
-        - Present but stale: calls fetch_fn() synchronously (see the
-          TODO below), always returns the *existing* local path right
-          away regardless of the fetch's outcome - a slow/failed refresh
-          never blocks or breaks the current call, it only affects what
-          the *next* call sees.
+        - Present but stale, OR `force=True` (the manual refresh_*() API -
+          forces an attempt regardless of freshness/config.refresh.enabled):
+          calls fetch_fn() synchronously (see the TODO below), always
+          returns the *existing* local path right away regardless of the
+          fetch's outcome - a slow/failed refresh never blocks or breaks
+          the current call, it only affects what the *next* call sees.
         """
         path = item_dir / filename
         with self._lock:
@@ -180,10 +182,11 @@ class MediaDataStore:
             entry = artwork.get(metadata_key)
 
             if path.exists():
-                if not self.config.refresh.enabled:
-                    return path
-                if not self._is_stale(entry or {}, max_age_days):
-                    return path
+                if not force:
+                    if not self.config.refresh.enabled:
+                        return path
+                    if not self._is_stale(entry or {}, max_age_days):
+                        return path
 
                 # TODO(async-refresh): this blocks the caller until fetch_fn
                 # returns. A future version should hand this off to a
@@ -217,3 +220,165 @@ class MediaDataStore:
             }
             self._write_metadata(item_dir, metadata)
             return path
+
+    def _was_updated_by(self, item_dir: Path, metadata_key: str, action: Callable[[], Any]) -> bool:
+        """Run `action` (a _resolve_artwork(..., force=True) call) and
+        report whether it actually changed metadata_key's last_updated -
+        used by the public refresh_*() methods to return a plain bool
+        without _resolve_artwork itself needing a different return type
+        for its regular (non-force) callers."""
+        before = (self._read_metadata(item_dir).get("artwork", {}).get(metadata_key) or {}).get(
+            "last_updated"
+        )
+        action()
+        after = (self._read_metadata(item_dir).get("artwork", {}).get(metadata_key) or {}).get(
+            "last_updated"
+        )
+        return after != before
+
+    # -- movies ---------------------------------------------------------
+
+    def get_movie_poster(self, title: str, year: Optional[int]) -> Optional[Path]:
+        item_dir = self.movie_dir(title, year)
+        return self._resolve_artwork(
+            item_dir, "poster.jpg", "poster", self.config.refresh.movies_days,
+            lambda: self._fetch_movie_artwork(title, year, "poster"),
+        )
+
+    def get_movie_fanart(self, title: str, year: Optional[int]) -> Optional[Path]:
+        item_dir = self.movie_dir(title, year)
+        return self._resolve_artwork(
+            item_dir, "fanart.jpg", "fanart", self.config.refresh.movies_days,
+            lambda: self._fetch_movie_artwork(title, year, "fanart"),
+        )
+
+    def refresh_movie(self, title: str, year: Optional[int]) -> bool:
+        """Force a refresh attempt for both poster and fanart, regardless
+        of freshness - e.g. for a future config UI "Refresh poster"/
+        "Refresh fanart" button. Returns True if at least one was
+        actually updated."""
+        item_dir = self.movie_dir(title, year)
+        updated = False
+        for filename, key in (("poster.jpg", "poster"), ("fanart.jpg", "fanart")):
+            changed = self._was_updated_by(
+                item_dir, key,
+                lambda: self._resolve_artwork(
+                    item_dir, filename, key, self.config.refresh.movies_days,
+                    lambda: self._fetch_movie_artwork(title, year, key),
+                    force=True,
+                ),
+            )
+            updated = updated or changed
+        return updated
+
+    def _fetch_movie_artwork(self, title: str, year: Optional[int], kind: str) -> FetchResult:
+        """STUB - always returns None (no update available). A real
+        implementation would call an artwork API (e.g. TMDB/fanart.tv)
+        here for `kind` ("poster" or "fanart") - deliberately not done in
+        this pass, see the module docstring."""
+        return None
+
+    # -- series (mirrors movies) ------------------------------------------
+
+    def get_series_poster(self, title: str, year: Optional[int]) -> Optional[Path]:
+        item_dir = self.series_dir(title, year)
+        return self._resolve_artwork(
+            item_dir, "poster.jpg", "poster", self.config.refresh.series_days,
+            lambda: self._fetch_series_artwork(title, year, "poster"),
+        )
+
+    def get_series_fanart(self, title: str, year: Optional[int]) -> Optional[Path]:
+        item_dir = self.series_dir(title, year)
+        return self._resolve_artwork(
+            item_dir, "fanart.jpg", "fanart", self.config.refresh.series_days,
+            lambda: self._fetch_series_artwork(title, year, "fanart"),
+        )
+
+    def refresh_series(self, title: str, year: Optional[int]) -> bool:
+        """Force a refresh attempt for both poster and fanart, regardless
+        of freshness. Returns True if at least one was actually updated."""
+        item_dir = self.series_dir(title, year)
+        updated = False
+        for filename, key in (("poster.jpg", "poster"), ("fanart.jpg", "fanart")):
+            changed = self._was_updated_by(
+                item_dir, key,
+                lambda: self._resolve_artwork(
+                    item_dir, filename, key, self.config.refresh.series_days,
+                    lambda: self._fetch_series_artwork(title, year, key),
+                    force=True,
+                ),
+            )
+            updated = updated or changed
+        return updated
+
+    def _fetch_series_artwork(self, title: str, year: Optional[int], kind: str) -> FetchResult:
+        """STUB - always returns None. See _fetch_movie_artwork."""
+        return None
+
+    # -- music ------------------------------------------------------------
+
+    def get_album_art(self, artist: str, album: str, year: Optional[int]) -> Optional[Path]:
+        item_dir = self.album_dir(artist, album, year)
+        return self._resolve_artwork(
+            item_dir, "albumart.jpg", "albumart", self.config.refresh.music_days,
+            lambda: self._fetch_album_artwork(artist, album, year, "albumart"),
+        )
+
+    def get_album_fanart(self, artist: str, album: str, year: Optional[int]) -> Optional[Path]:
+        item_dir = self.album_dir(artist, album, year)
+        return self._resolve_artwork(
+            item_dir, "fanart.jpg", "fanart", self.config.refresh.music_days,
+            lambda: self._fetch_album_artwork(artist, album, year, "fanart"),
+        )
+
+    def refresh_album(self, artist: str, album: str, year: Optional[int]) -> bool:
+        """Force a refresh attempt for both album art and fanart,
+        regardless of freshness. Returns True if at least one was
+        actually updated."""
+        item_dir = self.album_dir(artist, album, year)
+        updated = False
+        for filename, key in (("albumart.jpg", "albumart"), ("fanart.jpg", "fanart")):
+            changed = self._was_updated_by(
+                item_dir, key,
+                lambda: self._resolve_artwork(
+                    item_dir, filename, key, self.config.refresh.music_days,
+                    lambda: self._fetch_album_artwork(artist, album, year, key),
+                    force=True,
+                ),
+            )
+            updated = updated or changed
+        return updated
+
+    def _fetch_album_artwork(
+        self, artist: str, album: str, year: Optional[int], kind: str
+    ) -> FetchResult:
+        """STUB - always returns None. A real implementation would call
+        MusicBrainz/fanart.tv/discogs here for `kind` ("albumart" or
+        "fanart") - see the module docstring."""
+        return None
+
+    # -- year-discovered-later migration ----------------------------------
+
+    def _relocate_to_year_dir(self, old_dir: Path, new_dir: Path) -> None:
+        """Move an existing no-year directory's contents into the year'd
+        directory once a fetch reveals the year - merges into an existing
+        metadata.json at the destination (if any) rather than clobbering
+        it, with the moved-in fields taking precedence. No-op if old_dir
+        doesn't exist or old_dir == new_dir.
+        """
+        if old_dir == new_dir or not old_dir.exists():
+            return
+        with self._lock:
+            old_metadata = self._read_metadata(old_dir)
+            new_metadata = self._read_metadata(new_dir)
+            new_dir.mkdir(parents=True, exist_ok=True)
+            for item in old_dir.iterdir():
+                if item.name == _METADATA_FILENAME:
+                    # Merged into new_dir's metadata.json below instead of
+                    # moved as-is - removed so old_dir ends up empty.
+                    item.unlink()
+                    continue
+                item.replace(new_dir / item.name)
+            merged = {**new_metadata, **old_metadata}
+            self._write_metadata(new_dir, merged)
+            old_dir.rmdir()
