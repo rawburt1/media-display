@@ -48,6 +48,17 @@ class KodiConfig:
 
 
 @dataclasses.dataclass
+class MopidyConfig:
+    enabled: bool = False
+    # Mopidy's HTTP host/port - the same one serving its web interface (and
+    # the /mopidy/rpc JSON-RPC endpoint this source actually talks to).
+    host: str = "localhost"
+    port: int = 6680
+    # Per-request timeout, in seconds.
+    timeout: float = 5.0
+
+
+@dataclasses.dataclass
 class SonosConfig:
     enabled: bool = False
     # IP address(es) of Sonos speakers on your network, used as discovery
@@ -167,6 +178,7 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
     "homeassistant": HomeAssistantConfig,
     "jellyfin": JellyfinConfig,
     "kodi": KodiConfig,
+    "mopidy": MopidyConfig,
     "plex": PlexConfig,
     "shield": ShieldConfig,
     "sonos": SonosConfig,

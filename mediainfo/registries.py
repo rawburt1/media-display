@@ -27,6 +27,7 @@ SOURCE_CLASSES: dict[str, Union[str, type]] = {
     "homeassistant": "mediainfo.sources.homeassistant.HomeAssistantSource",
     "jellyfin": "mediainfo.sources.jellyfin.JellyfinSource",
     "kodi": "mediainfo.sources.kodi.KodiSource",
+    "mopidy": "mediainfo.sources.mopidy.MopidySource",
     "plex": "mediainfo.sources.plex.PlexSource",
     "shield": "mediainfo.sources.shield.ShieldSource",
     "sonos": "mediainfo.sources.sonos.SonosSource",

@@ -60,6 +60,10 @@ class NowPlaying:
     # in "Artist - Title" form) - lets Wikipedia and Last.fm look up artist
     # photos for SVT concert broadcasts without the media_type being "music".
     artist: str = ""
+    # Player/device name, for sources that can distinguish between several
+    # (e.g. which Logitech Media Server player, or which Spotify Connect
+    # device) - purely informational today (not read by any output yet).
+    device: str = ""
     # Audience rating (0-10), e.g. from the TMDb enricher.
     rating: Optional[float] = None
     # How far into the track/episode playback currently is, and its total
