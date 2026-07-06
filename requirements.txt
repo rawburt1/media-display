@@ -11,6 +11,9 @@ flask-sock~=0.7.0
 pyatv~=0.17.0
 ruamel.yaml~=0.19.1
 pydantic~=2.13.4
+# MPD source (mediainfo/sources/mpd.py) - a small, mature client for MPD's
+# own text protocol, so this codebase doesn't have to own protocol parsing.
+python-mpd2~=3.1.1
 # Optional Pixoo text-detection stage (mediainfo/text_removal.py) - only
 # exercised when outputs.pixoo.text_detection_enabled is set, but always
 # installed (matches this project's flat-requirements convention - no
