@@ -293,8 +293,13 @@ See `config.example.yaml` for all options. Key things to fill in:
   `python -m mediainfo auth spotify --config config.yaml` (or
   `docker compose run --rm mediainfo python -m mediainfo auth spotify
   --config config/config.yaml`), which opens a login flow and caches the
-  token at `cache_path`. Only reports playback on the account that's
-  actively listening.
+  token at `cache_path`. Reports whichever device is actively playing
+  account-wide (Spotify Connect), including device name and playback
+  progress. **If you authorized before this device/progress support was
+  added**, re-run the `auth spotify` command above once - the cached token
+  needs the broader `user-read-playback-state` scope now, and a stale one
+  is rejected with a log message telling you to redo this step rather than
+  a cryptic API error.
 - **`sources.appletv`**: `host` is the Apple TV's IP/hostname. Pair once
   with `python -m mediainfo auth appletv --config config.yaml` (or the
   `docker compose run` equivalent, with `--config config/config.yaml`)
