@@ -185,6 +185,7 @@ _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
         "jellyfin": {"label": "Jellyfin", "description": "Reads now-playing sessions from a Jellyfin media server."},
         "kodi": {"label": "Kodi", "description": "Reads now-playing info from a Kodi media center over its JSON-RPC API."},
         "mopidy": {"label": "Mopidy", "description": "Reads now-playing info from a Mopidy music server over its JSON-RPC API - works regardless of which Mopidy backend (Spotify, local files, ...) is actually playing."},
+        "mpd": {"label": "MPD (Music Player Daemon)", "description": "Reads now-playing info from an MPD server, and its embedded/folder cover art when available."},
         "plex": {"label": "Plex", "description": "Reads now-playing sessions from a Plex Media Server."},
         "shield": {"label": "Nvidia Shield (Android TV)", "description": "Reads the foreground app on an Android TV device (e.g. Nvidia Shield) over ADB."},
         "sonos": {"label": "Sonos", "description": "Reads what's playing on Sonos speakers on your network."},

@@ -59,6 +59,17 @@ class MopidyConfig:
 
 
 @dataclasses.dataclass
+class MpdConfig:
+    enabled: bool = False
+    host: str = "localhost"
+    port: int = 6600
+    # Leave blank if MPD_PASSWORD (or requirepass) isn't configured.
+    password: str = ""
+    # Per-request timeout, in seconds.
+    timeout: float = 5.0
+
+
+@dataclasses.dataclass
 class SonosConfig:
     enabled: bool = False
     # IP address(es) of Sonos speakers on your network, used as discovery
@@ -179,6 +190,7 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
     "jellyfin": JellyfinConfig,
     "kodi": KodiConfig,
     "mopidy": MopidyConfig,
+    "mpd": MpdConfig,
     "plex": PlexConfig,
     "shield": ShieldConfig,
     "sonos": SonosConfig,
