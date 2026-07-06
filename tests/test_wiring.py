@@ -163,6 +163,25 @@ def test_build_enrichers_passes_library_to_library_aware_enrichers():
     assert result == [fake_cls.return_value]
 
 
+def test_build_enrichers_passes_cache_dir_to_cache_aware_enrichers():
+    enc_cfg = MagicMock()
+    enc_cfg.enabled = True
+    fake_cls = MagicMock(return_value=MagicMock())
+    cfg = _minimal_config(enrichers={"ai_artwork": enc_cfg})
+
+    with (
+        patch("mediainfo.registries.ENRICHER_CLASSES", {"ai_artwork": fake_cls}),
+        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHER_NAMES", set()),
+        patch("mediainfo.registries.CACHE_AWARE_ENRICHER_NAMES", {"ai_artwork"}),
+    ):
+        result = build_enrichers(cfg)
+
+    args, _ = fake_cls.call_args
+    assert args[0] is enc_cfg
+    assert args[1] == Path(cfg.cache.dir) / "ai_artwork"
+    assert result == [fake_cls.return_value]
+
+
 # ---------------------------------------------------------------------------
 # build_text_enrichers (roadmap item 7 foundation - no real plugin yet)
 # ---------------------------------------------------------------------------
