@@ -8,7 +8,7 @@ import logging
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, Literal, Optional, Union
+from typing import Callable, Dict, Literal, Optional, Union
 from urllib.parse import urlparse
 
 import requests
@@ -231,6 +231,37 @@ class ImageCache:
 
         out_path = base_dir / f"{key}.jpg"
         img.convert("RGB").save(out_path, format="JPEG", quality=95)
+        return out_path
+
+    def get_derived_path(
+        self,
+        original_path: Path,
+        cache_key: str,
+        build: Callable[[Image.Image], Image.Image],
+    ) -> Path:
+        """Return a path to a derived image, built by `build` and cached on
+        disk keyed by (original stem, cache_key) - same cache-hit scheme as
+        get_transformed_path, but for callers whose derivation isn't a
+        Transform pipeline (e.g. Pixoo's LED-preparation pipeline).
+
+        Saved as PNG rather than JPEG: this is meant for small,
+        palette-reduced pixel-art-style output, where JPEG's lossy 8x8 DCT
+        blocks would smear a handful of exact colours together and
+        reintroduce colours outside the reduced palette. `cache_key` should
+        already reflect every setting that affects `build`'s output (plus a
+        version marker for the build logic itself), since it's the sole
+        cache-invalidation signal here.
+        """
+        base_dir = original_path.parent
+        key = f"{original_path.stem}_{cache_key}"
+        existing = self._find_existing(key, base_dir)
+        if existing is not None:
+            return existing
+
+        image = build(Image.open(original_path))
+
+        out_path = base_dir / f"{key}.png"
+        image.save(out_path, format="PNG")
         return out_path
 
     def purge_expired(self) -> None:

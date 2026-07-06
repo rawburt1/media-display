@@ -300,6 +300,10 @@ _ENUM_CHOICES: Dict[str, List[str]] = {
     "ui": ["form", "dashboard"],
     "level": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     "source": ["pexels", "pixabay"],
+    "crop_strategy": ["automatic", "center", "poster_top"],
+    "dithering": ["none", "ordered", "floyd_steinberg"],
+    "contrast_boost": ["off", "low", "medium", "high"],
+    "saturation_boost": ["off", "low", "medium", "high"],
 }
 
 # Generic help text shared by fields of the same name across many plugin
@@ -332,6 +336,13 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "sources.youtube.adb_key_path": "Generated automatically on first run if missing. Use a different key file than sources.shield if pointed at the same device.",
     "outputs.pixoo.size": "64 for the Pixoo64 (most common), 16 for the 16×16 Pixel Art LED Frame.",
     "outputs.pixoo.screen_off_hours": "Turn the panel off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
+    "outputs.pixoo.crop_strategy": "How to pick the square crop before downscaling. \"automatic\" biases toward the top third for portrait sources (posters/covers) and centers otherwise.",
+    "outputs.pixoo.palette_size": "Number of colours in the final image's palette. Lower (8-16) gives bolder pixel-art blocks; higher (24-32) allows subtler gradients.",
+    "outputs.pixoo.dithering": "\"none\" gives bold, clean colour blocks (recommended for small displays). \"ordered\" is subtler; \"floyd_steinberg\" is heavier and can look noisy at 16×16.",
+    "outputs.pixoo.contrast_boost": "Contrast applied before downscaling, so colours stay punchy at low resolution.",
+    "outputs.pixoo.saturation_boost": "Saturation applied before downscaling.",
+    "outputs.pixoo.dark_image_boost": "Lift brightness on naturally dark artwork so it isn't mostly black on the LEDs.",
+    "outputs.pixoo.pixel_art_mode": "Downsample in two stages for crisp, intentional pixel blocks instead of a single blurrier resize.",
     "outputs.ulanzi.screen_off_hours": "Turn the display off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
     "outputs.mqtt.ha_discovery": "Automatically add a mediainfo device with now-playing sensors to Home Assistant.",
     "outputs.mqtt.qos": "0 = at most once, 1 = at least once, 2 = exactly once. 0 is fine for most setups.",

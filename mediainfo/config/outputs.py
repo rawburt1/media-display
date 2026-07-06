@@ -67,6 +67,34 @@ class PixooConfig(_OutputFilterMixin):
     # wins; outside all windows the brightness is left alone. Level is
     # the Pixoo's native 0-100 range.
     brightness_schedule: list = dataclasses.field(default_factory=list)
+    # How to pick the square crop before downscaling. "automatic" (default)
+    # biases toward the top third for portrait sources (where poster faces/
+    # titles usually sit) and centers otherwise; "center" always centers;
+    # "poster_top" always biases toward the top (a no-op for
+    # landscape/square sources). See mediainfo/led_image.py.
+    crop_strategy: str = "automatic"
+    # Number of colours in the final LED image's palette. Lower = bolder,
+    # more "pixel art" blocks of colour; higher = more subtle gradients.
+    palette_size: int = 24
+    # Dithering applied during palette reduction: "none" (bold, clean
+    # blocks - the default), "ordered" (subtle, structured), or
+    # "floyd_steinberg" (heavier, can look noisy at 16x16).
+    dithering: str = "none"
+    # Contrast boost applied before downscaling: "off", "low", "medium"
+    # (default, matches this pipeline's original hardcoded boost), "high".
+    contrast_boost: str = "medium"
+    # Saturation boost applied before downscaling: "off", "low", "medium"
+    # (default), "high".
+    saturation_boost: str = "medium"
+    # Lift brightness on naturally dark source images so they don't render
+    # mostly-black on the LEDs. Conservative and capped - see
+    # mediainfo/led_image.py.
+    dark_image_boost: bool = True
+    # When enabled (default), downsample in two stages (LANCZOS to an
+    # intermediate size, then nearest-neighbour to the final size) so the
+    # result reads as intentional pixel art rather than a blurred photo.
+    # When disabled, a single LANCZOS pass produces smoother output.
+    pixel_art_mode: bool = True
 
 
 @dataclasses.dataclass

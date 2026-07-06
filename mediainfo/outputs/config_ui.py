@@ -110,6 +110,9 @@ for the pairing wizard itself.
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
+import json
 import logging
 import os
 import signal
@@ -118,6 +121,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from flask import Flask, jsonify, render_template, request, send_file
+from PIL import Image, UnidentifiedImageError
 
 from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
@@ -131,6 +135,7 @@ from mediainfo.config import (
     ConfigUiConfig,
 )
 from mediainfo.config_backup import list_backups
+from mediainfo.led_image import _crop_square, prepare_led_image
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.appletv_pairing import AppleTvPairingManager
@@ -615,6 +620,64 @@ class ConfigUiOutput(Output):
             type_name = body.get("type", "")
             ok, message = test_output(type_name, body)
             return jsonify({"ok": ok, "message": message})
+
+        @app.post("/api/preview/pixoo")
+        def preview_pixoo():
+            """Run an uploaded test image through mediainfo.led_image's
+            pipeline using the *currently-edited* form settings (sent as a
+            JSON string alongside the file, not read from config.yaml), so
+            changing a setting and previewing doesn't require saving first.
+            Returns the original/cropped/final/final-upscaled stages as
+            base64 PNGs for app.html's Pixoo instance card - see
+            mediainfo.led_image.prepare_led_image's docstring for what each
+            pipeline stage represents.
+            """
+            file = request.files.get("file")
+            if file is None or not file.filename:
+                return jsonify({"ok": False, "error": "An image file is required"}), 400
+
+            try:
+                original = Image.open(io.BytesIO(file.read())).convert("RGB")
+            except (UnidentifiedImageError, OSError):
+                return jsonify({"ok": False, "error": "Could not read that image"}), 400
+
+            settings = request.form.get("settings")
+            opts: Dict[str, Any] = {}
+            if settings:
+                try:
+                    opts = json.loads(settings)
+                except ValueError:
+                    return jsonify({"ok": False, "error": "Invalid settings"}), 400
+
+            size = int(opts.get("size", 64))
+            crop_strategy = opts.get("crop_strategy", "automatic")
+
+            cropped = _crop_square(original, crop_strategy)
+            final = prepare_led_image(
+                original,
+                size=size,
+                crop_strategy=crop_strategy,
+                palette_size=int(opts.get("palette_size", 24)),
+                dithering=opts.get("dithering", "none"),
+                contrast_boost=opts.get("contrast_boost", "medium"),
+                saturation_boost=opts.get("saturation_boost", "medium"),
+                dark_image_boost=bool(opts.get("dark_image_boost", True)),
+                pixel_art_mode=bool(opts.get("pixel_art_mode", True)),
+            )
+            upscaled = final.resize((512, 512), Image.Resampling.NEAREST)
+
+            def _png_b64(image: Image.Image) -> str:
+                buf = io.BytesIO()
+                image.save(buf, format="PNG")
+                return base64.b64encode(buf.getvalue()).decode("ascii")
+
+            return jsonify({
+                "ok": True,
+                "original": _png_b64(original),
+                "cropped": _png_b64(cropped),
+                "final": _png_b64(final),
+                "final_upscaled": _png_b64(upscaled),
+            })
 
         install_auth(app, self.auth_config)
         return app

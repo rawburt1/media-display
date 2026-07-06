@@ -158,6 +158,15 @@
   .test-result.ok { color: #4ade80; }
   .test-result.fail { color: #f87171; }
 
+  /* -- Pixoo LED preview -- */
+  .pixoo-preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                        gap: 12px; margin-top: 10px; }
+  .pixoo-preview-cell { text-align: center; }
+  .pixoo-preview-cell img { width: 100%; aspect-ratio: 1 / 1; object-fit: contain;
+                            background: var(--mono-bg); border-radius: 8px; border: 1px solid var(--border); }
+  .pixoo-preview-cell img.pixelated { image-rendering: pixelated; }
+  .pixoo-preview-cell .caption { font-size: 11px; color: #8a93a6; margin-top: 4px; }
+
   /* -- overview -- */
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 4px; }
   .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
@@ -1391,6 +1400,9 @@ function renderOutputsSection() {
         + '</div>';
       html += renderFieldGroup(fields.filter(function(f) { return f.name !== 'enabled'; }), scope, 'outputs-' + typeName + '-' + idx);
       html += '<details class="advanced-toggle" id="filters-' + typeName + '-' + idx + '"><summary>Content filters</summary>' + renderOutputFilters(typeName, idx) + '</details>';
+      if (typeName === 'pixoo') {
+        html += renderPixooPreview(idx);
+      }
       html += '<div class="instance-actions">'
         + renderTestButton('output-' + typeName, String(idx))
         + '<button type="button" class="btn secondary small" onclick="duplicateOutputInstance(\'' + typeName + '\',' + idx + ')">Duplicate</button>'
@@ -1425,6 +1437,61 @@ function runOutputTest(typeName, idx, btn, resultEl) {
       resultEl.classList.add(d.ok ? 'ok' : 'fail'); resultEl.textContent = d.message;
     }).catch(function() { resultEl.classList.add('fail'); resultEl.textContent = 'Request failed.'; })
     .finally(function() { btn.disabled = false; btn.textContent = 'Test connection'; });
+}
+
+// ---------------------------------------------------------------------
+// Pixoo LED preview: shows how the current (possibly unsaved) LED-prep
+// settings render against a test image, using outputsData directly (kept
+// live by setOutputField on every field change) rather than the saved
+// config - so previewing never requires saving first.
+// ---------------------------------------------------------------------
+function renderPixooPreview(idx) {
+  var uid = 'pixoo-preview-' + idx;
+  return '<details class="advanced-toggle" open><summary>LED preview</summary>'
+    + '<div class="field-help">Upload a poster/album cover to see how it will look on the LED display with the settings above.</div>'
+    + '<div class="row-inline" style="margin-top:8px;">'
+    + '<input type="file" accept="image/*" id="' + uid + '-file">'
+    + '<button type="button" class="btn secondary small" onclick="runPixooPreview(' + idx + ')">Generate preview</button>'
+    + '</div>'
+    + '<div class="test-result" id="' + uid + '-error"></div>'
+    + '<div class="pixoo-preview-grid" id="' + uid + '-grid" style="display:none;">'
+    + '<div class="pixoo-preview-cell"><img id="' + uid + '-original"><div class="caption">Original</div></div>'
+    + '<div class="pixoo-preview-cell"><img id="' + uid + '-cropped"><div class="caption">Cropped</div></div>'
+    + '<div class="pixoo-preview-cell"><img id="' + uid + '-final" class="pixelated"><div class="caption">Final (native size)</div></div>'
+    + '<div class="pixoo-preview-cell"><img id="' + uid + '-upscaled" class="pixelated"><div class="caption">Final (enlarged)</div></div>'
+    + '</div>'
+    + '</details>';
+}
+
+function runPixooPreview(idx) {
+  var uid = 'pixoo-preview-' + idx;
+  var fileInput = document.getElementById(uid + '-file');
+  var errorEl = document.getElementById(uid + '-error');
+  var gridEl = document.getElementById(uid + '-grid');
+  var file = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) {
+    errorEl.className = 'test-result show fail'; errorEl.textContent = 'Choose an image first.';
+    return;
+  }
+  var settings = outputsData.pixoo[idx];
+  var form = new FormData();
+  form.append('file', file);
+  form.append('settings', JSON.stringify(settings));
+
+  errorEl.className = 'test-result show'; errorEl.textContent = 'Generating…';
+  gridEl.style.display = 'none';
+  fetch('/api/preview/pixoo', { method: 'POST', body: form })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { errorEl.className = 'test-result show fail'; errorEl.textContent = d.error || 'Preview failed.'; return; }
+      document.getElementById(uid + '-original').src = 'data:image/png;base64,' + d.original;
+      document.getElementById(uid + '-cropped').src = 'data:image/png;base64,' + d.cropped;
+      document.getElementById(uid + '-final').src = 'data:image/png;base64,' + d.final;
+      document.getElementById(uid + '-upscaled').src = 'data:image/png;base64,' + d.final_upscaled;
+      errorEl.className = 'test-result'; errorEl.textContent = '';
+      gridEl.style.display = 'grid';
+    })
+    .catch(function() { errorEl.className = 'test-result show fail'; errorEl.textContent = 'Request failed.'; });
 }
 
 // ---------------------------------------------------------------------

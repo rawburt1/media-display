@@ -66,6 +66,10 @@ OUTPUT_EXTRA_ARGS = {
     "feed": lambda config, config_path, cache: (config.auth,),
     "video": lambda config, config_path, cache: (config.auth,),
     "nest_hub": lambda config, config_path, cache: (config.auth,),
+    # Pixoo disk-caches its LED-prepared derivative via the shared
+    # ImageCache (see mediainfo/led_image.py + ImageCache.get_derived_path)
+    # instead of reprocessing the image on every update().
+    "pixoo": lambda config, config_path, cache: (cache,),
 }
 
 ENRICHER_CLASSES: dict[str, Union[str, type]] = {
