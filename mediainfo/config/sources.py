@@ -70,6 +70,22 @@ class MpdConfig:
 
 
 @dataclasses.dataclass
+class LmsConfig:
+    enabled: bool = False
+    host: str = "localhost"
+    port: int = 9000
+    # Which player to report on, e.g. "aa:bb:cc:dd:ee:ff" (its MAC address -
+    # find it in the LMS web UI under Settings -> Information -> Player
+    # Information, or by running the "players" CLI query yourself). Leave
+    # blank to auto-select: the first player currently playing, else the
+    # first paused, else nothing (idle) - reasonable for a single-player
+    # household, but set this explicitly once you have more than one.
+    player_id: str = ""
+    # Per-request timeout, in seconds.
+    timeout: float = 5.0
+
+
+@dataclasses.dataclass
 class SonosConfig:
     enabled: bool = False
     # IP address(es) of Sonos speakers on your network, used as discovery
@@ -189,6 +205,7 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
     "homeassistant": HomeAssistantConfig,
     "jellyfin": JellyfinConfig,
     "kodi": KodiConfig,
+    "lms": LmsConfig,
     "mopidy": MopidyConfig,
     "mpd": MpdConfig,
     "plex": PlexConfig,

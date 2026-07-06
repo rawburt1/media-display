@@ -184,6 +184,7 @@ _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
         "homeassistant": {"label": "Home Assistant", "description": "Reads a media_player entity's state from Home Assistant - useful for a device HA already tracks that mediainfo can't read directly."},
         "jellyfin": {"label": "Jellyfin", "description": "Reads now-playing sessions from a Jellyfin media server."},
         "kodi": {"label": "Kodi", "description": "Reads now-playing info from a Kodi media center over its JSON-RPC API."},
+        "lms": {"label": "Logitech Media Server", "description": "Reads now-playing info from a Logitech Media Server (Squeezebox) via its JSON-RPC API. Set player_id if you have more than one player."},
         "mopidy": {"label": "Mopidy", "description": "Reads now-playing info from a Mopidy music server over its JSON-RPC API - works regardless of which Mopidy backend (Spotify, local files, ...) is actually playing."},
         "mpd": {"label": "MPD (Music Player Daemon)", "description": "Reads now-playing info from an MPD server, and its embedded/folder cover art when available."},
         "plex": {"label": "Plex", "description": "Reads now-playing sessions from a Plex Media Server."},
