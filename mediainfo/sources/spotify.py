@@ -14,7 +14,12 @@ from mediainfo.sources.base import MediaSource
 
 logger = logging.getLogger(__name__)
 
-SCOPE = "user-read-currently-playing"
+# current_playback() (GET /me/player) needs the broader "playback-state"
+# scope, unlike the narrower current_user_playing_track() this replaced -
+# a token cached under the old "user-read-currently-playing" scope alone
+# doesn't carry this, hence the explicit scope check in get_now_playing()
+# below rather than just letting a mismatched token 403 unhelpfully.
+SCOPE = "user-read-playback-state"
 
 
 class SpotifySource(MediaSource):
@@ -44,8 +49,26 @@ class SpotifySource(MediaSource):
                 self.last_poll_failed = True
                 return None
 
+            granted_scopes = (token_info.get("scope") or "").split()
+            if "user-read-playback-state" not in granted_scopes:
+                logger.warning(
+                    "Spotify: cached token at %s was authorized without the "
+                    "'user-read-playback-state' scope (needed for device/"
+                    "progress info) — run 'python -m mediainfo auth spotify' "
+                    "again to refresh it",
+                    self._config.cache_path,
+                )
+                self.last_poll_failed = True
+                return None
+
             client = spotipy.Spotify(auth=token_info["access_token"])
-            result = client.current_user_playing_track()
+            # current_playback() (GET /me/player) rather than the narrower
+            # current_user_playing_track() (GET /me/player/currently-playing):
+            # same track info, plus which device is playing and progress/
+            # duration - Spotify Connect's state is account-wide regardless
+            # of which endpoint is used, so this doesn't change *what* can
+            # be detected, only how much detail comes back about it.
+            result = client.current_playback()
 
             if not result or not result.get("is_playing"):
                 return None
@@ -72,13 +95,21 @@ class SpotifySource(MediaSource):
             if images_data:
                 artworks.append(Artwork(url=images_data[0]["url"], label="Album art (Spotify)"))
 
+            device_name = (result.get("device") or {}).get("name", "")
+            progress_ms = result.get("progress_ms")
+            duration_ms = item.get("duration_ms")
+
             return NowPlaying(
                 source=self.name,
                 media_type="music",
                 title=title,
                 subtitle=artist,
                 album=album,
+                artist=artist,
+                device=device_name,
                 images=artworks,
+                position_seconds=progress_ms / 1000 if progress_ms is not None else None,
+                duration_seconds=duration_ms / 1000 if duration_ms is not None else None,
             )
         except Exception:
             logger.exception("Spotify source error")
