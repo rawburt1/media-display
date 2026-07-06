@@ -81,7 +81,11 @@ from mediainfo.config.sources import (
     VinylConfig,
     YoutubeConfig,
 )
-from mediainfo.config.text_enrichers import TEXT_ENRICHER_CONFIG_TYPES, LrclibConfig
+from mediainfo.config.text_enrichers import (
+    TEXT_ENRICHER_CONFIG_TYPES,
+    LrclibConfig,
+    OllamaTextConfig,
+)
 
 __all__ = [
     "AlertConfig",
@@ -116,6 +120,7 @@ __all__ = [
     "MqttConfig",
     "MusicBrainzConfig",
     "NestHubConfig",
+    "OllamaTextConfig",
     "OmdbConfig",
     "OUTPUT_CONFIG_TYPES",
     "OverridesConfig",

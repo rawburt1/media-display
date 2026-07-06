@@ -16,8 +16,26 @@ class LrclibConfig:
     enabled: bool = False
 
 
+@dataclasses.dataclass
+class OllamaTextConfig:
+    # Off by default - requires a local Ollama instance the user has set
+    # up (and pulled a model into) themselves; see
+    # mediainfo/enrichers/ollama_text.py.
+    enabled: bool = False
+    host: str = "localhost"
+    port: int = 11434
+    # Must already be pulled in Ollama (e.g. `ollama pull llama3.2`) -
+    # this enricher doesn't pull/manage models itself.
+    model: str = "llama3.2"
+    # Local inference can be slow depending on model size/hardware; this
+    # bounds how long one enrichment call may block the orchestrator's
+    # tick loop before giving up (see the enricher's module docstring).
+    timeout_seconds: int = 30
+
+
 # Registry mapping config section names to their dataclass types. Adding a
 # new text enricher starts here (see also registries.TEXT_ENRICHER_CLASSES).
 TEXT_ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "lrclib": LrclibConfig,
+    "ollama_text": OllamaTextConfig,
 }

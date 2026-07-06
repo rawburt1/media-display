@@ -618,6 +618,14 @@ See `config.example.yaml` for all options. Key things to fill in:
   cached locally under `cache.dir/text`. Never shows a guessed or
   fuzzy-matched result - if LRCLIB has nothing for the track (or it's
   instrumental), lyrics are simply left blank.
+- **`text_enrichers.ollama_text`**: optional, off by default. Generates
+  short mood/description/"did you know"/album-artist context text
+  (`NowPlaying.ai_text`) about the playing song using a local Ollama
+  instance you run yourself (`host`/`port`/`model` - the model must
+  already be pulled, e.g. `ollama pull llama3.2`). Only ever sends
+  metadata (artist/title/album/genres/year) to the model - never lyrics.
+  `timeout_seconds` bounds how long one (usually cached-after-first-play)
+  generation may take.
 - **`cache.dir`**: where downloaded artwork is stored.
 - **`cache.min_width`** / **`cache.min_height`**: any downloaded image
   smaller than this (default 640×480) is rejected - not cached, and
