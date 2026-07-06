@@ -101,6 +101,19 @@ Currently implemented:
   now-playing item, and per-source/output/enricher status - JSON by default,
   or an HTML dashboard when requested with `Accept: text/html`
 
+In progress, not yet active (nothing in the running app reads these yet):
+
+- **`mediadata`**: a unified, human-browsable on-disk cache
+  (`mediainfo/media_data_store.py`) organizing artwork/lyrics/metadata as
+  `movies/<Title> (<Year>)/poster.jpg`, `music/<Artist>/<Album> (<Year>)/
+  albumart.jpg`, etc., each with a `metadata.json` recording where each
+  file came from and when it was last checked/refreshed - a cache-first
+  design with a per-media-type refresh policy (`mediadata.refresh`, see
+  config.example.yaml), instead of today's flat `cache/` directory. The
+  external-fetch step is currently a stub (no real API calls yet); this
+  is groundwork for a future artwork/lyrics cache redesign, not a
+  replacement for the existing cache yet.
+
 ## Setup
 
 ### Requirements
