@@ -114,3 +114,64 @@ def test_config_from_dict_partial_refresh_override_keeps_other_defaults():
     assert config.mediadata.refresh.movies_days == 60
     assert config.mediadata.refresh.series_days == 30  # untouched default
     assert config.mediadata.refresh.enabled is True
+
+
+# ---------------------------------------------------------------------------
+# metadata.json read/write
+# ---------------------------------------------------------------------------
+
+def test_read_metadata_returns_empty_dict_when_missing(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    assert store._read_metadata(item_dir) == {}
+
+
+def test_write_then_read_metadata_round_trips(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    data = {"title": "Alien", "year": 1979, "media_type": "movie", "external_ids": {"tmdb": "348"}}
+
+    store._write_metadata(item_dir, data)
+
+    assert store._read_metadata(item_dir) == data
+
+
+def test_write_metadata_creates_item_directory(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    assert not item_dir.exists()
+
+    store._write_metadata(item_dir, {"title": "Alien"})
+
+    assert item_dir.exists()
+    assert (item_dir / "metadata.json").exists()
+
+
+def test_write_metadata_does_not_leave_a_tmp_file_behind(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+
+    store._write_metadata(item_dir, {"title": "Alien"})
+
+    assert not (item_dir / "metadata.json.tmp").exists()
+
+
+def test_read_metadata_returns_empty_dict_for_corrupt_json(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    item_dir.mkdir(parents=True)
+    (item_dir / "metadata.json").write_text("not valid json{{{", encoding="utf-8")
+
+    assert store._read_metadata(item_dir) == {}
+
+
+def test_write_metadata_overwrites_previous_content(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+
+    store._write_metadata(item_dir, {"title": "Alien", "year": 1979})
+    store._write_metadata(item_dir, {"title": "Alien", "year": 1979, "external_ids": {"tmdb": "348"}})
+
+    assert store._read_metadata(item_dir) == {
+        "title": "Alien", "year": 1979, "external_ids": {"tmdb": "348"},
+    }
