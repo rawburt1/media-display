@@ -57,6 +57,7 @@ import json
 import logging
 import re
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -75,6 +76,16 @@ FetchResult = Optional[Tuple[bytes, str]]
 logger = logging.getLogger(__name__)
 
 _METADATA_FILENAME = "metadata.json"
+
+# How long a resolved TMDb/fanart.tv lookup is memoized for - just long
+# enough to cover get_movie_poster()+get_movie_fanart() (or the series
+# equivalent, or refresh_movie()/refresh_series()) being called back-to-
+# back for the same title, which would otherwise repeat the exact same
+# search/lookup twice. Deliberately far shorter than the days-scale
+# refresh.movies_days/series_days policy that governs when a *new* fetch
+# happens at all - this must not paper over that by serving a stale
+# in-memory result long after it should have re-checked.
+_LOOKUP_CACHE_SECONDS = 30
 
 # Characters unsafe (or awkward) in a filename across common filesystems -
 # replaced with "-". Deliberately conservative (covers Windows-reserved
@@ -130,6 +141,9 @@ class MediaDataStore:
         # blank means "skip fanart.tv". Not used for series - see
         # _fetch_series_artwork's docstring for why.
         self._fanarttv_api_key = fanarttv_api_key
+        # Short-lived memoization for _cached_lookup() - see
+        # _LOOKUP_CACHE_SECONDS.
+        self._lookup_cache: Dict[tuple, Tuple[float, Any]] = {}
 
     # -- path builders -----------------------------------------------------
 
@@ -334,6 +348,22 @@ class MediaDataStore:
         )
         return after != before
 
+    def _cached_lookup(self, key: tuple, fetch_fn: Callable[[], Any]) -> Any:
+        """Memoize an external search/lookup call (e.g. tmdb.find_movie,
+        fanarttv.fetch) for _LOOKUP_CACHE_SECONDS, so resolving poster and
+        fanart for the same title back-to-back (get_movie_poster() then
+        get_movie_fanart(), or refresh_movie()'s loop over both) doesn't
+        repeat the identical network call. `key` must include a tag for
+        which lookup this is, since different lookups may share arguments
+        (e.g. a title also being searched via find_tv)."""
+        now = time.monotonic()
+        cached = self._lookup_cache.get(key)
+        if cached is not None and now - cached[0] < _LOOKUP_CACHE_SECONDS:
+            return cached[1]
+        value = fetch_fn()
+        self._lookup_cache[key] = (now, value)
+        return value
+
     # -- movies ---------------------------------------------------------
 
     def get_movie_poster(self, title: str, year: Optional[int]) -> Optional[Path]:
@@ -383,26 +413,14 @@ class MediaDataStore:
     def _resolve_movie_artwork_url(
         self, title: str, year: Optional[int], kind: str
     ) -> Optional[Tuple[str, str]]:
-        movie = None
-        if self._tmdb_api_key:
-            try:
-                movie = tmdb.find_movie(self._tmdb_api_key, title, year)
-            except Exception:
-                logger.exception("MediaDataStore: TMDb movie search failed for %r", title)
-            if movie:
-                path_field = "poster_path" if kind == "poster" else "backdrop_path"
-                size = "w500" if kind == "poster" else "w1280"
-                url = tmdb.image_url(movie.get(path_field), size)
-                if url:
-                    return url, "tmdb"
+        movie = self._find_tmdb_movie(title, year) if self._tmdb_api_key else None
+        url = tmdb.artwork_url(movie, kind)
+        if url:
+            return url, "tmdb"
 
         tmdb_id = movie.get("id") if movie else None
         if self._fanarttv_api_key and tmdb_id:
-            try:
-                data = fanarttv.fetch(self._fanarttv_api_key, f"movies/{tmdb_id}")
-            except Exception:
-                logger.exception("MediaDataStore: fanart.tv movie lookup failed for %r", title)
-                data = None
+            data = self._fetch_fanarttv_movie(tmdb_id, title)
             if data:
                 field = "movieposter" if kind == "poster" else "moviebackground"
                 url = fanarttv.best_url(data.get(field))
@@ -410,6 +428,26 @@ class MediaDataStore:
                     return url, "fanarttv"
 
         return None
+
+    def _find_tmdb_movie(self, title: str, year: Optional[int]) -> Optional[dict]:
+        def fetch() -> Optional[dict]:
+            try:
+                return tmdb.find_movie(self._tmdb_api_key, title, year)
+            except Exception:
+                logger.exception("MediaDataStore: TMDb movie search failed for %r", title)
+                return None
+
+        return self._cached_lookup(("tmdb_movie", title, year), fetch)
+
+    def _fetch_fanarttv_movie(self, tmdb_id: str, title: str) -> Optional[dict]:
+        def fetch() -> Optional[dict]:
+            try:
+                return fanarttv.fetch(self._fanarttv_api_key, f"movies/{tmdb_id}")
+            except Exception:
+                logger.exception("MediaDataStore: fanart.tv movie lookup failed for %r", title)
+                return None
+
+        return self._cached_lookup(("fanarttv_movie", tmdb_id), fetch)
 
     # -- series (mirrors movies) ------------------------------------------
 
@@ -460,17 +498,19 @@ class MediaDataStore:
     ) -> Optional[Tuple[str, str]]:
         if not self._tmdb_api_key:
             return None
-        try:
-            show = tmdb.find_tv(self._tmdb_api_key, title)
-        except Exception:
-            logger.exception("MediaDataStore: TMDb TV search failed for %r", title)
-            return None
-        if not show:
-            return None
-        path_field = "poster_path" if kind == "poster" else "backdrop_path"
-        size = "w500" if kind == "poster" else "w1280"
-        url = tmdb.image_url(show.get(path_field), size)
+        show = self._find_tmdb_tv(title)
+        url = tmdb.artwork_url(show, kind)
         return (url, "tmdb") if url else None
+
+    def _find_tmdb_tv(self, title: str) -> Optional[dict]:
+        def fetch() -> Optional[dict]:
+            try:
+                return tmdb.find_tv(self._tmdb_api_key, title)
+            except Exception:
+                logger.exception("MediaDataStore: TMDb TV search failed for %r", title)
+                return None
+
+        return self._cached_lookup(("tmdb_tv", title), fetch)
 
     # -- music ------------------------------------------------------------
 

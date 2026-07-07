@@ -95,6 +95,17 @@ def image_url(path: Optional[str], size: str) -> Optional[str]:
     return f"{_IMAGE_BASE_URL}/{size}{path}" if path else None
 
 
+def artwork_url(result: Optional[dict], kind: str) -> Optional[str]:
+    """Pick the right field/CDN size for `kind` ("poster" or "fanart") out
+    of a find_movie()/find_tv() result dict, or None if there's no result
+    or no image at that field."""
+    if not result:
+        return None
+    path_field = "poster_path" if kind == "poster" else "backdrop_path"
+    size = "w500" if kind == "poster" else "w1280"
+    return image_url(result.get(path_field), size)
+
+
 def _round(value) -> Optional[float]:
     if not value:
         return None

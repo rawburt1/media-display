@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.media_data_store import MediaDataStore
@@ -34,21 +34,24 @@ class MediaDataArtworkEnricher(ArtworkEnricher):
         self.store = store
 
     def enrich(self, now_playing: NowPlaying) -> None:
-        if self.store is None:
+        store = self.store
+        if store is None:
             return
 
         try:
             if now_playing.media_type == "music":
-                self._enrich_music(now_playing)
+                self._enrich_music(now_playing, store)
             elif now_playing.media_type == "movie":
-                self._enrich_movie(now_playing)
+                self._enrich_media(now_playing, store.get_movie_poster, store.get_movie_fanart)
             elif now_playing.media_type == "episode":
-                self._enrich_series(now_playing)
+                # title holds the show name for episodes (subtitle holds
+                # the episode title/info) - see e.g. jellyfin.py's
+                # SeriesName mapping.
+                self._enrich_media(now_playing, store.get_series_poster, store.get_series_fanart)
         except Exception:
             logger.exception("MediaDataStore artwork enrichment error")
 
-    def _enrich_music(self, now_playing: NowPlaying) -> None:
-        assert self.store is not None
+    def _enrich_music(self, now_playing: NowPlaying, store: MediaDataStore) -> None:
         # subtitle holds the artist for music items - see NowPlaying's
         # own docstring for why (same convention every other music
         # enricher already follows).
@@ -56,27 +59,22 @@ class MediaDataArtworkEnricher(ArtworkEnricher):
         if not artist or not album:
             return
 
-        path = self.store.get_album_art(artist, album, now_playing.year)
+        path = store.get_album_art(artist, album, now_playing.year)
         self._append(now_playing, path, "Album art (mediadata)")
 
-    def _enrich_movie(self, now_playing: NowPlaying) -> None:
-        assert self.store is not None
+    def _enrich_media(
+        self,
+        now_playing: NowPlaying,
+        get_poster: Callable[[str, Optional[int]], Optional[Path]],
+        get_fanart: Callable[[str, Optional[int]], Optional[Path]],
+    ) -> None:
+        """Shared by movies and episodes - both look up poster+fanart the
+        same way, keyed by (title, year)."""
         if not now_playing.title:
             return
-        poster = self.store.get_movie_poster(now_playing.title, now_playing.year)
+        poster = get_poster(now_playing.title, now_playing.year)
         self._append(now_playing, poster, "Poster (mediadata)")
-        fanart = self.store.get_movie_fanart(now_playing.title, now_playing.year)
-        self._append(now_playing, fanart, "Fanart (mediadata)")
-
-    def _enrich_series(self, now_playing: NowPlaying) -> None:
-        assert self.store is not None
-        # title holds the show name for episodes (subtitle holds the
-        # episode title/info) - see e.g. jellyfin.py's SeriesName mapping.
-        if not now_playing.title:
-            return
-        poster = self.store.get_series_poster(now_playing.title, now_playing.year)
-        self._append(now_playing, poster, "Poster (mediadata)")
-        fanart = self.store.get_series_fanart(now_playing.title, now_playing.year)
+        fanart = get_fanart(now_playing.title, now_playing.year)
         self._append(now_playing, fanart, "Fanart (mediadata)")
 
     @staticmethod
