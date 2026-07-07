@@ -28,6 +28,14 @@ with:
     toggle it
   - a "Refresh artwork" button, wired to
     Orchestrator.request_artwork_refresh via set_refresh_artwork_handler()
+  - a "Next image" button, wired to Orchestrator.request_rotation_now via
+    set_rotate_now_handler() - immediately advances every output's
+    rotation instead of waiting for rotation_interval_seconds
+  - a "Restart" button - sends this process itself SIGTERM (the same
+    mechanism the config UI's own Restart button uses), so a process
+    supervisor (docker-compose's `restart: unless-stopped`, etc.) brings
+    it back up; needs no orchestrator wiring since restarting the whole
+    process doesn't touch orchestrator state
 
 There's no separate "idle mode" entity - the now_playing sensor's own
 "idle" state already covers that (see roadmap discussion; this was a
@@ -41,7 +49,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import signal
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -83,6 +93,7 @@ class MqttOutput(Output):
         self._hitster_safe_get: Optional[Callable[[], bool]] = None
         self._hitster_safe_set: Optional[Callable[[bool], None]] = None
         self._refresh_artwork_fn: Optional[Callable[[], None]] = None
+        self._rotate_now_fn: Optional[Callable[[], None]] = None
         self._last_state_republish: Optional[float] = None
         try:
             self._client.connect_async(config.host, config.port, keepalive=60)
@@ -109,6 +120,11 @@ class MqttOutput(Output):
         HA "button" entity triggers (see _on_message)."""
         self._refresh_artwork_fn = fn
 
+    def set_rotate_now_handler(self, fn: Callable[[], None]) -> None:
+        """Register a callable (Orchestrator.request_rotation_now) an HA
+        "button" entity triggers (see _on_message)."""
+        self._rotate_now_fn = fn
+
     @property
     def _availability_topic(self) -> str:
         return f"{self.config.topic}/availability"
@@ -124,6 +140,14 @@ class MqttOutput(Output):
     @property
     def _refresh_artwork_command_topic(self) -> str:
         return f"{self.config.topic}/refresh_artwork/set"
+
+    @property
+    def _rotate_now_command_topic(self) -> str:
+        return f"{self.config.topic}/next_image/set"
+
+    @property
+    def _restart_command_topic(self) -> str:
+        return f"{self.config.topic}/restart/set"
 
     @property
     def _health_state_topic(self) -> str:
@@ -231,6 +255,8 @@ class MqttOutput(Output):
         try:
             self._client.subscribe(self._hitster_safe_command_topic, qos=self.config.qos)
             self._client.subscribe(self._refresh_artwork_command_topic, qos=self.config.qos)
+            self._client.subscribe(self._rotate_now_command_topic, qos=self.config.qos)
+            self._client.subscribe(self._restart_command_topic, qos=self.config.qos)
         except Exception:
             logger.exception("MQTT: failed to subscribe to command topics")
 
@@ -249,6 +275,12 @@ class MqttOutput(Output):
         elif msg.topic == self._refresh_artwork_command_topic:
             if self._refresh_artwork_fn is not None:
                 self._refresh_artwork_fn()
+        elif msg.topic == self._rotate_now_command_topic:
+            if self._rotate_now_fn is not None:
+                self._rotate_now_fn()
+        elif msg.topic == self._restart_command_topic:
+            logger.info("Restarting (SIGTERM to self) - requested via MQTT")
+            os.kill(os.getpid(), signal.SIGTERM)
         else:
             logger.debug("MQTT: ignoring message on unrecognized topic %s", msg.topic)
 
@@ -341,6 +373,19 @@ class MqttOutput(Output):
                 "unique_id": f"{node}_refresh_artwork",
                 "command_topic": self._refresh_artwork_command_topic,
                 "icon": "mdi:image-refresh-outline",
+            },
+            "next_image": {
+                "name": "Next image",
+                "unique_id": f"{node}_next_image",
+                "command_topic": self._rotate_now_command_topic,
+                "icon": "mdi:skip-next-outline",
+            },
+            "restart": {
+                "name": "Restart",
+                "unique_id": f"{node}_restart",
+                "command_topic": self._restart_command_topic,
+                "device_class": "restart",
+                "icon": "mdi:restart",
             },
         }
         for object_id, payload in buttons.items():

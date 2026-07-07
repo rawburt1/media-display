@@ -427,6 +427,11 @@ outputs:
     #   - a "Health problem" binary_sensor
     #   - a "Hitster-safe mode" switch (readable AND settable from HA)
     #   - a "Refresh artwork" button
+    #   - a "Next image" button (advances rotation immediately, instead of
+    #     waiting for rotation_interval_seconds)
+    #   - a "Restart" button (sends this process itself SIGTERM - a process
+    #     supervisor, e.g. docker-compose's restart: unless-stopped, brings
+    #     it back up)
     ha_discovery: false
     # ha_discovery_prefix: homeassistant  # only if HA's discovery_prefix differs
 

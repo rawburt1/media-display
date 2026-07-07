@@ -1905,6 +1905,72 @@ def test_request_artwork_refresh_deferred_until_next_tick():
 
 
 # ---------------------------------------------------------------------------
+# request_rotation_now() - e.g. an MQTT "next image" button
+# ---------------------------------------------------------------------------
+
+def test_request_rotation_now_repushes_immediately_without_waiting_for_interval():
+    now_playing = NowPlaying(
+        source="kodi", media_type="music", title="Money", subtitle="Pink Floyd",
+        images=[Artwork(url="https://example.com/original.jpg")],
+    )
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/art.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orch = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=9999,  # long enough that a normal tick never rotates on its own
+    )
+    orch._tick()  # item becomes current
+    assert output.update.call_count == 1
+
+    orch.request_rotation_now()
+    orch._tick()  # SAME_ITEM_ROTATE tick, but forced rotation re-pushes immediately
+
+    assert output.update.call_count == 2
+
+
+def test_request_rotation_now_is_noop_when_nothing_playing():
+    output = MagicMock()
+    orch = _orchestrator(outputs=[output], cache=MagicMock())  # _FakeSource: nothing playing
+
+    orch.request_rotation_now()
+    orch._tick()  # must not raise
+
+    output.update.assert_not_called()
+
+
+def test_request_rotation_now_deferred_until_next_tick():
+    now_playing = NowPlaying(
+        source="kodi", media_type="music", title="Money",
+        images=[Artwork(url="https://example.com/original.jpg")],
+    )
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/art.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orch = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=9999,
+    )
+    orch._tick()
+    output.update.reset_mock()
+
+    orch.request_rotation_now()
+    assert output.update.call_count == 0  # not acted on until the next _tick()
+
+
+# ---------------------------------------------------------------------------
 # text_enrichers (roadmap item 7 foundation - no real plugin yet, but the
 # pipeline is fully wired: config -> registry -> wiring -> orchestrator)
 # ---------------------------------------------------------------------------

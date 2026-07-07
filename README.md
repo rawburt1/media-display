@@ -537,9 +537,10 @@ See `config.example.yaml` for all options. Key things to fill in:
   `password`/`qos`) - useful for Home Assistant or other automation. Set
   `ha_discovery: true` for a deeper HA integration: a "mediainfo" device
   with now-playing/artist/album/source sensors, a health-problem
-  binary_sensor, a hitster-safe switch HA can read *and* set, and a
-  refresh-artwork button - all via MQTT Discovery, no YAML needed on the
-  HA side.
+  binary_sensor, a hitster-safe switch HA can read *and* set, a
+  refresh-artwork button, a next-image button (advances rotation
+  immediately), and a restart button - all via MQTT Discovery, no YAML
+  needed on the HA side.
 - **`outputs.feed`**: serves RSS (`/rss`) and Atom (`/atom`) feeds
   describing only the currently playing item (single entry, replaced
   whenever it changes, empty while idle), with artwork as an enclosure,

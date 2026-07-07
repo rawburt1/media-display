@@ -32,6 +32,7 @@ from mediainfo.wiring import (
     wire_health_providers,
     wire_history,
     wire_hitster_safe,
+    wire_rotate_now,
 )
 
 logger = logging.getLogger(__name__)
@@ -184,6 +185,7 @@ def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: M
     wire_health_providers(outputs, orch, config)
     wire_hitster_safe(outputs, orch)
     wire_artwork_refresh(outputs, orch)
+    wire_rotate_now(outputs, orch)
     return orch
 
 

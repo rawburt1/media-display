@@ -231,6 +231,18 @@ def wire_artwork_refresh(outputs: list, orch: Orchestrator) -> None:
             output.set_refresh_artwork_handler(orch.request_artwork_refresh)
 
 
+def wire_rotate_now(outputs: list, orch: Orchestrator) -> None:
+    """Register Orchestrator.request_rotation_now on every MqttOutput
+    instance, so an HA "button" entity (when ha_discovery is enabled) can
+    trigger it - see wire_artwork_refresh above for the identical pattern
+    this mirrors."""
+    from mediainfo.outputs.mqtt import MqttOutput
+
+    for output in outputs:
+        if isinstance(output, MqttOutput):
+            output.set_rotate_now_handler(orch.request_rotation_now)
+
+
 def wire_artwork_overrides(outputs: list, overrides: Optional[ArtworkOverrideStore]) -> None:
     """Register the artwork override store on every ConfigUiOutput
     instance, so its "Overrides" page can list/add/remove pins. A no-op
