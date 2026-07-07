@@ -591,6 +591,21 @@ def test_fetch_movie_fanart_via_tmdb_uses_backdrop(tmp_path):
     assert download_temp.call_args.args[0].url == "https://image.tmdb.org/t/p/w1280/backdrop.jpg"
 
 
+def test_movie_poster_and_fanart_share_one_tmdb_search(tmp_path):
+    """get_movie_poster()+get_movie_fanart() called back-to-back for the
+    same title (as MediaDataArtworkEnricher._enrich_media does) must not
+    repeat the identical TMDb search - see _cached_lookup."""
+    store = _store(tmp_path, cache=ImageCache(tmp_path / "cache"), tmdb_api_key="tmdb-key")
+    movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
+
+    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie) as find_movie, \
+         patch.object(ImageCache, "download_temp", return_value=None):
+        store.get_movie_poster("The Matrix", 1999)
+        store.get_movie_fanart("The Matrix", 1999)
+
+    find_movie.assert_called_once_with("tmdb-key", "The Matrix", 1999)
+
+
 def test_fetch_movie_artwork_falls_back_to_fanarttv(tmp_path):
     store = _store(
         tmp_path, cache=ImageCache(tmp_path / "cache"),

@@ -59,6 +59,15 @@ def build_sources(config: Config) -> list:
     return sources
 
 
+def _enabled_credential(config: Config, name: str, attr: str) -> str:
+    """The given attr (e.g. "token"/"api_key") off config.enrichers[name],
+    or "" if that enricher section is missing or not enabled - used so
+    MediaDataStore can reuse whatever credential a standalone enricher
+    already has configured, without requiring a second copy of it."""
+    enricher_config = config.enrichers.get(name)
+    return getattr(enricher_config, attr) if enricher_config and enricher_config.enabled else ""
+
+
 def build_mediadata_store(config: Config, cache: ImageCache) -> Optional[MediaDataStore]:
     """Construct the shared MediaDataStore instance used by both
     MediaDataArtworkEnricher and MediaDataLyricsEnricher (see
@@ -70,18 +79,12 @@ def build_mediadata_store(config: Config, cache: ImageCache) -> Optional[MediaDa
     lyrics_config = config.text_enrichers.get("mediadata")
     if not ((artwork_config and artwork_config.enabled) or (lyrics_config and lyrics_config.enabled)):
         return None
-    discogs_config = config.enrichers.get("discogs")
-    discogs_token = discogs_config.token if discogs_config and discogs_config.enabled else ""
-    tmdb_config = config.enrichers.get("tmdb")
-    tmdb_api_key = tmdb_config.api_key if tmdb_config and tmdb_config.enabled else ""
-    fanarttv_config = config.enrichers.get("fanarttv")
-    fanarttv_api_key = fanarttv_config.api_key if fanarttv_config and fanarttv_config.enabled else ""
     return MediaDataStore(
         config.mediadata,
         cache=cache,
-        discogs_token=discogs_token,
-        tmdb_api_key=tmdb_api_key,
-        fanarttv_api_key=fanarttv_api_key,
+        discogs_token=_enabled_credential(config, "discogs", "token"),
+        tmdb_api_key=_enabled_credential(config, "tmdb", "api_key"),
+        fanarttv_api_key=_enabled_credential(config, "fanarttv", "api_key"),
     )
 
 
