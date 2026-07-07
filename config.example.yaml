@@ -65,6 +65,7 @@ priority:
   - foobar2000
   - vlc
   - vinyl
+  - browser
   - chromecast
 
 
@@ -86,6 +87,21 @@ sources:
     # For older hardware or tvOS < 15:
     # mrp_credentials: ""
     # airplay_credentials: ""       # Rarely needed for now-playing
+
+  # Browser extension - receives now-playing info pushed by the companion
+  # browser extension (see browser-extension/README.md) over a WebSocket
+  # connection, for media playing in a browser tab (YouTube, Spotify Web,
+  # Netflix, Disney+, SVT Play, Plex Web). Unlike every other source, this
+  # one listens for inbound connections instead of polling anything -
+  # host 0.0.0.0 so it's reachable from whatever machine runs the browser.
+  # Set a token here (and the same one in the extension's options page) if
+  # this port is reachable by anyone other than yourself.
+  browser:
+    enabled: true
+    host: 0.0.0.0
+    port: 8096
+    token: ""             # optional shared secret - see comment above
+    timeout: 10           # seconds an event stays valid with no update
 
   # Home Assistant — polls a single media_player entity's state via HA's
   # REST API. Mainly useful as a fallback for a device a more specific
@@ -551,8 +567,8 @@ outputs:
   #
   # media_type values: music, movie, episode
   # source values: kodi, plex, jellyfin, emby, sonos, spotify, mopidy, mpd,
-  #                lms, vlc, foobar2000, vinyl, appletv, homeassistant,
-  #                youtube, shield, chromecast
+  #                lms, vlc, foobar2000, vinyl, browser, appletv,
+  #                homeassistant, youtube, shield, chromecast
   # active_hours: "HH:MM-HH:MM" local time; wrap-around supported
   #   e.g. "22:00-06:00" is active from 22:00 through 06:00 the next morning
   # ---------------------------------------------------------------------------

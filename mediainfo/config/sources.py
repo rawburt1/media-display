@@ -21,6 +21,29 @@ class AppleTvConfig:
 
 
 @dataclasses.dataclass
+class BrowserConfig:
+    enabled: bool = False
+    # Bind address for the WebSocket server the browser extension connects
+    # to. 0.0.0.0 so it's reachable from other machines on your network
+    # (e.g. a laptop/desktop running the extension) - unlike every other
+    # source, this one listens for inbound connections rather than polling
+    # something itself.
+    host: str = "0.0.0.0"
+    port: int = 8096
+    # Shared secret the extension must send (as a "token" query parameter
+    # on the WebSocket connection URL) - leave blank to accept any
+    # connection (fine on a trusted local network, not recommended
+    # otherwise, since this has no other authentication).
+    token: str = ""
+    # How long (seconds) a received now-playing event stays valid before
+    # being treated as stale/idle. There's no polling here - once the
+    # extension stops sending updates (tab closed, browser quit, network
+    # drop, ...), this is the only signal that a previously-active tab
+    # isn't showing anything current anymore.
+    timeout: float = 10.0
+
+
+@dataclasses.dataclass
 class EmbyConfig:
     enabled: bool = False
     host: str = ""
@@ -229,6 +252,7 @@ class HomeAssistantConfig:
 # new source starts here.
 SOURCE_CONFIG_TYPES: dict[str, type] = {
     "appletv": AppleTvConfig,
+    "browser": BrowserConfig,
     "chromecast": ChromecastConfig,
     "emby": EmbyConfig,
     "foobar2000": Foobar2000Config,

@@ -22,6 +22,7 @@ from typing import Optional, Union
 
 SOURCE_CLASSES: dict[str, Union[str, type]] = {
     "appletv": "mediainfo.sources.appletv.AppleTvSource",
+    "browser": "mediainfo.sources.browser.BrowserSource",
     "chromecast": "mediainfo.sources.chromecast.ChromecastSource",
     "emby": "mediainfo.sources.jellyfin.EmbySource",
     "foobar2000": "mediainfo.sources.foobar2000.Foobar2000Source",
