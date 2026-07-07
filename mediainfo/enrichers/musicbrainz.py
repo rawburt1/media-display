@@ -132,3 +132,12 @@ class MusicBrainzEnricher(ArtworkEnricher):
                 now_playing.images.append(Artwork(url=image_url, label="Album art (MusicBrainz)"))
         except Exception:
             logger.exception("MusicBrainz enrichment error")
+
+    def test_connection(self) -> Tuple[bool, str]:
+        try:
+            result = _query_musicbrainz("Queen", "A Night at the Opera")
+            if result is not None:
+                return True, "Resolved test query successfully"
+            return False, "No match for test query (musicbrainz.org may be unreachable)"
+        except Exception as exc:
+            return False, f"Error: {exc}"

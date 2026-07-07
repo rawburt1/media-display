@@ -319,3 +319,29 @@ def test_cache_get_path_returns_none_for_missing_file_url(tmp_path):
     cache = ImageCache(tmp_path)
     result = cache.get_path(Artwork(url="file:///nonexistent/path/art.jpg"))
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_stops_background_loop():
+    src = _source()
+    with patch.object(AppleTvSource, "get_now_playing", return_value=None), \
+         patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe:
+        ok, message = src.test_connection()
+
+    assert ok is True
+    assert "nothing currently playing" in message
+    call_soon_threadsafe.assert_called_once()
+
+
+def test_test_connection_stops_background_loop_even_on_error():
+    src = _source()
+    with patch.object(AppleTvSource, "get_now_playing", side_effect=RuntimeError("boom")), \
+         patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe:
+        ok, message = src.test_connection()
+
+    assert ok is False
+    assert "boom" in message
+    call_soon_threadsafe.assert_called_once()

@@ -169,3 +169,31 @@ def test_resolve_release_group_ids_without_library_skips_caching():
         resolve_release_group_ids(None, "Pink Floyd", "The Wall")
         resolve_release_group_ids(None, "Pink Floyd", "The Wall")
         assert mock_get.call_count == 2  # no library, so no caching
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_success():
+    with patch(
+        "mediainfo.enrichers.musicbrainz._query_musicbrainz",
+        return_value=("artist-mbid", "album-mbid"),
+    ):
+        ok, message = MusicBrainzEnricher(_config()).test_connection()
+    assert ok is True
+
+
+def test_test_connection_failure():
+    with patch("mediainfo.enrichers.musicbrainz._query_musicbrainz", return_value=None):
+        ok, message = MusicBrainzEnricher(_config()).test_connection()
+    assert ok is False
+
+
+def test_test_connection_handles_exception():
+    with patch(
+        "mediainfo.enrichers.musicbrainz._query_musicbrainz", side_effect=RuntimeError("boom")
+    ):
+        ok, message = MusicBrainzEnricher(_config()).test_connection()
+    assert ok is False
+    assert "boom" in message

@@ -137,3 +137,9 @@ def test_does_not_add_duplicate_url(mock_fetch, tmp_path):
     LibraryEnricher(library=library).enrich(np)
 
     assert len(np.images) == 1
+
+
+def test_test_connection_no_network_needed():
+    ok, message = LibraryEnricher().test_connection()
+    assert ok is True
+    assert "no network" in message.lower()

@@ -91,6 +91,15 @@ class TheTvDbEnricher(ArtworkEnricher):
         except Exception:
             logger.exception("thetvdb.com enrichment error")
 
+    def test_connection(self) -> Tuple[bool, str]:
+        try:
+            token = self._login()
+            if token:
+                return True, "Logged in successfully"
+            return False, "Login failed - check api_key/pin"
+        except Exception as exc:
+            return False, f"Error: {exc}"
+
     def _resolve_series_id(self, title: str, subtitle: str) -> Optional[str]:
         cache_key = (title, subtitle)
         if cache_key in self._series_search_cache:

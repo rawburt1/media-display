@@ -13,7 +13,7 @@ the other's result depending on which happens to run first.
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import requests
 
@@ -77,6 +77,17 @@ class OmdbEnricher(ArtworkEnricher):
         if data.get("Response") != "True":
             return None
         return self._parse_rating(data.get("imdbRating"))
+
+    def test_connection(self) -> Tuple[bool, str]:
+        try:
+            # tt0133093 is The Matrix's IMDb id - a stable, well-known
+            # test target, same one used by the tmdb/fanarttv checks.
+            rating = self._fetch({"i": "tt0133093"})
+            if rating is not None:
+                return True, f"API reachable - The Matrix rated {rating}/10"
+            return False, "No response - check api_key"
+        except Exception as exc:
+            return False, f"Error: {exc}"
 
     def _get(self, params: dict):
         return requests.get(

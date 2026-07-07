@@ -51,11 +51,19 @@ class MediaSource(ABC):
         return None
 
     def test_connection(self) -> Tuple[bool, str]:
-        """Optional connectivity check for the config UI's "test
-        connection" button. Default: not implemented here - today this is
-        instead dispatched by name in
-        mediainfo/outputs/config_dashboard.py (test_source()); migrating
-        an individual plugin's test logic to this method is a reasonable
-        future increment, one plugin at a time, rather than all at once.
-        """
-        return False, "No connection test available for this plugin"
+        """Connectivity check for the config UI's "test connection"
+        button: poll once via the real get_now_playing() - the same call
+        the orchestrator itself makes every tick, so there's no separate
+        test code path to fall out of sync with real polling. This one
+        implementation covers every source uniformly; a plugin needing
+        extra cleanup around it (e.g. AppleTvSource's background asyncio
+        loop) should override this and delegate back via super()."""
+        try:
+            result = self.get_now_playing()
+            if self.last_poll_failed:
+                return False, "Could not connect - check host/credentials"
+            if result is not None:
+                return True, f"Connected - currently playing: {result.title}"
+            return True, "Connected - nothing currently playing"
+        except Exception as exc:
+            return False, f"Error: {exc}"

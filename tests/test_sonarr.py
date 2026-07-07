@@ -122,3 +122,26 @@ def test_api_error_does_not_propagate(mock_get):
     _enricher().enrich(now_playing)
 
     assert now_playing.images == []
+
+
+# ---------------------------------------------------------------------------
+# test_connection (shared ArrEnricher implementation - see also
+# test_radarr.py/test_lidarr.py for the same coverage on the other two)
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.arr_base.requests.get")
+def test_test_connection_success(mock_get):
+    mock_get.return_value.raise_for_status = MagicMock()
+    ok, message = _enricher().test_connection()
+    assert ok is True
+    args, kwargs = mock_get.call_args
+    assert args[0] == "http://192.168.1.50:8989/api/v3/system/status"
+    assert kwargs["headers"] == {"X-Api-Key": "key123"}
+
+
+@patch("mediainfo.enrichers.arr_base.requests.get")
+def test_test_connection_handles_exception(mock_get):
+    mock_get.side_effect = RuntimeError("connection refused")
+    ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "connection refused" in message

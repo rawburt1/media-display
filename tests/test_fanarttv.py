@@ -367,3 +367,28 @@ def test_best_url_picks_most_liked_among_preferred():
 def test_best_url_empty_returns_none():
     assert best_url(None) is None
     assert best_url([]) is None
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_success():
+    with patch.object(FanartTvEnricher, "_get", return_value={"movieposter": []}):
+        ok, message = _enricher().test_connection()
+    assert ok is True
+    assert "API reachable" in message
+
+
+def test_test_connection_failure():
+    with patch.object(FanartTvEnricher, "_get", return_value=None):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "api_key" in message
+
+
+def test_test_connection_handles_exception():
+    with patch.object(FanartTvEnricher, "_get", side_effect=RuntimeError("boom")):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "boom" in message
