@@ -138,14 +138,14 @@ def test_enricher_fanarttv_failure():
 
 
 def test_enricher_tmdb_success():
-    with patch("mediainfo.enrichers.tmdb.TmdbEnricher._fetch_rating", return_value=8.7):
+    with patch("mediainfo.enrichers.tmdb.fetch_rating", return_value=8.7):
         ok, message = check_enricher("tmdb", MagicMock())
     assert ok is True
     assert "8.7" in message
 
 
 def test_enricher_tmdb_failure():
-    with patch("mediainfo.enrichers.tmdb.TmdbEnricher._fetch_rating", return_value=None):
+    with patch("mediainfo.enrichers.tmdb.fetch_rating", return_value=None):
         ok, message = check_enricher("tmdb", MagicMock())
     assert ok is False
     assert "api_key" in message

@@ -230,7 +230,9 @@ def test_build_mediadata_store_constructed_when_artwork_enabled():
     with patch("mediainfo.wiring.MediaDataStore", fake_cls):
         result = build_mediadata_store(cfg, fake_cache)
 
-    fake_cls.assert_called_once_with(cfg.mediadata, cache=fake_cache, discogs_token="")
+    fake_cls.assert_called_once_with(
+        cfg.mediadata, cache=fake_cache, discogs_token="", tmdb_api_key="", fanarttv_api_key="",
+    )
     assert result is fake_cls.return_value
 
 
@@ -273,6 +275,42 @@ def test_build_mediadata_store_skips_discogs_token_when_disabled():
 
     _, kwargs = fake_cls.call_args
     assert kwargs["discogs_token"] == ""
+
+
+def test_build_mediadata_store_passes_tmdb_and_fanarttv_keys_when_enabled():
+    artwork_cfg = MagicMock(enabled=True)
+    tmdb_cfg = MagicMock(enabled=True, api_key="tmdb-key")
+    fanarttv_cfg = MagicMock(enabled=True, api_key="fanarttv-key")
+    cfg = _minimal_config(
+        enrichers={"mediadata": artwork_cfg, "tmdb": tmdb_cfg, "fanarttv": fanarttv_cfg},
+        text_enrichers={},
+    )
+    fake_cls = MagicMock(return_value=MagicMock())
+
+    with patch("mediainfo.wiring.MediaDataStore", fake_cls):
+        build_mediadata_store(cfg, MagicMock())
+
+    _, kwargs = fake_cls.call_args
+    assert kwargs["tmdb_api_key"] == "tmdb-key"
+    assert kwargs["fanarttv_api_key"] == "fanarttv-key"
+
+
+def test_build_mediadata_store_skips_tmdb_and_fanarttv_keys_when_disabled():
+    artwork_cfg = MagicMock(enabled=True)
+    tmdb_cfg = MagicMock(enabled=False, api_key="tmdb-key")
+    fanarttv_cfg = MagicMock(enabled=False, api_key="fanarttv-key")
+    cfg = _minimal_config(
+        enrichers={"mediadata": artwork_cfg, "tmdb": tmdb_cfg, "fanarttv": fanarttv_cfg},
+        text_enrichers={},
+    )
+    fake_cls = MagicMock(return_value=MagicMock())
+
+    with patch("mediainfo.wiring.MediaDataStore", fake_cls):
+        build_mediadata_store(cfg, MagicMock())
+
+    _, kwargs = fake_cls.call_args
+    assert kwargs["tmdb_api_key"] == ""
+    assert kwargs["fanarttv_api_key"] == ""
 
 
 # ---------------------------------------------------------------------------

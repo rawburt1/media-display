@@ -1,9 +1,11 @@
-"""Tests for the TMDb rating enricher."""
+"""Tests for the TMDb rating enricher, and the pure module-level search/
+image-url functions it shares with MediaDataStore (see
+mediainfo/media_data_store.py's _fetch_movie_artwork/_fetch_series_artwork)."""
 
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import TmdbConfig
-from mediainfo.enrichers.tmdb import TmdbEnricher
+from mediainfo.enrichers.tmdb import TmdbEnricher, find_movie, find_tv, image_url
 from mediainfo.models import NowPlaying
 
 
@@ -142,3 +144,59 @@ def test_v4_jwt_token_sent_as_bearer_header(mock_get):
     _, kwargs = mock_get.call_args
     assert kwargs["headers"]["Authorization"] == f"Bearer {jwt_token}"
     assert "api_key" not in (kwargs.get("params") or {})
+
+
+# ---------------------------------------------------------------------------
+# find_movie / find_tv / image_url - used by MediaDataStore, not by
+# TmdbEnricher itself.
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.tmdb.requests.get")
+def test_find_movie_prefers_result_matching_year(mock_get):
+    mock_get.return_value = _response(json_data={"results": [
+        {"id": 1, "release_date": "1985-01-01"},
+        {"id": 2, "release_date": "1999-03-31"},
+    ]})
+
+    result = find_movie("test-key", "The Matrix", 1999)
+
+    assert result == {"id": 2, "release_date": "1999-03-31"}
+
+
+@patch("mediainfo.enrichers.tmdb.requests.get")
+def test_find_movie_falls_back_to_first_result_without_year_match(mock_get):
+    mock_get.return_value = _response(json_data={"results": [
+        {"id": 1, "release_date": "1985-01-01"},
+    ]})
+
+    result = find_movie("test-key", "The Matrix", 2010)
+
+    assert result == {"id": 1, "release_date": "1985-01-01"}
+
+
+@patch("mediainfo.enrichers.tmdb.requests.get")
+def test_find_movie_no_results_returns_none(mock_get):
+    mock_get.return_value = _response(json_data={"results": []})
+
+    assert find_movie("test-key", "Nonexistent Movie", None) is None
+
+
+@patch("mediainfo.enrichers.tmdb.requests.get")
+def test_find_tv_takes_top_result_no_year_filter(mock_get):
+    mock_get.return_value = _response(json_data={"results": [
+        {"id": 1399, "first_air_date": "2011-04-17"},
+    ]})
+
+    result = find_tv("test-key", "Game of Thrones")
+
+    assert result == {"id": 1399, "first_air_date": "2011-04-17"}
+    url = mock_get.call_args[0][0]
+    assert url.endswith("/search/tv")
+
+
+def test_image_url_builds_cdn_url():
+    assert image_url("/poster.jpg", "w500") == "https://image.tmdb.org/t/p/w500/poster.jpg"
+
+
+def test_image_url_none_path_returns_none():
+    assert image_url(None, "w500") is None

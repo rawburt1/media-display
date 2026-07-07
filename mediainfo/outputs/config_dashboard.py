@@ -128,8 +128,8 @@ def test_enricher(name: str, enricher_config: Any) -> Tuple[bool, str]:
         if name == "tmdb":
             from mediainfo.enrichers import tmdb as tmdb_module
 
-            rating = tmdb_module.TmdbEnricher(enricher_config)._fetch_rating(
-                f"{tmdb_module._BASE_URL}/movie/603"
+            rating = tmdb_module.fetch_rating(
+                enricher_config.api_key, f"{tmdb_module._BASE_URL}/movie/603"
             )
             ok = rating is not None
             return ok, (f"API reachable - The Matrix rated {rating}/10" if ok

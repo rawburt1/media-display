@@ -694,12 +694,15 @@ outputs:
 enrichers:
 
   # Unified media-data cache (see `mediadata:` below) — checks the local
-  # on-disk album-art cache before any other music enricher runs, falling
-  # back to a real MusicBrainz (free) / Discogs (if enrichers.discogs.token
-  # is set) lookup on a miss and caching the result for next time. Off by
-  # default; listed first (like `library:` below) so a cache hit here saves
-  # every enricher after it a redundant lookup. Movie/series artwork isn't
-  # covered yet - only music.
+  # on-disk cache before any other artwork enricher runs: album art for
+  # music (falling back to a real MusicBrainz [free] / Discogs [if
+  # enrichers.discogs.token is set] lookup on a miss), and poster+fanart
+  # for movies/TV episodes (via enrichers.tmdb's credential, falling back
+  # to enrichers.fanarttv's for movies only - reuses whatever credentials
+  # those sections already have configured, no separate key needed).
+  # Caches the result for next time either way. Off by default; listed
+  # first (like `library:` below) so a cache hit here saves every
+  # enricher after it a redundant lookup.
   mediadata:
     enabled: false
 
@@ -903,9 +906,7 @@ cache:
 # (mediainfo/media_data_store.py) that organizes content as
 # movies/<Title> (<Year>)/poster.jpg etc. instead of the flat cache/
 # directory above. Only read when at least one of enrichers.mediadata /
-# text_enrichers.mediadata above is enabled - currently that's music
-# (album art + lyrics) only; movie/series artwork is a planned follow-up
-# (movies_days/series_days below are accepted but not yet used).
+# text_enrichers.mediadata above is enabled.
 mediadata:
   path: ./mediadata
   # Prefer cached content over a fresh external check - a refresh is
@@ -913,12 +914,10 @@ mediadata:
   cache_first: true
   refresh:
     enabled: true
-    # A released movie's poster/fanart rarely changes. (Not used yet -
-    # movie/series artwork fetching is a planned follow-up.)
+    # A released movie's poster/fanart rarely changes.
     movies_days: 180
     # Checked more often than movies - a still-airing show's poster/
-    # fanart can change when a new season is announced/released. (Not
-    # used yet - see movies_days above.)
+    # fanart can change when a new season is announced/released.
     series_days: 30
     # An album's art essentially never changes once released.
     music_days: 365

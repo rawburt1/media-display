@@ -1,6 +1,6 @@
 """Tests for MediaDataStore - a unified artwork/lyrics/metadata cache,
-wired into the live app for music only (album art + lyrics) - see the
-module's own docstring."""
+wired into the live app for album art, movie/series posters+fanart, and
+lyrics - see the module's own docstring."""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -10,11 +10,16 @@ from mediainfo.config import MediaDataConfig, MediaDataRefreshConfig
 from mediainfo.media_data_store import MediaDataStore
 
 
-def _store(tmp_path, refresh=None, cache=None, discogs_token="", **kwargs):
+def _store(
+    tmp_path, refresh=None, cache=None, discogs_token="", tmdb_api_key="", fanarttv_api_key="",
+    **kwargs,
+):
     return MediaDataStore(
         MediaDataConfig(path=str(tmp_path), refresh=refresh or MediaDataRefreshConfig(), **kwargs),
         cache=cache,
         discogs_token=discogs_token,
+        tmdb_api_key=tmdb_api_key,
+        fanarttv_api_key=fanarttv_api_key,
     )
 
 
@@ -355,9 +360,13 @@ def test_get_movie_fanart_uses_a_separate_file_from_poster(tmp_path):
     assert result == store.movie_dir("Alien", 1979) / "fanart.jpg"
 
 
-def test_fetch_movie_artwork_stub_returns_none(tmp_path):
-    store = _store(tmp_path)
-    assert store._fetch_movie_artwork("Alien", 1979, "poster") is None
+def test_fetch_movie_artwork_no_tmdb_key_returns_none(tmp_path):
+    store = _store(tmp_path)  # no tmdb_api_key configured
+    with patch("mediainfo.media_data_store.tmdb.find_movie") as find_movie:
+        result = store._fetch_movie_artwork("Alien", 1979, "poster")
+
+    find_movie.assert_not_called()
+    assert result is None
 
 
 def test_refresh_movie_forces_fetch_even_when_fresh(tmp_path):
@@ -376,9 +385,9 @@ def test_refresh_movie_forces_fetch_even_when_fresh(tmp_path):
     assert (item_dir / "poster.jpg").read_bytes() == b"refreshed"
 
 
-def test_refresh_movie_returns_false_when_stub_finds_nothing(tmp_path):
-    store = _store(tmp_path)
-    updated = store.refresh_movie("Alien", 1979)  # real stub, always None
+def test_refresh_movie_returns_false_when_no_tmdb_key_configured(tmp_path):
+    store = _store(tmp_path)  # no tmdb_api_key - _fetch_movie_artwork finds nothing
+    updated = store.refresh_movie("Alien", 1979)
     assert updated is False
 
 
@@ -549,6 +558,123 @@ def test_fetch_album_artwork_downloads_real_bytes(tmp_path):
 
     assert result == (b"fake-jpeg-bytes", "musicbrainz")
     assert not downloaded.exists()  # temp file cleaned up after reading
+
+
+# ---------------------------------------------------------------------------
+# Real _fetch_movie_artwork / _fetch_series_artwork implementations (mocking
+# tmdb.find_movie/find_tv and fanarttv.fetch/best_url directly, rather than
+# the raw HTTP calls - see test_tmdb.py/test_fanarttv.py for coverage of
+# those functions themselves).
+# ---------------------------------------------------------------------------
+
+def test_fetch_movie_artwork_via_tmdb(tmp_path):
+    store = _store(tmp_path, cache=ImageCache(tmp_path / "cache"), tmdb_api_key="tmdb-key")
+    movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
+
+    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie) as find_movie, \
+         patch.object(ImageCache, "download_temp", return_value=None) as download_temp:
+        result = store._fetch_movie_artwork("The Matrix", 1999, "poster")
+
+    find_movie.assert_called_once_with("tmdb-key", "The Matrix", 1999)
+    assert download_temp.call_args.args[0].url == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert result is None  # download_temp returning None -> no bytes to write
+
+
+def test_fetch_movie_fanart_via_tmdb_uses_backdrop(tmp_path):
+    store = _store(tmp_path, cache=ImageCache(tmp_path / "cache"), tmdb_api_key="tmdb-key")
+    movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
+
+    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie), \
+         patch.object(ImageCache, "download_temp", return_value=None) as download_temp:
+        store._fetch_movie_artwork("The Matrix", 1999, "fanart")
+
+    assert download_temp.call_args.args[0].url == "https://image.tmdb.org/t/p/w1280/backdrop.jpg"
+
+
+def test_fetch_movie_artwork_falls_back_to_fanarttv(tmp_path):
+    store = _store(
+        tmp_path, cache=ImageCache(tmp_path / "cache"),
+        tmdb_api_key="tmdb-key", fanarttv_api_key="fanarttv-key",
+    )
+    movie = {"id": 603, "poster_path": None, "backdrop_path": None}  # resolved, but no TMDb image
+    fanarttv_data = {"movieposter": [{"url": "https://fanart.example/poster.jpg", "likes": "5"}]}
+
+    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie), \
+         patch("mediainfo.media_data_store.fanarttv.fetch", return_value=fanarttv_data) as fetch, \
+         patch.object(ImageCache, "download_temp", return_value=None) as download_temp:
+        store._fetch_movie_artwork("The Matrix", 1999, "poster")
+
+    fetch.assert_called_once_with("fanarttv-key", "movies/603")
+    assert download_temp.call_args.args[0].url == "https://fanart.example/poster.jpg"
+
+
+def test_fetch_movie_artwork_no_fanarttv_key_skips_fallback(tmp_path):
+    store = _store(tmp_path, tmdb_api_key="tmdb-key", fanarttv_api_key="")
+    movie = {"id": 603, "poster_path": None, "backdrop_path": None}
+
+    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie), \
+         patch("mediainfo.media_data_store.fanarttv.fetch") as fetch:
+        result = store._fetch_movie_artwork("The Matrix", 1999, "poster")
+
+    fetch.assert_not_called()
+    assert result is None
+
+
+def test_fetch_movie_artwork_no_tmdb_match_skips_fanarttv(tmp_path):
+    """fanart.tv needs the TMDb id find_movie would have resolved - if
+    TMDb has no match at all, there's no id to look fanart.tv up with."""
+    store = _store(tmp_path, tmdb_api_key="tmdb-key", fanarttv_api_key="fanarttv-key")
+
+    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=None), \
+         patch("mediainfo.media_data_store.fanarttv.fetch") as fetch:
+        result = store._fetch_movie_artwork("Unknown Movie", None, "poster")
+
+    fetch.assert_not_called()
+    assert result is None
+
+
+def test_fetch_series_artwork_via_tmdb(tmp_path):
+    store = _store(tmp_path, cache=ImageCache(tmp_path / "cache"), tmdb_api_key="tmdb-key")
+    show = {"id": 1399, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
+
+    with patch("mediainfo.media_data_store.tmdb.find_tv", return_value=show) as find_tv, \
+         patch.object(ImageCache, "download_temp", return_value=None) as download_temp:
+        result = store._fetch_series_artwork("Game of Thrones", None, "poster")
+
+    find_tv.assert_called_once_with("tmdb-key", "Game of Thrones")
+    assert download_temp.call_args.args[0].url == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert result is None
+
+
+def test_fetch_series_artwork_no_tmdb_key_returns_none(tmp_path):
+    store = _store(tmp_path)  # no tmdb_api_key configured
+    with patch("mediainfo.media_data_store.tmdb.find_tv") as find_tv:
+        result = store._fetch_series_artwork("Game of Thrones", None, "poster")
+
+    find_tv.assert_not_called()
+    assert result is None
+
+
+def test_fetch_series_artwork_no_match_returns_none(tmp_path):
+    store = _store(tmp_path, tmdb_api_key="tmdb-key")
+    with patch("mediainfo.media_data_store.tmdb.find_tv", return_value=None):
+        result = store._fetch_series_artwork("Unknown Show", None, "poster")
+
+    assert result is None
+
+
+def test_fetch_series_artwork_never_uses_fanarttv(tmp_path):
+    """No fanart.tv fallback for series - it needs a TVDB id this store
+    has no way to resolve (see _fetch_series_artwork's docstring)."""
+    store = _store(tmp_path, tmdb_api_key="tmdb-key", fanarttv_api_key="fanarttv-key")
+    show = {"id": 1399, "poster_path": None, "backdrop_path": None}
+
+    with patch("mediainfo.media_data_store.tmdb.find_tv", return_value=show), \
+         patch("mediainfo.media_data_store.fanarttv.fetch") as fetch:
+        result = store._fetch_series_artwork("Game of Thrones", None, "poster")
+
+    fetch.assert_not_called()
+    assert result is None
 
 
 @patch("mediainfo.enrichers.lrclib.requests.get")

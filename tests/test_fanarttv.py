@@ -1,10 +1,12 @@
-"""Tests for the fanart.tv artwork enricher."""
+"""Tests for the fanart.tv artwork enricher, and the pure module-level
+fetch/best_url functions it shares with MediaDataStore (see
+mediainfo/media_data_store.py's _fetch_movie_artwork)."""
 
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import FanartTvConfig
-from mediainfo.enrichers.fanarttv import FanartTvEnricher
+from mediainfo.enrichers.fanarttv import FanartTvEnricher, best_url, fetch
 from mediainfo.models import Artwork, NowPlaying
 
 
@@ -308,3 +310,60 @@ def test_music_musicbrainz_no_results_does_nothing(mock_get):
 
     assert now_playing.images == []
     mock_get.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# fetch / best_url - used by MediaDataStore, not by FanartTvEnricher itself.
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.fanarttv.requests.get")
+def test_fetch_returns_json_body(mock_get):
+    response = MagicMock()
+    response.status_code = 200
+    response.raise_for_status = MagicMock()
+    response.json.return_value = {"movieposter": []}
+    mock_get.return_value = response
+
+    result = fetch("test-key", "movies/603")
+
+    assert result == {"movieposter": []}
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://webservice.fanart.tv/v3/movies/603"
+    assert kwargs["params"] == {"api_key": "test-key"}
+
+
+@patch("mediainfo.enrichers.fanarttv.requests.get")
+def test_fetch_404_returns_none(mock_get):
+    response = MagicMock()
+    response.status_code = 404
+    mock_get.return_value = response
+
+    assert fetch("test-key", "movies/999999") is None
+
+
+@patch("mediainfo.enrichers.fanarttv.requests.get")
+def test_fetch_swallows_request_exception(mock_get):
+    mock_get.side_effect = RuntimeError("connection refused")
+
+    assert fetch("test-key", "movies/603") is None
+
+
+def test_best_url_prefers_preferred_language():
+    entries = [
+        {"url": "https://example.com/fr.jpg", "lang": "fr", "likes": "100"},
+        {"url": "https://example.com/en.jpg", "lang": "en", "likes": "1"},
+    ]
+    assert best_url(entries) == "https://example.com/en.jpg"
+
+
+def test_best_url_picks_most_liked_among_preferred():
+    entries = [
+        {"url": "https://example.com/a.jpg", "lang": "en", "likes": "1"},
+        {"url": "https://example.com/b.jpg", "lang": "en", "likes": "10"},
+    ]
+    assert best_url(entries) == "https://example.com/b.jpg"
+
+
+def test_best_url_empty_returns_none():
+    assert best_url(None) is None
+    assert best_url([]) is None
