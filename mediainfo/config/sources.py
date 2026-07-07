@@ -121,6 +121,20 @@ class VinylConfig:
 
 
 @dataclasses.dataclass
+class VlcConfig:
+    enabled: bool = False
+    host: str = "localhost"
+    port: int = 8080
+    # VLC's Lua HTTP interface password - Tools -> Preferences -> Show
+    # settings: All -> Interface -> Main interfaces -> Lua -> Lua HTTP ->
+    # Password. The HTTP interface itself must also be enabled under
+    # Interface -> Main interfaces -> check "Web".
+    password: str = ""
+    # Per-request timeout, in seconds.
+    timeout: float = 5.0
+
+
+@dataclasses.dataclass
 class ShieldConfig:
     enabled: bool = False
     # IP address of the Android TV device (e.g. Nvidia Shield).
@@ -213,5 +227,6 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
     "sonos": SonosConfig,
     "spotify": SpotifyConfig,
     "vinyl": VinylConfig,
+    "vlc": VlcConfig,
     "youtube": YoutubeConfig,
 }

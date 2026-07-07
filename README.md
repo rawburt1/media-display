@@ -19,7 +19,9 @@ Currently implemented:
   playing), MPD/Music Player Daemon (music, including embedded/folder
   cover art when the server supports it), Logitech Media Server/Squeezebox
   (music, auto-selects the active player across a multi-player household
-  unless `player_id` is set), Apple TV (any app, via the Companion/MRP/AirPlay
+  unless `player_id` is set), VLC (any media, via VLC's built-in web/HTTP
+  interface - requires enabling it and setting a password in VLC's own
+  preferences), Apple TV (any app, via the Companion/MRP/AirPlay
   protocols), **the YouTube *app* on Android TV** (⚠️ not YouTube in
   general - this works only via ADB against an actual Android TV device
   running the YouTube app, e.g. an Nvidia Shield; it cannot see YouTube
@@ -144,6 +146,7 @@ entirely optional - skip any row for a feature you don't care about.
 | Emby | the equivalent Emby settings page | `sources.emby` |
 | Spotify | [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) (free app) | `sources.spotify` |
 | Vinyl recognition | [AudD](https://audd.io/) - see [vinyl_recognizer/README.md](vinyl_recognizer/) | `sources.vinyl` |
+| VLC | Set in VLC: Preferences → Lua → Lua HTTP → Password | `sources.vlc` |
 | fanart.tv | [fanart.tv/get-an-api-key](https://fanart.tv/get-an-api-key/) | `enrichers.fanarttv` |
 | TheTVDB | [thetvdb.com/dashboard/account/apikey](https://thetvdb.com/dashboard/account/apikey) | `enrichers.thetvdb` |
 | Sonarr | Settings → General → Security | `enrichers.sonarr` |
