@@ -693,6 +693,16 @@ outputs:
 
 enrichers:
 
+  # Unified media-data cache (see `mediadata:` below) — checks the local
+  # on-disk album-art cache before any other music enricher runs, falling
+  # back to a real MusicBrainz (free) / Discogs (if enrichers.discogs.token
+  # is set) lookup on a miss and caching the result for next time. Off by
+  # default; listed first (like `library:` below) so a cache hit here saves
+  # every enricher after it a redundant lookup. Movie/series artwork isn't
+  # covered yet - only music.
+  mediadata:
+    enabled: false
+
   # Local music library — fills in album art for sources that don't
   # report an album at all (e.g. YouTube), by looking up the playing
   # artist+song in the local library (see `library:` below, populated via
@@ -834,6 +844,14 @@ enrichers:
 # ---------------------------------------------------------------------------
 
 text_enrichers:
+  # Unified media-data cache (see `mediadata:` below) — checks the local
+  # on-disk lyrics cache before any other lyrics enricher runs, falling
+  # back to a real LRCLIB (free) lookup on a miss and caching the result
+  # for next time. Off by default; list it before lrclib below if you
+  # enable both, so the cache gets first look.
+  mediadata:
+    enabled: false
+
   # LRCLIB — free, public lyrics lookup (https://lrclib.net), no API key
   # needed. Looks up both plain and time-synced lyrics for the currently
   # playing music track by artist/title/album/duration. Only ever shows
@@ -881,12 +899,13 @@ cache:
   min_width: 640
   min_height: 480
 
-# NOT YET USED BY THE RUNNING APP - foundation for a future unified,
-# human-browsable artwork/lyrics/metadata cache (mediainfo/media_data_store.py)
-# that would organize content as movies/<Title> (<Year>)/poster.jpg etc.
-# instead of the flat cache/ directory above. Nothing reads this section
-# yet; documented here only so the shape is visible ahead of it being wired
-# into the app.
+# Unified, human-browsable artwork/lyrics/metadata cache
+# (mediainfo/media_data_store.py) that organizes content as
+# movies/<Title> (<Year>)/poster.jpg etc. instead of the flat cache/
+# directory above. Only read when at least one of enrichers.mediadata /
+# text_enrichers.mediadata above is enabled - currently that's music
+# (album art + lyrics) only; movie/series artwork is a planned follow-up
+# (movies_days/series_days below are accepted but not yet used).
 mediadata:
   path: ./mediadata
   # Prefer cached content over a fresh external check - a refresh is
@@ -894,10 +913,12 @@ mediadata:
   cache_first: true
   refresh:
     enabled: true
-    # A released movie's poster/fanart rarely changes.
+    # A released movie's poster/fanart rarely changes. (Not used yet -
+    # movie/series artwork fetching is a planned follow-up.)
     movies_days: 180
     # Checked more often than movies - a still-airing show's poster/
-    # fanart can change when a new season is announced/released.
+    # fanart can change when a new season is announced/released. (Not
+    # used yet - see movies_days above.)
     series_days: 30
     # An album's art essentially never changes once released.
     music_days: 365

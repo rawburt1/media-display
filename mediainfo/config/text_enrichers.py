@@ -17,6 +17,16 @@ class LrclibConfig:
 
 
 @dataclasses.dataclass
+class MediaDataLyricsEnricherConfig:
+    # Checks the local unified media-data cache (see
+    # mediainfo/media_data_store.py, configured via the top-level
+    # `mediadata:` section) for track lyrics - see mediainfo/enrichers/
+    # mediadata_lyrics.py. No credentials of its own; a cache miss falls
+    # through to a real LRCLIB (free) lookup.
+    enabled: bool = False
+
+
+@dataclasses.dataclass
 class OllamaTextConfig:
     # Off by default - requires a local Ollama instance the user has set
     # up (and pulled a model into) themselves; see
@@ -37,5 +47,6 @@ class OllamaTextConfig:
 # new text enricher starts here (see also registries.TEXT_ENRICHER_CLASSES).
 TEXT_ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "lrclib": LrclibConfig,
+    "mediadata": MediaDataLyricsEnricherConfig,
     "ollama_text": OllamaTextConfig,
 }

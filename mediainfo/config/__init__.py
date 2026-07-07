@@ -26,6 +26,7 @@ from mediainfo.config.enrichers import (
     LastFmConfig,
     LibraryEnricherConfig,
     LidarrConfig,
+    MediaDataArtworkEnricherConfig,
     MusicBrainzConfig,
     OmdbConfig,
     RadarrConfig,
@@ -92,6 +93,7 @@ from mediainfo.config.sources import (
 from mediainfo.config.text_enrichers import (
     TEXT_ENRICHER_CONFIG_TYPES,
     LrclibConfig,
+    MediaDataLyricsEnricherConfig,
     OllamaTextConfig,
 )
 
@@ -129,7 +131,9 @@ __all__ = [
     "LocalWallpaperConfig",
     "LoggingConfig",
     "LrclibConfig",
+    "MediaDataArtworkEnricherConfig",
     "MediaDataConfig",
+    "MediaDataLyricsEnricherConfig",
     "MediaDataRefreshConfig",
     "MopidyConfig",
     "MpdConfig",
@@ -250,8 +254,8 @@ class Config:
     # source, never mixed" rule, but a source is picked at random each
     # batch instead of always preferring the highest-priority one.
     idle_mode: str = "priority"
-    # Foundation for a future unified artwork/lyrics/metadata cache (see
-    # mediainfo/media_data_store.py) - not read by anything yet.
+    # Unified artwork/lyrics/metadata cache (see mediainfo/media_data_store.py),
+    # read by the opt-in enrichers.mediadata / text_enrichers.mediadata plugins.
     mediadata: MediaDataConfig = dataclasses.field(default_factory=MediaDataConfig)
 
     @classmethod

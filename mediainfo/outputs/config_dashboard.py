@@ -98,9 +98,9 @@ def test_enricher(name: str, enricher_config: Any) -> Tuple[bool, str]:
                     "No response - check api_key")
 
         if name == "discogs":
-            from mediainfo.enrichers.discogs import DiscogsEnricher
+            from mediainfo.enrichers.discogs import find_cover
 
-            url = DiscogsEnricher(enricher_config)._find_cover("Queen", "A Night at the Opera")
+            url = find_cover(enricher_config.token, "Queen", "A Night at the Opera")
             return True, ("Found cover art for test query" if url else
                           "Reached Discogs, no match for test query (token may still be invalid)")
 

@@ -1,17 +1,20 @@
-"""Tests for MediaDataStore - a foundation-only unified artwork/lyrics/
-metadata cache, not yet wired into the live app (see the module's own
-docstring)."""
+"""Tests for MediaDataStore - a unified artwork/lyrics/metadata cache,
+wired into the live app for music only (album art + lyrics) - see the
+module's own docstring."""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
+from mediainfo.cache import ImageCache
 from mediainfo.config import MediaDataConfig, MediaDataRefreshConfig
 from mediainfo.media_data_store import MediaDataStore
 
 
-def _store(tmp_path, refresh=None, **kwargs):
+def _store(tmp_path, refresh=None, cache=None, discogs_token="", **kwargs):
     return MediaDataStore(
-        MediaDataConfig(path=str(tmp_path), refresh=refresh or MediaDataRefreshConfig(), **kwargs)
+        MediaDataConfig(path=str(tmp_path), refresh=refresh or MediaDataRefreshConfig(), **kwargs),
+        cache=cache,
+        discogs_token=discogs_token,
     )
 
 
@@ -459,6 +462,136 @@ def test_album_uses_music_days_refresh_policy(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Real _fetch_album_artwork / _fetch_lyrics implementations (mocking the
+# underlying MusicBrainz/Discogs/LRCLIB HTTP calls, never a real network
+# request - see test_musicbrainz.py/test_discogs.py/test_lrclib.py for the
+# equivalent enricher-level tests of the same underlying functions).
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.musicbrainz.requests.head")
+@patch("mediainfo.enrichers.musicbrainz.requests.get")
+def test_fetch_album_artwork_via_musicbrainz(mock_get, mock_head, tmp_path):
+    mock_get.return_value.json.return_value = {
+        "release-groups": [
+            {"id": "rg-1", "primary-type": "Album", "artist-credit": [{"artist": {"id": "artist-1"}}]}
+        ]
+    }
+    mock_head.return_value.status_code = 200
+    mock_head.return_value.url = "https://coverartarchive.org/release-group/rg-1/front-500.jpg"
+
+    cache = ImageCache(tmp_path / "cache")
+    with patch.object(cache, "download_temp", return_value=None) as download_temp:
+        store = _store(tmp_path / "store", cache=cache)
+        result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
+
+    download_temp.assert_called_once()
+    assert download_temp.call_args.args[0].url == "https://coverartarchive.org/release-group/rg-1/front-500.jpg"
+    assert result is None  # download_temp returning None -> no bytes to write
+
+
+@patch("mediainfo.enrichers.discogs.requests.get")
+@patch("mediainfo.enrichers.musicbrainz.requests.head")
+@patch("mediainfo.enrichers.musicbrainz.requests.get")
+def test_fetch_album_artwork_falls_back_to_discogs(mock_mb_get, mock_mb_head, mock_discogs_get, tmp_path):
+    mock_mb_get.return_value.json.return_value = {"release-groups": []}  # MusicBrainz finds nothing
+    mock_discogs_get.return_value.json.return_value = {
+        "results": [{"cover_image": "https://discogs.example/cover.jpg"}]
+    }
+
+    cache = ImageCache(tmp_path / "cache")
+    with patch.object(cache, "download_temp", return_value=None) as download_temp:
+        store = _store(tmp_path / "store", cache=cache, discogs_token="test-token")
+        store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
+
+    assert download_temp.call_args.args[0].url == "https://discogs.example/cover.jpg"
+
+
+@patch("mediainfo.enrichers.musicbrainz.requests.head")
+@patch("mediainfo.enrichers.musicbrainz.requests.get")
+def test_fetch_album_artwork_no_discogs_token_skips_fallback(mock_get, mock_head, tmp_path):
+    mock_get.return_value.json.return_value = {"release-groups": []}
+
+    store = _store(tmp_path, discogs_token="")  # blank - Discogs never even attempted
+    with patch("mediainfo.media_data_store.discogs.find_cover") as find_cover:
+        result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
+
+    find_cover.assert_not_called()
+    assert result is None
+
+
+def test_fetch_album_artwork_fanart_kind_is_never_fetched(tmp_path):
+    store = _store(tmp_path, discogs_token="test-token")
+    with patch("mediainfo.media_data_store.musicbrainz.resolve_release_group_ids") as resolve:
+        result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "fanart")
+
+    resolve.assert_not_called()  # no source even attempted for "fanart"
+    assert result is None
+
+
+def test_fetch_album_artwork_without_cache_configured_returns_none(tmp_path):
+    store = _store(tmp_path)  # no cache= passed
+    with patch("mediainfo.media_data_store.musicbrainz.resolve_release_group_ids", return_value=("a", "rg-1")), \
+         patch("mediainfo.media_data_store.musicbrainz.fetch_front_cover", return_value="https://example.com/x.jpg"):
+        result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
+
+    assert result is None
+
+
+def test_fetch_album_artwork_downloads_real_bytes(tmp_path):
+    store = _store(tmp_path / "store", cache=ImageCache(tmp_path / "cache"))
+    downloaded = tmp_path / "downloaded.jpg"
+    downloaded.write_bytes(b"fake-jpeg-bytes")
+
+    with patch("mediainfo.media_data_store.musicbrainz.resolve_release_group_ids", return_value=("a", "rg-1")), \
+         patch("mediainfo.media_data_store.musicbrainz.fetch_front_cover", return_value="https://example.com/x.jpg"), \
+         patch.object(ImageCache, "download_temp", return_value=downloaded):
+        result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
+
+    assert result == (b"fake-jpeg-bytes", "musicbrainz")
+    assert not downloaded.exists()  # temp file cleaned up after reading
+
+
+@patch("mediainfo.enrichers.lrclib.requests.get")
+def test_fetch_lyrics_via_lrclib_prefers_synced(mock_get, tmp_path):
+    mock_get.return_value.json.return_value = [
+        {"syncedLyrics": "[00:01.00] la la la", "plainLyrics": "la la la"}
+    ]
+
+    store = _store(tmp_path)
+    result = store._fetch_lyrics("Led Zeppelin", "Houses of the Holy", "The Ocean")
+
+    assert result == (b"[00:01.00] la la la", "lrclib")
+
+
+@patch("mediainfo.enrichers.lrclib.requests.get")
+def test_fetch_lyrics_falls_back_to_plain_when_no_synced(mock_get, tmp_path):
+    mock_get.return_value.json.return_value = [{"plainLyrics": "la la la", "syncedLyrics": ""}]
+
+    store = _store(tmp_path)
+    result = store._fetch_lyrics("Led Zeppelin", "Houses of the Holy", "The Ocean")
+
+    assert result == (b"la la la", "lrclib")
+
+
+@patch("mediainfo.enrichers.lrclib.requests.get")
+def test_fetch_lyrics_nothing_found_returns_none(mock_get, tmp_path):
+    mock_get.return_value.json.return_value = []
+
+    store = _store(tmp_path)
+    result = store._fetch_lyrics("Led Zeppelin", "Houses of the Holy", "The Ocean")
+
+    assert result is None
+
+
+@patch("mediainfo.enrichers.lrclib.requests.get", side_effect=Exception("connection refused"))
+def test_fetch_lyrics_network_error_returns_none_not_raise(mock_get, tmp_path):
+    store = _store(tmp_path)
+    result = store._fetch_lyrics("Led Zeppelin", "Houses of the Holy", "The Ocean")
+
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
 # _relocate_to_year_dir
 # ---------------------------------------------------------------------------
 
@@ -538,8 +671,9 @@ def test_get_track_lyrics_fetches_when_missing(tmp_path):
 
 def test_get_track_lyrics_returns_none_when_fetch_finds_nothing(tmp_path):
     store = _store(tmp_path)
-    result = store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "The Rain Song")
-    assert result is None  # real stub, always None
+    with patch.object(store, "_fetch_lyrics", return_value=None):
+        result = store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "The Rain Song")
+    assert result is None
 
 
 def test_get_track_lyrics_records_tracks_entry_in_album_metadata(tmp_path):
@@ -596,9 +730,10 @@ def test_refresh_track_lyrics_keeps_old_file_when_fetch_fails(tmp_path):
     with patch.object(store, "_fetch_lyrics", return_value=(b"good lyrics", "lrclib")):
         store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "The Crunge", year=1973)
 
-    updated = store.refresh_track_lyrics(
-        "Led Zeppelin", "Houses of the Holy", "The Crunge", year=1973
-    )  # real stub: fetch returns None
+    with patch.object(store, "_fetch_lyrics", return_value=None):
+        updated = store.refresh_track_lyrics(
+            "Led Zeppelin", "Houses of the Holy", "The Crunge", year=1973
+        )
 
     assert updated is False
     assert store.get_track_lyrics(

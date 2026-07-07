@@ -85,6 +85,7 @@ ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "lastfm": "mediainfo.enrichers.lastfm.LastFmEnricher",
     "library": "mediainfo.enrichers.library.LibraryEnricher",
     "lidarr": "mediainfo.enrichers.lidarr.LidarrEnricher",
+    "mediadata": "mediainfo.enrichers.mediadata.MediaDataArtworkEnricher",
     "musicbrainz": "mediainfo.enrichers.musicbrainz.MusicBrainzEnricher",
     "omdb": "mediainfo.enrichers.omdb.OmdbEnricher",
     "radarr": "mediainfo.enrichers.radarr.RadarrEnricher",
@@ -101,6 +102,7 @@ ENRICHER_CLASSES: dict[str, Union[str, type]] = {
 # mediainfo.config.TEXT_ENRICHER_CONFIG_TYPES.
 TEXT_ENRICHER_CLASSES: dict[str, Union[str, type]] = {
     "lrclib": "mediainfo.enrichers.lrclib.LrclibEnricher",
+    "mediadata": "mediainfo.enrichers.mediadata_lyrics.MediaDataLyricsEnricher",
     "ollama_text": "mediainfo.enrichers.ollama_text.OllamaTextEnricher",
 }
 
@@ -126,6 +128,13 @@ LIBRARY_AWARE_ENRICHER_NAMES = {
 # Enrichers that need a local directory to cache generated (rather than
 # downloaded) content into, by registry key - see wiring.build_enrichers().
 CACHE_AWARE_ENRICHER_NAMES = {"ai_artwork"}
+
+# Artwork/text enrichers that read the unified MediaDataStore cache (see
+# mediainfo/media_data_store.py), by registry key - wiring.py constructs one
+# shared MediaDataStore instance and injects it into whichever of these are
+# enabled instead of the CACHE_AWARE_ENRICHER_NAMES TextCache/ImageCache path.
+MEDIADATA_AWARE_ENRICHER_NAMES = {"mediadata"}
+MEDIADATA_AWARE_TEXT_ENRICHER_NAMES = {"mediadata"}
 
 # Config attributes to include per output type in the /health response.
 OUTPUT_DETAIL_FIELDS: dict = {

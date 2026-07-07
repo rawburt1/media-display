@@ -3,15 +3,18 @@ folder per movie/series/album (e.g. `movies/Alien (1979)/poster.jpg`), each
 with a `metadata.json` tracking where each piece of content came from and
 when it was last checked/updated.
 
-Foundation only - not yet wired into the live orchestrator/enrichment
-pipeline. Existing `mediainfo.cache.ImageCache` (flat, hash-named artwork
-cache), `mediainfo.text_cache.TextCache` (namespaced lyrics/AI-text cache),
-`mediainfo.poster_store.PosterStore`, and `mediainfo.artwork_overrides.
-ArtworkOverrideStore` are untouched and keep working exactly as before;
-nothing here replaces or migrates them yet. `_fetch_*` methods are explicit
-stubs (return None) - calling real APIs (TMDB/fanart.tv/MusicBrainz/discogs/
-LRCLIB) is separate future work, once this store's cache/refresh mechanics
-are proven out.
+Wired into the live enrichment pipeline for music only (album art +
+lyrics) via mediainfo/enrichers/mediadata.py and mediadata_lyrics.py -
+opt-in, off by default (see those modules). Movie/series artwork
+(_fetch_movie_artwork/_fetch_series_artwork) remain explicit stubs - that
+needs new TMDb search code this pass deliberately doesn't include, see
+the enricher modules' docstrings for why. Existing `mediainfo.cache.
+ImageCache` (flat, hash-named artwork cache, reused here for the actual
+download step - see _download_bytes), `mediainfo.text_cache.TextCache`
+(namespaced lyrics/AI-text cache), `mediainfo.poster_store.PosterStore`,
+and `mediainfo.artwork_overrides.ArtworkOverrideStore` are all untouched
+and keep working exactly as before; nothing here replaces or migrates
+them.
 
 Directory layout:
     {path}/movies/{Title} ({Year})/poster.jpg
@@ -58,7 +61,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
+from mediainfo.cache import ImageCache
 from mediainfo.config import MediaDataConfig
+from mediainfo.enrichers import discogs, lrclib, musicbrainz
+from mediainfo.models import Artwork
 
 # What a `_fetch_*` stub (or, later, a real implementation) returns:
 # (content_bytes, source_name) on success, or None if there's nothing new
@@ -86,7 +92,12 @@ def _sanitize(name: str) -> str:
 
 
 class MediaDataStore:
-    def __init__(self, config: MediaDataConfig):
+    def __init__(
+        self,
+        config: MediaDataConfig,
+        cache: Optional[ImageCache] = None,
+        discogs_token: str = "",
+    ):
         self.config = config
         self.root = Path(config.path).resolve()
         # Guards read-modify-write of a single item's metadata.json - cheap
@@ -94,6 +105,19 @@ class MediaDataStore:
         # concurrently (matches the pattern already used by
         # mediainfo.artwork_overrides.ArtworkOverrideStore).
         self._lock = threading.Lock()
+        # Used by _download_bytes() to actually fetch resolved artwork URLs
+        # (reusing ImageCache's existing minimum-size filtering, JPEG
+        # normalization, and User-Agent handling rather than duplicating
+        # that logic here) - optional so existing tests that only exercise
+        # the cache/refresh-policy engine don't need to construct one.
+        # Without it, every real fetch simply finds nothing (same
+        # externally-visible behaviour as the old always-None stubs).
+        self._cache = cache
+        # Discogs personal access token, for the album-art fallback when
+        # MusicBrainz/Cover Art Archive has nothing - blank means "skip
+        # Discogs", not an error (matches how DiscogsEnricher itself
+        # behaves without a token).
+        self._discogs_token = discogs_token
 
     # -- path builders -----------------------------------------------------
 
@@ -414,10 +438,60 @@ class MediaDataStore:
     def _fetch_album_artwork(
         self, artist: str, album: str, year: Optional[int], kind: str
     ) -> FetchResult:
-        """STUB - always returns None. A real implementation would call
-        MusicBrainz/fanart.tv/discogs here for `kind` ("albumart" or
-        "fanart") - see the module docstring."""
-        return None
+        """Real implementation for kind == "albumart": MusicBrainz/Cover
+        Art Archive first (free, no key), falling back to Discogs if a
+        token is configured and MusicBrainz has nothing.
+
+        kind == "fanart" is deliberately left unfetched: neither source
+        has a distinct "background art" concept for an album (both only
+        ever give a front cover) - returning that same cover under a
+        "fanart" label would be misleading, so get_album_fanart() simply
+        finds nothing until a real background-art source is added.
+        """
+        if kind != "albumart":
+            return None
+        resolved = self._resolve_album_cover_url(artist, album)
+        if resolved is None:
+            return None
+        url, source = resolved
+        return self._download_bytes(url, source)
+
+    def _resolve_album_cover_url(self, artist: str, album: str) -> Optional[Tuple[str, str]]:
+        try:
+            resolved_ids = musicbrainz.resolve_release_group_ids(None, artist, album)
+            if resolved_ids is not None:
+                url = musicbrainz.fetch_front_cover(resolved_ids[1])
+                if url:
+                    return url, "musicbrainz"
+        except Exception:
+            logger.exception("MediaDataStore: MusicBrainz lookup failed for %r - %r", artist, album)
+
+        if not self._discogs_token:
+            return None
+        try:
+            url = discogs.find_cover(self._discogs_token, artist, album)
+        except Exception:
+            logger.exception("MediaDataStore: Discogs lookup failed for %r - %r", artist, album)
+            return None
+        return (url, "discogs") if url else None
+
+    def _download_bytes(self, url: str, source: str) -> FetchResult:
+        if self._cache is None:
+            logger.warning(
+                "MediaDataStore: no ImageCache configured - cannot download %s", url
+            )
+            return None
+        temp_path = self._cache.download_temp(Artwork(url=url))
+        if temp_path is None:
+            return None
+        try:
+            content = temp_path.read_bytes()
+        except OSError:
+            logger.exception("MediaDataStore: failed to read downloaded artwork from %s", temp_path)
+            return None
+        finally:
+            temp_path.unlink(missing_ok=True)
+        return content, source
 
     # -- lyrics -------------------------------------------------------------
     #
@@ -459,10 +533,28 @@ class MediaDataStore:
         return after != before
 
     def _fetch_lyrics(self, artist: str, album: str, title: str) -> FetchResult:
-        """STUB - always returns None. A real implementation would call
-        LRCLIB here (see mediainfo/enrichers/lrclib.py for the existing
-        pattern this project already uses for lyrics lookups)."""
-        return None
+        """Real implementation via LRCLIB (mediainfo/enrichers/lrclib.py's
+        extracted fetch_search()). Always uses the fuzzy search endpoint,
+        never the exact-match one - this store's API has no duration
+        parameter to pass, unlike LrclibEnricher's own duration-aware
+        preference for the exact-match endpoint when available.
+
+        Prefers synced (LRC-timestamped) lyrics for the stored .lrc file,
+        since that's the format its extension implies, falling back to
+        plain lyrics (still better than nothing) when synced isn't
+        available.
+        """
+        try:
+            result = lrclib.fetch_search(artist, title)
+        except Exception:
+            logger.exception("MediaDataStore: LRCLIB lookup failed for %r - %r", artist, title)
+            return None
+        if result is None:
+            return None
+        lyrics = result.get("syncedLyrics") or result.get("plainLyrics") or ""
+        if not lyrics:
+            return None
+        return lyrics.encode("utf-8"), "lrclib"
 
     # -- year-discovered-later migration ----------------------------------
 
