@@ -144,6 +144,11 @@ class MediaDataStore:
         # Short-lived memoization for _cached_lookup() - see
         # _LOOKUP_CACHE_SECONDS.
         self._lookup_cache: Dict[tuple, Tuple[float, Any]] = {}
+        # Artwork/lyrics file Paths with a background refresh currently in
+        # flight (see _resolve_content's stale-but-present branch) - guards
+        # against starting a second background fetch for the same file
+        # while one is already running.
+        self._refresh_in_progress: set = set()
 
     # -- path builders -----------------------------------------------------
 
@@ -237,12 +242,17 @@ class MediaDataStore:
           on success, None if fetch_fn found nothing.
         - Present and not stale (or config.refresh.enabled is False):
           returns the local path immediately, without calling fetch_fn().
-        - Present but stale, OR `force=True` (the manual refresh_*() API -
-          forces an attempt regardless of freshness/config.refresh.enabled):
-          calls fetch_fn() synchronously (see the TODO below), always
-          returns the *existing* local path right away regardless of the
-          fetch's outcome - a slow/failed refresh never blocks or breaks
-          the current call, it only affects what the *next* call sees.
+        - Present but stale (and not forced): fetch_fn() runs on a
+          background thread (see _background_refresh) - always returns
+          the *existing* local path right away regardless of the fetch's
+          outcome, a slow/failed refresh never blocks or breaks the
+          current call, it only affects what a *later* call sees once the
+          background fetch finishes.
+        - `force=True` (the manual refresh_*() API - forces an attempt
+          regardless of freshness/config.refresh.enabled): calls
+          fetch_fn() synchronously, since that API's caller
+          (_was_updated_by) wants to know whether the fetch found
+          something new right now, not eventually in the background.
         """
         path = item_dir / filename
         with self._lock:
@@ -256,10 +266,22 @@ class MediaDataStore:
                     if not self._is_stale(entry or {}, max_age_days):
                         return path
 
-                # TODO(async-refresh): this blocks the caller until fetch_fn
-                # returns. A future version should hand this off to a
-                # background task (or defer it to the next enrichment
-                # pass) instead - see the plan this was built from.
+                    # Stale and not forced: serve the existing file
+                    # immediately, refreshing in the background so a
+                    # slow/hung source lookup never blocks the caller.
+                    # Skip starting a second refresh if one for this
+                    # exact file is already in flight.
+                    if path not in self._refresh_in_progress:
+                        self._refresh_in_progress.add(path)
+                        threading.Thread(
+                            target=self._background_refresh,
+                            args=(item_dir, filename, path, get_entry, set_entry, fetch_fn),
+                            daemon=True,
+                            name=f"mediadata-refresh-{filename}",
+                        ).start()
+                    return path
+
+                # force=True: synchronous - see docstring above.
                 result = fetch_fn()
                 now = self._now_iso()
                 if entry is None:
@@ -287,6 +309,44 @@ class MediaDataStore:
             set_entry(metadata, entry)
             self._write_metadata(item_dir, metadata)
             return path
+
+    def _background_refresh(
+        self,
+        item_dir: Path,
+        filename: str,
+        path: Path,
+        get_entry: Callable[[Dict[str, Any]], Optional[Dict[str, Any]]],
+        set_entry: Callable[[Dict[str, Any], Dict[str, Any]], None],
+        fetch_fn: Callable[[], FetchResult],
+    ) -> None:
+        """Runs fetch_fn() off the caller's thread for _resolve_content's
+        stale-but-present branch, then applies the same metadata/bytes
+        update the synchronous force=True path applies inline. The
+        try/except here is a safety net for running unsupervised on a
+        bare daemon thread - every real _fetch_* implementation already
+        catches its own errors and returns None, but this must never let
+        an unexpected exception go unlogged."""
+        try:
+            result = fetch_fn()
+        except Exception:
+            logger.exception("MediaDataStore: background refresh failed for %s", path)
+            result = None
+
+        with self._lock:
+            metadata = self._read_metadata(item_dir)
+            entry = get_entry(metadata)
+            now = self._now_iso()
+            if entry is None:
+                entry = {"path": filename, "source": "", "last_checked": now, "last_updated": now}
+            entry["last_checked"] = now
+            if result is not None:
+                content, source = result
+                self._atomic_write_bytes(path, content)
+                entry["source"] = source
+                entry["last_updated"] = now
+            set_entry(metadata, entry)
+            self._write_metadata(item_dir, metadata)
+            self._refresh_in_progress.discard(path)
 
     def _resolve_artwork(
         self,
