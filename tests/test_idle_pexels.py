@@ -1,5 +1,6 @@
 """Tests for the Pexels idle wallpaper source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import PexelsWallpaperConfig
@@ -7,7 +8,7 @@ from mediainfo.idle.pexels import PexelsWallpaperSource
 
 
 def _source(**kwargs) -> PexelsWallpaperSource:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         enabled=True,
         queries="nature, architecture",
         rotation_interval_seconds=300,

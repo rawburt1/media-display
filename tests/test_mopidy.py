@@ -1,5 +1,6 @@
 """Tests for the Mopidy source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import MopidyConfig
@@ -7,7 +8,7 @@ from mediainfo.sources.mopidy import MopidySource
 
 
 def _source(**kwargs) -> MopidySource:
-    defaults = dict(enabled=True, host="192.168.1.30", port=6680)
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.30", port=6680)
     defaults.update(kwargs)
     return MopidySource(MopidyConfig(**defaults))
 

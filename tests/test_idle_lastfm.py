@@ -1,5 +1,6 @@
 """Tests for the Last.fm scrobble history idle wallpaper source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import LastFmHistoryConfig
@@ -7,7 +8,7 @@ from mediainfo.idle.lastfm import LastFmWallpaperSource
 
 
 def _source(**kwargs) -> LastFmWallpaperSource:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         enabled=True,
         api_key="test-key",
         username="testuser",

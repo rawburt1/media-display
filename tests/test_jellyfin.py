@@ -1,5 +1,6 @@
 """Tests for Jellyfin and Emby sources."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import EmbyConfig, JellyfinConfig
@@ -11,13 +12,13 @@ from mediainfo.sources.jellyfin import EmbySource, JellyfinSource, _image_url, _
 # ---------------------------------------------------------------------------
 
 def _jf(**kwargs) -> JellyfinSource:
-    defaults = dict(enabled=True, host="192.168.1.10", port=8096, api_key="jf-key")
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.10", port=8096, api_key="jf-key")
     defaults.update(kwargs)
     return JellyfinSource(JellyfinConfig(**defaults))
 
 
 def _emby(**kwargs) -> EmbySource:
-    defaults = dict(enabled=True, host="192.168.1.11", port=8096, api_key="emby-key")
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.11", port=8096, api_key="emby-key")
     defaults.update(kwargs)
     return EmbySource(EmbyConfig(**defaults))
 

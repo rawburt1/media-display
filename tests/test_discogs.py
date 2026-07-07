@@ -1,5 +1,6 @@
 """Tests for the Discogs artwork enricher."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import DiscogsConfig
@@ -9,13 +10,13 @@ from mediainfo.musiclibrary import MusicLibrary
 
 
 def _enricher(**kwargs) -> DiscogsEnricher:
-    defaults = dict(enabled=True, token="test-token")
+    defaults: dict[str, Any] = dict(enabled=True, token="test-token")
     defaults.update(kwargs)
     return DiscogsEnricher(DiscogsConfig(**defaults))
 
 
 def _song(**kwargs) -> NowPlaying:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         source="sonos",
         media_type="music",
         title="Comfortably Numb",

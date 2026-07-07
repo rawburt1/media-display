@@ -1,5 +1,6 @@
 """Tests for the SVT Play enricher."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,7 +11,7 @@ from mediainfo.models import Artwork, NowPlaying
 
 
 def _now_playing(**kwargs):
-    defaults = dict(source="shield", media_type="episode", title="Den danska kvinnan", subtitle="5. Brutna ben")
+    defaults: dict[str, Any] = dict(source="shield", media_type="episode", title="Den danska kvinnan", subtitle="5. Brutna ben")
     return NowPlaying(**{**defaults, **kwargs})
 
 
@@ -254,7 +255,7 @@ def test_does_not_overwrite_existing_original_title(mock_post):
 # ---------------------------------------------------------------------------
 
 def _sonarr_config(**kwargs) -> SvtConfig:
-    defaults = dict(enabled=True, sonarr_host="192.168.1.50", sonarr_port=8989, sonarr_api_key="key")
+    defaults: dict[str, Any] = dict(enabled=True, sonarr_host="192.168.1.50", sonarr_port=8989, sonarr_api_key="key")
     defaults.update(kwargs)
     return SvtConfig(**defaults)
 

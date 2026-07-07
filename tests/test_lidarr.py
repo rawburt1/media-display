@@ -1,5 +1,6 @@
 """Tests for the Lidarr discography/album-art enricher."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import LidarrConfig
@@ -8,13 +9,13 @@ from mediainfo.models import Artwork, NowPlaying
 
 
 def _enricher(**kwargs) -> LidarrEnricher:
-    defaults = dict(enabled=True, host="192.168.1.50", port=8686, api_key="key123")
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.50", port=8686, api_key="key123")
     defaults.update(kwargs)
     return LidarrEnricher(LidarrConfig(**defaults))
 
 
 def _song(**kwargs) -> NowPlaying:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         source="kodi",
         media_type="music",
         title="Comfortably Numb",

@@ -1,10 +1,11 @@
 """Tests for the shared NowPlaying/Artwork data model."""
 
+from typing import Any
 from mediainfo.models import Artwork, NowPlaying
 
 
 def _now_playing(**kwargs) -> NowPlaying:
-    defaults = dict(source="kodi", media_type="movie", title="Movie", subtitle="")
+    defaults: dict[str, Any] = dict(source="kodi", media_type="movie", title="Movie", subtitle="")
     defaults.update(kwargs)
     return NowPlaying(**defaults)
 

@@ -1,5 +1,6 @@
 """Tests for the Kodi source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import KodiConfig
@@ -18,7 +19,7 @@ def test_resolve_kodi_image_url():
 
 
 def _source(**kwargs) -> KodiSource:
-    defaults = dict(enabled=True, host="192.168.1.21", port=8080, username="kodi", password="kodi")
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.21", port=8080, username="kodi", password="kodi")
     defaults.update(kwargs)
     return KodiSource(KodiConfig(**defaults))
 

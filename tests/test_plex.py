@@ -1,5 +1,6 @@
 """Tests for the Plex source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import PlexConfig
@@ -7,7 +8,7 @@ from mediainfo.sources.plex import PlexSource, resolve_plex_image_url
 
 
 def _source(**kwargs) -> PlexSource:
-    defaults = dict(enabled=True, host="192.168.1.22", port=32400, token="test-token")
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.22", port=32400, token="test-token")
     defaults.update(kwargs)
     return PlexSource(PlexConfig(**defaults))
 
