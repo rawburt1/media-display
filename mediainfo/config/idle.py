@@ -3,10 +3,10 @@ outputs when nothing is playing)."""
 
 from __future__ import annotations
 
-import dataclasses
+import pydantic
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class UnsplashWallpaperConfig:
     enabled: bool = False
     # Comma-separated list of search queries to pick wallpapers from while
@@ -22,7 +22,7 @@ class UnsplashWallpaperConfig:
     access_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class PexelsWallpaperConfig:
     enabled: bool = False
     # Comma-separated list of search queries to pick wallpapers from while
@@ -39,7 +39,7 @@ class PexelsWallpaperConfig:
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LocalWallpaperConfig:
     enabled: bool = False
     # Base directory - each immediate subdirectory is treated as one
@@ -57,7 +57,7 @@ class LocalWallpaperConfig:
     batch_size: int = 15
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LastFmHistoryConfig:
     enabled: bool = False
     # Free API key from https://www.last.fm/api/account/create (same key
@@ -74,7 +74,7 @@ class LastFmHistoryConfig:
     rotation_interval_seconds: int = 300
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LibraryIdleConfig:
     enabled: bool = False
     # Number of random albums (with a known MusicBrainz id) to show per

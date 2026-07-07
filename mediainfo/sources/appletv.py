@@ -92,6 +92,9 @@ class AppleTvSource(MediaSource):
             except Exception:
                 pass
 
+    def health_check(self) -> Optional[dict]:
+        return {"connected": self._atv is not None}
+
     # ------------------------------------------------------------------
     # Async internals (all run on self._loop)
     # ------------------------------------------------------------------

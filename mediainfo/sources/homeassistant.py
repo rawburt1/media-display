@@ -173,6 +173,10 @@ class HomeAssistantSource(MediaSource):
             return None
         return self._parse_entity(entity["attributes"])
 
+    def health_check(self) -> Optional[dict]:
+        with self._lock:
+            return {"connected": self._connected}
+
     def _select_entity(self) -> Optional[dict]:
         """Return the tracked entity to report on.
 

@@ -104,6 +104,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
                 entry["retry_in_seconds"] = retry
                 entry["last_error"] = f"Could not connect - retrying in {retry}s"
             entry.update(config_detail_fields(config.sources.get(source.name)))
+            entry.update(source.health_check() or {})
             sources.append(entry)
         sources.extend(
             _registered_but_inactive(active_source_names, registries.SOURCE_CLASSES, config.sources)
@@ -140,6 +141,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
                     val = getattr(cfg, field, None)
                     if val not in (None, ""):
                         entry[field] = val
+            entry.update(output.health_check() or {})
             output_list.append(entry)
         output_list.extend(
             _inactive_outputs(active_output_types, registries.OUTPUT_CLASSES, config.outputs)
@@ -153,6 +155,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
             active_enricher_names.add(name)
             entry = {"name": name, "status": "ok"}
             entry.update(config_detail_fields(config.enrichers.get(name)))
+            entry.update(enricher.health_check() or {})
             enrichers.append(entry)
         enrichers.extend(
             _registered_but_inactive(active_enricher_names, registries.ENRICHER_CLASSES, config.enrichers)
@@ -179,11 +182,13 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
         for instance in active_idle_instances:
             name = instance.name or type(instance).__name__.removesuffix("WallpaperSource").lower()
             active_idle_names.add(name)
-            idle_sources.append({
+            idle_entry = {
                 "type": name,
                 "status": "ok",
                 "wallpapers_loaded": data["idle_wallpapers_loaded"],
-            })
+            }
+            idle_entry.update(instance.health_check() or {})
+            idle_sources.append(idle_entry)
         idle_sources.extend(
             _inactive_idle_sources(active_idle_names, registries.IDLE_CLASSES, config.idle)
         )

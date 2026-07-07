@@ -169,6 +169,9 @@ class MqttOutput(Output):
     def on_idle(self) -> None:
         self._publish({"state": "idle"})
 
+    def health_check(self) -> Optional[dict]:
+        return {"broker_connected": self._client.is_connected()}
+
     def on_schedule_tick(self) -> None:
         """Periodically republish the health/hitster-safe entity states,
         so they're current even if nothing has *changed* them recently -

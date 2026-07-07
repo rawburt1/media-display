@@ -303,3 +303,28 @@ def test_schedule_tick_sends_power_and_brightness_commands(tmp_path):
     assert mock_post.call_args.kwargs["json"] == {
         "Command": "Channel/OnOffScreen", "OnOff": 0,
     }
+
+
+# ---------------------------------------------------------------------------
+# PixooConfig validation (pydantic dataclass rollout - see
+# mediainfo/config/outputs.py)
+# ---------------------------------------------------------------------------
+
+def test_config_unknown_field_raises_validation_error():
+    import pytest
+
+    with pytest.raises(ValueError, match="no_such_field"):
+        PixooConfig(enabled=True, no_such_field="x")
+
+
+def test_config_coerces_string_int_size():
+    cfg = PixooConfig(enabled=True, size="16")
+    assert cfg.size == 16
+    assert isinstance(cfg.size, int)
+
+
+def test_config_transforms_default_is_independent_per_instance():
+    cfg1 = PixooConfig()
+    cfg1.transforms.append({"grayscale": True})
+    cfg2 = PixooConfig()
+    assert cfg2.transforms == []

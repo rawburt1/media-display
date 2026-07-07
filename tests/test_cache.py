@@ -761,3 +761,25 @@ def test_get_derived_path_no_sidecar_when_build_returns_plain_image(tmp_path):
     path = cache.get_derived_path(original, "key1", lambda img: Image.new("RGB", (16, 16)))
 
     assert not path.with_suffix(".json").exists()
+
+
+# ---------------------------------------------------------------------------
+# CacheConfig validation (pydantic dataclass rollout - see
+# mediainfo/config/shared.py)
+# ---------------------------------------------------------------------------
+
+def test_cache_config_unknown_field_raises_validation_error():
+    import pytest
+
+    from mediainfo.config import CacheConfig
+
+    with pytest.raises(ValueError, match="no_such_field"):
+        CacheConfig(no_such_field="x")
+
+
+def test_cache_config_coerces_string_int_min_width():
+    from mediainfo.config import CacheConfig
+
+    cfg = CacheConfig(min_width="640")
+    assert cfg.min_width == 640
+    assert isinstance(cfg.min_width, int)

@@ -5,10 +5,10 @@ to enrichers.py's artwork enrichers.
 
 from __future__ import annotations
 
-import dataclasses
+import pydantic
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LrclibConfig:
     # No API key required - lrclib.net is free and public, and explicitly
     # intended for this kind of lookup/display use (crowd-sourced,
@@ -16,7 +16,7 @@ class LrclibConfig:
     enabled: bool = False
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MediaDataLyricsEnricherConfig:
     # Checks the local unified media-data cache (see
     # mediainfo/media_data_store.py, configured via the top-level
@@ -26,7 +26,7 @@ class MediaDataLyricsEnricherConfig:
     enabled: bool = False
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class OllamaTextConfig:
     # Off by default - requires a local Ollama instance the user has set
     # up (and pulled a model into) themselves; see

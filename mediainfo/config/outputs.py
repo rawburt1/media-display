@@ -42,7 +42,7 @@ class _OutputFilterMixin:
     label: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class PixooConfig(_OutputFilterMixin):
     enabled: bool = False
     ip: str = ""
@@ -126,7 +126,7 @@ class PixooConfig(_OutputFilterMixin):
     max_logo_area_percent: float = 25.0
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class WebConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"
@@ -138,7 +138,7 @@ class WebConfig(_OutputFilterMixin):
     transition_exclude: list = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class InfoConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"
@@ -151,7 +151,7 @@ class InfoConfig(_OutputFilterMixin):
     transition_exclude: list = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class ConfigUiConfig(_OutputFilterMixin):
     enabled: bool = False
     # Bind address for the config UI server.  Defaults to 127.0.0.1 (loopback
@@ -168,7 +168,7 @@ class ConfigUiConfig(_OutputFilterMixin):
     ui: str = "form"
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class FeedConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"
@@ -177,7 +177,7 @@ class FeedConfig(_OutputFilterMixin):
     title: str = "Now Playing"
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class FolderConfig(_OutputFilterMixin):
     enabled: bool = False
     # Directory that mirrors the album art / fanart / posters for whatever
@@ -187,7 +187,7 @@ class FolderConfig(_OutputFilterMixin):
     transforms: list = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class NestHubConfig(_OutputFilterMixin):
     enabled: bool = False
     # IP address of the Google Nest Hub (or other Cast-compatible display).
@@ -201,7 +201,7 @@ class NestHubConfig(_OutputFilterMixin):
     transforms: list = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class UlanziConfig(_OutputFilterMixin):
     enabled: bool = False
     # IP address of the Ulanzi TC001 (or other AWTRIX3 device).
@@ -266,7 +266,7 @@ class MqttConfig(_OutputFilterMixin):
     ha_discovery_prefix: str = "homeassistant"
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class VideoOutputConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"

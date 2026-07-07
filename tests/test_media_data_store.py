@@ -905,3 +905,28 @@ def test_lyrics_and_artwork_share_the_same_album_metadata_file(tmp_path):
     metadata = store._read_metadata(store.album_dir("Led Zeppelin", "Houses of the Holy", 1973))
     assert "albumart" in metadata["artwork"]
     assert "The Ocean" in metadata["tracks"]
+
+
+# ---------------------------------------------------------------------------
+# MediaDataConfig/MediaDataRefreshConfig validation (pydantic dataclass
+# rollout - see mediainfo/config/shared.py; these two are converted
+# together since MediaDataConfig nests MediaDataRefreshConfig)
+# ---------------------------------------------------------------------------
+
+def test_media_data_refresh_config_unknown_field_raises_validation_error():
+    import pytest
+
+    with pytest.raises(ValueError, match="no_such_field"):
+        MediaDataRefreshConfig(no_such_field="x")
+
+
+def test_media_data_config_unknown_field_raises_validation_error():
+    import pytest
+
+    with pytest.raises(ValueError, match="no_such_field"):
+        MediaDataConfig(no_such_field="x")
+
+
+def test_media_data_config_accepts_nested_refresh_config():
+    cfg = MediaDataConfig(refresh=MediaDataRefreshConfig(movies_days=7))
+    assert cfg.refresh.movies_days == 7

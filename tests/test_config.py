@@ -120,7 +120,10 @@ def test_from_dict_empty_dict_uses_defaults():
 
 
 def test_from_dict_raises_on_unknown_field():
-    with pytest.raises(TypeError):
+    # KodiConfig (like every other leaf config class) is now a pydantic
+    # dataclass - an unknown field raises pydantic.ValidationError (a
+    # ValueError subclass) instead of stdlib dataclasses' TypeError.
+    with pytest.raises(ValueError):
         Config.from_dict({"sources": {"kodi": {"enabled": True, "no_such_field": "x"}}})
 
 
