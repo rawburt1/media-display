@@ -11,6 +11,7 @@ from mediainfo.wiring import (
     build_artwork_overrides,
     build_enrichers,
     build_idle_source,
+    build_mediadata_store,
     build_sources,
     build_text_enrichers,
     instantiate_outputs,
@@ -183,6 +184,97 @@ def test_build_enrichers_passes_cache_dir_to_cache_aware_enrichers():
     assert result == [fake_cls.return_value]
 
 
+def test_build_enrichers_passes_mediadata_store_to_mediadata_aware_enrichers():
+    enc_cfg = MagicMock()
+    enc_cfg.enabled = True
+    fake_cls = MagicMock(return_value=MagicMock())
+    fake_store = MagicMock()
+    cfg = _minimal_config(enrichers={"mediadata": enc_cfg})
+
+    with (
+        patch("mediainfo.registries.ENRICHER_CLASSES", {"mediadata": fake_cls}),
+        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHER_NAMES", set()),
+        patch("mediainfo.registries.CACHE_AWARE_ENRICHER_NAMES", set()),
+        patch("mediainfo.registries.MEDIADATA_AWARE_ENRICHER_NAMES", {"mediadata"}),
+    ):
+        result = build_enrichers(cfg, mediadata_store=fake_store)
+
+    fake_cls.assert_called_once_with(enc_cfg, fake_store)
+    assert result == [fake_cls.return_value]
+
+
+# ---------------------------------------------------------------------------
+# build_mediadata_store
+# ---------------------------------------------------------------------------
+
+def test_build_mediadata_store_none_when_neither_plugin_enabled():
+    cfg = _minimal_config(enrichers={}, text_enrichers={})
+    assert build_mediadata_store(cfg, MagicMock()) is None
+
+
+def test_build_mediadata_store_none_when_both_disabled():
+    artwork_cfg = MagicMock(enabled=False)
+    lyrics_cfg = MagicMock(enabled=False)
+    cfg = _minimal_config(
+        enrichers={"mediadata": artwork_cfg}, text_enrichers={"mediadata": lyrics_cfg}
+    )
+    assert build_mediadata_store(cfg, MagicMock()) is None
+
+
+def test_build_mediadata_store_constructed_when_artwork_enabled():
+    artwork_cfg = MagicMock(enabled=True)
+    cfg = _minimal_config(enrichers={"mediadata": artwork_cfg}, text_enrichers={})
+    fake_cache = MagicMock()
+    fake_cls = MagicMock(return_value=MagicMock())
+
+    with patch("mediainfo.wiring.MediaDataStore", fake_cls):
+        result = build_mediadata_store(cfg, fake_cache)
+
+    fake_cls.assert_called_once_with(cfg.mediadata, cache=fake_cache, discogs_token="")
+    assert result is fake_cls.return_value
+
+
+def test_build_mediadata_store_constructed_when_lyrics_enabled():
+    lyrics_cfg = MagicMock(enabled=True)
+    cfg = _minimal_config(enrichers={}, text_enrichers={"mediadata": lyrics_cfg})
+    fake_cls = MagicMock(return_value=MagicMock())
+
+    with patch("mediainfo.wiring.MediaDataStore", fake_cls):
+        result = build_mediadata_store(cfg, MagicMock())
+
+    assert result is fake_cls.return_value
+
+
+def test_build_mediadata_store_passes_discogs_token_when_enabled():
+    artwork_cfg = MagicMock(enabled=True)
+    discogs_cfg = MagicMock(enabled=True, token="secret-token")
+    cfg = _minimal_config(
+        enrichers={"mediadata": artwork_cfg, "discogs": discogs_cfg}, text_enrichers={}
+    )
+    fake_cls = MagicMock(return_value=MagicMock())
+
+    with patch("mediainfo.wiring.MediaDataStore", fake_cls):
+        build_mediadata_store(cfg, MagicMock())
+
+    _, kwargs = fake_cls.call_args
+    assert kwargs["discogs_token"] == "secret-token"
+
+
+def test_build_mediadata_store_skips_discogs_token_when_disabled():
+    artwork_cfg = MagicMock(enabled=True)
+    discogs_cfg = MagicMock(enabled=False, token="secret-token")
+    cfg = _minimal_config(
+        enrichers={"mediadata": artwork_cfg, "discogs": discogs_cfg}, text_enrichers={}
+    )
+    fake_cls = MagicMock(return_value=MagicMock())
+
+    with patch("mediainfo.wiring.MediaDataStore", fake_cls):
+        build_mediadata_store(cfg, MagicMock())
+
+    _, kwargs = fake_cls.call_args
+    assert kwargs["discogs_token"] == ""
+
+
 # ---------------------------------------------------------------------------
 # build_text_enrichers (roadmap item 7 foundation - no real plugin yet)
 # ---------------------------------------------------------------------------
@@ -240,6 +332,23 @@ def test_build_text_enrichers_shares_one_cache_across_plugins():
         result = build_text_enrichers(cfg)
 
     assert result[0].cache is result[1].cache
+
+
+def test_build_text_enrichers_passes_mediadata_store_to_mediadata_aware_enrichers():
+    text_cfg = MagicMock()
+    text_cfg.enabled = True
+    fake_cls = MagicMock(return_value=MagicMock())
+    fake_store = MagicMock()
+    cfg = _minimal_config(text_enrichers={"mediadata": text_cfg})
+
+    with (
+        patch("mediainfo.registries.TEXT_ENRICHER_CLASSES", {"mediadata": fake_cls}),
+        patch("mediainfo.registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES", {"mediadata"}),
+    ):
+        result = build_text_enrichers(cfg, mediadata_store=fake_store)
+
+    fake_cls.assert_called_once_with(text_cfg, fake_store)
+    assert result == [fake_cls.return_value]
 
 
 def test_build_idle_source_returns_none_when_disabled():

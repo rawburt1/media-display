@@ -17,6 +17,7 @@ from mediainfo.health import make_health_provider
 from mediainfo.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
+from mediainfo.media_data_store import MediaDataStore
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
 from mediainfo.poster_store import PosterStore
@@ -58,7 +59,27 @@ def build_sources(config: Config) -> list:
     return sources
 
 
-def build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> list:
+def build_mediadata_store(config: Config, cache: ImageCache) -> Optional[MediaDataStore]:
+    """Construct the shared MediaDataStore instance used by both
+    MediaDataArtworkEnricher and MediaDataLyricsEnricher (see
+    registries.MEDIADATA_AWARE_ENRICHER_NAMES /
+    MEDIADATA_AWARE_TEXT_ENRICHER_NAMES), or None if neither plugin is
+    enabled - so a config that doesn't opt in never even touches disk
+    for this feature."""
+    artwork_config = config.enrichers.get("mediadata")
+    lyrics_config = config.text_enrichers.get("mediadata")
+    if not ((artwork_config and artwork_config.enabled) or (lyrics_config and lyrics_config.enabled)):
+        return None
+    discogs_config = config.enrichers.get("discogs")
+    discogs_token = discogs_config.token if discogs_config and discogs_config.enabled else ""
+    return MediaDataStore(config.mediadata, cache=cache, discogs_token=discogs_token)
+
+
+def build_enrichers(
+    config: Config,
+    library: Optional[MusicLibrary] = None,
+    mediadata_store: Optional[MediaDataStore] = None,
+) -> list:
     enrichers = []
     for name, enricher_config in config.enrichers.items():
         if not enricher_config.enabled:
@@ -71,16 +92,22 @@ def build_enrichers(config: Config, library: Optional[MusicLibrary] = None) -> l
             enrichers.append(enricher_cls(enricher_config, library))
         elif name in registries.CACHE_AWARE_ENRICHER_NAMES:
             enrichers.append(enricher_cls(enricher_config, Path(config.cache.dir) / "ai_artwork"))
+        elif name in registries.MEDIADATA_AWARE_ENRICHER_NAMES:
+            enrichers.append(enricher_cls(enricher_config, mediadata_store))
         else:
             enrichers.append(enricher_cls(enricher_config))
     return enrichers
 
 
-def build_text_enrichers(config: Config) -> list:
+def build_text_enrichers(
+    config: Config, mediadata_store: Optional[MediaDataStore] = None
+) -> list:
     """Build the configured text enrichers (lyrics, AI-generated text -
     see mediainfo/enrichers/text_base.py), each sharing one TextCache
     instance under cache.dir/text (same retention as artwork, mirroring
-    ImageCache's own idle/music subdirectories)."""
+    ImageCache's own idle/music subdirectories) - except "mediadata",
+    which reads the shared MediaDataStore instead (see
+    registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES)."""
     text_cache = TextCache(Path(config.cache.dir) / "text", max_age_days=config.cache.max_age_days)
     text_enrichers = []
     for name, text_enricher_config in config.text_enrichers.items():
@@ -90,7 +117,10 @@ def build_text_enrichers(config: Config) -> list:
         if text_enricher_cls is None:
             logger.warning("Unknown text enricher: %s", name)
             continue
-        text_enrichers.append(text_enricher_cls(text_enricher_config, text_cache))
+        if name in registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES:
+            text_enrichers.append(text_enricher_cls(text_enricher_config, mediadata_store))
+        else:
+            text_enrichers.append(text_enricher_cls(text_enricher_config, text_cache))
     return text_enrichers
 
 
@@ -161,10 +191,11 @@ def start_orchestrator(
     poster_store: Optional[PosterStore] = None,
     history: Optional[PlaybackHistory] = None,
 ) -> Orchestrator:
+    mediadata_store = build_mediadata_store(config, cache)
     orch = Orchestrator(
         sources=build_sources(config),
-        enrichers=build_enrichers(config, library),
-        text_enrichers=build_text_enrichers(config),
+        enrichers=build_enrichers(config, library, mediadata_store),
+        text_enrichers=build_text_enrichers(config, mediadata_store),
         outputs=outputs,
         cache=cache,
         poll_interval_seconds=config.poll_interval_seconds,

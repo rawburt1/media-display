@@ -40,6 +40,17 @@ class LibraryEnricherConfig:
 
 
 @dataclasses.dataclass
+class MediaDataArtworkEnricherConfig:
+    # Checks the local unified media-data cache (see
+    # mediainfo/media_data_store.py, configured via the top-level
+    # `mediadata:` section) for album art before other music enrichers
+    # run - see mediainfo/enrichers/mediadata.py. No credentials of its
+    # own; a cache miss falls through to a real MusicBrainz (free) /
+    # Discogs (if enrichers.discogs.token is set) lookup.
+    enabled: bool = False
+
+
+@dataclasses.dataclass
 class TheTvDbConfig:
     enabled: bool = False
     # Project API key from https://thetvdb.com/dashboard/account/apikey
@@ -157,6 +168,7 @@ ENRICHER_CONFIG_TYPES: dict[str, type] = {
     "lastfm": LastFmConfig,
     "library": LibraryEnricherConfig,
     "lidarr": LidarrConfig,
+    "mediadata": MediaDataArtworkEnricherConfig,
     "musicbrainz": MusicBrainzConfig,
     "omdb": OmdbConfig,
     "radarr": RadarrConfig,

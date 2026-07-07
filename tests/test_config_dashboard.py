@@ -167,7 +167,7 @@ def test_enricher_omdb_failure():
 
 def test_enricher_discogs_found():
     with patch(
-        "mediainfo.enrichers.discogs.DiscogsEnricher._find_cover",
+        "mediainfo.enrichers.discogs.find_cover",
         return_value="https://example.com/x.jpg",
     ):
         ok, message = check_enricher("discogs", MagicMock())
@@ -176,7 +176,7 @@ def test_enricher_discogs_found():
 
 
 def test_enricher_discogs_no_match_still_reachable():
-    with patch("mediainfo.enrichers.discogs.DiscogsEnricher._find_cover", return_value=None):
+    with patch("mediainfo.enrichers.discogs.find_cover", return_value=None):
         ok, message = check_enricher("discogs", MagicMock())
     assert ok is True
     assert "no match" in message.lower()

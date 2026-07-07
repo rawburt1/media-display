@@ -35,6 +35,37 @@ _BASE_URL = "https://lrclib.net/api"
 _NAMESPACE = "lrclib"
 
 
+def fetch_exact(artist: str, title: str, album: str, duration_seconds: float) -> Optional[dict]:
+    """Exact-match lookup by artist/track/album/duration - LRCLIB's
+    preferred endpoint when duration is known, since it avoids picking
+    the wrong result among cover versions/remixes. A pure, NowPlaying-
+    independent function, so it's directly reusable outside the enricher
+    (see mediainfo/media_data_store.py's lyrics fetch)."""
+    params: dict[str, Any] = {
+        "artist_name": artist,
+        "track_name": title,
+        "duration": int(duration_seconds),
+    }
+    if album:
+        params["album_name"] = album
+    response = requests.get(f"{_BASE_URL}/get", params=params, timeout=10)
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    return response.json()
+
+
+def fetch_search(artist: str, title: str) -> Optional[dict]:
+    """Fuzzy search by artist/track name, used when duration is unknown
+    (or the exact-match lookup found nothing) - takes the first (best-
+    ranked) result, if any."""
+    params = {"artist_name": artist, "track_name": title}
+    response = requests.get(f"{_BASE_URL}/search", params=params, timeout=10)
+    response.raise_for_status()
+    results = response.json()
+    return results[0] if results else None
+
+
 class LrclibEnricher(TextEnricher):
     name = "lrclib"
     config_class = LrclibConfig
@@ -72,41 +103,13 @@ class LrclibEnricher(TextEnricher):
         now_playing.synced_lyrics = result.get("syncedLyrics") or ""
 
     def _lookup(self, now_playing: NowPlaying) -> Optional[dict]:
+        artist, title, album = now_playing.subtitle, now_playing.title, now_playing.album
         try:
             if now_playing.duration_seconds:
-                result = self._get_exact(now_playing)
+                result = fetch_exact(artist, title, album, now_playing.duration_seconds)
                 if result is not None:
                     return result
-            return self._search(now_playing)
+            return fetch_search(artist, title)
         except Exception:
-            logger.exception(
-                "LRCLIB lookup failed for %s - %s", now_playing.subtitle, now_playing.title
-            )
+            logger.exception("LRCLIB lookup failed for %s - %s", artist, title)
             return None
-
-    def _get_exact(self, now_playing: NowPlaying) -> Optional[dict]:
-        """Exact-match lookup by artist/track/album/duration - LRCLIB's
-        preferred endpoint when duration is known, since it avoids
-        picking the wrong result among cover versions/remixes."""
-        params: dict[str, Any] = {
-            "artist_name": now_playing.subtitle,
-            "track_name": now_playing.title,
-            "duration": int(now_playing.duration_seconds),  # type: ignore[arg-type]
-        }
-        if now_playing.album:
-            params["album_name"] = now_playing.album
-        response = requests.get(f"{_BASE_URL}/get", params=params, timeout=10)
-        if response.status_code == 404:
-            return None
-        response.raise_for_status()
-        return response.json()
-
-    def _search(self, now_playing: NowPlaying) -> Optional[dict]:
-        """Fuzzy search by artist/track name, used when duration is
-        unknown (or the exact-match lookup found nothing) - takes the
-        first (best-ranked) result, if any."""
-        params = {"artist_name": now_playing.subtitle, "track_name": now_playing.title}
-        response = requests.get(f"{_BASE_URL}/search", params=params, timeout=10)
-        response.raise_for_status()
-        results = response.json()
-        return results[0] if results else None
