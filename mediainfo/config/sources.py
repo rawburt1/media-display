@@ -30,6 +30,21 @@ class EmbyConfig:
 
 
 @dataclasses.dataclass
+class Foobar2000Config:
+    enabled: bool = False
+    host: str = "localhost"
+    port: int = 8888
+    # Which foobar2000 HTTP API/plugin to talk to. Only "beefweb" (the
+    # Beefweb Remote Control plugin - https://github.com/hyperblast/beefweb)
+    # is implemented today; foobar2000 has no single standard API of its
+    # own, so this is left as an explicit field for other plugins later
+    # rather than assumed.
+    api_type: str = "beefweb"
+    # Per-request timeout, in seconds.
+    timeout: float = 5.0
+
+
+@dataclasses.dataclass
 class JellyfinConfig:
     enabled: bool = False
     host: str = ""
@@ -216,6 +231,7 @@ SOURCE_CONFIG_TYPES: dict[str, type] = {
     "appletv": AppleTvConfig,
     "chromecast": ChromecastConfig,
     "emby": EmbyConfig,
+    "foobar2000": Foobar2000Config,
     "homeassistant": HomeAssistantConfig,
     "jellyfin": JellyfinConfig,
     "kodi": KodiConfig,
