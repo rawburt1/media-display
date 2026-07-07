@@ -2,6 +2,8 @@
 wired into the live app for album art, movie/series posters+fanart, and
 lyrics - see the module's own docstring."""
 
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -21,6 +23,18 @@ def _store(
         tmdb_api_key=tmdb_api_key,
         fanarttv_api_key=fanarttv_api_key,
     )
+
+
+def _wait_for_background_refresh(store, timeout=2.0):
+    """Block until every in-flight _background_refresh() thread started
+    by `store` has finished (see MediaDataStore._refresh_in_progress) -
+    used by tests that need to observe a stale-refresh's result, since
+    it's no longer applied synchronously before _resolve_artwork returns."""
+    deadline = time.monotonic() + timeout
+    while store._refresh_in_progress:
+        if time.monotonic() > deadline:
+            raise AssertionError("background refresh did not finish in time")
+        time.sleep(0.005)
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +269,7 @@ def test_resolve_artwork_refreshes_when_stale(tmp_path):
     fetch_fn = MagicMock(return_value=(b"refreshed-bytes", "tmdb"))
 
     result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+    _wait_for_background_refresh(store)
 
     fetch_fn.assert_called_once()
     assert result.read_bytes() == b"refreshed-bytes"
@@ -269,6 +284,7 @@ def test_resolve_artwork_keeps_old_file_when_refresh_fetch_fails(tmp_path):
     fetch_fn = MagicMock(return_value=None)
 
     result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+    _wait_for_background_refresh(store)
 
     fetch_fn.assert_called_once()
     assert result.read_bytes() == b"old-bytes"  # unchanged
@@ -282,6 +298,7 @@ def test_resolve_artwork_bumps_last_checked_but_not_last_updated_when_fetch_fail
     fetch_fn = MagicMock(return_value=None)
 
     store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+    _wait_for_background_refresh(store)
 
     new_entry = store._read_metadata(item_dir)["artwork"]["poster"]
     assert new_entry["last_checked"] != old_entry["last_checked"]
@@ -296,10 +313,72 @@ def test_resolve_artwork_bumps_both_timestamps_when_fetch_succeeds(tmp_path):
     fetch_fn = MagicMock(return_value=(b"new-bytes", "tmdb"))
 
     store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+    _wait_for_background_refresh(store)
 
     new_entry = store._read_metadata(item_dir)["artwork"]["poster"]
     assert new_entry["last_checked"] != old_entry["last_checked"]
     assert new_entry["last_updated"] != old_entry["last_updated"]
+
+
+def test_resolve_artwork_stale_refresh_does_not_block_the_caller(tmp_path):
+    """The whole point of backgrounding the stale-refresh fetch: a slow
+    fetch_fn must not delay _resolve_artwork's return."""
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=200)
+    release_fetch = threading.Event()
+
+    def slow_fetch():
+        release_fetch.wait(timeout=2.0)
+        return (b"refreshed-bytes", "tmdb")
+
+    start = time.monotonic()
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, slow_fetch)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 0.5  # returned long before slow_fetch's own wait finishes
+    assert result.read_bytes() == b"old-bytes"  # not yet refreshed
+
+    release_fetch.set()
+    _wait_for_background_refresh(store)
+    assert result.read_bytes() == b"refreshed-bytes"
+
+
+def test_resolve_artwork_stale_refresh_is_not_duplicated_while_in_flight(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=200)
+    release_fetch = threading.Event()
+    call_count = 0
+
+    def slow_fetch():
+        nonlocal call_count
+        call_count += 1
+        release_fetch.wait(timeout=2.0)
+        return (b"refreshed-bytes", "tmdb")
+
+    store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, slow_fetch)
+    # Second call while the first refresh is still in flight - must not
+    # start a duplicate background fetch for the same file.
+    store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, slow_fetch)
+
+    release_fetch.set()
+    _wait_for_background_refresh(store)
+    assert call_count == 1
+
+
+def test_resolve_artwork_stale_refresh_exception_is_logged_not_raised(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=200)
+
+    def failing_fetch():
+        raise RuntimeError("boom")
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, failing_fetch)
+    _wait_for_background_refresh(store)  # must not raise, and must finish
+
+    assert result.read_bytes() == b"old-bytes"  # unchanged, no crash
 
 
 def test_resolve_artwork_does_not_refresh_when_refresh_disabled(tmp_path):
