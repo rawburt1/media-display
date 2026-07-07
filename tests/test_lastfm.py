@@ -261,3 +261,28 @@ def test_caches_negative_result_in_library(mock_get, tmp_path):
 
     enricher.enrich(_music())
     assert mock_get.call_count == 1  # cached miss, no new call
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_found():
+    with patch.object(LastFmEnricher, "_fetch_artist_image", return_value="https://example.com/x.jpg"):
+        ok, message = LastFmEnricher(_config()).test_connection()
+    assert ok is True
+    assert "Found" in message
+
+
+def test_test_connection_no_match_still_reachable():
+    with patch.object(LastFmEnricher, "_fetch_artist_image", return_value=None):
+        ok, message = LastFmEnricher(_config()).test_connection()
+    assert ok is True
+    assert "no photo" in message.lower()
+
+
+def test_test_connection_handles_exception():
+    with patch.object(LastFmEnricher, "_fetch_artist_image", side_effect=RuntimeError("boom")):
+        ok, message = LastFmEnricher(_config()).test_connection()
+    assert ok is False
+    assert "boom" in message

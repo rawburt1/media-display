@@ -1,8 +1,17 @@
-"""Tests for the dashboard UI's test-connection logic."""
+"""Tests for the dashboard UI's test-connection logic.
+
+Per-plugin test_connection() behavior (thetvdb, fanarttv, discogs, lastfm,
+musicbrainz, wikipedia, tmdb, omdb, library, sonarr/radarr/lidarr, every
+source via MediaSource's shared implementation, AppleTvSource's override)
+now lives in each plugin's own test file - see mediainfo/sources/base.py
+and mediainfo/enrichers/base.py's test_connection() docstrings. This file
+only covers the generic registry-driven dispatch in test_source()/
+test_enricher() themselves, plus test_output() (which stays a raw field-
+based check here - see config_dashboard.py's module docstring for why).
+"""
 
 from unittest.mock import MagicMock, patch
 
-from mediainfo.models import NowPlaying
 from mediainfo.outputs.config_dashboard import (
     test_enricher as check_enricher,
     test_output as check_output,
@@ -15,14 +24,11 @@ from mediainfo.outputs.config_dashboard import (
 
 
 class _FakeSource:
-    last_call = None
-
     def __init__(self, config):
         self.config = config
-        self.last_poll_failed = False
 
-    def get_now_playing(self):
-        return None
+    def test_connection(self):
+        return True, "fake source connected"
 
 
 def test_source_unknown_name_returns_false():
@@ -37,42 +43,17 @@ def test_source_none_config_returns_false():
     assert ok is False
 
 
-def test_source_connected_with_now_playing():
-    class _Source(_FakeSource):
-        def get_now_playing(self):
-            return NowPlaying(source="fake", media_type="music", title="Bohemian Rhapsody")
-
-    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _Source}):
-        ok, message = check_source("fake", MagicMock())
-
-    assert ok is True
-    assert "Bohemian Rhapsody" in message
-
-
-def test_source_connected_with_nothing_playing():
+def test_source_delegates_to_test_connection():
     with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _FakeSource}):
         ok, message = check_source("fake", MagicMock())
 
     assert ok is True
-    assert "nothing currently playing" in message
+    assert message == "fake source connected"
 
 
-def test_source_reports_last_poll_failed():
+def test_source_construction_exception_is_caught():
     class _Source(_FakeSource):
-        def get_now_playing(self):
-            self.last_poll_failed = True
-            return None
-
-    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _Source}):
-        ok, message = check_source("fake", MagicMock())
-
-    assert ok is False
-    assert "connect" in message.lower()
-
-
-def test_source_exception_is_caught():
-    class _Source(_FakeSource):
-        def get_now_playing(self):
+        def __init__(self, config):
             raise RuntimeError("boom")
 
     with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _Source}):
@@ -82,23 +63,17 @@ def test_source_exception_is_caught():
     assert "boom" in message
 
 
-def test_source_cleans_up_background_loop():
-    fake_loop = MagicMock()
-
-    class _Source(_FakeSource):
-        def __init__(self, config):
-            super().__init__(config)
-            self._loop = fake_loop
-
-    with patch("mediainfo.registries.SOURCE_CLASSES", {"fake": _Source}):
-        check_source("fake", MagicMock())
-
-    fake_loop.call_soon_threadsafe.assert_called_once()
-
-
 # ---------------------------------------------------------------------------
 # test_enricher
 # ---------------------------------------------------------------------------
+
+
+class _FakeEnricher:
+    def __init__(self, config):
+        self.config = config
+
+    def test_connection(self):
+        return True, "fake enricher connected"
 
 
 def test_enricher_none_config_returns_false():
@@ -112,120 +87,22 @@ def test_enricher_unknown_name_returns_false():
     assert ok is False
 
 
-def test_enricher_thetvdb_success():
-    with patch("mediainfo.enrichers.thetvdb.TheTvDbEnricher._login", return_value="tok"):
-        ok, message = check_enricher("thetvdb", MagicMock())
+def test_enricher_delegates_to_test_connection():
+    with patch("mediainfo.registries.ENRICHER_CLASSES", {"fake": _FakeEnricher}):
+        ok, message = check_enricher("fake", MagicMock())
+
     assert ok is True
-    assert "Logged in" in message
+    assert message == "fake enricher connected"
 
 
-def test_enricher_thetvdb_failure():
-    with patch("mediainfo.enrichers.thetvdb.TheTvDbEnricher._login", return_value=None):
-        ok, message = check_enricher("thetvdb", MagicMock())
-    assert ok is False
+def test_enricher_construction_exception_is_caught():
+    class _Enricher(_FakeEnricher):
+        def __init__(self, config):
+            raise RuntimeError("boom")
 
+    with patch("mediainfo.registries.ENRICHER_CLASSES", {"fake": _Enricher}):
+        ok, message = check_enricher("fake", MagicMock())
 
-def test_enricher_fanarttv_success():
-    with patch("mediainfo.enrichers.fanarttv.FanartTvEnricher._get", return_value={"x": 1}):
-        ok, message = check_enricher("fanarttv", MagicMock())
-    assert ok is True
-
-
-def test_enricher_fanarttv_failure():
-    with patch("mediainfo.enrichers.fanarttv.FanartTvEnricher._get", return_value=None):
-        ok, message = check_enricher("fanarttv", MagicMock())
-    assert ok is False
-
-
-def test_enricher_tmdb_success():
-    with patch("mediainfo.enrichers.tmdb.fetch_rating", return_value=8.7):
-        ok, message = check_enricher("tmdb", MagicMock())
-    assert ok is True
-    assert "8.7" in message
-
-
-def test_enricher_tmdb_failure():
-    with patch("mediainfo.enrichers.tmdb.fetch_rating", return_value=None):
-        ok, message = check_enricher("tmdb", MagicMock())
-    assert ok is False
-    assert "api_key" in message
-
-
-def test_enricher_omdb_success():
-    with patch("mediainfo.enrichers.omdb.OmdbEnricher._fetch", return_value=8.7):
-        ok, message = check_enricher("omdb", MagicMock())
-    assert ok is True
-    assert "8.7" in message
-
-
-def test_enricher_omdb_failure():
-    with patch("mediainfo.enrichers.omdb.OmdbEnricher._fetch", return_value=None):
-        ok, message = check_enricher("omdb", MagicMock())
-    assert ok is False
-    assert "api_key" in message
-
-
-def test_enricher_discogs_found():
-    with patch(
-        "mediainfo.enrichers.discogs.find_cover",
-        return_value="https://example.com/x.jpg",
-    ):
-        ok, message = check_enricher("discogs", MagicMock())
-    assert ok is True
-    assert "Found" in message
-
-
-def test_enricher_discogs_no_match_still_reachable():
-    with patch("mediainfo.enrichers.discogs.find_cover", return_value=None):
-        ok, message = check_enricher("discogs", MagicMock())
-    assert ok is True
-    assert "no match" in message.lower()
-
-
-def test_enricher_lastfm():
-    with patch(
-        "mediainfo.enrichers.lastfm.LastFmEnricher._fetch_artist_image",
-        return_value="https://example.com/x.jpg",
-    ):
-        ok, message = check_enricher("lastfm", MagicMock())
-    assert ok is True
-    assert "Found" in message
-
-
-def test_enricher_musicbrainz_success():
-    with patch(
-        "mediainfo.enrichers.musicbrainz._query_musicbrainz",
-        return_value=("artist-mbid", "album-mbid"),
-    ):
-        ok, message = check_enricher("musicbrainz", MagicMock())
-    assert ok is True
-
-
-def test_enricher_musicbrainz_failure():
-    with patch("mediainfo.enrichers.musicbrainz._query_musicbrainz", return_value=None):
-        ok, message = check_enricher("musicbrainz", MagicMock())
-    assert ok is False
-
-
-def test_enricher_wikipedia_success():
-    with patch(
-        "mediainfo.enrichers.wikipedia.WikipediaEnricher._lookup",
-        return_value=("summary text", None),
-    ):
-        ok, message = check_enricher("wikipedia", MagicMock())
-    assert ok is True
-
-
-def test_enricher_library_no_network_needed():
-    ok, message = check_enricher("library", MagicMock())
-    assert ok is True
-
-
-def test_enricher_handles_exception():
-    with patch(
-        "mediainfo.enrichers.thetvdb.TheTvDbEnricher._login", side_effect=RuntimeError("boom")
-    ):
-        ok, message = check_enricher("thetvdb", MagicMock())
     assert ok is False
     assert "boom" in message
 

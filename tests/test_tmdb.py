@@ -200,3 +200,28 @@ def test_image_url_builds_cdn_url():
 
 def test_image_url_none_path_returns_none():
     assert image_url(None, "w500") is None
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_success():
+    with patch("mediainfo.enrichers.tmdb.fetch_rating", return_value=8.7):
+        ok, message = _enricher().test_connection()
+    assert ok is True
+    assert "8.7" in message
+
+
+def test_test_connection_failure():
+    with patch("mediainfo.enrichers.tmdb.fetch_rating", return_value=None):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "api_key" in message
+
+
+def test_test_connection_handles_exception():
+    with patch("mediainfo.enrichers.tmdb.fetch_rating", side_effect=RuntimeError("boom")):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "boom" in message

@@ -343,3 +343,26 @@ def test_negative_result_is_cached_too(mock_get):
     assert mock_get.call_count == call_count_after_first  # no retry
     assert np2.summary == ""
     assert np2.images == []
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_success():
+    with patch.object(WikipediaEnricher, "_lookup", return_value=("summary text", None)):
+        ok, message = WikipediaEnricher(_config()).test_connection()
+    assert ok is True
+
+
+def test_test_connection_failure():
+    with patch.object(WikipediaEnricher, "_lookup", return_value=None):
+        ok, message = WikipediaEnricher(_config()).test_connection()
+    assert ok is False
+
+
+def test_test_connection_handles_exception():
+    with patch.object(WikipediaEnricher, "_lookup", side_effect=RuntimeError("boom")):
+        ok, message = WikipediaEnricher(_config()).test_connection()
+    assert ok is False
+    assert "boom" in message

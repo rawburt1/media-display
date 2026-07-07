@@ -68,6 +68,15 @@ class WikipediaEnricher(ArtworkEnricher):
                 Artwork(url=thumbnail, label="Photo (Wikipedia)", is_artist_photo=is_artist_photo)
             )
 
+    def test_connection(self) -> Tuple[bool, str]:
+        try:
+            result = self._lookup(["Queen (band)", "Queen"])
+            if result is not None:
+                return True, "Found summary for test query"
+            return False, "No match for test query (en.wikipedia.org may be unreachable)"
+        except Exception as exc:
+            return False, f"Error: {exc}"
+
     def _lookup(self, queries: List[str]) -> _CacheEntry:
         try:
             for query in queries:

@@ -16,7 +16,7 @@ already on file goes over the network.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.enrichers.musicbrainz import fetch_front_cover
@@ -65,3 +65,6 @@ class LibraryEnricher(ArtworkEnricher):
                     )
         except Exception:
             logger.exception("Library enrichment error")
+
+    def test_connection(self) -> Tuple[bool, str]:
+        return True, "Local library - no network connection to test"

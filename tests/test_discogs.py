@@ -262,3 +262,28 @@ def test_caches_negative_result_in_library(mock_get, tmp_path):
 
     enricher.enrich(_song())
     assert mock_get.call_count == 2  # cached miss, no new calls
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_found():
+    with patch("mediainfo.enrichers.discogs.find_cover", return_value="https://example.com/x.jpg"):
+        ok, message = _enricher().test_connection()
+    assert ok is True
+    assert "Found" in message
+
+
+def test_test_connection_no_match_still_reachable():
+    with patch("mediainfo.enrichers.discogs.find_cover", return_value=None):
+        ok, message = _enricher().test_connection()
+    assert ok is True
+    assert "no match" in message.lower()
+
+
+def test_test_connection_handles_exception():
+    with patch("mediainfo.enrichers.discogs.find_cover", side_effect=RuntimeError("boom")):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "boom" in message

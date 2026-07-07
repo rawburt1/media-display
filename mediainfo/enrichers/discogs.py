@@ -10,7 +10,7 @@ release.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 import requests
 
@@ -85,6 +85,18 @@ class DiscogsEnricher(ArtworkEnricher):
                 now_playing.images.append(Artwork(url=url, label="Album art (Discogs)"))
         except Exception:
             logger.exception("Discogs enrichment error")
+
+    def test_connection(self) -> Tuple[bool, str]:
+        # A found vs. not-found cover are both "reachable" - the point is
+        # to distinguish Discogs being unreachable/token invalid (an
+        # exception) from a legitimate no-match for this specific query.
+        try:
+            url = find_cover(self.config.token, "Queen", "A Night at the Opera")
+            if url:
+                return True, "Found cover art for test query"
+            return True, "Reached Discogs, no match for test query (token may still be invalid)"
+        except Exception as exc:
+            return False, f"Error: {exc}"
 
     def _cover_for(self, artist: str, album: str) -> Optional[str]:
         if self.library is None:

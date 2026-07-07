@@ -11,7 +11,7 @@ logic are identical across all three and live here.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, List, Optional
+from typing import Any, Iterable, List, Optional, Tuple
 
 import requests
 
@@ -20,9 +20,20 @@ from mediainfo.models import Artwork, NowPlaying
 
 
 class ArrEnricher(ArtworkEnricher):
+    # Overridden by LidarrEnricher, which is on the v1 API - Sonarr/Radarr
+    # are both on v3.
+    _STATUS_PATH = "/api/v3/system/status"
+
     def __init__(self, config: Any):
         self.config = config
         self._base = f"http://{config.host}:{config.port}"
+
+    def test_connection(self) -> Tuple[bool, str]:
+        try:
+            self._get(self._STATUS_PATH)
+            return True, "Connected successfully"
+        except Exception as exc:
+            return False, f"Error: {exc}"
 
     def _get(self, path: str, params: Optional[dict] = None) -> Optional[Any]:
         response = requests.get(

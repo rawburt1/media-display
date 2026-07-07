@@ -19,7 +19,7 @@ import logging
 import tempfile
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import pyatv
 
@@ -77,6 +77,20 @@ class AppleTvSource(MediaSource):
             logger.exception("Apple TV source error")
             self.last_poll_failed = True
             return None
+
+    def test_connection(self) -> Tuple[bool, str]:
+        """Same connectivity check as every other source (see
+        MediaSource.test_connection), plus stopping this instance's
+        background asyncio loop thread afterwards - a throwaway instance
+        built just for a "test connection" click shouldn't leak one every
+        time the button is clicked."""
+        try:
+            return super().test_connection()
+        finally:
+            try:
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Async internals (all run on self._loop)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Tuple
 
 import requests
 
@@ -48,6 +48,17 @@ class FanartTvEnricher(ArtworkEnricher):
     def __init__(self, config: FanartTvConfig, library: Optional[MusicLibrary] = None):
         self.config = config
         self.library = library
+
+    def test_connection(self) -> Tuple[bool, str]:
+        try:
+            # 603 is The Matrix's TMDb id - a stable, well-known test
+            # target for fanart.tv's movie lookup.
+            data = self._get("movies/603")
+            if data is not None:
+                return True, "API reachable"
+            return False, "No response - check api_key"
+        except Exception as exc:
+            return False, f"Error: {exc}"
 
     def enrich(self, now_playing: NowPlaying) -> None:
         try:

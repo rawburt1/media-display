@@ -13,7 +13,7 @@ the other's result depending on which happens to run first.
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import requests
 
@@ -153,3 +153,13 @@ class TmdbEnricher(ArtworkEnricher):
         except Exception:
             logger.exception("TMDb enrichment error for %r", now_playing.title)
             return None
+
+    def test_connection(self) -> Tuple[bool, str]:
+        try:
+            # 603 is The Matrix's TMDb id - a stable, well-known test target.
+            rating = fetch_rating(self.config.api_key, f"{_BASE_URL}/movie/603")
+            if rating is not None:
+                return True, f"API reachable - The Matrix rated {rating}/10"
+            return False, "No response - check api_key"
+        except Exception as exc:
+            return False, f"Error: {exc}"

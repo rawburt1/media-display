@@ -10,7 +10,7 @@ API docs: https://www.last.fm/api/show/artist.getInfo
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 import requests
 
@@ -51,6 +51,15 @@ class LastFmEnricher(ArtworkEnricher):
             now_playing.images.append(
                 Artwork(url=url, label=f"Artist photo (Last.fm): {artist}", is_artist_photo=True)
             )
+
+    def test_connection(self) -> Tuple[bool, str]:
+        try:
+            url = self._fetch_artist_image("Queen")
+            if url:
+                return True, "Found artist photo for test query"
+            return True, "Reached Last.fm, no photo for test query (token may still be invalid)"
+        except Exception as exc:
+            return False, f"Error: {exc}"
 
     def _image_for(self, artist: str) -> Optional[str]:
         if self.library is None:

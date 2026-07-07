@@ -479,3 +479,28 @@ def test_original_title_fallback_skipped_when_not_set(mock_post, mock_get):
     assert now_playing.images == []
     # Only one /search call since original_title is empty.
     assert mock_get.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_success():
+    with patch.object(TheTvDbEnricher, "_login", return_value="tok"):
+        ok, message = _enricher().test_connection()
+    assert ok is True
+    assert "Logged in" in message
+
+
+def test_test_connection_failure():
+    with patch.object(TheTvDbEnricher, "_login", return_value=None):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "Login failed" in message
+
+
+def test_test_connection_handles_exception():
+    with patch.object(TheTvDbEnricher, "_login", side_effect=RuntimeError("boom")):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "boom" in message

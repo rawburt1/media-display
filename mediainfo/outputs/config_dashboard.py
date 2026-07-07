@@ -7,19 +7,26 @@ running a second config output instance dedicated to "is everything
 working", e.g. without exposing config.yaml's write access on that port.
 
 Test-connection implementation notes:
-- Sources: a fresh instance is constructed from the live config and
-  polled once via get_now_playing() - the exact same call the
-  orchestrator itself makes every tick, so there's no separate "test"
-  code path to fall out of sync with real polling.
-- Enrichers: each has its own lightweight check using its own internal
-  request methods against a well-known real item (e.g. "Queen" for music
-  enrichers), since the public enrich() interface swallows its own
-  errors by design and can't distinguish "API down" from "legitimately
-  nothing found for this item".
+- Sources and enrichers: each plugin class implements its own
+  test_connection() (see mediainfo/sources/base.py's MediaSource and
+  mediainfo/enrichers/base.py's ArtworkEnricher) - this module just looks
+  up the class by name and calls it on a fresh instance built from the
+  live config. Enrichers need their own internal-method checks against a
+  well-known real item (e.g. "Queen" for music enrichers) rather than the
+  public enrich() interface, since enrich() swallows its own errors by
+  design and can't distinguish "API down" from "legitimately nothing
+  found for this item" - each class's own test_connection() handles that.
 - Outputs: a plain TCP (or HTTP, for outputs that are themselves servers)
   reachability check against whatever host/ip/port the dashboard already
   displays for that instance - never re-sends an actual update, so a test
-  click can't visibly disrupt a physical display.
+  click can't visibly disrupt a physical display. Unlike sources/
+  enrichers, this stays a raw field-based check here rather than a class
+  method: it runs against unsaved form fields (not a real config object),
+  several outputs need constructor args this dashboard doesn't have
+  (e.g. an ImageCache), and self-hosted outputs (web/info/feed/video/
+  config) can only be tested by hitting the port of an already-running
+  instance from outside - a freshly-built throwaway instance is never
+  actually bound to a socket.
 """
 
 from __future__ import annotations
@@ -51,120 +58,26 @@ def test_source(name: str, source_config: Any) -> Tuple[bool, str]:
     if cls is None or source_config is None:
         return False, "Unknown source"
 
-    loop = None
     try:
-        instance = cls(source_config)
-        loop = getattr(instance, "_loop", None)  # appletv's background asyncio loop
-        result = instance.get_now_playing()
-        if getattr(instance, "last_poll_failed", False):
-            return False, "Could not connect - check host/credentials"
-        if result is not None:
-            return True, f"Connected - currently playing: {result.title}"
-        return True, "Connected - nothing currently playing"
+        return cls(source_config).test_connection()
     except Exception as exc:
         return False, f"Error: {exc}"
-    finally:
-        # Best-effort cleanup for sources that start a background thread
-        # on construction (only Apple TV, today) - it's a daemon thread so
-        # it won't block shutdown, but a repeatedly-clicked test button
-        # shouldn't leak one of these every time.
-        if loop is not None:
-            try:
-                loop.call_soon_threadsafe(loop.stop)
-            except Exception:
-                pass
 
 
 def test_enricher(name: str, enricher_config: Any) -> Tuple[bool, str]:
+    from mediainfo import registries
+
     if enricher_config is None:
         return False, "Unknown enricher"
 
+    cls = registries.get_enricher_class(name)
+    if cls is None:
+        return False, "Unknown enricher"
+
     try:
-        if name == "thetvdb":
-            from mediainfo.enrichers.thetvdb import TheTvDbEnricher
-
-            token = TheTvDbEnricher(enricher_config)._login()
-            return (token is not None, "Logged in successfully" if token else
-                    "Login failed - check api_key/pin")
-
-        if name == "fanarttv":
-            from mediainfo.enrichers.fanarttv import FanartTvEnricher
-
-            # 5cd0fc20-c2eb-4fe8-9d4c-49a8e35a2e29 isn't needed - fanart.tv
-            # looks up music by mbid; "The Matrix"'s TMDB id is a stable,
-            # well-known test target for the movie branch of this API.
-            data = FanartTvEnricher(enricher_config)._get("movies/603")
-            return (data is not None, "API reachable" if data else
-                    "No response - check api_key")
-
-        if name == "discogs":
-            from mediainfo.enrichers.discogs import find_cover
-
-            url = find_cover(enricher_config.token, "Queen", "A Night at the Opera")
-            return True, ("Found cover art for test query" if url else
-                          "Reached Discogs, no match for test query (token may still be invalid)")
-
-        if name == "lastfm":
-            from mediainfo.enrichers.lastfm import LastFmEnricher
-
-            url = LastFmEnricher(enricher_config)._fetch_artist_image("Queen")
-            return True, ("Found artist photo for test query" if url else
-                          "Reached Last.fm, no photo for test query (token may still be invalid)")
-
-        if name == "musicbrainz":
-            from mediainfo.enrichers.musicbrainz import _query_musicbrainz
-
-            result = _query_musicbrainz("Queen", "A Night at the Opera")
-            return (result is not None, "Resolved test query successfully" if result else
-                    "No match for test query (musicbrainz.org may be unreachable)")
-
-        if name == "wikipedia":
-            from mediainfo.enrichers.wikipedia import WikipediaEnricher
-
-            summary = WikipediaEnricher(enricher_config)._lookup(["Queen (band)", "Queen"])
-            return (summary is not None, "Found summary for test query" if summary else
-                    "No match for test query (en.wikipedia.org may be unreachable)")
-
-        if name == "tmdb":
-            from mediainfo.enrichers import tmdb as tmdb_module
-
-            rating = tmdb_module.fetch_rating(
-                enricher_config.api_key, f"{tmdb_module._BASE_URL}/movie/603"
-            )
-            ok = rating is not None
-            return ok, (f"API reachable - The Matrix rated {rating}/10" if ok
-                        else "No response - check api_key")
-
-        if name == "omdb":
-            from mediainfo.enrichers.omdb import OmdbEnricher
-
-            # tt0133093 is The Matrix's IMDb id - same well-known test
-            # target used by the tmdb/fanarttv tests above.
-            rating = OmdbEnricher(enricher_config)._fetch({"i": "tt0133093"})
-            ok = rating is not None
-            return ok, (f"API reachable - The Matrix rated {rating}/10" if ok
-                        else "No response - check api_key")
-
-        if name == "library":
-            return True, "Local library - no network connection to test"
-
-        if name in ("sonarr", "radarr", "lidarr"):
-            path = {
-                "sonarr": "/api/v3/system/status",
-                "radarr": "/api/v3/system/status",
-                "lidarr": "/api/v1/system/status",
-            }[name]
-            response = requests.get(
-                f"http://{enricher_config.host}:{enricher_config.port}{path}",
-                headers={"X-Api-Key": enricher_config.api_key},
-                timeout=5,
-            )
-            response.raise_for_status()
-            return True, "Connected successfully"
+        return cls(enricher_config).test_connection()
     except Exception as exc:
         return False, f"Error: {exc}"
-
-    return False, "No connection test available for this enricher"
 
 
 def test_output(type_name: str, fields: dict) -> Tuple[bool, str]:

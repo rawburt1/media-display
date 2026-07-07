@@ -136,3 +136,28 @@ def test_api_key_sent_as_query_param(mock_get):
 
     params = mock_get.call_args.kwargs["params"]
     assert params["apikey"] == "a473dd"
+
+
+# ---------------------------------------------------------------------------
+# test_connection
+# ---------------------------------------------------------------------------
+
+def test_test_connection_success():
+    with patch.object(OmdbEnricher, "_fetch", return_value=8.7):
+        ok, message = _enricher().test_connection()
+    assert ok is True
+    assert "8.7" in message
+
+
+def test_test_connection_failure():
+    with patch.object(OmdbEnricher, "_fetch", return_value=None):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "api_key" in message
+
+
+def test_test_connection_handles_exception():
+    with patch.object(OmdbEnricher, "_fetch", side_effect=RuntimeError("boom")):
+        ok, message = _enricher().test_connection()
+    assert ok is False
+    assert "boom" in message
