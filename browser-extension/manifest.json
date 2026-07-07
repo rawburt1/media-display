@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Media Display Now-Playing Bridge",
+  "version": "0.1.0",
+  "description": "Sends now-playing info from supported sites (YouTube, Spotify Web, Netflix, Disney+, SVT Play, Plex Web) to a local Media Display instance over WebSocket. Reads only visible page metadata - no DRM circumvention, no cookies/tokens/page content are ever sent.",
+  "permissions": ["storage", "alarms"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options/options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["shared/media-state.js", "content-scripts/youtube.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://open.spotify.com/*"],
+      "js": ["shared/media-state.js", "content-scripts/spotify.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.netflix.com/*"],
+      "js": ["shared/media-state.js", "content-scripts/netflix.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.disneyplus.com/*"],
+      "js": ["shared/media-state.js", "content-scripts/disneyplus.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.svtplay.se/*"],
+      "js": ["shared/media-state.js", "content-scripts/svtplay.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://app.plex.tv/*"],
+      "js": ["shared/media-state.js", "content-scripts/plex.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

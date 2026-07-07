@@ -16,7 +16,11 @@ needs a background thread just starts it in its own constructor.
 The extension is expected to already have normalized `media_type` to this
 project's vocabulary ("music" | "movie" | "episode") per site, rather than
 this source guessing it from whatever a site's own metadata calls itself -
-see browser-extension/shared/media-state.js.
+see browser-extension/shared/media-state.js. An event carrying an optional
+`series_title` (plus `season`/`episode`) is treated as an episode
+regardless of its own `media_type`, mirroring how every other source
+represents episodes (series name as title, "SxxEyy - episode title" as
+subtitle).
 """
 
 from __future__ import annotations
@@ -133,14 +137,34 @@ class BrowserSource(MediaSource):
         duration = event.get("duration")
         progress = event.get("progress")
         site = event.get("site")
+        media_type = event.get("media_type") or "movie"
+
+        # Optional series/episode fields (Netflix, Disney+, SVT Play, Plex
+        # Web) - when present, follow the same title/subtitle shape Kodi
+        # uses for episodes (series name as title, "SxxEyy - episode
+        # title" as subtitle) instead of the flat title/artist used for
+        # movies and music.
+        series_title = event.get("series_title")
+        title = event.get("title") or ""
+        subtitle = artist
+        if series_title:
+            media_type = "episode"
+            season = event.get("season")
+            episode = event.get("episode")
+            if season is not None and episode is not None:
+                subtitle = f"S{season:02d}E{episode:02d} - {title}"
+            else:
+                subtitle = title
+            title = series_title
 
         return NowPlaying(
             source="browser",
-            media_type=event.get("media_type") or "movie",
-            title=event.get("title") or "",
-            subtitle=artist,
+            media_type=media_type,
+            title=title,
+            subtitle=subtitle,
             album=event.get("album") or "",
             artist=artist,
+            season=event.get("season") if series_title else None,
             device=f"Browser ({site})" if site else "Browser",
             images=images,
             position_seconds=float(progress) if progress is not None else None,
