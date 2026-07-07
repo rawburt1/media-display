@@ -1,5 +1,6 @@
 """Tests for the VLC source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import VlcConfig
@@ -7,7 +8,7 @@ from mediainfo.sources.vlc import VlcSource
 
 
 def _source(**kwargs) -> VlcSource:
-    defaults = dict(enabled=True, host="192.168.1.60", port=8080, password="secret")
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.60", port=8080, password="secret")
     defaults.update(kwargs)
     return VlcSource(VlcConfig(**defaults))
 

@@ -1,5 +1,6 @@
 """Tests for the foobar2000 (Beefweb) source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import Foobar2000Config
@@ -7,7 +8,7 @@ from mediainfo.sources.foobar2000 import Foobar2000Source
 
 
 def _source(**kwargs) -> Foobar2000Source:
-    defaults = dict(enabled=True, host="192.168.1.70", port=8888)
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.70", port=8888)
     defaults.update(kwargs)
     return Foobar2000Source(Foobar2000Config(**defaults))
 

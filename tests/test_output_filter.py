@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+from typing import Any
 from unittest.mock import patch
 
 from mediainfo.models import NowPlaying
@@ -140,10 +141,8 @@ def test_combined_both_must_pass():
 
 
 def _fake_time(hh: int, mm: int):
-    return patch(
-        "mediainfo.output_filter.datetime.datetime",
-        **{"now.return_value": datetime.datetime(2024, 1, 1, hh, mm, 30)},
-    )
+    kwargs: dict[str, Any] = {"now.return_value": datetime.datetime(2024, 1, 1, hh, mm, 30)}
+    return patch("mediainfo.output_filter.datetime.datetime", **kwargs)
 
 
 def test_active_hours_inside_window():

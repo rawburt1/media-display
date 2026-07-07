@@ -8,6 +8,7 @@ handling, staleness, and state selection are all plain method calls.
 
 import json
 import time
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -23,7 +24,7 @@ def no_real_server():
 
 
 def _source(**kwargs) -> BrowserSource:
-    defaults = dict(enabled=True)
+    defaults: dict[str, Any] = dict(enabled=True)
     defaults.update(kwargs)
     return BrowserSource(BrowserConfig(**defaults))
 

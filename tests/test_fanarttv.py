@@ -1,5 +1,6 @@
 """Tests for the fanart.tv artwork enricher."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import FanartTvConfig
@@ -12,7 +13,7 @@ def _enricher() -> FanartTvEnricher:
 
 
 def _movie(**kwargs) -> NowPlaying:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         source="kodi",
         media_type="movie",
         title="Movie",
@@ -23,7 +24,7 @@ def _movie(**kwargs) -> NowPlaying:
 
 
 def _episode(**kwargs) -> NowPlaying:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         source="kodi",
         media_type="episode",
         title="Show",
@@ -36,7 +37,7 @@ def _episode(**kwargs) -> NowPlaying:
 
 
 def _song(**kwargs) -> NowPlaying:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         source="kodi",
         media_type="music",
         title="Comfortably Numb",

@@ -1,5 +1,6 @@
 """Tests for the Unsplash idle wallpaper source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import UnsplashWallpaperConfig
@@ -7,7 +8,7 @@ from mediainfo.idle.unsplash import UnsplashWallpaperSource
 
 
 def _source(**kwargs) -> UnsplashWallpaperSource:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         enabled=True,
         queries="nature, architecture",
         rotation_interval_seconds=300,

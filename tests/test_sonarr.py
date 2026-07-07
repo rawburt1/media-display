@@ -1,5 +1,6 @@
 """Tests for the Sonarr artwork/studio enricher."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import SonarrConfig
@@ -12,7 +13,7 @@ def _enricher() -> SonarrEnricher:
 
 
 def _episode(**kwargs) -> NowPlaying:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         source="kodi",
         media_type="episode",
         title="Breaking Bad",

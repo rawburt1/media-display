@@ -1,5 +1,6 @@
 """Tests for the generic Chromecast/Cast "now playing" source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import ChromecastConfig
@@ -7,7 +8,7 @@ from mediainfo.sources.chromecast import ChromecastSource
 
 
 def _source(**kwargs) -> ChromecastSource:
-    defaults = dict(enabled=True, device_ips=["192.168.1.90"])
+    defaults: dict[str, Any] = dict(enabled=True, device_ips=["192.168.1.90"])
     defaults.update(kwargs)
     return ChromecastSource(ChromecastConfig(**defaults))
 

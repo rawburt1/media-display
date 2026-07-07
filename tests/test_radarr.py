@@ -1,5 +1,6 @@
 """Tests for the Radarr artwork/studio/genres enricher."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import RadarrConfig
@@ -12,7 +13,7 @@ def _enricher() -> RadarrEnricher:
 
 
 def _movie_now_playing(**kwargs) -> NowPlaying:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         source="kodi",
         media_type="movie",
         title="The Matrix",

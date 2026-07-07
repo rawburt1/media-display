@@ -8,6 +8,7 @@ connection would otherwise deliver.
 
 import json
 import time
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,7 +24,7 @@ def no_real_connection():
 
 
 def _source(**kwargs) -> HomeAssistantSource:
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         enabled=True, host="192.168.1.11", port=8123, token="test-token",
         entity_id="media_player.apple_tv_4k",
     )

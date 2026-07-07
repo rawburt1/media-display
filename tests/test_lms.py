@@ -1,5 +1,6 @@
 """Tests for the Logitech Media Server (LMS) source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import LmsConfig
@@ -7,7 +8,7 @@ from mediainfo.sources.lms import LmsSource
 
 
 def _source(**kwargs) -> LmsSource:
-    defaults = dict(enabled=True, host="192.168.1.50", port=9000)
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.50", port=9000)
     defaults.update(kwargs)
     return LmsSource(LmsConfig(**defaults))
 

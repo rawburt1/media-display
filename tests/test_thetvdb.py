@@ -1,5 +1,6 @@
 """Tests for the thetvdb.com enricher."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import TheTvDbConfig
@@ -27,13 +28,13 @@ _SERIES_ARTWORKS = {
 
 
 def _enricher(**kwargs) -> TheTvDbEnricher:
-    defaults = dict(enabled=True, api_key="test-key", pin="")
+    defaults: dict[str, Any] = dict(enabled=True, api_key="test-key", pin="")
     defaults.update(kwargs)
     return TheTvDbEnricher(TheTvDbConfig(**defaults))
 
 
 def _now_playing(**kwargs) -> NowPlaying:
-    defaults = dict(source="kodi", media_type="episode", title="Pilot", subtitle="S01E01")
+    defaults: dict[str, Any] = dict(source="kodi", media_type="episode", title="Pilot", subtitle="S01E01")
     defaults.update(kwargs)
     return NowPlaying(**defaults, ids={"tvdb": "12345"})
 

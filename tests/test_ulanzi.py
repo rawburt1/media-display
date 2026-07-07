@@ -1,5 +1,6 @@
 """Tests for the Ulanzi TC001 (AWTRIX3) text output."""
 
+from typing import Any
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,7 +12,7 @@ from mediainfo.outputs.ulanzi import UlanziOutput
 
 
 def _output(**kwargs) -> UlanziOutput:
-    defaults = dict(enabled=True, device_ip="192.168.1.30", app_name="now_playing")
+    defaults: dict[str, Any] = dict(enabled=True, device_ip="192.168.1.30", app_name="now_playing")
     defaults.update(kwargs)
     return UlanziOutput(UlanziConfig(**defaults))
 

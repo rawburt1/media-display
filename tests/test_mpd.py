@@ -1,5 +1,6 @@
 """Tests for the MPD source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import MpdConfig
@@ -7,7 +8,7 @@ from mediainfo.sources.mpd import MpdSource, _ART_CACHE_DIR, _art_cache_path
 
 
 def _source(**kwargs) -> MpdSource:
-    defaults = dict(enabled=True, host="192.168.1.40", port=6600)
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.40", port=6600)
     defaults.update(kwargs)
     return MpdSource(MpdConfig(**defaults))
 

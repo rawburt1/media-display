@@ -1,5 +1,6 @@
 """Tests for the vinyl (turntable recognition) source."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from mediainfo.config import VinylConfig
@@ -7,7 +8,7 @@ from mediainfo.sources.vinyl import VinylSource
 
 
 def _source(**kwargs) -> VinylSource:
-    defaults = dict(enabled=True, host="192.168.1.40", port=8091)
+    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.40", port=8091)
     defaults.update(kwargs)
     return VinylSource(VinylConfig(**defaults))
 
