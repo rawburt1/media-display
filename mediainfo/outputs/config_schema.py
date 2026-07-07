@@ -183,7 +183,7 @@ _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
         "chromecast": {"label": "Chromecast / Google Cast", "description": "Polls Cast-compatible devices (Chromecasts, Google/Android TVs, smart speakers) directly by IP address."},
         "emby": {"label": "Emby", "description": "Reads now-playing sessions from an Emby media server."},
         "foobar2000": {"label": "foobar2000", "description": "Reads now-playing info from foobar2000 via the Beefweb Remote Control plugin."},
-        "homeassistant": {"label": "Home Assistant", "description": "Reads a media_player entity's state from Home Assistant - useful for a device HA already tracks that mediainfo can't read directly."},
+        "homeassistant": {"label": "Home Assistant", "description": "Tracks media_player entity state from Home Assistant over its WebSocket API - useful for a device HA already tracks that mediainfo can't read directly."},
         "jellyfin": {"label": "Jellyfin", "description": "Reads now-playing sessions from a Jellyfin media server."},
         "kodi": {"label": "Kodi", "description": "Reads now-playing info from a Kodi media center over its JSON-RPC API."},
         "lms": {"label": "Logitech Media Server", "description": "Reads now-playing info from a Logitech Media Server (Squeezebox) via its JSON-RPC API. Set player_id if you have more than one player."},
@@ -269,7 +269,7 @@ _REQUIRED_FIELDS: Dict[str, Dict[str, frozenset]] = {
     "sources": {
         "chromecast": frozenset({"device_ips"}),
         "emby": frozenset({"host", "api_key"}),
-        "homeassistant": frozenset({"host", "token", "entity_id"}),
+        "homeassistant": frozenset({"host", "token"}),
         "jellyfin": frozenset({"host", "api_key"}),
         "kodi": frozenset({"host"}),
         "plex": frozenset({"host", "token"}),
@@ -335,7 +335,7 @@ _FIELD_HELP: Dict[str, str] = {
 # the generic help text above isn't specific enough.
 _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "sources.spotify.redirect_uri": "Must exactly match the redirect URI registered in your Spotify developer dashboard app.",
-    "sources.homeassistant.entity_id": "The media_player entity to watch, e.g. media_player.apple_tv_4k - find it under Settings → Devices & Services → Entities in Home Assistant.",
+    "sources.homeassistant.entity_id": "The media_player entity to track, e.g. media_player.apple_tv_4k - find it under Settings → Devices & Services → Entities in Home Assistant. Leave blank to track every media_player entity and report whichever one is playing.",
     "sources.chromecast.ignore_apps": "Cast app names to ignore (e.g. screensaver apps). Also list any Nest Hub used as an output here, to avoid it detecting its own cast image as \"now playing\".",
     "sources.shield.adb_key_path": "Generated automatically on first run if missing - accept the authorization prompt on the device's screen.",
     "sources.youtube.adb_key_path": "Generated automatically on first run if missing. Use a different key file than sources.shield if pointed at the same device.",

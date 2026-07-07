@@ -336,19 +336,22 @@ See `config.example.yaml` for all options. Key things to fill in:
   closed, browser closed, network drop). See
   [browser-extension/README.md](browser-extension/README.md) for
   installation and per-site limitations.
-- **`sources.homeassistant`**: polls a single `media_player` entity via
-  Home Assistant's REST API - `host`/`port`/`use_ssl` point at HA itself,
-  `token` is a long-lived access token (HA UI: your profile → Security →
-  Long-lived access tokens → Create Token), and `entity_id` is the entity
-  to read (HA UI: Settings → Devices & Services → Entities). Not specific
-  to Apple TV - this works for any device HA tracks - but its main use is
-  as a fallback for `sources.appletv`: list it right after `appletv` in
-  `priority` so it only gets polled once appletv has confirmed pyatv
-  itself sees nothing playing, for an app like SVT Play that HA's own
-  Apple TV integration can apparently still see (likely via an MRP
-  pairing made back when the device still advertised that protocol -
-  pairing fresh today only offers Companion/AirPlay, which expose far
-  less now-playing metadata to third-party clients).
+- **`sources.homeassistant`**: tracks `media_player` entity state via
+  Home Assistant's WebSocket API (a persistent, push-based subscription,
+  not polling) - `host`/`port`/`use_ssl` point at HA itself, `token` is a
+  long-lived access token (HA UI: your profile → Security → Long-lived
+  access tokens → Create Token), and `entity_id` is the entity to track
+  (HA UI: Settings → Devices & Services → Entities) - leave it blank to
+  track every media_player entity instead and report whichever one is
+  actually playing. Not specific to Apple TV - this works for any device
+  HA tracks - but its main use is as a fallback for `sources.appletv`:
+  list it right after `appletv` in `priority` so it only gets consulted
+  once appletv has confirmed pyatv itself sees nothing playing, for an
+  app like SVT Play that HA's own Apple TV integration can apparently
+  still see (likely via an MRP pairing made back when the device still
+  advertised that protocol - pairing fresh today only offers Companion/
+  AirPlay, which expose far less now-playing metadata to third-party
+  clients).
 - **`sources.shield`**: IP address of an Android TV device (e.g. Nvidia
   Shield) - can be the same device as `sources.kodi`, since this reads the
   Android-level "now playing" media session (Spotify, YouTube Music, SVT

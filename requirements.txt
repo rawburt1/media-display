@@ -21,3 +21,7 @@ python-mpd2~=3.1.1
 # supplies a model file, no separate install step needed.
 opencv-python-headless~=5.0.0
 numpy~=2.2.6
+# Home Assistant source (mediainfo/sources/homeassistant.py) - a small,
+# synchronous client for HA's WebSocket API, run in its own background
+# thread (see WebSocketApp.run_forever()) rather than a second asyncio loop.
+websocket-client~=1.9.0

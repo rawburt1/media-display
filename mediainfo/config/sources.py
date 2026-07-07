@@ -238,12 +238,16 @@ class HomeAssistantConfig:
     # Long-lived access token: your profile (bottom-left in the HA UI) →
     # Security → Long-lived access tokens → Create Token.
     token: str = ""
-    # The media_player entity to poll, e.g. "media_player.apple_tv_4k". Find
-    # it under Settings → Devices & Services → Entities in the HA UI. Useful
-    # for any device HA already tracks but that this codebase otherwise
-    # can't read "now playing" from directly (e.g. a tvOS app, such as SVT
-    # Play, that doesn't populate Apple's own now-playing API - pyatv (see
-    # sources.appletv) can then only ever see it as idle).
+    # The media_player entity to track, e.g. "media_player.apple_tv_4k".
+    # Find it under Settings → Devices & Services → Entities in the HA UI.
+    # Useful for any device HA already tracks but that this codebase
+    # otherwise can't read "now playing" from directly (e.g. a tvOS app,
+    # such as SVT Play, that doesn't populate Apple's own now-playing API -
+    # pyatv (see sources.appletv) can then only ever see it as idle).
+    # Leave blank to track every media_player entity instead and report
+    # whichever one is actually playing - useful with more than one such
+    # device, but pick a specific entity_id if you'd rather this only ever
+    # reflect one of them regardless of what else HA is playing.
     entity_id: str = ""
 
 
