@@ -21,22 +21,24 @@ Currently implemented:
   (music, auto-selects the active player across a multi-player household
   unless `player_id` is set), VLC (any media, via VLC's built-in web/HTTP
   interface - requires enabling it and setting a password in VLC's own
-  preferences), Apple TV (any app, via the Companion/MRP/AirPlay
-  protocols), **the YouTube *app* on Android TV** (⚠️ not YouTube in
-  general - this works only via ADB against an actual Android TV device
-  running the YouTube app, e.g. an Nvidia Shield; it cannot see YouTube
-  played in a browser, on a phone, on a smart TV's own built-in app, or
-  anywhere else - reports a song only when the video looks like one, see
-  "Extending" below), Android TV / Nvidia Shield (via ADB, generic "now
-  playing" from any other app on the same device), vinyl turntable
-  (audio recognition via [vinyl_recognizer](vinyl_recognizer/) + AudD),
-  Home Assistant (polls a single media_player entity via HA's REST API -
-  a fallback for devices a more specific source can't read directly, e.g.
-  a tvOS app that doesn't populate Apple's own now-playing API), generic
-  Chromecast/Cast (polls any configured Cast device's media status
-  directly, so anything cast to it - Netflix, Disney+, YouTube, Spotify
-  Connect, etc. - is picked up regardless of which app is casting, unlike
-  the Shield source which only sees apps running locally on that device)
+  preferences), foobar2000 (music, via the Beefweb Remote Control plugin -
+  https://github.com/hyperblast/beefweb), Apple TV (any app, via the
+  Companion/MRP/AirPlay protocols), **the YouTube *app* on Android TV**
+  (⚠️ not YouTube in general - this works only via ADB against an actual
+  Android TV device running the YouTube app, e.g. an Nvidia Shield; it
+  cannot see YouTube played in a browser, on a phone, on a smart TV's own
+  built-in app, or anywhere else - reports a song only when the video
+  looks like one, see "Extending" below), Android TV / Nvidia Shield (via
+  ADB, generic "now playing" from any other app on the same device),
+  vinyl turntable (audio recognition via
+  [vinyl_recognizer](vinyl_recognizer/) + AudD), Home Assistant (polls a
+  single media_player entity via HA's REST API - a fallback for devices a
+  more specific source can't read directly, e.g. a tvOS app that doesn't
+  populate Apple's own now-playing API), generic Chromecast/Cast (polls
+  any configured Cast device's media status directly, so anything cast
+  to it - Netflix, Disney+, YouTube, Spotify Connect, etc. - is picked up
+  regardless of which app is casting, unlike the Shield source which only
+  sees apps running locally on that device)
 - **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
   movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
   Discogs also add (and prefer) album covers for music, matched via

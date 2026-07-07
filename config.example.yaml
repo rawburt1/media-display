@@ -62,6 +62,7 @@ priority:
   - mopidy
   - mpd
   - lms
+  - foobar2000
   - vlc
   - vinyl
   - chromecast
@@ -146,6 +147,18 @@ sources:
     port: 9000
     player_id: ""        # e.g. "aa:bb:cc:dd:ee:ff" - see above
     timeout: 5           # per-request timeout, in seconds
+
+  # foobar2000, via the Beefweb Remote Control plugin
+  # (https://github.com/hyperblast/beefweb) - install it, then enable its
+  # HTTP server under File -> Preferences -> Beefweb Remote Control.
+  # foobar2000 has no other standard remote API, so api_type is currently
+  # always "beefweb" (kept as its own field for other plugins later).
+  foobar2000:
+    enabled: true
+    host: 192.168.1.34
+    port: 8888
+    api_type: beefweb
+    timeout: 5
 
   # Plex Media Server.
   # See https://support.plex.tv/articles/204059436 to find your token.
@@ -538,8 +551,8 @@ outputs:
   #
   # media_type values: music, movie, episode
   # source values: kodi, plex, jellyfin, emby, sonos, spotify, mopidy, mpd,
-  #                lms, vlc, vinyl, appletv, homeassistant, youtube, shield,
-  #                chromecast
+  #                lms, vlc, foobar2000, vinyl, appletv, homeassistant,
+  #                youtube, shield, chromecast
   # active_hours: "HH:MM-HH:MM" local time; wrap-around supported
   #   e.g. "22:00-06:00" is active from 22:00 through 06:00 the next morning
   # ---------------------------------------------------------------------------

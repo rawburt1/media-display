@@ -181,6 +181,7 @@ _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
         "appletv": {"label": "Apple TV", "description": "Detects what's playing on an Apple TV via tvOS's now-playing API. Needs a one-time pairing (below)."},
         "chromecast": {"label": "Chromecast / Google Cast", "description": "Polls Cast-compatible devices (Chromecasts, Google/Android TVs, smart speakers) directly by IP address."},
         "emby": {"label": "Emby", "description": "Reads now-playing sessions from an Emby media server."},
+        "foobar2000": {"label": "foobar2000", "description": "Reads now-playing info from foobar2000 via the Beefweb Remote Control plugin."},
         "homeassistant": {"label": "Home Assistant", "description": "Reads a media_player entity's state from Home Assistant - useful for a device HA already tracks that mediainfo can't read directly."},
         "jellyfin": {"label": "Jellyfin", "description": "Reads now-playing sessions from a Jellyfin media server."},
         "kodi": {"label": "Kodi", "description": "Reads now-playing info from a Kodi media center over its JSON-RPC API."},
