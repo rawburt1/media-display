@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Media Display Now-Playing Bridge - Settings</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+    h1 { font-size: 18px; }
+    label { display: block; margin-top: 16px; font-weight: 600; font-size: 13px; }
+    input[type="text"], input[type="password"] { width: 100%; box-sizing: border-box; padding: 6px 8px; margin-top: 4px; font-size: 13px; }
+    .help { font-size: 12px; color: #666; margin-top: 2px; }
+    .sites { margin-top: 6px; }
+    .sites label { display: flex; align-items: center; gap: 6px; font-weight: normal; margin-top: 6px; }
+    .sites input { width: auto; margin: 0; }
+    button { margin-top: 20px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+    #status { margin-left: 10px; font-size: 12px; color: #2a7a2a; }
+  </style>
+</head>
+<body>
+  <h1>Media Display Now-Playing Bridge</h1>
+  <p class="help">Sends now-playing info from supported sites to your Media Display instance's <code>sources.browser</code> WebSocket server.</p>
+
+  <label for="wsUrl">Media Display WebSocket URL</label>
+  <input type="text" id="wsUrl" placeholder="ws://192.168.1.10:8096/ws">
+  <div class="help">Matches <code>sources.browser.host</code>/<code>port</code> in Media Display's config.yaml.</div>
+
+  <label for="token">Token (optional)</label>
+  <input type="password" id="token" placeholder="Leave blank if sources.browser.token is empty">
+  <div class="help">Must match <code>sources.browser.token</code> exactly if set there.</div>
+
+  <label>Enabled sites</label>
+  <div class="sites">
+    <label><input type="checkbox" data-site="youtube"> YouTube</label>
+    <label><input type="checkbox" data-site="spotify"> Spotify Web</label>
+    <label><input type="checkbox" data-site="netflix"> Netflix</label>
+    <label><input type="checkbox" data-site="disneyplus"> Disney+</label>
+    <label><input type="checkbox" data-site="svtplay"> SVT Play</label>
+    <label><input type="checkbox" data-site="plex"> Plex Web</label>
+  </div>
+
+  <button id="save">Save</button>
+  <span id="status"></span>
+
+  <script src="options.js"></script>
+</body>
+</html>

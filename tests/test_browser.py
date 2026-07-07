@@ -69,6 +69,42 @@ def test_playing_event_is_surfaced():
     assert result.images[0].url == "https://example.com/thumb.jpg"
 
 
+def test_series_event_uses_kodi_style_title_and_subtitle():
+    source = _source()
+    source._handle_message(
+        json.dumps(
+            _event(
+                site="plex",
+                media_type="movie",  # deliberately "wrong" - series_title must win
+                title="The Insider",
+                series_title="The Boys",
+                season=4,
+                episode=7,
+            )
+        )
+    )
+
+    result = source.get_now_playing()
+
+    assert result.media_type == "episode"
+    assert result.title == "The Boys"
+    assert result.subtitle == "S04E07 - The Insider"
+    assert result.season == 4
+
+
+def test_series_event_without_season_episode_uses_plain_subtitle():
+    source = _source()
+    source._handle_message(
+        json.dumps(_event(site="svtplay", title="Avsnitt 3", series_title="Nyhetsmorgon"))
+    )
+
+    result = source.get_now_playing()
+
+    assert result.media_type == "episode"
+    assert result.title == "Nyhetsmorgon"
+    assert result.subtitle == "Avsnitt 3"
+
+
 def test_paused_event_is_not_surfaced():
     source = _source()
     source._handle_message(json.dumps(_event(state="paused")))
