@@ -84,6 +84,7 @@ from mediainfo.config.sources import (
     SonosConfig,
     SpotifyConfig,
     VinylConfig,
+    VlcConfig,
     YoutubeConfig,
 )
 from mediainfo.config.text_enrichers import (
@@ -153,6 +154,7 @@ __all__ = [
     "UnsplashWallpaperConfig",
     "VideoOutputConfig",
     "VinylConfig",
+    "VlcConfig",
     "WebConfig",
     "WikipediaConfig",
     "YoutubeConfig",

@@ -192,6 +192,7 @@ _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
         "sonos": {"label": "Sonos", "description": "Reads what's playing on Sonos speakers on your network."},
         "spotify": {"label": "Spotify", "description": "Reads your current Spotify playback via the Spotify Web API."},
         "vinyl": {"label": "Vinyl recognition", "description": "Identifies vinyl records played through a connected turntable, via the vinyl_recognizer service."},
+        "vlc": {"label": "VLC", "description": "Reads now-playing info from VLC media player via its built-in web/HTTP interface."},
         "youtube": {"label": "YouTube (Android TV)", "description": "Reads the YouTube app's now-playing state on an Android TV device over ADB."},
     },
     "outputs": {
@@ -273,6 +274,7 @@ _REQUIRED_FIELDS: Dict[str, Dict[str, frozenset]] = {
         "shield": frozenset({"host"}),
         "spotify": frozenset({"client_id", "client_secret"}),
         "vinyl": frozenset({"host"}),
+        "vlc": frozenset({"password"}),
         "youtube": frozenset({"host"}),
     },
     "outputs": {

@@ -19,7 +19,7 @@ def test_load_example_config():
     assert config.nothing_playing_grace_seconds == 2
     assert config.priority == [
         "kodi", "appletv", "homeassistant", "youtube", "shield", "plex", "sonos", "spotify", "mopidy",
-        "mpd", "lms", "vinyl", "chromecast",
+        "mpd", "lms", "vlc", "vinyl", "chromecast",
     ]
 
     assert config.sources["kodi"].enabled is True

@@ -35,6 +35,7 @@ SOURCE_CLASSES: dict[str, Union[str, type]] = {
     "sonos": "mediainfo.sources.sonos.SonosSource",
     "spotify": "mediainfo.sources.spotify.SpotifySource",
     "vinyl": "mediainfo.sources.vinyl.VinylSource",
+    "vlc": "mediainfo.sources.vlc.VlcSource",
     "youtube": "mediainfo.sources.youtube.YoutubeSource",
 }
 

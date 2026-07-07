@@ -62,6 +62,7 @@ priority:
   - mopidy
   - mpd
   - lms
+  - vlc
   - vinyl
   - chromecast
 
@@ -229,6 +230,18 @@ sources:
     enabled: true
     host: 192.168.1.40       # Machine the UCA202 is connected to
     port: 8091               # Port the vinyl_recognizer service listens on
+
+  # VLC media player - reads now-playing info via its built-in web/HTTP
+  # interface. Enable it in VLC: Tools -> Preferences -> Show settings:
+  # All -> Interface -> Main interfaces -> check "Web" -> Lua -> Lua HTTP
+  # -> set a Password (VLC won't start the interface without one; there's
+  # no separate username field, just the password below).
+  vlc:
+    enabled: true
+    host: 192.168.1.41
+    port: 8080
+    password: YOUR_VLC_HTTP_PASSWORD
+    timeout: 5
 
   # Generic Chromecast/Cast source - polls Cast devices' media status
   # directly, so anything cast to them (Netflix, Disney+, YouTube, Spotify
@@ -525,7 +538,7 @@ outputs:
   #
   # media_type values: music, movie, episode
   # source values: kodi, plex, jellyfin, emby, sonos, spotify, mopidy, mpd,
-  #                lms, vinyl, appletv, homeassistant, youtube, shield,
+  #                lms, vlc, vinyl, appletv, homeassistant, youtube, shield,
   #                chromecast
   # active_hours: "HH:MM-HH:MM" local time; wrap-around supported
   #   e.g. "22:00-06:00" is active from 22:00 through 06:00 the next morning
