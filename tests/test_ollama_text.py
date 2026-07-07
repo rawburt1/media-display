@@ -216,3 +216,21 @@ def test_different_songs_do_not_share_a_cache_entry(mock_post, tmp_path):
 
     assert mock_post.call_count == 2
     assert np_b.ai_text == {"mood": "song B mood"}
+
+
+# ---------------------------------------------------------------------------
+# OllamaTextConfig validation (pydantic dataclass rollout - see
+# mediainfo/config/text_enrichers.py)
+# ---------------------------------------------------------------------------
+
+def test_config_unknown_field_raises_validation_error():
+    import pytest
+
+    with pytest.raises(ValueError, match="no_such_field"):
+        OllamaTextConfig(enabled=True, no_such_field="x")
+
+
+def test_config_coerces_string_int_timeout():
+    cfg = OllamaTextConfig(enabled=True, timeout_seconds="30")
+    assert cfg.timeout_seconds == 30
+    assert isinstance(cfg.timeout_seconds, int)

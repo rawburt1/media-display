@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import dataclasses
 
+import pydantic
 
-@dataclasses.dataclass
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class AppleTvConfig:
     enabled: bool = False
     # IP address or hostname of the Apple TV.
@@ -20,7 +22,7 @@ class AppleTvConfig:
     airplay_credentials: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class BrowserConfig:
     enabled: bool = False
     # Bind address for the WebSocket server the browser extension connects
@@ -43,7 +45,7 @@ class BrowserConfig:
     timeout: float = 10.0
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class EmbyConfig:
     enabled: bool = False
     host: str = ""
@@ -52,7 +54,7 @@ class EmbyConfig:
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class Foobar2000Config:
     enabled: bool = False
     host: str = "localhost"
@@ -67,7 +69,7 @@ class Foobar2000Config:
     timeout: float = 5.0
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class JellyfinConfig:
     enabled: bool = False
     host: str = ""
@@ -76,7 +78,7 @@ class JellyfinConfig:
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class KodiConfig:
     enabled: bool = False
     host: str = ""
@@ -85,7 +87,7 @@ class KodiConfig:
     password: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MopidyConfig:
     enabled: bool = False
     # Mopidy's HTTP host/port - the same one serving its web interface (and
@@ -96,7 +98,7 @@ class MopidyConfig:
     timeout: float = 5.0
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MpdConfig:
     enabled: bool = False
     host: str = "localhost"
@@ -107,7 +109,7 @@ class MpdConfig:
     timeout: float = 5.0
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LmsConfig:
     enabled: bool = False
     host: str = "localhost"
@@ -123,7 +125,7 @@ class LmsConfig:
     timeout: float = 5.0
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class SonosConfig:
     enabled: bool = False
     # IP address(es) of Sonos speakers on your network, used as discovery
@@ -137,7 +139,7 @@ class SonosConfig:
     blacklist: list = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class SpotifyConfig:
     enabled: bool = False
     # From https://developer.spotify.com/dashboard — create a free app.
@@ -149,7 +151,7 @@ class SpotifyConfig:
     cache_path: str = "./spotify_cache/token.json"
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class VinylConfig:
     enabled: bool = False
     # Host/port of the vinyl_recognizer service (runs on the machine the
@@ -158,7 +160,7 @@ class VinylConfig:
     port: int = 8091
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class VlcConfig:
     enabled: bool = False
     host: str = "localhost"
@@ -172,7 +174,7 @@ class VlcConfig:
     timeout: float = 5.0
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class ShieldConfig:
     enabled: bool = False
     # IP address of the Android TV device (e.g. Nvidia Shield).
@@ -186,7 +188,7 @@ class ShieldConfig:
     adb_key_path: str = "./adb_keys/shield"
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class YoutubeConfig:
     enabled: bool = False
     # IP address of the Android TV device running the YouTube app (e.g.
@@ -201,7 +203,7 @@ class YoutubeConfig:
     adb_key_path: str = "./adb_keys/youtube"
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class ChromecastConfig:
     enabled: bool = False
     # IP addresses of Cast devices to poll (Chromecasts, Google/Android TVs,
@@ -220,7 +222,7 @@ class ChromecastConfig:
     )
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class PlexConfig:
     enabled: bool = False
     host: str = ""
@@ -229,7 +231,7 @@ class PlexConfig:
     token: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class HomeAssistantConfig:
     enabled: bool = False
     host: str = ""

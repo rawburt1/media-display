@@ -145,3 +145,21 @@ def test_test_connection_handles_exception(mock_get):
     ok, message = _enricher().test_connection()
     assert ok is False
     assert "connection refused" in message
+
+
+# ---------------------------------------------------------------------------
+# SonarrConfig validation (pydantic dataclass rollout - see
+# mediainfo/config/enrichers.py)
+# ---------------------------------------------------------------------------
+
+def test_config_unknown_field_raises_validation_error():
+    import pytest
+
+    with pytest.raises(ValueError, match="no_such_field"):
+        SonarrConfig(enabled=True, host="h", port=1, api_key="k", no_such_field="x")
+
+
+def test_config_coerces_string_int_port():
+    cfg = SonarrConfig(enabled=True, host="192.168.1.50", port="8989", api_key="key123")
+    assert cfg.port == 8989
+    assert isinstance(cfg.port, int)

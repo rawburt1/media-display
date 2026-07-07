@@ -2,44 +2,44 @@
 
 from __future__ import annotations
 
-import dataclasses
+import pydantic
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class DiscogsConfig:
     enabled: bool = False
     # Personal access token from https://www.discogs.com/settings/developers
     token: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class FanartTvConfig:
     enabled: bool = False
     # Personal API key from https://fanart.tv/get-an-api-key/
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LastFmConfig:
     enabled: bool = False
     # API key from https://www.last.fm/api/account/create (free).
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MusicBrainzConfig:
     enabled: bool = False
     # No API key required; uses the free Cover Art Archive.
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LibraryEnricherConfig:
     # No API key required; looks up the local MusicLibrary only (plus the
     # free Cover Art Archive for the actual cover image).
     enabled: bool = True
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MediaDataArtworkEnricherConfig:
     # Checks the local unified media-data cache (see
     # mediainfo/media_data_store.py, configured via the top-level
@@ -50,7 +50,7 @@ class MediaDataArtworkEnricherConfig:
     enabled: bool = False
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class TheTvDbConfig:
     enabled: bool = False
     # Project API key from https://thetvdb.com/dashboard/account/apikey
@@ -65,13 +65,13 @@ class TheTvDbConfig:
     max_search_candidates: int = 5
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class WikipediaConfig:
     enabled: bool = False
     # No API key required; uses the free Wikipedia REST API.
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class TmdbConfig:
     enabled: bool = False
     # Free credential from https://www.themoviedb.org/settings/api - either
@@ -81,14 +81,14 @@ class TmdbConfig:
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class OmdbConfig:
     enabled: bool = False
     # Free API key from https://www.omdbapi.com/apikey.aspx
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class SonarrConfig:
     enabled: bool = False
     host: str = ""
@@ -97,7 +97,7 @@ class SonarrConfig:
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class RadarrConfig:
     enabled: bool = False
     host: str = ""
@@ -106,7 +106,7 @@ class RadarrConfig:
     api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LidarrConfig:
     enabled: bool = False
     host: str = ""
@@ -118,7 +118,7 @@ class LidarrConfig:
     max_discography_items: int = 50
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class FingerprintConfig:
     enabled: bool = False
     # Host and port of a running vinyl_recognizer instance.
@@ -129,7 +129,7 @@ class FingerprintConfig:
     max_age_seconds: int = 120
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class SvtConfig:
     # No API key required - uses SVT's public content API (contento.svt.se).
     enabled: bool = True
@@ -141,7 +141,7 @@ class SvtConfig:
     sonarr_api_key: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class AiArtworkConfig:
     # Off by default - requires a local Stable-Diffusion-WebUI-API-
     # compatible instance the user has set up (and loaded a checkpoint

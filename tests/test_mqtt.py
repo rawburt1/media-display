@@ -534,6 +534,22 @@ def test_schedule_tick_throttled_to_interval(MockClient):
 
 
 # ---------------------------------------------------------------------------
+# health_check
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_health_check_reports_broker_connection_state(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config())
+
+    mock_client.is_connected.return_value = True
+    assert output.health_check() == {"broker_connected": True}
+
+    mock_client.is_connected.return_value = False
+    assert output.health_check() == {"broker_connected": False}
+
+
+# ---------------------------------------------------------------------------
 # MqttConfig validation (pydantic dataclass spike - see mediainfo/config/
 # outputs.py's MqttConfig docstring)
 # ---------------------------------------------------------------------------

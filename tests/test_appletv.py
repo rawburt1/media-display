@@ -322,6 +322,21 @@ def test_cache_get_path_returns_none_for_missing_file_url(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# health_check
+# ---------------------------------------------------------------------------
+
+def test_health_check_reports_disconnected_before_first_connect():
+    src = _source()
+    assert src.health_check() == {"connected": False}
+
+
+def test_health_check_reports_connected_once_atv_is_set():
+    src = _source()
+    src._atv = MagicMock()
+    assert src.health_check() == {"connected": True}
+
+
+# ---------------------------------------------------------------------------
 # test_connection
 # ---------------------------------------------------------------------------
 

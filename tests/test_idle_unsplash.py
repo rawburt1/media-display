@@ -107,3 +107,21 @@ def test_request_error_returns_empty_list(mock_get):
     mock_get.side_effect = Exception("boom")
 
     assert _source(queries="nature").get_wallpapers() == []
+
+
+# ---------------------------------------------------------------------------
+# UnsplashWallpaperConfig validation (pydantic dataclass rollout - see
+# mediainfo/config/idle.py)
+# ---------------------------------------------------------------------------
+
+def test_config_unknown_field_raises_validation_error():
+    import pytest
+
+    with pytest.raises(ValueError, match="no_such_field"):
+        UnsplashWallpaperConfig(enabled=True, no_such_field="x")
+
+
+def test_config_coerces_string_int_batch_size():
+    cfg = UnsplashWallpaperConfig(enabled=True, batch_size="10")
+    assert cfg.batch_size == 10
+    assert isinstance(cfg.batch_size, int)

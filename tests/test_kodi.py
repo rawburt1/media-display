@@ -245,3 +245,21 @@ def test_request_error_returns_none(mock_post):
     source = _source()
     assert source.get_now_playing() is None
     assert source.last_poll_failed is True
+
+
+# ---------------------------------------------------------------------------
+# KodiConfig validation (pydantic dataclass rollout - see
+# mediainfo/config/sources.py)
+# ---------------------------------------------------------------------------
+
+def test_config_unknown_field_raises_validation_error():
+    import pytest
+
+    with pytest.raises(ValueError, match="no_such_field"):
+        KodiConfig(enabled=True, no_such_field="x")
+
+
+def test_config_coerces_string_int_port():
+    cfg = KodiConfig(enabled=True, host="192.168.1.21", port="8080")
+    assert cfg.port == 8080
+    assert isinstance(cfg.port, int)

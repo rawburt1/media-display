@@ -1125,7 +1125,7 @@ history:
 posters:
   enabled: true
   dir: ./posters
-  entries:
+  entries: []
     # - title: Morgonstudion
     #   source: shield    # optional: restrict to a specific source
     #   file: SVT-Morgonstudion.png

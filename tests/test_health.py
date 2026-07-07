@@ -1,6 +1,6 @@
 """Tests for mediainfo.health: building the /health JSON payload."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from mediainfo.health import config_detail_fields, make_health_provider
 
@@ -189,3 +189,117 @@ def test_inactive_idle_sources_not_configured_when_missing():
     )
 
     assert all(e["status"] == "not_configured" for e in entries)
+
+
+# ---------------------------------------------------------------------------
+# health_check() merging - each category merges a plugin's own self-
+# reported detail (or nothing, if it returns None) into its /health entry.
+# ---------------------------------------------------------------------------
+
+def _base_orch_health() -> dict:
+    return {
+        "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
+        "source_backoff_seconds": {}, "uptime_seconds": 0, "poll_interval_seconds": 5,
+        "rotation_interval_seconds": 30, "now_playing": None,
+        "idle_wallpapers_loaded": 0, "hitster_safe": False,
+    }
+
+
+def test_source_health_check_detail_is_merged():
+    source = MagicMock()
+    source.name = "kodi"
+    source.health_check.return_value = {"connected": True}
+
+    orch = MagicMock()
+    orch.sources = [source]
+    orch.enrichers = []
+    orch.idle_source = None
+    orch.get_health.return_value = _base_orch_health()
+
+    cfg = MagicMock()
+    cfg.sources, cfg.outputs, cfg.enrichers, cfg.idle = {}, {}, {}, {}
+
+    health = make_health_provider(orch, cfg, [])()
+    entry = next(s for s in health["sources"] if s["name"] == "kodi")
+    assert entry["connected"] is True
+
+
+def test_source_health_check_none_leaves_entry_unaffected():
+    source = MagicMock()
+    source.name = "kodi"
+    source.health_check.return_value = None
+
+    orch = MagicMock()
+    orch.sources = [source]
+    orch.enrichers = []
+    orch.idle_source = None
+    orch.get_health.return_value = _base_orch_health()
+
+    cfg = MagicMock()
+    cfg.sources, cfg.outputs, cfg.enrichers, cfg.idle = {}, {}, {}, {}
+
+    health = make_health_provider(orch, cfg, [])()
+    entry = next(s for s in health["sources"] if s["name"] == "kodi")
+    assert set(entry) == {"name", "status"}
+
+
+def test_output_health_check_detail_is_merged():
+    from mediainfo.config import UlanziConfig
+    from mediainfo.outputs.ulanzi import UlanziOutput
+
+    output = UlanziOutput(UlanziConfig(enabled=True, device_ip="1.1.1.1"))
+    output.health_check = lambda: {"broker_connected": False}
+
+    orch = MagicMock()
+    orch.sources = []
+    orch.enrichers = []
+    orch.idle_source = None
+    orch.get_health.return_value = _base_orch_health()
+
+    cfg = MagicMock()
+    cfg.sources, cfg.outputs, cfg.enrichers, cfg.idle = {}, {}, {}, {}
+
+    health = make_health_provider(orch, cfg, [output])()
+    entry = next(o for o in health["outputs"] if o["type"] == "ulanzi")
+    assert entry["broker_connected"] is False
+
+
+def test_enricher_health_check_detail_is_merged():
+    from mediainfo import registries
+
+    enricher = MagicMock()
+    enricher.health_check.return_value = {"queue_depth": 3}
+
+    orch = MagicMock()
+    orch.sources = []
+    orch.enrichers = [enricher]
+    orch.idle_source = None
+    orch.get_health.return_value = _base_orch_health()
+
+    cfg = MagicMock()
+    cfg.sources, cfg.outputs, cfg.enrichers, cfg.idle = {}, {}, {}, {}
+
+    with patch.object(registries, "enricher_name_for_class", return_value="fake"):
+        health = make_health_provider(orch, cfg, [])()
+
+    entry = next(e for e in health["enrichers"] if e["name"] == "fake")
+    assert entry["queue_depth"] == 3
+
+
+def test_idle_source_health_check_detail_is_merged():
+    idle = MagicMock()
+    idle.name = "unsplash"
+    idle.health_check.return_value = {"last_batch_source": "unsplash.com"}
+
+    orch = MagicMock()
+    orch.sources = []
+    orch.enrichers = []
+    orch.idle_source = idle
+    orch.get_health.return_value = _base_orch_health()
+
+    cfg = MagicMock()
+    cfg.sources, cfg.outputs, cfg.enrichers, cfg.idle = {}, {}, {}, {}
+
+    health = make_health_provider(orch, cfg, [])()
+    entry = next(i for i in health["idle_sources"] if i["type"] == "unsplash")
+    assert entry["last_batch_source"] == "unsplash.com"

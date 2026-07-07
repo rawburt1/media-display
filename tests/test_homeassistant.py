@@ -304,6 +304,21 @@ def test_auto_select_only_paused_still_reports_idle():
 
 
 # ---------------------------------------------------------------------------
+# health_check
+# ---------------------------------------------------------------------------
+
+def test_health_check_reports_disconnected_by_default():
+    source = _source()
+    assert source.health_check() == {"connected": False}
+
+
+def test_health_check_reports_connected_after_authentication():
+    source = _source()
+    _authenticate(source)
+    assert source.health_check() == {"connected": True}
+
+
+# ---------------------------------------------------------------------------
 # Config defaults
 # ---------------------------------------------------------------------------
 

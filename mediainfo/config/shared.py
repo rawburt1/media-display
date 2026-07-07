@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import dataclasses
 
+import pydantic
 
-@dataclasses.dataclass
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LibraryConfig:
     # Local SQLite cache of artist/album/track metadata (external ids like
     # MusicBrainz mbids, and "claims" like cover art URLs or artist photos)
@@ -19,7 +21,7 @@ class LibraryConfig:
     max_age_days: int = 30
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class AuthConfig:
     # Off by default. When enabled, HTTP Basic Auth is required for the
     # web/config/info/feed/video/nest_hub outputs - but only for requests
@@ -33,7 +35,7 @@ class AuthConfig:
     password: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class CacheConfig:
     dir: str = "./cache"
     max_age_days: int = 30
@@ -51,7 +53,7 @@ class CacheConfig:
     min_height: int = 480
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class AlertConfig:
     # Off by default. When enabled, a webhook is POSTed once an output has
     # been continuously failing (e.g. a Pixoo64 or Nest Hub unreachable on
@@ -68,7 +70,7 @@ class AlertConfig:
     repeat_interval_seconds: int = 3600
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class OverridesConfig:
     # Manual per-title artwork pins, managed via the config UI's
     # "Overrides" page - see mediainfo/artwork_overrides.py.
@@ -76,7 +78,7 @@ class OverridesConfig:
     dir: str = "./overrides"
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class PostersConfig:
     # Static poster images stored in `dir`, matched per show by title and
     # optionally source (see mediainfo/poster_store.py).
@@ -85,7 +87,7 @@ class PostersConfig:
     entries: list = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class HistoryConfig:
     # Persistent playback history (a self-hosted scrobble log across every
     # source) - browsable at the web output's /history page. See
@@ -99,7 +101,7 @@ class HistoryConfig:
     dedupe_window_seconds: int = 600
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class LoggingConfig:
     # Python logging level name: DEBUG, INFO, WARNING, ERROR, or CRITICAL.
     level: str = "INFO"
@@ -111,7 +113,7 @@ class LoggingConfig:
     backup_count: int = 3
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MediaDataRefreshConfig:
     # When False, cached artwork is used forever once fetched - never
     # checked for staleness (still fetched once if missing). See
@@ -124,7 +126,7 @@ class MediaDataRefreshConfig:
     music_days: int = 365
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MediaDataConfig:
     # Foundation for a future unified on-disk artwork/lyrics/metadata cache
     # (see mediainfo/media_data_store.py) - not yet wired into the running
