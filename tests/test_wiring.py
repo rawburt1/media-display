@@ -19,6 +19,7 @@ from mediainfo.wiring import (
     wire_artwork_refresh,
     wire_health_providers,
     wire_hitster_safe,
+    wire_rotate_now,
 )
 
 
@@ -528,3 +529,24 @@ def test_wire_artwork_refresh_wires_mqtt_output_only():
 
     mqtt_output.set_refresh_artwork_handler.assert_called_once_with(orch.request_artwork_refresh)
     assert not other_output.set_refresh_artwork_handler.called
+
+
+# ---------------------------------------------------------------------------
+# wire_rotate_now
+# ---------------------------------------------------------------------------
+
+def test_wire_rotate_now_wires_mqtt_output_only():
+    from mediainfo.outputs.config_ui import ConfigUiOutput
+    from mediainfo.outputs.mqtt import MqttOutput
+
+    config_output = MagicMock(spec=ConfigUiOutput)
+    mqtt_output = MagicMock(spec=MqttOutput)
+    other_output = MagicMock()
+
+    orch = MagicMock()
+    orch.request_rotation_now = MagicMock()
+
+    wire_rotate_now([config_output, mqtt_output, other_output], orch)
+
+    mqtt_output.set_rotate_now_handler.assert_called_once_with(orch.request_rotation_now)
+    assert not other_output.set_rotate_now_handler.called

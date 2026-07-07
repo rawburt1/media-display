@@ -111,6 +111,12 @@ class Orchestrator:
         # must happen there too rather than immediately on the caller's
         # thread.
         self._refresh_artwork_requested = threading.Event()
+        # Set cross-thread (e.g. by an MQTT "next image" command) to ask
+        # the next tick to immediately advance every output's rotation,
+        # without waiting for rotation_interval_seconds to elapse - see
+        # request_rotation_now(). Same cross-thread-flag-checked-on-the-
+        # orchestrator's-own-thread reasoning as refresh-artwork above.
+        self._rotate_now_requested = threading.Event()
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._health = _HealthTracker()
@@ -201,6 +207,17 @@ class Orchestrator:
         """
         self._refresh_artwork_requested.set()
 
+    def request_rotation_now(self) -> None:
+        """Ask the orchestrator to immediately advance every output's
+        image rotation on its very next tick, without waiting for
+        rotation_interval_seconds to elapse - e.g. for a "next image"
+        button (see the mqtt output's Home Assistant discovery). Safe to
+        call from any thread; the actual work happens on the
+        orchestrator's own thread (see _tick()). A no-op for any group
+        with nothing currently playing - there's nothing to advance to.
+        """
+        self._rotate_now_requested.set()
+
     def start(self) -> None:
         self._thread.start()
 
@@ -225,6 +242,10 @@ class Orchestrator:
         if self._refresh_artwork_requested.is_set():
             self._refresh_artwork_requested.clear()
             self._refresh_artwork()
+
+        if self._rotate_now_requested.is_set():
+            self._rotate_now_requested.clear()
+            self._force_rotation()
 
         # Time-based device housekeeping (power/brightness schedules) runs
         # for every output every tick, filtered or not - via _safe_call
@@ -273,6 +294,18 @@ class Orchestrator:
             for index in group.output_indices:
                 if index not in group.filtered_outputs:
                     self._artwork.show_image_for_output(group, index, self.outputs[index])
+
+    def _force_rotation(self) -> None:
+        """Reset every group's rotation clock so _router.tick()'s normal
+        periodic-rotation check (_maybe_rotate: now - last_rotation vs.
+        rotation_interval_seconds) treats every output as due right now,
+        later in this same tick - see request_rotation_now(). Groups with
+        nothing currently playing simply have no effect (_maybe_rotate
+        returns immediately for those).
+        """
+        for group in self._groups:
+            for state in group.rotation_state.values():
+                state.last_rotation = 0.0
 
     def _maybe_purge_cache(self) -> None:
         now = time.monotonic()

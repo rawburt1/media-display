@@ -290,6 +290,35 @@ def test_discovery_publishes_refresh_artwork_button(MockClient):
 
 
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_discovery_publishes_next_image_button(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    output._on_connect(mock_client, None, {}, 0)
+
+    published = {call.args[0]: call for call in mock_client.publish.call_args_list}
+    config_topic = "homeassistant/button/test-client/next_image/config"
+    assert config_topic in published
+    payload = json.loads(published[config_topic].args[1])
+    assert payload["command_topic"] == "mediainfo/now_playing/next_image/set"
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_discovery_publishes_restart_button(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    output._on_connect(mock_client, None, {}, 0)
+
+    published = {call.args[0]: call for call in mock_client.publish.call_args_list}
+    config_topic = "homeassistant/button/test-client/restart/config"
+    assert config_topic in published
+    payload = json.loads(published[config_topic].args[1])
+    assert payload["command_topic"] == "mediainfo/now_playing/restart/set"
+    assert payload["device_class"] == "restart"
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_connect_subscribes_to_command_topics_when_discovery_enabled(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config(ha_discovery=True))
@@ -299,6 +328,8 @@ def test_connect_subscribes_to_command_topics_when_discovery_enabled(MockClient)
     subscribed = {call.args[0] for call in mock_client.subscribe.call_args_list}
     assert output._hitster_safe_command_topic in subscribed
     assert output._refresh_artwork_command_topic in subscribed
+    assert output._rotate_now_command_topic in subscribed
+    assert output._restart_command_topic in subscribed
 
 
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
@@ -382,6 +413,41 @@ def test_refresh_artwork_command_ignored_when_not_wired(MockClient):
 
     # Must not raise even though set_refresh_artwork_handler was never called.
     output._on_message(mock_client, None, _message(output._refresh_artwork_command_topic, "PRESS"))
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_rotate_now_command_calls_handler(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+    rotate_fn = MagicMock()
+    output.set_rotate_now_handler(rotate_fn)
+
+    output._on_message(mock_client, None, _message(output._rotate_now_command_topic, "PRESS"))
+
+    rotate_fn.assert_called_once_with()
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_rotate_now_command_ignored_when_not_wired(MockClient):
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    # Must not raise even though set_rotate_now_handler was never called.
+    output._on_message(mock_client, None, _message(output._rotate_now_command_topic, "PRESS"))
+
+
+@patch("mediainfo.outputs.mqtt.os.kill")
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_restart_command_sends_sigterm_to_self(MockClient, mock_kill):
+    import os
+    import signal
+
+    mock_client = MockClient.return_value
+    output = MqttOutput(_config(ha_discovery=True))
+
+    output._on_message(mock_client, None, _message(output._restart_command_topic, "PRESS"))
+
+    mock_kill.assert_called_once_with(os.getpid(), signal.SIGTERM)
 
 
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
