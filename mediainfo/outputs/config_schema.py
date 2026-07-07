@@ -179,6 +179,7 @@ _CATEGORY_INFO: Dict[str, Dict[str, str]] = {
 _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
     "sources": {
         "appletv": {"label": "Apple TV", "description": "Detects what's playing on an Apple TV via tvOS's now-playing API. Needs a one-time pairing (below)."},
+        "browser": {"label": "Browser extension", "description": "Receives now-playing info pushed by the companion browser extension (YouTube, Spotify Web, Netflix, Disney+, SVT Play, Plex Web) over a WebSocket connection."},
         "chromecast": {"label": "Chromecast / Google Cast", "description": "Polls Cast-compatible devices (Chromecasts, Google/Android TVs, smart speakers) directly by IP address."},
         "emby": {"label": "Emby", "description": "Reads now-playing sessions from an Emby media server."},
         "foobar2000": {"label": "foobar2000", "description": "Reads now-playing info from foobar2000 via the Beefweb Remote Control plugin."},

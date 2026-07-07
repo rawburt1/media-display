@@ -71,6 +71,7 @@ from mediainfo.config.shared import (
 from mediainfo.config.sources import (
     SOURCE_CONFIG_TYPES,
     AppleTvConfig,
+    BrowserConfig,
     ChromecastConfig,
     EmbyConfig,
     Foobar2000Config,
@@ -99,6 +100,7 @@ __all__ = [
     "AlertConfig",
     "AppleTvConfig",
     "AuthConfig",
+    "BrowserConfig",
     "CacheConfig",
     "ChromecastConfig",
     "Config",

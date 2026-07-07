@@ -38,7 +38,11 @@ Currently implemented:
   any configured Cast device's media status directly, so anything cast
   to it - Netflix, Disney+, YouTube, Spotify Connect, etc. - is picked up
   regardless of which app is casting, unlike the Shield source which only
-  sees apps running locally on that device)
+  sees apps running locally on that device), a companion **browser
+  extension** (see [browser-extension/](browser-extension/)) for media
+  playing in a browser tab - YouTube, Spotify Web, Netflix, Disney+, SVT
+  Play, Plex Web - pushed to a small WebSocket server this source runs,
+  rather than polled
 - **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
   movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
   Discogs also add (and prefer) album covers for music, matched via
@@ -319,6 +323,19 @@ See `config.example.yaml` for all options. Key things to fill in:
   third-party tvOS apps (SVT Play, notably) never do, so pyatv can only
   ever see the device as idle while they're actually playing something.
   `sources.homeassistant` below is a workaround for exactly that case.
+- **`sources.browser`**: unlike every other source, this one doesn't poll
+  anything - it runs its own small WebSocket server (`host`/`port`, default
+  `0.0.0.0:8096`) that the companion [browser
+  extension](browser-extension/) connects to and pushes now-playing state
+  into whenever a supported site (YouTube, Spotify Web, Netflix, Disney+,
+  SVT Play, Plex Web) is playing in a tab. Set `token` here and in the
+  extension's options page if this port is reachable by anyone besides
+  you - there's no other authentication. `timeout` (default 10s) is how
+  long a tab's last update stays valid before being treated as idle, since
+  there's no polling to notice a browser that's simply gone quiet (tab
+  closed, browser closed, network drop). See
+  [browser-extension/README.md](browser-extension/README.md) for
+  installation and per-site limitations.
 - **`sources.homeassistant`**: polls a single `media_player` entity via
   Home Assistant's REST API - `host`/`port`/`use_ssl` point at HA itself,
   `token` is a long-lived access token (HA UI: your profile → Security →

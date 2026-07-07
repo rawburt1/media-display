@@ -28,6 +28,10 @@ services:
       - "${VIDEO_PORT:-8091}:8091"
       - "${NEST_HUB_PORT:-8092}:8092"
       - "${INFO_PORT:-8093}:8093"
+      # sources.browser (the browser-extension WebSocket source) listens
+      # for inbound connections, unlike every other source - only needed
+      # if that source is enabled.
+      - "${BROWSER_SOURCE_PORT:-8096}:8096"
       # outputs.config and outputs.feed ports are in docker-compose.management.yml.
       # Run: docker compose -f docker-compose.yml -f docker-compose.management.yml up -d
     volumes:
