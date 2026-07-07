@@ -3,18 +3,18 @@ folder per movie/series/album (e.g. `movies/Alien (1979)/poster.jpg`), each
 with a `metadata.json` tracking where each piece of content came from and
 when it was last checked/updated.
 
-Wired into the live enrichment pipeline for music only (album art +
-lyrics) via mediainfo/enrichers/mediadata.py and mediadata_lyrics.py -
-opt-in, off by default (see those modules). Movie/series artwork
-(_fetch_movie_artwork/_fetch_series_artwork) remain explicit stubs - that
-needs new TMDb search code this pass deliberately doesn't include, see
-the enricher modules' docstrings for why. Existing `mediainfo.cache.
-ImageCache` (flat, hash-named artwork cache, reused here for the actual
-download step - see _download_bytes), `mediainfo.text_cache.TextCache`
-(namespaced lyrics/AI-text cache), `mediainfo.poster_store.PosterStore`,
-and `mediainfo.artwork_overrides.ArtworkOverrideStore` are all untouched
-and keep working exactly as before; nothing here replaces or migrates
-them.
+Wired into the live enrichment pipeline via mediainfo/enrichers/
+mediadata.py (artwork: music album art, movie/series posters+fanart) and
+mediadata_lyrics.py (music lyrics) - opt-in, off by default (see those
+modules). Movie/series artwork is TMDb-first, falling back to fanart.tv
+for movies only (fanart.tv's TV lookup needs a TVDB id this store has no
+way to resolve - see _fetch_series_artwork's docstring). Existing
+`mediainfo.cache.ImageCache` (flat, hash-named artwork cache, reused
+here for the actual download step - see _download_bytes),
+`mediainfo.text_cache.TextCache` (namespaced lyrics/AI-text cache),
+`mediainfo.poster_store.PosterStore`, and `mediainfo.artwork_overrides.
+ArtworkOverrideStore` are all untouched and keep working exactly as
+before; nothing here replaces or migrates them.
 
 Directory layout:
     {path}/movies/{Title} ({Year})/poster.jpg
@@ -63,7 +63,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import MediaDataConfig
-from mediainfo.enrichers import discogs, lrclib, musicbrainz
+from mediainfo.enrichers import discogs, fanarttv, lrclib, musicbrainz, tmdb
 from mediainfo.models import Artwork
 
 # What a `_fetch_*` stub (or, later, a real implementation) returns:
@@ -97,6 +97,8 @@ class MediaDataStore:
         config: MediaDataConfig,
         cache: Optional[ImageCache] = None,
         discogs_token: str = "",
+        tmdb_api_key: str = "",
+        fanarttv_api_key: str = "",
     ):
         self.config = config
         self.root = Path(config.path).resolve()
@@ -118,6 +120,16 @@ class MediaDataStore:
         # Discogs", not an error (matches how DiscogsEnricher itself
         # behaves without a token).
         self._discogs_token = discogs_token
+        # TMDb credential (v3 key or v4 token, see tmdb.py), used for both
+        # movie and series poster/fanart search - blank means "skip
+        # movie/series artwork entirely" (same "no error, just nothing to
+        # do" behavior as a blank discogs_token).
+        self._tmdb_api_key = tmdb_api_key
+        # fanart.tv personal API key, for a movie-poster/fanart fallback
+        # when TMDb has nothing (using the TMDb id already resolved) -
+        # blank means "skip fanart.tv". Not used for series - see
+        # _fetch_series_artwork's docstring for why.
+        self._fanarttv_api_key = fanarttv_api_key
 
     # -- path builders -----------------------------------------------------
 
@@ -358,10 +370,45 @@ class MediaDataStore:
         return updated
 
     def _fetch_movie_artwork(self, title: str, year: Optional[int], kind: str) -> FetchResult:
-        """STUB - always returns None (no update available). A real
-        implementation would call an artwork API (e.g. TMDB/fanart.tv)
-        here for `kind` ("poster" or "fanart") - deliberately not done in
-        this pass, see the module docstring."""
+        """TMDb first (free, one credential covers movies+series), falling
+        back to fanart.tv (if a key is configured) using the TMDb id just
+        resolved - mirrors _fetch_album_artwork's "free source, then a
+        keyed fallback" shape."""
+        resolved = self._resolve_movie_artwork_url(title, year, kind)
+        if resolved is None:
+            return None
+        url, source = resolved
+        return self._download_bytes(url, source)
+
+    def _resolve_movie_artwork_url(
+        self, title: str, year: Optional[int], kind: str
+    ) -> Optional[Tuple[str, str]]:
+        movie = None
+        if self._tmdb_api_key:
+            try:
+                movie = tmdb.find_movie(self._tmdb_api_key, title, year)
+            except Exception:
+                logger.exception("MediaDataStore: TMDb movie search failed for %r", title)
+            if movie:
+                path_field = "poster_path" if kind == "poster" else "backdrop_path"
+                size = "w500" if kind == "poster" else "w1280"
+                url = tmdb.image_url(movie.get(path_field), size)
+                if url:
+                    return url, "tmdb"
+
+        tmdb_id = movie.get("id") if movie else None
+        if self._fanarttv_api_key and tmdb_id:
+            try:
+                data = fanarttv.fetch(self._fanarttv_api_key, f"movies/{tmdb_id}")
+            except Exception:
+                logger.exception("MediaDataStore: fanart.tv movie lookup failed for %r", title)
+                data = None
+            if data:
+                field = "movieposter" if kind == "poster" else "moviebackground"
+                url = fanarttv.best_url(data.get(field))
+                if url:
+                    return url, "fanarttv"
+
         return None
 
     # -- series (mirrors movies) ------------------------------------------
@@ -398,8 +445,32 @@ class MediaDataStore:
         return updated
 
     def _fetch_series_artwork(self, title: str, year: Optional[int], kind: str) -> FetchResult:
-        """STUB - always returns None. See _fetch_movie_artwork."""
-        return None
+        """TMDb only - no fanart.tv fallback here, since fanart.tv's TV
+        lookup needs a TVDB id specifically and this store has no way to
+        resolve one without a separate thetvdb.com login flow (see the
+        module docstring for why that integration was skipped)."""
+        resolved = self._resolve_series_artwork_url(title, year, kind)
+        if resolved is None:
+            return None
+        url, source = resolved
+        return self._download_bytes(url, source)
+
+    def _resolve_series_artwork_url(
+        self, title: str, year: Optional[int], kind: str
+    ) -> Optional[Tuple[str, str]]:
+        if not self._tmdb_api_key:
+            return None
+        try:
+            show = tmdb.find_tv(self._tmdb_api_key, title)
+        except Exception:
+            logger.exception("MediaDataStore: TMDb TV search failed for %r", title)
+            return None
+        if not show:
+            return None
+        path_field = "poster_path" if kind == "poster" else "backdrop_path"
+        size = "w500" if kind == "poster" else "w1280"
+        url = tmdb.image_url(show.get(path_field), size)
+        return (url, "tmdb") if url else None
 
     # -- music ------------------------------------------------------------
 

@@ -1,5 +1,7 @@
-"""Tests for the MediaDataStore-backed album art enricher."""
+"""Tests for the MediaDataStore-backed artwork enricher (album art for
+music, poster+fanart for movies/episodes)."""
 
+from typing import Any
 from unittest.mock import Mock
 
 from mediainfo.enrichers.mediadata import MediaDataArtworkEnricher
@@ -8,10 +10,22 @@ from mediainfo.models import Artwork, NowPlaying
 
 
 def _song(**kwargs):
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         source="youtube", media_type="music",
         title="Comfortably Numb", subtitle="Pink Floyd", album="The Wall",
     )
+    defaults.update(kwargs)
+    return NowPlaying(**defaults)
+
+
+def _movie(**kwargs):
+    defaults: dict[str, Any] = dict(source="kodi", media_type="movie", title="Alien", year=1979)
+    defaults.update(kwargs)
+    return NowPlaying(**defaults)
+
+
+def _episode(**kwargs):
+    defaults: dict[str, Any] = dict(source="kodi", media_type="episode", title="Breaking Bad")
     defaults.update(kwargs)
     return NowPlaying(**defaults)
 
@@ -73,12 +87,68 @@ def test_no_op_when_store_is_none():
     assert np.images == []
 
 
-def test_no_op_for_non_music():
+def test_adds_movie_poster_and_fanart_on_hit(tmp_path):
     store = Mock(spec=MediaDataStore)
-    np = _song(media_type="movie")
+    poster_path = tmp_path / "poster.jpg"
+    poster_path.write_bytes(b"fake")
+    fanart_path = tmp_path / "fanart.jpg"
+    fanart_path.write_bytes(b"fake")
+    store.get_movie_poster.return_value = poster_path
+    store.get_movie_fanart.return_value = fanart_path
+
+    np = _movie()
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    store.get_movie_poster.assert_called_once_with("Alien", 1979)
+    store.get_movie_fanart.assert_called_once_with("Alien", 1979)
+    urls = {img.url for img in np.images}
+    assert urls == {f"file://{poster_path}", f"file://{fanart_path}"}
+    store.get_album_art.assert_not_called()
+
+
+def test_adds_series_poster_and_fanart_on_hit(tmp_path):
+    store = Mock(spec=MediaDataStore)
+    poster_path = tmp_path / "poster.jpg"
+    poster_path.write_bytes(b"fake")
+    store.get_series_poster.return_value = poster_path
+    store.get_series_fanart.return_value = None
+
+    np = _episode()
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    store.get_series_poster.assert_called_once_with("Breaking Bad", None)
+    store.get_series_fanart.assert_called_once_with("Breaking Bad", None)
+    assert len(np.images) == 1
+    assert np.images[0].url == f"file://{poster_path}"
+
+
+def test_movie_no_op_on_store_miss():
+    store = Mock(spec=MediaDataStore)
+    store.get_movie_poster.return_value = None
+    store.get_movie_fanart.return_value = None
+
+    np = _movie()
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    assert np.images == []
+
+
+def test_movie_no_op_without_title():
+    store = Mock(spec=MediaDataStore)
+    np = _movie(title="")
     MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
     assert np.images == []
-    store.get_album_art.assert_not_called()
+    store.get_movie_poster.assert_not_called()
+
+
+def test_movie_swallows_store_exception():
+    store = Mock(spec=MediaDataStore)
+    store.get_movie_poster.side_effect = RuntimeError("disk error")
+
+    np = _movie()
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    assert np.images == []
 
 
 def test_no_op_without_artist_or_album():

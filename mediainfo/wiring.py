@@ -72,7 +72,17 @@ def build_mediadata_store(config: Config, cache: ImageCache) -> Optional[MediaDa
         return None
     discogs_config = config.enrichers.get("discogs")
     discogs_token = discogs_config.token if discogs_config and discogs_config.enabled else ""
-    return MediaDataStore(config.mediadata, cache=cache, discogs_token=discogs_token)
+    tmdb_config = config.enrichers.get("tmdb")
+    tmdb_api_key = tmdb_config.api_key if tmdb_config and tmdb_config.enabled else ""
+    fanarttv_config = config.enrichers.get("fanarttv")
+    fanarttv_api_key = fanarttv_config.api_key if fanarttv_config and fanarttv_config.enabled else ""
+    return MediaDataStore(
+        config.mediadata,
+        cache=cache,
+        discogs_token=discogs_token,
+        tmdb_api_key=tmdb_api_key,
+        fanarttv_api_key=fanarttv_api_key,
+    )
 
 
 def build_enrichers(

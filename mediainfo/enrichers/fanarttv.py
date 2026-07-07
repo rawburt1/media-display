@@ -19,6 +19,31 @@ _BASE_URL = "https://webservice.fanart.tv/v3"
 _PREFERRED_LANGS = {"en", "00", ""}
 
 
+def fetch(api_key: str, path: str) -> Optional[dict]:
+    try:
+        response = requests.get(
+            f"{_BASE_URL}/{path}", params={"api_key": api_key}, timeout=10
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        logger.exception("fanart.tv request failed for %s", path)
+        return None
+
+
+def best_url(entries: Optional[Iterable[dict]]) -> Optional[str]:
+    entries = list(entries or [])
+    if not entries:
+        return None
+
+    preferred = [entry for entry in entries if entry.get("lang") in _PREFERRED_LANGS]
+    candidates = preferred or entries
+    best = max(candidates, key=lambda entry: int(entry.get("likes") or 0))
+    return best.get("url")
+
+
 class FanartTvEnricher(ArtworkEnricher):
     def __init__(self, config: FanartTvConfig, library: Optional[MusicLibrary] = None):
         self.config = config
@@ -94,34 +119,17 @@ class FanartTvEnricher(ArtworkEnricher):
         self._prepend_best(now_playing, album.get("albumcover"), "Album (fanart.tv)")
 
     def _get(self, path: str) -> Optional[dict]:
-        try:
-            response = requests.get(
-                f"{_BASE_URL}/{path}", params={"api_key": self.config.api_key}, timeout=10
-            )
-            if response.status_code == 404:
-                return None
-            response.raise_for_status()
-            return response.json()
-        except Exception:
-            logger.exception("fanart.tv request failed for %s", path)
-            return None
+        return fetch(self.config.api_key, path)
 
     @staticmethod
     def _best_url(entries: Optional[Iterable[dict]]) -> Optional[str]:
-        entries = list(entries or [])
-        if not entries:
-            return None
-
-        preferred = [entry for entry in entries if entry.get("lang") in _PREFERRED_LANGS]
-        candidates = preferred or entries
-        best = max(candidates, key=lambda entry: int(entry.get("likes") or 0))
-        return best.get("url")
+        return best_url(entries)
 
     @classmethod
     def _append_best(
         cls, now_playing: NowPlaying, entries: Optional[Iterable[dict]], label: str
     ) -> None:
-        url = cls._best_url(entries)
+        url = best_url(entries)
         if url and not any(image.url == url for image in now_playing.images):
             now_playing.images.append(Artwork(url=url, label=label))
 
@@ -129,6 +137,6 @@ class FanartTvEnricher(ArtworkEnricher):
     def _prepend_best(
         cls, now_playing: NowPlaying, entries: Optional[Iterable[dict]], label: str
     ) -> None:
-        url = cls._best_url(entries)
+        url = best_url(entries)
         if url and not any(image.url == url for image in now_playing.images):
             now_playing.images.insert(0, Artwork(url=url, label=label))
