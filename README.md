@@ -179,25 +179,39 @@ git clone https://github.com/rawburt1/media-display.git
 cd media-display
 
 ./setup.sh                     # creates config/, cache/, etc. and config/config.yaml
-nano config/config.yaml        # fill in your devices' IPs/credentials
-
 docker compose up -d
 ```
 
 `./setup.sh` creates every directory `docker-compose.yml` bind-mounts
 (`config/`, `cache/`, `library/`, `logs/`, `adb_keys/`, `artwork/`,
-`spotify_cache/`, `overrides/`) and copies `config.example.yaml` to `config/config.yaml`
-if it isn't there yet. Running it yourself first matters: Docker otherwise
-creates any missing mount target itself as root, which the container's
-non-root app user can't then write into. config.yaml lives in
-`./config/config.yaml` rather than the project root because it's
-bind-mounted as a directory, so editors/tools that save by replacing the
-file (rather than writing in place) don't orphan the mount.
+`spotify_cache/`, `overrides/`) and copies `config.starter.yaml` to
+`config/config.yaml` if it isn't there yet - a minimal config with just the
+config UI and a couple of harmless local outputs enabled, and no sources,
+so a fresh install doesn't sit there erroring against placeholder IPs.
+Running `setup.sh` yourself first matters: Docker otherwise creates any
+missing mount target itself as root, which the container's non-root app
+user can't then write into. config.yaml lives in `./config/config.yaml`
+rather than the project root because it's bind-mounted as a directory, so
+editors/tools that save by replacing the file (rather than writing in
+place) don't orphan the mount.
 
-Open `http://<this-machine>:8090/` - if you enabled at least one source and
-output in config.yaml, you should see either its artwork or an idle
-wallpaper within a few seconds. Check `docker compose logs -f` if not (see
-"Troubleshooting" below).
+Open `http://<this-machine>:8094/` - the guided config UI - and add
+whichever sources (Kodi, Plex, Spotify, ...) and displays you actually use
+from there; no YAML editing needed. Most changes apply within a few
+seconds; the page tells you when one needs a restart instead (see
+"Configuration" below). Once at least one source and one output are
+enabled, `http://<this-machine>:8090/` shows the artwork/idle wallpaper.
+
+**Prefer hand-editing YAML instead?** `nano config/config.yaml` - see
+`config.example.yaml` for every available option, or "Configuration" below.
+
+**Security note**: the config UI has read+write access to every API key in
+config.yaml and needs no login by default - fine on a trusted home LAN,
+but see [SECURITY.md](SECURITY.md) before this machine's ports are reachable
+beyond one (port-forwarding, an untrusted shared network, ...).
+
+Check `docker compose logs -f` if nothing shows up (see "Troubleshooting"
+below).
 
 To update later: `git pull && docker compose up -d --build`.
 
@@ -211,13 +225,15 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-cp config.example.yaml config.yaml
-nano config.yaml               # fill in your devices' IPs/credentials
-
+cp config.starter.yaml config.yaml
 python -m mediainfo --config config.yaml
 ```
 
-The web page is then available at `http://<this-machine>:8090/`.
+Open `http://<this-machine>:8094/` - the guided config UI - and add your
+sources/displays from there (or `nano config.yaml` - see
+`config.example.yaml` for every available option, if you'd rather edit
+YAML by hand). The web page is at `http://<this-machine>:8090/` once at
+least one source and output are enabled.
 
 To update later: `git pull && pip install -r requirements.txt`.
 
@@ -261,7 +277,12 @@ To update later: `git pull && pip install -r requirements.txt`.
 
 ## Configuration
 
-See `config.example.yaml` for all options. Key things to fill in:
+Most of this is easiest done from the config UI (`http://<this-machine>:8094/`
+- see `outputs.config` below) rather than by hand. See `config.example.yaml`
+for every available option if you're editing YAML directly - `config.yaml`
+itself starts out as a copy of `config.starter.yaml` (just the config UI and
+a few harmless local outputs, no sources), not the full example file. Key
+things to fill in:
 
 - **`priority`**: ordered list of source names. When more than one source
   is active at once, the first one in this list wins. A source that's

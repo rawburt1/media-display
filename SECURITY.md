@@ -42,14 +42,22 @@ credentials are stored in it. Anyone who can reach its port (and isn't
 blocked by `auth`, if enabled) can read your API keys/tokens and change
 any setting. Only enable it on a trusted local network, or behind `auth`.
 
-Its `host` setting defaults to `127.0.0.1` (loopback only), so it isn't
-reachable from the LAN without a deliberate change. When running inside
-Docker, set `host: 0.0.0.0` in config.yaml **and** include the management
-compose overlay to publish the port:
-
-```
-docker compose -f docker-compose.yml -f docker-compose.management.yml up -d
-```
+**This output is reachable on your LAN, with no login, out of the box.**
+Both `config.starter.yaml` (what `setup.sh` copies into `config/config.yaml`
+on a fresh install) and `config.example.yaml` set `outputs.config.host` to
+`0.0.0.0`, and `docker-compose.yml` publishes port 8094 by default - this
+is deliberate, so a new install is reachable from a browser with zero YAML
+editing (see README.md "Quick start"), but it means anyone else on your
+LAN can read every API key in `config.yaml` from the moment the container
+starts. If your home network isn't fully trusted (e.g. a shared/student
+flat, an untrusted IoT VLAN you haven't segmented this machine out of),
+set `auth.enabled: true` before or immediately after first boot - the
+config UI's own "Advanced configuration" page can do this for you, no
+restart-then-edit-YAML dance needed except the restart itself (see
+README.md's `auth` section). Set `outputs.config.host: 127.0.0.1` instead
+if you never need to reach the config UI from another device at all -
+Docker users note that this makes it unreachable even from the Docker
+host itself (see "Operating modes at a glance" below).
 
 ## Keeping credentials out of config.yaml
 
@@ -70,6 +78,6 @@ the startup validator will warn about the unexpanded reference.
 
 | Setup | Reachable from | Recommended for |
 |---|---|---|
-| `host: 127.0.0.1` (default) | This machine only | Single-machine installs, development |
-| `host: 0.0.0.0`, no `auth` | Entire LAN (no login) | Fully trusted home network |
-| `host: 0.0.0.0`, `auth.enabled: true` | LAN (login required); public IPs challenge all | Exposing beyond LAN via port-forward/reverse proxy |
+| `host: 127.0.0.1` | This machine only (Docker: unreachable even from the host - the published port can't reach a loopback-only bind inside the container) | Development, or "never touch this from another device" |
+| `host: 0.0.0.0`, no `auth` (shipped default) | Entire LAN (no login) | Fully trusted home network |
+| `host: 0.0.0.0`, `auth.enabled: true` | LAN (login required); public IPs challenge all | Shared/untrusted LAN, or exposing beyond LAN via port-forward/reverse proxy |

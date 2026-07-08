@@ -28,19 +28,26 @@ services:
       - "${VIDEO_PORT:-8091}:8091"
       - "${NEST_HUB_PORT:-8092}:8092"
       - "${INFO_PORT:-8093}:8093"
+      # outputs.config (the guided config UI) - read+write access to
+      # config.yaml, including any credentials in it, with no login unless
+      # you set auth.enabled: true. Published by default so a fresh
+      # install is reachable from a browser with zero YAML editing - fine
+      # on a trusted home LAN, but see SECURITY.md before exposing this
+      # machine's ports beyond it.
+      - "${CONFIG_PORT:-8094}:8094"
+      - "${CONFIG_PORT_ALT:-8095}:8095" # outputs.config second instance, if configured
+      - "${FEED_PORT:-8086}:8086"       # outputs.feed (RSS/Atom)
       # sources.browser (the browser-extension WebSocket source) listens
       # for inbound connections, unlike every other source - only needed
       # if that source is enabled.
       - "${BROWSER_SOURCE_PORT:-8096}:8096"
-      # outputs.config and outputs.feed ports are in docker-compose.management.yml.
-      # Run: docker compose -f docker-compose.yml -f docker-compose.management.yml up -d
     volumes:
       # A directory mount (not a single-file mount) so config.yaml stays
       # readable/writable across edits that replace the file via rename
       # (atomic saves - many editors and tools do this, including the
       # `config` output's own save path) without orphaning a stale inode,
       # which a single-file bind mount is prone to. Put config.yaml in
-      # ./config/ (cp config.example.yaml config/config.yaml) - read-write
+      # ./config/ (./setup.sh does this for you) - read-write
       # so the `config` output (see config.example.yaml) can save edits
       # made through its web UI; mount `:ro` instead if that output is
       # disabled and you only ever edit config.yaml by hand.
