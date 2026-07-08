@@ -1,4 +1,5 @@
-"""Tests for AlertManager (webhook alerting for persistent output failures)."""
+"""Tests for AlertManager (webhook alerting for persistent source or
+output failures)."""
 
 from unittest.mock import patch
 
@@ -107,3 +108,82 @@ def test_multiple_outputs_alerted_independently(mock_post):
     assert mock_post.call_count == 1
     _, kwargs = mock_post.call_args
     assert kwargs["json"]["output"] == "pixoo"
+
+
+# ---------------------------------------------------------------------------
+# source_error_since (mirrors the output_error_since tests above, but via
+# the source_error_since parameter rather than the required positional args)
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.alerting.requests.post")
+def test_source_does_not_alert_before_threshold(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300))
+    manager.check({}, {}, now=1000.0, source_error_since={"vinyl": 800.0})  # only failing 200s
+    mock_post.assert_not_called()
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_source_alerts_once_threshold_elapsed(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300))
+    manager.check({}, {}, now=1000.0, source_error_since={"vinyl": 700.0})  # failing 300s
+
+    mock_post.assert_called_once()
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"]["source"] == "vinyl"
+    assert kwargs["json"]["kind"] == "source"
+    assert kwargs["json"]["duration_seconds"] == 300.0
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_source_does_not_repeat_alert_within_repeat_interval(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300, repeat_interval_seconds=3600))
+    manager.check({}, {}, now=1000.0, source_error_since={"vinyl": 700.0})
+    manager.check({}, {}, now=2000.0, source_error_since={"vinyl": 700.0})
+
+    mock_post.assert_called_once()
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_source_recovery_resets_alert_state(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300, repeat_interval_seconds=3600))
+    manager.check({}, {}, now=1000.0, source_error_since={"vinyl": 700.0})
+    assert mock_post.call_count == 1
+
+    manager.check({}, {}, now=1100.0, source_error_since={})  # recovered
+    mock_post.reset_mock()
+
+    manager.check({}, {}, now=1100.0 + 300, source_error_since={"vinyl": 1100.0})
+    assert mock_post.call_count == 1
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_source_and_output_alerting_are_independent(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300, repeat_interval_seconds=3600))
+    # Output alert fires and enters its own repeat window...
+    manager.check({0: "pixoo"}, {0: 700.0}, now=1000.0, source_error_since={})
+    assert mock_post.call_count == 1
+
+    # ...a source starting to fail at the same moment must still alert on
+    # its own schedule, not be suppressed by the output's repeat window.
+    manager.check({0: "pixoo"}, {0: 700.0}, now=1000.0, source_error_since={"vinyl": 700.0})
+    assert mock_post.call_count == 2
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"]["source"] == "vinyl"
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_source_send_failure_is_caught_and_logged(mock_post):
+    mock_post.side_effect = ConnectionError("no network")
+    manager = AlertManager(_config(error_threshold_seconds=300))
+
+    manager.check({}, {}, now=1000.0, source_error_since={"vinyl": 700.0})  # must not raise
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_multiple_sources_alerted_independently(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300))
+    manager.check({}, {}, now=1000.0, source_error_since={"vinyl": 700.0, "kodi": 999.0})
+
+    assert mock_post.call_count == 1
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"]["source"] == "vinyl"

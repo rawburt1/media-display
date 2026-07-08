@@ -84,7 +84,7 @@ class _SourcePoller:
             result = source.get_now_playing()
 
             if getattr(source, "last_poll_failed", False):
-                self._health.record_backoff(name, self._next_backoff(backoff, now))
+                self._health.record_backoff(name, self._next_backoff(backoff, now), now)
             elif backoff is not None:
                 self._health.clear_backoff(name)
 

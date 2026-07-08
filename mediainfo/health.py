@@ -90,6 +90,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
         # Sources — active/idle for those in the orchestrator; disabled /
         # not_configured for everything else in the registry.
         backoff_seconds = data["source_backoff_seconds"]
+        failing_for_seconds = data["source_failing_for_seconds"]
         active_source_names = {s.name for s in orch.sources}
         sources = []
         for source in orch.sources:
@@ -103,6 +104,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
                 retry = backoff_seconds[source.name]
                 entry["retry_in_seconds"] = retry
                 entry["last_error"] = f"Could not connect - retrying in {retry}s"
+                entry["failing_for_seconds"] = failing_for_seconds.get(source.name, 0)
             entry.update(config_detail_fields(config.sources.get(source.name)))
             entry.update(source.health_check() or {})
             sources.append(entry)
