@@ -51,6 +51,7 @@ def test_health_provider_includes_config_fields_and_error_message_for_backed_off
         "source_last_polled_ago": {"kodi": 1.0},
         "output_errors": {},
         "source_backoff_seconds": {"kodi": 30.0},
+        "source_failing_for_seconds": {"kodi": 90.0},
         "uptime_seconds": 0,
         "poll_interval_seconds": 5,
         "rotation_interval_seconds": 30,
@@ -71,6 +72,7 @@ def test_health_provider_includes_config_fields_and_error_message_for_backed_off
     assert kodi_entry["host"] == "192.168.1.21"
     assert kodi_entry["port"] == 8080
     assert "retrying in 30.0s" in kodi_entry["last_error"]
+    assert kodi_entry["failing_for_seconds"] == 90.0
 
 
 def test_health_provider_assigns_per_type_instance_index_to_outputs():
@@ -86,7 +88,8 @@ def test_health_provider_assigns_per_type_instance_index_to_outputs():
     orch.idle_source = None
     orch.get_health.return_value = {
         "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
-        "source_backoff_seconds": {}, "uptime_seconds": 0, "poll_interval_seconds": 5,
+        "source_backoff_seconds": {}, "source_failing_for_seconds": {}, "uptime_seconds": 0,
+        "poll_interval_seconds": 5,
         "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0, "hitster_safe": False,
     }
 
@@ -199,7 +202,8 @@ def test_inactive_idle_sources_not_configured_when_missing():
 def _base_orch_health() -> dict:
     return {
         "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
-        "source_backoff_seconds": {}, "uptime_seconds": 0, "poll_interval_seconds": 5,
+        "source_backoff_seconds": {}, "source_failing_for_seconds": {}, "uptime_seconds": 0,
+        "poll_interval_seconds": 5,
         "rotation_interval_seconds": 30, "now_playing": None,
         "idle_wallpapers_loaded": 0, "hitster_safe": False,
     }

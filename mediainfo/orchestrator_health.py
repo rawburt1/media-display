@@ -25,6 +25,11 @@ class _HealthTracker:
         self.active_source_name: Optional[str] = None
         self.source_polled: Dict[str, float] = {}
         self.source_backoff: Dict[str, _BackoffState] = {}
+        # When the current (still-ongoing) failure streak for a source
+        # began - same "set once, left untouched by subsequent failures,
+        # cleared on recovery" discipline as output_error_since. Used by
+        # alerting.AlertManager.
+        self.source_error_since: Dict[str, float] = {}
         self.output_errors: Dict[int, Tuple[str, float]] = {}
         # When the current (still-ongoing) error streak for an output
         # began - set once on the first error and left untouched by
@@ -39,11 +44,13 @@ class _HealthTracker:
     def set_active_source(self, name: Optional[str]) -> None:
         self.active_source_name = name
 
-    def record_backoff(self, name: str, state: _BackoffState) -> None:
+    def record_backoff(self, name: str, state: _BackoffState, now: float) -> None:
         self.source_backoff[name] = state
+        self.source_error_since.setdefault(name, now)
 
     def clear_backoff(self, name: str) -> None:
         self.source_backoff.pop(name, None)
+        self.source_error_since.pop(name, None)
 
     def record_output_success(self, index: int) -> None:
         self.output_errors.pop(index, None)
@@ -63,6 +70,9 @@ class _HealthTracker:
             "source_backoff_seconds": {
                 name: round(max(state.next_attempt - now, 0), 1)
                 for name, state in self.source_backoff.items()
+            },
+            "source_failing_for_seconds": {
+                name: round(now - since, 1) for name, since in self.source_error_since.items()
             },
             "output_errors": {
                 i: {

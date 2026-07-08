@@ -1058,13 +1058,14 @@ auth:
 # ---------------------------------------------------------------------------
 # Alerting
 # ---------------------------------------------------------------------------
-# Off by default. When enabled, a webhook is POSTed once an output (e.g. a
-# Pixoo64 or Nest Hub that's become unreachable on the network) has been
-# continuously failing for at least error_threshold_seconds - most chat
-# tools (Slack, Discord, ntfy.sh, healthchecks.io, a generic HTTP endpoint
-# of your own, ...) accept a plain JSON POST. Re-fires at most every
-# repeat_interval_seconds while the outage continues, and resets the
-# moment the output recovers.
+# Off by default. When enabled, a webhook is POSTed once a source or
+# output (e.g. a Pixoo64/Nest Hub that's become unreachable on the
+# network, or a source like vinyl_recognizer that's simply not running)
+# has been continuously failing for at least error_threshold_seconds -
+# most chat tools (Slack, Discord, ntfy.sh, healthchecks.io, a generic
+# HTTP endpoint of your own, ...) accept a plain JSON POST. Re-fires at
+# most every repeat_interval_seconds while the outage continues, and
+# resets the moment it recovers.
 
 alerts:
   enabled: false

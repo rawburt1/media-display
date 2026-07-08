@@ -328,7 +328,7 @@ class Orchestrator:
 
         self._last_alert_check = now
         labels = {i: type(output).__name__ for i, output in enumerate(self.outputs)}
-        self._alerts.check(labels, self._health.output_error_since, now)
+        self._alerts.check(labels, self._health.output_error_since, now, self._health.source_error_since)
 
     def _poll_sources(self) -> List[NowPlaying]:
         """The route groups' view of this tick's active sources - a thin
