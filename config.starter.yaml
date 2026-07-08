@@ -1,0 +1,49 @@
+# Starter config - this is what setup.sh copies to config/config.yaml on a
+# fresh install. It has no sources/displays configured yet on purpose: after
+# `docker compose up -d` (or `python -m mediainfo --config config.yaml` for a
+# manual install), open http://<this-machine>:8094 in a browser - that's the
+# guided config UI - and add the media sources and displays you actually use
+# from there. No YAML editing required.
+#
+# Prefer editing YAML by hand instead? config.example.yaml (in the project
+# root) documents every available source/output/enricher/idle wallpaper
+# option, each with its own comments on what it needs and where to get any
+# API key - copy whatever sections you need from it into this file.
+
+outputs:
+  # Guided config UI - see the comment at the top of this file.
+  # SECURITY: read+write access to config.yaml, including any credentials
+  # in it, with no login by default - see SECURITY.md before exposing this
+  # machine's ports beyond a trusted LAN.
+  config:
+    enabled: true
+    host: 0.0.0.0
+
+  # Local web page - http://<this-machine>:8090/
+  web:
+    enabled: true
+
+  # RSS/Atom "now playing" feed - /rss and /atom on port 8086.
+  feed:
+    enabled: true
+
+  # Mirrors the current artwork as image files in ./artwork.
+  folder:
+    enabled: true
+
+  # High-resolution artwork + bio/plot summary page - http://<this-machine>:8093/
+  info:
+    enabled: true
+
+enrichers:
+  # Local music library lookups - no API key required.
+  library:
+    enabled: true
+
+  # Artist bio / movie info / TV show info + photo - no API key required.
+  wikipedia:
+    enabled: true
+
+  # Album cover scans from the Cover Art Archive - no API key required.
+  musicbrainz:
+    enabled: true
