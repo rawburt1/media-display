@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Now Playing - Themes</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #fff;
+                  font-family: sans-serif; display: flex; flex-direction: column;
+                  align-items: center; justify-content: center; overflow: hidden; }
+    #art-container { position: relative; width: 100vw; height: 90vh; }
+    #art-container.fullscreen { height: 100vh; }
+    #art-container img {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      object-fit: contain; opacity: 0;
+      transition: opacity 1s ease-in-out, transform 1s ease-in-out;
+    }
+    #art-container.fullscreen img { object-fit: cover; }
+    {{ transitions_css }}
+    #meta { text-align: center; padding: 0.5em; }
+    #meta.hidden { display: none; }
+    #title { font-size: 1.5em; }
+    #subtitle { font-size: 1em; opacity: 0.8; }
+    #art-label { font-size: 0.8em; opacity: 0.5; margin-top: 0.3em; }
+    #progress { display: none; width: min(60vw, 400px); height: 4px; margin: 0.6em auto 0;
+                background: rgba(255, 255, 255, 0.25); border-radius: 2px; overflow: hidden; }
+    #progress-fill { width: 0%; height: 100%; background: #fff; border-radius: 2px; }
+    /* Themes append their own rules below (via the theme_css template
+       variable) - shared layers (glow, blurred background, mosaic tiles,
+       ...) live inside #theme-layer so they compose behind/around
+       #art-container without fighting the core crossfade markup above. */
+    #theme-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+                   pointer-events: none; z-index: 0; }
+    #art-container { z-index: 1; }
+    #meta { z-index: 1; }
+    {{ theme_css }}
+  </style>
+</head>
+<body>
+  <div id="theme-layer"></div>
+  <div id="art-container">
+    <img id="art-a" alt="">
+    <img id="art-b" alt="">
+  </div>
+  <div id="meta">
+    <div id="title"></div>
+    <div id="subtitle"></div>
+    <div id="art-label"></div>
+    <div id="progress"><div id="progress-fill"></div></div>
+  </div>
+  <script>
+    {{ transitions_js }}
+
+    let lastImage = null;
+    let activeImg = document.getElementById("art-a");
+    let standbyImg = document.getElementById("art-b");
+
+    function showImage(src) {
+      prepareForTransition(standbyImg);
+      standbyImg.onload = standbyImg.onerror = () => {
+        activeImg.classList.remove("visible");
+        standbyImg.classList.add("visible");
+        [activeImg, standbyImg] = [standbyImg, activeImg];
+      };
+      standbyImg.src = src;
+    }
+
+    // Per-theme JS registers a handler here (keyed by theme name, matching
+    // the WebSocket payload's data.themes keys) via the theme_js template
+    // variable below - called with that theme's own payload slice (or
+    // null when absent/disabled) on every state update, so a new theme
+    // needs no changes to this file.
+    window.themeHandlers = window.themeHandlers || {};
+
+    function applyThemeState(data) {
+      const themes = data.themes || {};
+      Object.keys(window.themeHandlers).forEach(function(name) {
+        window.themeHandlers[name](themes[name] || null);
+      });
+    }
+
+    function applyState(data) {
+      const title = document.getElementById("title");
+      const subtitle = document.getElementById("subtitle");
+      const artLabel = document.getElementById("art-label");
+      const artContainer = document.getElementById("art-container");
+      const meta = document.getElementById("meta");
+
+      if (data.image) {
+        if (data.image !== lastImage) {
+          showImage(data.image);
+          lastImage = data.image;
+        }
+      } else {
+        activeImg.classList.remove("visible");
+        standbyImg.classList.remove("visible");
+        lastImage = null;
+      }
+
+      const isIdle = data.source === "idle";
+      artContainer.classList.toggle("fullscreen", isIdle);
+      meta.classList.toggle("hidden", isIdle);
+
+      title.textContent = data.title || "";
+      subtitle.textContent = data.subtitle || "";
+      artLabel.textContent = data.art_label || "";
+      setProgress(data);
+      applyThemeState(data);
+    }
+
+    // Payloads only arrive on item changes and rotation ticks, so the bar
+    // advances locally at 1s/s from the last reported position; each new
+    // payload re-anchors it (correcting for pauses/seeks within one tick).
+    let progress = null;
+
+    function setProgress(data) {
+      progress = (typeof data.position_seconds === "number" && data.duration_seconds > 0)
+        ? { position: data.position_seconds, duration: data.duration_seconds, at: Date.now() }
+        : null;
+      renderProgress();
+    }
+
+    function renderProgress() {
+      const bar = document.getElementById("progress");
+      if (progress === null) {
+        bar.style.display = "none";
+        return;
+      }
+      const pos = Math.min(progress.position + (Date.now() - progress.at) / 1000, progress.duration);
+      bar.style.display = "block";
+      document.getElementById("progress-fill").style.width = (100 * pos / progress.duration) + "%";
+    }
+
+    setInterval(renderProgress, 1000);
+
+    function connect() {
+      const ws = new WebSocket("ws://" + location.host + "/ws");
+      ws.onmessage = (event) => { applyState(JSON.parse(event.data)); };
+      ws.onclose = () => { setTimeout(connect, 3000); };
+      ws.onerror = () => { ws.close(); };
+    }
+
+    connect();
+
+    {{ theme_js }}
+  </script>
+</body>
+</html>

@@ -77,7 +77,21 @@ Currently implemented:
   and it has a "Hitster-safe" button that suppresses song/artist/album
   display across *every* output (falling back to idle wallpapers/text
   instead) while it's on, so a song's title/artist never leaks onto a
-  screen mid-round of Hitster or similar music-guessing games
+  screen mid-round of Hitster or similar music-guessing games; themes
+  output (`http://<host>:8097/`) is a completely separate full-screen
+  display from `web` that layers selectable, combinable Display Themes on
+  top of the current artwork - enabled themes render simultaneously into
+  one combined look. Off by default; ships today with Color Palette (a
+  strip of the artwork's dominant colors), Blurred Background (a heavily
+  blurred, darkened copy of the artwork filling the screen behind it),
+  Word Cloud (built from lyrics for music, or the plot summary for
+  movies/TV, colored from the artwork - reuses the same cached word cloud
+  described under mediadata above for music), Glow (a soft, slowly
+  pulsing ambient glow behind the artwork, colored from it), Ken Burns
+  (a slow, continuous pan/zoom on the artwork, the classic documentary
+  effect), and Vinyl (shows the album art as a spinning record - music
+  only), with more themes still being added - see the Display Themes
+  roadmap
 - **Idle wallpapers**: Unsplash, Pexels, local folders (random pictures
   from your own collection - see `idle.local` below), Last.fm scrobble
   history (album art from your recent scrobbles), and/or your own music
@@ -529,6 +543,11 @@ things to fill in:
   slide from any side, or zoom); `transition_exclude` (a list of names)
   drops any of them from the pool - this output, `info`, and `video` all
   support it.
+- **`outputs.themes`**: host/port for the separate Display Themes display
+  (see above) - a broadcast page, not per-client-rotated like `web`.
+  `themes:` (nested inside this section) holds one entry per individual
+  theme, keyed by theme name - see config.example.yaml for the currently
+  available themes and their own options (just `color_palette` today).
 - **`outputs.folder`**: `dir` is a local directory that mirrors all of the
   current item's artwork (album art, fanart, posters) as individual image
   files, named after each image's label (e.g. `Poster (fanart.tv).jpg`).

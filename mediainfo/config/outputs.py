@@ -139,6 +139,29 @@ class WebConfig(_OutputFilterMixin):
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class ThemesConfig(_OutputFilterMixin):
+    """A completely separate display from `web` (its own port, its own
+    page) that layers selectable, combinable visual effects ("Display
+    Themes" - see mediainfo/themes/) on top of the current artwork/
+    metadata. Themes enabled at once render simultaneously into one
+    combined look, not as alternate single-active skins - see
+    mediainfo/outputs/themes.py."""
+
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8097
+    transforms: list = dataclasses.field(default_factory=list)
+    # Image-change transition variants to exclude - see WebConfig above.
+    transition_exclude: list = dataclasses.field(default_factory=list)
+    # One entry per theme, keyed by theme name (e.g. {"glow": {"enabled":
+    # true, "intensity": 0.6}}) - deliberately a raw dict, not validated
+    # here (mirrors `transforms: list` above): each theme's own config
+    # dataclass (mediainfo.config.themes.THEMES_CONFIG_TYPES) validates
+    # its own entry via parse_themes(), called from ThemesOutput.__init__.
+    themes: dict = dataclasses.field(default_factory=dict)
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class InfoConfig(_OutputFilterMixin):
     enabled: bool = False
     host: str = "0.0.0.0"
@@ -297,6 +320,7 @@ OUTPUT_CONFIG_TYPES: dict[str, type] = {
     "mqtt": MqttConfig,
     "nest_hub": NestHubConfig,
     "pixoo": PixooConfig,
+    "themes": ThemesConfig,
     "ulanzi": UlanziConfig,
     "video": VideoOutputConfig,
     "web": WebConfig,
