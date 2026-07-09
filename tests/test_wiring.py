@@ -232,6 +232,7 @@ def test_build_mediadata_store_constructed_when_artwork_enabled():
 
     fake_cls.assert_called_once_with(
         cfg.mediadata, cache=fake_cache, discogs_token="", tmdb_api_key="", fanarttv_api_key="",
+        lastfm_api_key="",
     )
     assert result is fake_cls.return_value
 
@@ -311,6 +312,36 @@ def test_build_mediadata_store_skips_tmdb_and_fanarttv_keys_when_disabled():
     _, kwargs = fake_cls.call_args
     assert kwargs["tmdb_api_key"] == ""
     assert kwargs["fanarttv_api_key"] == ""
+
+
+def test_build_mediadata_store_passes_lastfm_key_when_enabled():
+    artwork_cfg = MagicMock(enabled=True)
+    lastfm_cfg = MagicMock(enabled=True, api_key="lastfm-key")
+    cfg = _minimal_config(
+        enrichers={"mediadata": artwork_cfg, "lastfm": lastfm_cfg}, text_enrichers={},
+    )
+    fake_cls = MagicMock(return_value=MagicMock())
+
+    with patch("mediainfo.wiring.MediaDataStore", fake_cls):
+        build_mediadata_store(cfg, MagicMock())
+
+    _, kwargs = fake_cls.call_args
+    assert kwargs["lastfm_api_key"] == "lastfm-key"
+
+
+def test_build_mediadata_store_skips_lastfm_key_when_disabled():
+    artwork_cfg = MagicMock(enabled=True)
+    lastfm_cfg = MagicMock(enabled=False, api_key="lastfm-key")
+    cfg = _minimal_config(
+        enrichers={"mediadata": artwork_cfg, "lastfm": lastfm_cfg}, text_enrichers={},
+    )
+    fake_cls = MagicMock(return_value=MagicMock())
+
+    with patch("mediainfo.wiring.MediaDataStore", fake_cls):
+        build_mediadata_store(cfg, MagicMock())
+
+    _, kwargs = fake_cls.call_args
+    assert kwargs["lastfm_api_key"] == ""
 
 
 # ---------------------------------------------------------------------------
