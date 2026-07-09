@@ -15,6 +15,18 @@ cache/
 # Local music metadata cache (artist/album/track ids and claims)
 library/
 
+# Unified media-data cache (mediadata.path in config.example.yaml)
+mediadata/
+
+# Backups of config/config.yaml made before each edit (see config_backup.py)
+config/.config_backups/
+
+# Derived-image cache files ImageCache.get_derived_path() writes next to
+# the original (e.g. Pixoo/Ulanzi's LED-resized versions of a poster) -
+# same {stem}_{16-hex-chars}.{ext} naming wherever the original lives
+posters/*_????????????????.jpg
+posters/*_????????????????.png
+
 # Log files
 logs/
 
