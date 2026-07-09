@@ -28,6 +28,7 @@ from mediainfo.config import (
     IDLE_CONFIG_TYPES,
     OUTPUT_CONFIG_TYPES,
     SOURCE_CONFIG_TYPES,
+    THEMES_CONFIG_TYPES,
     AlertConfig,
     AuthConfig,
     CacheConfig,
@@ -205,9 +206,22 @@ _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
         "mqtt": {"label": "MQTT", "description": "Publishes now-playing events to an MQTT broker - handy for a Home Assistant integration."},
         "nest_hub": {"label": "Google Nest Hub", "description": "Casts the current artwork to a Google Nest Hub or other Cast-compatible display."},
         "pixoo": {"label": "Divoom Pixoo", "description": "Sends the current artwork to a Divoom Pixoo LED matrix display."},
+        "themes": {"label": "Display Themes", "description": "A separate full-screen display (its own port) that layers selectable visual effects - color palette, blurred background, glow, and more - on top of the current artwork. Pick which themes to enable below."},
         "ulanzi": {"label": "Ulanzi TC001 / AWTRIX3", "description": "Sends now-playing text and graphics to a Ulanzi TC001 or other AWTRIX3 device."},
         "video": {"label": "Video display", "description": "Shows looping idle background video (Pexels/Pixabay) plus now-playing artwork in a browser."},
         "web": {"label": "Web display", "description": "A full-screen now-playing display in any browser, with image transitions."},
+    },
+    # Individual Display Theme plugins (see mediainfo/themes/), each
+    # nested inside a "themes" output instance's own `themes:` config -
+    # not a top-level category like the four above (no _SINGLE_INSTANCE_
+    # CATEGORIES/OUTPUT_CONFIG_TYPES entry of its own).
+    "themes": {
+        "blurred_background": {"label": "Blurred Background", "description": "Fills the screen behind the artwork with a heavily blurred, darkened copy of it."},
+        "color_palette": {"label": "Color Palette", "description": "Shows the current artwork's dominant colors as a strip of swatches."},
+        "glow": {"label": "Glow", "description": "A soft, slowly pulsing ambient glow behind the artwork, colored from it."},
+        "ken_burns": {"label": "Ken Burns", "description": "A slow, continuous pan/zoom on the artwork - the classic documentary-style effect."},
+        "vinyl": {"label": "Vinyl", "description": "Shows the album art as a spinning vinyl record. Music only."},
+        "word_cloud": {"label": "Word Cloud", "description": "Shows a word cloud built from the lyrics (music) or plot summary (movies/TV), colored from the artwork."},
     },
     "enrichers": {
         "discogs": {"label": "Discogs", "description": "Looks up album cover art on Discogs."},
@@ -303,6 +317,9 @@ _REQUIRED_FIELDS: Dict[str, Dict[str, frozenset]] = {
 _ENUM_CHOICES: Dict[str, List[str]] = {
     "idle_mode": ["priority", "random"],
     "ui": ["form", "dashboard"],
+    "swatch_position": ["bottom", "top", "side"],
+    "corner": ["bottom-right", "bottom-left", "top-right", "top-left", "center"],
+    "color_source": ["album_art", "fixed"],
     "level": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     "source": ["pexels", "pixabay"],
     "crop_strategy": ["automatic", "center", "poster_top"],
@@ -359,6 +376,21 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "outputs.mqtt.qos": "0 = at most once, 1 = at least once, 2 = exactly once. 0 is fine for most setups.",
     "outputs.video.queries": "Comma-separated search queries; one is picked at random per refresh.",
     "outputs.video.source": "Which stock video provider to pull idle background clips from.",
+    "themes.color_palette.swatch_count": "How many color swatches to show, most-prevalent first.",
+    "themes.color_palette.swatch_position": "Where the swatch strip appears on screen.",
+    "themes.blurred_background.blur_radius": "How heavily to blur the background - higher is softer.",
+    "themes.blurred_background.brightness": "1.0 = unchanged, below 1 darkens (keeps foreground text/art readable), above 1 brightens.",
+    "themes.word_cloud.corner": "Where the word cloud appears on screen.",
+    "themes.word_cloud.size_vw": "Width as a percentage of screen width (it's square, so this sets its height too, capped to screen height).",
+    "themes.glow.intensity": "How visible the glow is at its peak, from 0 (invisible) to 1 (fully visible).",
+    "themes.glow.color_source": "\"album_art\" colors the glow from the artwork's own dominant color; \"fixed\" always uses fixed_color below.",
+    "themes.glow.fixed_color": "A CSS color (e.g. #ff8800) used when color_source is \"fixed\".",
+    "themes.glow.pulse": "Slowly grow and shrink the glow on a loop, instead of staying a fixed size.",
+    "themes.ken_burns.duration_seconds": "Seconds for one full pan/zoom cycle - lower is more noticeable motion.",
+    "themes.ken_burns.opacity": "How visible the animated layer is, from 0 (invisible) to 1 (fully visible).",
+    "themes.vinyl.corner": "Where the record appears on screen.",
+    "themes.vinyl.size_vmin": "Diameter as a percentage of the shorter screen dimension.",
+    "themes.vinyl.rotation_seconds": "Seconds for one full rotation - lower spins faster. Purely decorative - it can't stop on pause, since no source reports that state.",
     "enrichers.thetvdb.pin": "Only needed for \"user-supported\" TheTVDB API keys.",
     "enrichers.lidarr.max_discography_items": "Cap on how many tracks to list for a prolific artist.",
     "idle.local.dir": "Each subfolder here is treated as one destination - one is picked at random each refresh.",
@@ -511,6 +543,11 @@ def _build_schema() -> Dict[str, Any]:
     for category, registry in _SINGLE_INSTANCE_CATEGORIES.items():
         schema[category] = {name: _scalar_fields(cls, category, name) for name, cls in registry.items()}
     schema["outputs"] = {name: _scalar_fields(cls, "outputs", name) for name, cls in OUTPUT_CONFIG_TYPES.items()}
+    # Individual theme plugins (see _TYPE_INFO's "themes" category above) -
+    # a themes output instance's own picker UI iterates this, not
+    # schema["outputs"] (which only describes the "themes" output type
+    # itself: host/port/enabled/etc.).
+    schema["themes"] = {name: _scalar_fields(cls, "themes", name) for name, cls in THEMES_CONFIG_TYPES.items()}
     schema["filter_meta"] = {
         "media_types": _KNOWN_MEDIA_TYPES,
         "known_sources": sorted(SOURCE_CONFIG_TYPES.keys()),

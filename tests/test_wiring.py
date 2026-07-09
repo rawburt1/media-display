@@ -20,6 +20,7 @@ from mediainfo.wiring import (
     wire_artwork_refresh,
     wire_health_providers,
     wire_hitster_safe,
+    wire_media_data_store,
     wire_rotate_now,
 )
 
@@ -574,6 +575,20 @@ def test_start_orchestrator_starts_and_returns_orchestrator():
     assert result is mock_orch
 
 
+def test_start_orchestrator_uses_supplied_mediadata_store_instead_of_building_one():
+    cfg = _minimal_config(
+        priority=[], sources={}, enrichers={}, idle={},
+        poll_interval_seconds=5, rotation_interval_seconds=30,
+    )
+    store = MagicMock()
+
+    with patch("mediainfo.wiring.Orchestrator", return_value=MagicMock()), \
+            patch("mediainfo.wiring.build_mediadata_store") as build_fn:
+        start_orchestrator(cfg, [], MagicMock(), mediadata_store=store)
+
+    build_fn.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # build_artwork_overrides / wire_artwork_overrides
 # ---------------------------------------------------------------------------
@@ -654,6 +669,31 @@ def test_wire_health_providers_wires_web_config_ui_and_mqtt_outputs():
     config_output.set_health_provider.assert_called_once()
     mqtt_output.set_health_provider.assert_called_once()
     assert not other_output.set_health_provider.called
+
+
+# ---------------------------------------------------------------------------
+# wire_media_data_store
+# ---------------------------------------------------------------------------
+
+def test_wire_media_data_store_wires_themes_output_only():
+    from mediainfo.outputs.themes import ThemesOutput
+
+    themes_output = MagicMock(spec=ThemesOutput)
+    other_output = MagicMock()
+    store = MagicMock()
+
+    wire_media_data_store([themes_output, other_output], store)
+
+    themes_output.set_media_data_store.assert_called_once_with(store)
+    assert not other_output.set_media_data_store.called
+
+
+def test_wire_media_data_store_passes_through_none():
+    from mediainfo.outputs.themes import ThemesOutput
+
+    themes_output = MagicMock(spec=ThemesOutput)
+    wire_media_data_store([themes_output], None)
+    themes_output.set_media_data_store.assert_called_once_with(None)
 
 
 # ---------------------------------------------------------------------------

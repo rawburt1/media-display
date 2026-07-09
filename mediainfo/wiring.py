@@ -204,8 +204,15 @@ def start_orchestrator(
     overrides: Optional[ArtworkOverrideStore] = None,
     poster_store: Optional[PosterStore] = None,
     history: Optional[PlaybackHistory] = None,
+    mediadata_store: Optional[MediaDataStore] = None,
 ) -> Orchestrator:
-    mediadata_store = build_mediadata_store(config, cache)
+    # Callers that already need the store themselves (e.g. _start_and_wire,
+    # to also pass it to wire_media_data_store()) build it once and pass it
+    # in here instead of leaving this to build a second, separate instance
+    # of it - build_mediadata_store() is called only if one wasn't already
+    # supplied, so existing callers that don't care about this are unaffected.
+    if mediadata_store is None:
+        mediadata_store = build_mediadata_store(config, cache)
     orch = Orchestrator(
         sources=build_sources(config),
         enrichers=build_enrichers(config, library, mediadata_store),
@@ -251,6 +258,22 @@ def wire_health_providers(outputs: list, orch: Orchestrator, config: Config) -> 
     for output in outputs:
         if isinstance(output, (WebOutput, ConfigUiOutput, MqttOutput)):
             output.set_health_provider(provider)
+
+
+def wire_media_data_store(outputs: list, mediadata_store: Optional[MediaDataStore]) -> None:
+    """Give the themes output direct MediaDataStore access, so its Word
+    Cloud theme can reuse MediaDataStore.get_track_wordcloud (lyrics
+    fetch/cache included) instead of duplicating that logic - same post-
+    construction wiring shape as wire_history/wire_health_providers,
+    needed because MediaDataStore is built inside start_orchestrator(),
+    after outputs are already instantiated. None (mediadata unconfigured
+    entirely) is passed through as-is; the theme itself already handles
+    a None store by producing nothing for music."""
+    from mediainfo.outputs.themes import ThemesOutput
+
+    for output in outputs:
+        if isinstance(output, ThemesOutput):
+            output.set_media_data_store(mediadata_store)
 
 
 def wire_hitster_safe(outputs: list, orch: Orchestrator) -> None:

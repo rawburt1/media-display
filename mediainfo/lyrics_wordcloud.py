@@ -36,10 +36,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List, Tuple, cast
+from typing import List, Tuple
 
 from PIL import Image
 from wordcloud import STOPWORDS, ImageColorGenerator, WordCloud
+
+from mediainfo.colors import dominant_colors
 
 _TIMESTAMP_RE = re.compile(r"^\[\d+:\d+(?:\.\d+)?\]\s*")
 
@@ -58,22 +60,6 @@ def strip_lrc_timestamps(lrc_text: str) -> str:
         if line:
             lines.append(line)
     return "\n".join(lines)
-
-
-def _dominant_colors(image: Image.Image, count: int = 8) -> List[Tuple[int, int, int]]:
-    """The `count` most common colors in `image`, most-prevalent first.
-    Quantizes to a small adaptive palette first so near-duplicate shades
-    of the same color collapse into one entry, rather than every one of a
-    photo's thousands of distinct pixel colors competing separately."""
-    quantized = image.convert("RGB").quantize(colors=count)
-    palette = quantized.getpalette() or []
-    counts = sorted(quantized.getcolors() or [], reverse=True)
-    colors = []
-    for _, index in counts:
-        offset = cast(int, index) * 3
-        r, g, b = palette[offset : offset + 3]
-        colors.append((r, g, b))
-    return colors
 
 
 def _palette_color_func(colors: List[Tuple[int, int, int]]):
@@ -140,7 +126,7 @@ def generate(
         wc = WordCloud(mask=mask_array, **common).generate(plain)
         wc = wc.recolor(color_func=ImageColorGenerator(mask_array))
     else:
-        colors = _dominant_colors(album_art)
+        colors = dominant_colors(album_art)
         wc = WordCloud(color_func=_palette_color_func(colors), **common).generate(plain)
 
     wc.to_file(str(out_path))

@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from mediainfo.colors import dominant_colors
 from mediainfo.lyrics_wordcloud import (
-    _dominant_colors,
     _palette_color_func,
     generate,
     strip_lrc_timestamps,
@@ -61,22 +61,6 @@ def test_strip_lrc_timestamps_keeps_untimestamped_lines():
 def test_strip_lrc_timestamps_drops_blank_lines():
     result = strip_lrc_timestamps("[00:01.00] first\n\n[00:02.00] second")
     assert result == "first\nsecond"
-
-
-def test_dominant_colors_finds_both_halves():
-    colors = _dominant_colors(_half_and_half_image(), count=4)
-    assert (255, 0, 0) in colors
-    assert (0, 0, 255) in colors
-
-
-def test_dominant_colors_orders_most_prevalent_first():
-    # 3/4 red, 1/4 blue - red must come first.
-    img = Image.new("RGB", (64, 64), (255, 0, 0))
-    for x in range(48, 64):
-        for y in range(48, 64):
-            img.putpixel((x, y), (0, 0, 255))
-    colors = _dominant_colors(img, count=4)
-    assert colors[0] == (255, 0, 0)
 
 
 def test_palette_color_func_only_returns_given_colors():
@@ -166,7 +150,7 @@ def test_generate_real_example_with_mask_writes_valid_image(tmp_path):
 def test_generate_real_example_uses_album_art_palette(tmp_path):
     """The rendered colors should come from the album art's own dominant
     palette (sky blue / white cloud / sandy tan / warm brown-grey), not
-    some unrelated default - a coarse check that _dominant_colors is
+    some unrelated default - a coarse check that dominant_colors() is
     actually driving color_func rather than e.g. matplotlib's default
     qualitative colormap sneaking in."""
     out_path = tmp_path / "wordcloud.png"
@@ -175,7 +159,7 @@ def test_generate_real_example_uses_album_art_palette(tmp_path):
         use_mask=False, width=400, height=400,
     )
 
-    album_colors = set(_dominant_colors(Image.open(_REAL_ALBUM_ART_PATH), count=8))
+    album_colors = set(dominant_colors(Image.open(_REAL_ALBUM_ART_PATH), count=8))
     rendered = np.array(Image.open(out_path).convert("RGBA"))
     opaque_pixels = rendered[rendered[:, :, 3] > 0][:, :3]
     rendered_colors = {tuple(c) for c in np.unique(opaque_pixels, axis=0).tolist()}

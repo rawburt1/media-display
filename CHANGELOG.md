@@ -25,8 +25,79 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   offset from wall-clock time. docker-compose.yml now passes `TZ`
   through (set your IANA zone in `.env`, e.g. `TZ=Europe/Stockholm`;
   tzdata is already in the image).
+- Config UI: an `outputs.themes` instance's per-theme settings
+  (`themes.<name>.*`) loaded as blank/unchecked in the form even when
+  already saved and enabled in `config.yaml` - the guided form only ever
+  round-tripped known scalar output fields, silently dropping this nested
+  dict. Now round-trips correctly.
 
 ### Added
+- **Display Themes (foundation)**: a new `outputs.themes` display (port
+  8097 by default), completely separate from `web` (8090) - lays the
+  groundwork for a modular system of selectable, combinable visual
+  effects (color palette, blurred background, glow, and more - see the
+  Display Themes roadmap plan) that render simultaneously on top of the
+  current artwork/metadata. Today it behaves like a bare artwork+metadata
+  display (the same broadcast-to-all-clients design as `info`, not
+  `web`'s independent per-client rotation) plus whichever themes are
+  enabled below, with the plugin interface
+  (`mediainfo.themes.DisplayTheme`), config shape (`outputs.themes.themes`,
+  one entry per theme, mirroring how `enrichers`/`idle` are configured),
+  and config UI picker already in place so each future theme needs no
+  changes to this scaffolding. Also promotes the lyrics word cloud's
+  dominant-color extraction into a shared `mediainfo.colors.
+  dominant_colors()`, for reuse by future themes.
+- **Color Palette theme** (`outputs.themes.themes.color_palette`, first of
+  the Display Themes above): shows the current artwork's dominant colors
+  as a strip of swatches along one edge of the screen (`swatch_count`,
+  `swatch_position: bottom|top|side`) - works for music, movie, and TV
+  artwork alike, no extra setup needed beyond enabling it.
+- **Blurred Background theme** (`outputs.themes.themes.blurred_background`):
+  fills the screen behind the sharp foreground artwork with a heavily
+  blurred, darkened copy of it (`blur_radius`, `brightness`) - the baked
+  composite is disk-cached per image+settings (reusing the same
+  `ImageCache.get_derived_path` machinery Pixoo's LED prep already uses),
+  so it's only actually re-blurred once per unique combination.
+- **Word Cloud theme** (`outputs.themes.themes.word_cloud`): a word cloud
+  built from the current item's own text, colored from its artwork -
+  lyrics for music (reuses `MediaDataStore.get_track_wordcloud`, the same
+  cached word cloud the `web` output can already show, just through the
+  new theme interface instead - needs `enrichers.mediadata`/
+  `text_enrichers.mediadata` configured with lyrics fetchable for the
+  playing track) or the plot summary for movies/TV (needs
+  `enrichers.wikipedia` configured for `now_playing.summary`, disk-cached
+  the same way Blurred Background is). Shown as a corner overlay
+  (`corner`, `size_vw`), not full-screen, so it layers alongside the other
+  themes rather than covering them. Also gives the `themes` output direct
+  `MediaDataStore` access (`wiring.wire_media_data_store`), wired in
+  post-construction the same way `web`'s history/health-provider are.
+- **Glow theme** (`outputs.themes.themes.glow`): a soft, slowly pulsing
+  ambient glow behind the artwork (`intensity`, `pulse`), colored from its
+  own dominant color by default or a fixed `fixed_color`
+  (`color_source: album_art|fixed`). The first theme to combine both
+  halves of the Display Themes plugin split - the color is computed once
+  per item server-side, but the glow itself (fade-in, and the pulse) is a
+  pure CSS animation, no per-tick server work. Also promotes a shared
+  `mediainfo.colors.to_hex()` (previously private to the Color Palette
+  theme), since Glow needed the same RGB-to-CSS conversion.
+- **Ken Burns theme** (`outputs.themes.themes.ken_burns`): a slow,
+  continuous pan/zoom on the artwork (`duration_seconds`, `opacity`) - the
+  classic documentary-style effect, one of three randomly-picked pan/zoom
+  variants per image change. Purely client-side (a looping CSS
+  `animation`, not `transition`): renders its own animated copy of the
+  artwork behind the static foreground art rather than touching
+  `#art-a`/`#art-b` directly, so it can't fight their existing one-shot
+  crossfade transitions (`mediainfo/outputs/transitions.py`).
+- **Vinyl theme** (`outputs.themes.themes.vinyl`): shows the album art as
+  a spinning vinyl record (`corner`, `size_vmin`, `rotation_seconds`) -
+  music-only by design, the first Display Theme scoped to one media type
+  (a record-player metaphor has no movie/TV equivalent). Purely
+  decorative continuous rotation, not tied to real playback state - no
+  source reports play/pause today, so it can't stop spinning on pause the
+  way a real turntable would (a known, documented simplification, not a
+  bug). Introduces `VinylThemeConfig` (distinct from the existing vinyl-
+  recognition source's `VinylConfig`, `mediainfo/config/sources.py`) to
+  avoid a name collision between the two unrelated "vinyl" features.
 - **Playback history**: a persistent log of everything that has played
   (SQLite, `history:` config section, on by default), browsable at the
   web output's new `/history` page - grouped by day, with thumbnails

@@ -118,6 +118,17 @@ class ConfigStore:
                         entry[f["name"]] = raw
                 entry.update(_get_filter_values(instance))
                 entry[_LABEL_FIELD_NAME] = instance.get(_LABEL_FIELD_NAME, "")
+                if type_name == "themes":
+                    # ThemesConfig.themes is a raw dict (one entry per
+                    # individual theme plugin), deliberately excluded from
+                    # _scalar_fields() like `transforms` elsewhere - but
+                    # unlike transforms, the themes picker (app.html's
+                    # renderThemesPicker) needs it, so pass it through
+                    # as-is here rather than leaving it YAML-only. Not
+                    # validated/defaulted (mirrors every other field on
+                    # this path) - mediainfo.config.themes.parse_themes()
+                    # does that at actual app startup.
+                    entry["themes"] = instance.get("themes") or {}
                 out_instances.append(entry)
             result[type_name] = out_instances
         return result, secrets_set

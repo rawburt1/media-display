@@ -49,6 +49,7 @@ OUTPUT_CLASSES: dict[str, Union[str, type]] = {
     "mqtt": "mediainfo.outputs.mqtt.MqttOutput",
     "nest_hub": "mediainfo.outputs.nest_hub.NestHubOutput",
     "pixoo": "mediainfo.outputs.pixoo.PixooOutput",
+    "themes": "mediainfo.outputs.themes.ThemesOutput",
     "ulanzi": "mediainfo.outputs.ulanzi.UlanziOutput",
     "video": "mediainfo.outputs.video.VideoOutput",
     "web": "mediainfo.outputs.web.WebOutput",
@@ -75,6 +76,27 @@ OUTPUT_EXTRA_ARGS = {
     # ImageCache (see mediainfo/led_image.py + ImageCache.get_derived_path)
     # instead of reprocessing the image on every update().
     "pixoo": lambda config, config_path, cache: (cache,),
+    # Themes get the shared ImageCache the same way every other output
+    # does - via on_new_item(now_playing, cache), not the constructor
+    # (mirrors info/web's own image-path resolution: the orchestrator
+    # already resolves/transforms the image before update() is called;
+    # a theme's own per-item ImageCache.get_derived_path() bakes happen
+    # in on_new_item(), which already receives cache as an argument).
+    "themes": lambda config, config_path, cache: (config.auth,),
+}
+
+# Display Theme plugins (see mediainfo/themes/base.py) hosted by the
+# `themes` output (mediainfo/outputs/themes.py). Configured via
+# mediainfo.config.themes.THEMES_CONFIG_TYPES, not one of the *_CONFIG_TYPES
+# dicts below, since a theme isn't its own output/enricher - it's nested
+# inside one `themes` output instance's own `themes:` config.
+THEME_CLASSES: dict[str, Union[str, type]] = {
+    "blurred_background": "mediainfo.themes.blurred_background.BlurredBackgroundTheme",
+    "color_palette": "mediainfo.themes.color_palette.ColorPaletteTheme",
+    "glow": "mediainfo.themes.glow.GlowTheme",
+    "ken_burns": "mediainfo.themes.ken_burns.KenBurnsTheme",
+    "vinyl": "mediainfo.themes.vinyl.VinylTheme",
+    "word_cloud": "mediainfo.themes.word_cloud.WordCloudTheme",
 }
 
 ENRICHER_CLASSES: dict[str, Union[str, type]] = {
@@ -145,6 +167,7 @@ OUTPUT_DETAIL_FIELDS: dict = {
     "mqtt":     ["label", "host", "port", "topic"],
     "nest_hub": ["label", "device_ip", "server_port"],
     "pixoo":    ["label", "ip"],
+    "themes":   ["label", "port"],
     "ulanzi":   ["label", "device_ip"],
     "video":    ["label", "port"],
     "web":      ["label", "port"],
@@ -185,6 +208,10 @@ def get_text_enricher_class(name: str) -> Optional[type]:
 
 def get_idle_class(name: str) -> Optional[type]:
     return _resolve_entry(IDLE_CLASSES.get(name))
+
+
+def get_theme_class(name: str) -> Optional[type]:
+    return _resolve_entry(THEME_CLASSES.get(name))
 
 
 def _name_for_class(registry: dict, cls: type) -> Optional[str]:

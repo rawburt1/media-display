@@ -18,6 +18,7 @@ from mediainfo.config import (
     OUTPUT_CONFIG_TYPES,
     SOURCE_CONFIG_TYPES,
     TEXT_ENRICHER_CONFIG_TYPES,
+    THEMES_CONFIG_TYPES,
 )
 
 
@@ -39,3 +40,7 @@ def test_text_enricher_registries_have_matching_keys():
 
 def test_idle_registries_have_matching_keys():
     assert set(IDLE_CONFIG_TYPES) == set(registries.IDLE_CLASSES)
+
+
+def test_theme_registries_have_matching_keys():
+    assert set(THEMES_CONFIG_TYPES) == set(registries.THEME_CLASSES)

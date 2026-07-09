@@ -24,6 +24,7 @@ from mediainfo.validation import validate_config
 from mediainfo.wiring import (
     build_artwork_overrides,
     build_history,
+    build_mediadata_store,
     build_poster_store,
     instantiate_outputs,
     start_orchestrator,
@@ -32,6 +33,7 @@ from mediainfo.wiring import (
     wire_health_providers,
     wire_history,
     wire_hitster_safe,
+    wire_media_data_store,
     wire_rotate_now,
 )
 
@@ -181,11 +183,19 @@ def _build_cache(config: Config) -> ImageCache:
 
 
 def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: MusicLibrary, overrides, poster_store=None, history=None):
-    orch = start_orchestrator(config, outputs, cache, library, overrides, poster_store, history)
+    # Built once here (rather than left to start_orchestrator's own
+    # internal default) so the same instance can also be wired directly
+    # into the themes output below, instead of each ending up with its
+    # own separate MediaDataStore.
+    mediadata_store = build_mediadata_store(config, cache)
+    orch = start_orchestrator(
+        config, outputs, cache, library, overrides, poster_store, history, mediadata_store,
+    )
     wire_health_providers(outputs, orch, config)
     wire_hitster_safe(outputs, orch)
     wire_artwork_refresh(outputs, orch)
     wire_rotate_now(outputs, orch)
+    wire_media_data_store(outputs, mediadata_store)
     return orch
 
 

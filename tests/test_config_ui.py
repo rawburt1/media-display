@@ -71,11 +71,13 @@ def test_schema_includes_all_categories(config_path):
     data = out.app.test_client().get("/api/schema").get_json()
     # One key per _FLAT_SECTIONS entry (cache/history/library/overrides/
     # posters/alerts/auth/logging), the four per-type-registry categories,
-    # plus filter_meta and the presentation-metadata keys the guided UI
-    # needs (flat_sections/type_info/category_info/enricher_groups).
+    # "themes" (the individual Display Theme plugins nested inside a
+    # "themes" output instance - see mediainfo/config/themes.py), plus
+    # filter_meta and the presentation-metadata keys the guided UI needs
+    # (flat_sections/type_info/category_info/enricher_groups).
     assert set(data.keys()) == {
         "general", "cache", "history", "library", "overrides", "posters", "alerts", "auth", "logging",
-        "sources", "outputs", "enrichers", "idle", "filter_meta",
+        "sources", "outputs", "enrichers", "idle", "themes", "filter_meta",
         "flat_sections", "type_info", "category_info", "enricher_groups",
     }
 
@@ -190,6 +192,43 @@ def test_get_config_outputs_unconfigured_type_has_one_default_instance(config_pa
     data = out.app.test_client().get("/api/config").get_json()
     assert len(data["outputs"]["web"]) == 1
     assert data["outputs"]["web"][0]["enabled"] is False  # default
+
+
+def test_get_config_themes_output_includes_its_nested_themes_dict(config_path):
+    # ThemesConfig.themes is a raw dict (unlike ordinary scalar fields) -
+    # excluded from _scalar_fields() like `transforms` elsewhere, but the
+    # themes picker UI needs it round-tripped, unlike transforms (which
+    # stays YAML-only) - see config_store.py's get_output_instances().
+    config_path.write_text(
+        """
+outputs:
+  themes:
+    enabled: true
+    port: 8097
+    themes:
+      color_palette:
+        enabled: true
+        swatch_count: 3
+"""
+    )
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert data["outputs"]["themes"][0]["themes"] == {
+        "color_palette": {"enabled": True, "swatch_count": 3},
+    }
+
+
+def test_get_config_themes_output_defaults_to_empty_dict(config_path):
+    config_path.write_text("outputs:\n  themes:\n    enabled: true\n")
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert data["outputs"]["themes"][0]["themes"] == {}
+
+
+def test_other_output_types_do_not_get_a_themes_key(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert "themes" not in data["outputs"]["web"][0]
 
 
 # ---------------------------------------------------------------------------
@@ -612,6 +651,40 @@ outputs:
     cfg = Config.load(config_path)
     assert cfg.outputs["pixoo"][0].ip == "9.9.9.9"
     assert cfg.outputs["pixoo"][0].transforms == [{"fit": {"width": 64, "height": 64}}]
+
+
+def test_save_form_round_trips_themes_dict_on_existing_output_instance(config_path):
+    config_path.write_text(
+        """
+outputs:
+  themes:
+    - enabled: true
+      port: 8097
+      themes:
+        color_palette:
+          enabled: true
+          swatch_count: 3
+"""
+    )
+    out = _output(config_path)
+    client = out.app.test_client()
+    # Mirrors what the browser actually posts: the full outputsData.themes
+    # entry (as returned by GET /api/config, then possibly edited) - not
+    # just the changed field, matching saveAll()'s Object.assign-free
+    # whole-array-per-dirty-type post in app.html.
+    get_data = client.get("/api/config").get_json()
+    instance = get_data["outputs"]["themes"][0]
+    instance["themes"]["color_palette"]["swatch_position"] = "top"
+
+    client.post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"themes": [instance]}},
+    )
+
+    cfg = Config.load(config_path)
+    assert cfg.outputs["themes"][0].themes == {
+        "color_palette": {"enabled": True, "swatch_count": 3, "swatch_position": "top"},
+    }
 
 
 def test_save_form_emptying_all_instances_results_in_empty_list(config_path):

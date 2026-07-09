@@ -1198,6 +1198,77 @@ function setOutputField(typeName, idx, name, value) {
   outputsData[typeName][idx][name] = value;
   markOutputTypeDirty(typeName);
 }
+
+// ---------------------------------------------------------------------
+// Themes picker: nested one level inside a "themes" output instance -
+// each registered theme (schema.themes, currently empty until the first
+// one ships) gets its own toggle card, writing into that instance's own
+// `themes: {name: {...}}` dict rather than a top-level output field.
+// ---------------------------------------------------------------------
+function themeScope(idx, themeName) {
+  return {
+    key: function(name) { return 'outputs.themes.' + idx + '.themes.' + themeName + '.' + name; },
+    get: function(name) {
+      var inst = outputsData.themes[idx];
+      return ((inst.themes || {})[themeName] || {})[name];
+    },
+    secretKey: function(name) { return this.key(name); },
+    onInput: function(name, expr) {
+      return "setThemeField(" + idx + ",'" + themeName + "','" + name + "', " + expr + "); renderSection(currentSection);";
+    },
+    rawInput: function(name) {
+      return "setThemeField(" + idx + ",'" + themeName + "','" + name + "', this.value)";
+    },
+    onTimeRange: function(name) { return "onThemeTimeRange(" + idx + ",'" + themeName + "','" + name + "', this)"; },
+    isReplacing: function() { return false; },
+    startReplacing: function() { return ''; },
+    stopReplacing: function() { return ''; },
+  };
+}
+function setThemeField(idx, themeName, name, value) {
+  var inst = outputsData.themes[idx];
+  inst.themes = inst.themes || {};
+  inst.themes[themeName] = inst.themes[themeName] || {};
+  inst.themes[themeName][name] = value;
+  markOutputTypeDirty('themes');
+}
+function onThemeTimeRange(idx, themeName, name, el) {
+  var container = el.parentElement;
+  var start = container.querySelector('[data-part="start"]').value;
+  var end = container.querySelector('[data-part="end"]').value;
+  setThemeField(idx, themeName, name, (start && end) ? (start + '-' + end) : '');
+  renderSection(currentSection);
+}
+
+function renderThemesPicker(idx) {
+  var names = Object.keys(schema.themes || {}).sort(function(a, b) {
+    return typeLabel('themes', a).localeCompare(typeLabel('themes', b));
+  });
+  var inst = outputsData.themes[idx];
+  var enabledThemes = inst.themes || {};
+
+  var html = '<details class="advanced-toggle" open><summary>Themes</summary>';
+  if (!names.length) {
+    html += '<div class="field-help">No themes available yet - check back in a future update.</div>';
+  } else {
+    names.forEach(function(name) {
+      var fields = schema.themes[name];
+      var themeInst = enabledThemes[name] || {};
+      var scope = themeScope(idx, name);
+      html += '<div class="instance-block">'
+        + '<div class="instance-head">'
+        + '<label class="row-inline"><input type="checkbox" id="' + scope.key('enabled') + '" '
+        + (themeInst.enabled ? 'checked' : '') + ' onchange="setThemeField(' + idx + ",'" + name + "','enabled', this.checked); renderSection(currentSection);"
+        + '"> ' + esc(typeLabel('themes', name)) + '</label>'
+        + '<span class="field-help">' + esc(typeDescription('themes', name)) + '</span>'
+        + '</div>';
+      html += renderFieldGroup(fields.filter(function(f) { return f.name !== 'enabled'; }), scope, 'themes-' + idx + '-' + name);
+      html += '</div>';
+    });
+  }
+  html += '</details>';
+  return html;
+}
 function onOutputTimeRange(typeName, idx, name, el) {
   var container = el.parentElement;
   var start = container.querySelector('[data-part="start"]').value;
@@ -1407,6 +1478,9 @@ function renderOutputsSection() {
       html += '<details class="advanced-toggle" id="filters-' + typeName + '-' + idx + '"><summary>Content filters</summary>' + renderOutputFilters(typeName, idx) + '</details>';
       if (typeName === 'pixoo') {
         html += renderPixooPreview(idx);
+      }
+      if (typeName === 'themes') {
+        html += renderThemesPicker(idx);
       }
       html += '<div class="instance-actions">'
         + renderTestButton('output-' + typeName, String(idx))

@@ -41,6 +41,10 @@ services:
       # for inbound connections, unlike every other source - only needed
       # if that source is enabled.
       - "${BROWSER_SOURCE_PORT:-8096}:8096"
+      # outputs.themes - a separate full-screen display from outputs.web
+      # that layers selectable Display Themes on top of the current
+      # artwork; only needed if that output is enabled.
+      - "${THEMES_PORT:-8097}:8097"
     volumes:
       # A directory mount (not a single-file mount) so config.yaml stays
       # readable/writable across edits that replace the file via rename
