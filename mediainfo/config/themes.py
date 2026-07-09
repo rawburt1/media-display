@@ -120,6 +120,23 @@ class VinylThemeConfig:
     rotation_seconds: int = 8
 
 
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class MediaMosaicConfig:
+    # A grid of related artwork alongside the current pick - other albums
+    # by the artist, other posters/fanart for the item - see
+    # mediainfo/themes/media_mosaic.py. Media-type-agnostic: works off
+    # whatever NowPlaying.images already holds, regardless of media type.
+    # Degrades to a single tile when only one candidate image is
+    # available, rather than hiding.
+    enabled: bool = False
+    corner: str = "top-right"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    # Max width as a percentage of viewport width.
+    size_vw: int = 30
+    # Cap on how many tiles to include, most-relevant-first (the order
+    # NowPlaying.images already has - see enrichers/orchestrator_artwork.py).
+    max_tiles: int = 6
+
+
 # Registry mapping theme name to its config dataclass type. Adding a new
 # theme starts here (and in mediainfo.registries.THEME_CLASSES, and
 # mediainfo.themes.<name> for the implementation - see
@@ -130,6 +147,7 @@ THEMES_CONFIG_TYPES: Dict[str, type] = {
     "color_palette": ColorPaletteConfig,
     "glow": GlowConfig,
     "ken_burns": KenBurnsConfig,
+    "media_mosaic": MediaMosaicConfig,
     "vinyl": VinylThemeConfig,
     "word_cloud": WordCloudConfig,
 }

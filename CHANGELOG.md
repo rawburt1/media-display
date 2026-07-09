@@ -98,6 +98,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   bug). Introduces `VinylThemeConfig` (distinct from the existing vinyl-
   recognition source's `VinylConfig`, `mediainfo/config/sources.py`) to
   avoid a name collision between the two unrelated "vinyl" features.
+- **Media Mosaic theme** (`outputs.themes.themes.media_mosaic`): a grid
+  of related artwork alongside the current pick - other albums by the
+  artist, other posters/fanart for the item (`corner`, `size_vw`,
+  `max_tiles`). The first theme that needs the *entire* image pool
+  (`NowPlaying.images`) rather than just the single artwork the
+  orchestrator already resolved for the tick - both were already
+  available to every theme's `prepare()`, so no new plugin-interface hook
+  was needed. Excludes artist-photo/word-cloud images from the grid (not
+  "other artwork" in the relevant sense) and degrades to a single tile
+  when only one candidate is available, rather than hiding. The
+  currently-showing tile gets a highlighted border.
 - **Playback history**: a persistent log of everything that has played
   (SQLite, `history:` config section, on by default), browsable at the
   web output's new `/history` page - grouped by day, with thumbnails

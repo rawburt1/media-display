@@ -536,3 +536,38 @@ def test_real_vinyl_theme_end_to_end_movie_produces_nothing(tmp_path):
 
     payload = out._get_payload()
     assert "vinyl" not in payload.get("themes", {})
+
+
+def test_real_media_mosaic_theme_end_to_end(tmp_path):
+    from PIL import Image
+
+    from mediainfo.cache import ImageCache
+
+    paths = []
+    for i in range(3):
+        p = tmp_path / f"art{i}.jpg"
+        Image.new("RGB", (64, 64), (i * 60, 50, 90)).save(p)
+        paths.append(p)
+    cache = ImageCache(tmp_path / "cache")
+
+    album = NowPlaying(
+        source="kodi", media_type="music", title="Song", subtitle="Artist",
+        images=[Artwork(url=f"file://{p}", label=f"Art {i}") for i, p in enumerate(paths)],
+    )
+
+    out = _output(_config(themes={"media_mosaic": {"enabled": True}}))
+    assert out._themes[0].name == "media_mosaic"
+
+    out.on_new_item(album, cache=cache)
+    out.update(album, Artwork(url=f"file://{paths[0]}", label="Art 0"), paths[0])
+
+    payload = out._get_payload()
+    image_url = payload["themes"]["media_mosaic"]["image"]
+    v = image_url.split("v=")[1]
+
+    resp = out.app.test_client().get(f"/image/current?v={v}")
+    assert resp.status_code == 200
+    assert resp.content_type == "image/png"
+
+    body = out.app.test_client().get("/").data.decode()
+    assert body.count("window.themeHandlers.media_mosaic = function") == 1

@@ -104,6 +104,7 @@ from mediainfo.config.themes import (
     ColorPaletteConfig,
     GlowConfig,
     KenBurnsConfig,
+    MediaMosaicConfig,
     VinylThemeConfig,
     WordCloudConfig,
 )
@@ -151,6 +152,7 @@ __all__ = [
     "MediaDataLyricsEnricherConfig",
     "MediaDataRefreshConfig",
     "MediaDataWordcloudConfig",
+    "MediaMosaicConfig",
     "MopidyConfig",
     "MpdConfig",
     "MqttConfig",
