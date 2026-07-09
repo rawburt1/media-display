@@ -93,10 +93,18 @@ Currently implemented:
   Media Mosaic (a grid of other artwork for the same item - other albums,
   other posters/fanart - alongside the current pick), Timeline (a
   list of the artist's other albums - music only, needs `enrichers.lidarr`
-  configured or it just shows the current album), and Equalizer (a
+  configured or it just shows the current album), Equalizer (a
   decorative bar/wave animation suggesting audio activity - music only,
-  not driven by a real audio signal), with more themes still being added
-  - see the Display Themes roadmap. `outputs.themes[].auto_rotate` can
+  not driven by a real audio signal), and Lyrics Ticker (a karaoke-style
+  ticker highlighting the current line of time-synced lyrics - music
+  only, needs synced lyrics available e.g. via `text_enrichers.lrclib`),
+  Now Playing Progress (a real-data full-width playback progress
+  border along one screen edge - works for music, movies, and TV alike),
+  Cast/Crew Mosaic (a grid of top-billed cast headshots - movie/TV
+  only, needs `enrichers.tmdb.fetch_cast` enabled), and Artist Spotlight
+  (a portrait card with the artist's photo and a short bio blurb),
+  with more themes still being added - see the Display Themes roadmap.
+  `outputs.themes[].auto_rotate` can
   optionally cycle between named presets (subsets of the enabled themes
   above) on a timer, instead of always showing all of them at once
 - **Idle wallpapers**: Unsplash, Pexels, local folders (random pictures

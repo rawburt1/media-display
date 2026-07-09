@@ -22,7 +22,7 @@ from __future__ import annotations
 import dataclasses
 from abc import ABC
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from mediainfo.cache import ImageCache
 from mediainfo.media_data_store import MediaDataStore
@@ -54,6 +54,18 @@ class ThemeRenderResult:
     # exposed as an extra image URL if the theme needs a full composite -
     # None if extra_payload alone is enough.
     derived_image_path: Optional[Path] = None
+    # Any number of additional Paths this theme wants made servable via
+    # /image/current (registered into ThemesOutput._known_images the same
+    # way derived_image_path is) - for a theme that needs several
+    # individually-addressable images rather than one composite, e.g.
+    # Cast/Crew Mosaic's per-actor headshots (shown as individual DOM
+    # tiles with real DOM text captions, not baked into one image). The
+    # theme embeds each resulting URL itself
+    # (f"/image/current?v={path.stem}", the same deterministic convention
+    # derived_image_path already uses) directly into extra_payload -
+    # this field only tells ThemesOutput to register the Paths so those
+    # URLs actually resolve.
+    derived_image_paths: List[Path] = dataclasses.field(default_factory=list)
 
 
 class DisplayTheme(ABC):

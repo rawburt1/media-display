@@ -91,12 +91,16 @@ OUTPUT_EXTRA_ARGS = {
 # dicts below, since a theme isn't its own output/enricher - it's nested
 # inside one `themes` output instance's own `themes:` config.
 THEME_CLASSES: dict[str, Union[str, type]] = {
+    "artist_spotlight": "mediainfo.themes.artist_spotlight.ArtistSpotlightTheme",
     "blurred_background": "mediainfo.themes.blurred_background.BlurredBackgroundTheme",
+    "cast_mosaic": "mediainfo.themes.cast_mosaic.CastMosaicTheme",
     "color_palette": "mediainfo.themes.color_palette.ColorPaletteTheme",
     "equalizer": "mediainfo.themes.equalizer.EqualizerTheme",
     "glow": "mediainfo.themes.glow.GlowTheme",
     "ken_burns": "mediainfo.themes.ken_burns.KenBurnsTheme",
+    "lyrics_ticker": "mediainfo.themes.lyrics_ticker.LyricsTickerTheme",
     "media_mosaic": "mediainfo.themes.media_mosaic.MediaMosaicTheme",
+    "progress_bar": "mediainfo.themes.progress_bar.ProgressBarTheme",
     "timeline": "mediainfo.themes.timeline.TimelineTheme",
     "vinyl": "mediainfo.themes.vinyl.VinylTheme",
     "word_cloud": "mediainfo.themes.word_cloud.WordCloudTheme",

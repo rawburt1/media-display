@@ -822,3 +822,222 @@ def test_real_equalizer_theme_end_to_end_movie_produces_nothing(tmp_path):
 
     payload = out._get_payload()
     assert "equalizer" not in payload.get("themes", {})
+
+
+def test_real_lyrics_ticker_theme_end_to_end_music(tmp_path):
+    img_path = tmp_path / "art.jpg"
+    img_path.write_bytes(b"x")
+
+    out = _output(_config(themes={"lyrics_ticker": {"enabled": True, "position": "bottom"}}))
+    assert out._themes[0].name == "lyrics_ticker"
+
+    song = _music()
+    song.synced_lyrics = "[00:12.50]Davy's on the road again\n[00:16.00]hear him singing"
+    song.position_seconds = 13.0
+    song.duration_seconds = 200.0
+    out.on_new_item(song, cache=MagicMock())
+    out.update(song, _artwork(), img_path)
+
+    payload = out._get_payload()
+    cues = payload["themes"]["lyrics_ticker"]["cues"]
+    assert cues == [
+        {"t": 12.5, "text": "Davy's on the road again"},
+        {"t": 16.0, "text": "hear him singing"},
+    ]
+    assert out.health_check() is None
+
+    body = out.app.test_client().get("/").data.decode()
+    assert body.count("window.themeHandlers.lyrics_ticker = function") == 1
+    assert "position-bottom" in body
+
+
+def test_real_lyrics_ticker_theme_end_to_end_no_synced_lyrics_reported_on_health(tmp_path):
+    img_path = tmp_path / "art.jpg"
+    img_path.write_bytes(b"x")
+
+    out = _output(_config(themes={"lyrics_ticker": {"enabled": True}}))
+    song = _music()
+    song.synced_lyrics = ""
+    out.on_new_item(song, cache=MagicMock())
+    out.update(song, _artwork(), img_path)
+
+    payload = out._get_payload()
+    assert "lyrics_ticker" not in payload.get("themes", {})
+
+    health = out.health_check()
+    assert health["themes"]["lyrics_ticker"]["degraded"] is True
+
+
+def test_real_progress_bar_theme_end_to_end_music(tmp_path):
+    img_path = tmp_path / "art.jpg"
+    img_path.write_bytes(b"x")
+
+    out = _output(_config(themes={"progress_bar": {"enabled": True, "position": "top", "color": "#ff8800"}}))
+    assert out._themes[0].name == "progress_bar"
+
+    song = _music()
+    song.position_seconds = 42.5
+    song.duration_seconds = 180.0
+    out.on_new_item(song, cache=MagicMock())
+    out.update(song, _artwork(), img_path)
+
+    payload = out._get_payload()
+    assert payload["themes"]["progress_bar"] == {
+        "position_seconds": 42.5, "duration_seconds": 180.0, "color": "#ff8800",
+    }
+
+    body = out.app.test_client().get("/").data.decode()
+    assert body.count("window.themeHandlers.progress_bar = function") == 1
+    assert "position-top" in body
+
+
+def test_real_progress_bar_theme_end_to_end_movie_with_position(tmp_path):
+    img_path = tmp_path / "poster.jpg"
+    img_path.write_bytes(b"x")
+
+    out = _output(_config(themes={"progress_bar": {"enabled": True}}))
+    movie = NowPlaying(source="kodi", media_type="movie", title="Alien")
+    movie.position_seconds = 10.0
+    movie.duration_seconds = 6000.0
+
+    out.on_new_item(movie, cache=MagicMock())
+    out.update(movie, _artwork(), img_path)
+
+    payload = out._get_payload()
+    assert payload["themes"]["progress_bar"]["duration_seconds"] == 6000.0
+
+
+def test_real_progress_bar_theme_end_to_end_no_position_produces_nothing(tmp_path):
+    img_path = tmp_path / "art.jpg"
+    img_path.write_bytes(b"x")
+
+    out = _output(_config(themes={"progress_bar": {"enabled": True}}))
+    song = _music()
+
+    out.on_new_item(song, cache=MagicMock())
+    out.update(song, _artwork(), img_path)
+
+    payload = out._get_payload()
+    assert "progress_bar" not in payload.get("themes", {})
+
+
+def test_real_cast_mosaic_theme_end_to_end(tmp_path):
+    """Exercises the multi-image derived_image_paths -> /image/current
+    plumbing end-to-end (regression-style test analogous to
+    test_derived_theme_image_is_servable, but for the multi-image path
+    added for Cast/Crew Mosaic)."""
+    from PIL import Image
+
+    from mediainfo.cache import ImageCache
+
+    photo_paths = []
+    for i, name in enumerate(["keanu", "laurence"]):
+        p = tmp_path / f"{name}.jpg"
+        Image.new("RGB", (50, 50), (i * 60, 50, 90)).save(p)
+        photo_paths.append(p)
+    poster_path = tmp_path / "poster.jpg"
+    Image.new("RGB", (64, 64), (10, 10, 10)).save(poster_path)
+    cache = ImageCache(tmp_path / "cache")
+
+    movie = NowPlaying(
+        source="kodi", media_type="movie", title="The Matrix",
+        cast=[
+            {"name": "Keanu Reeves", "character": "Neo", "photo_url": f"file://{photo_paths[0]}"},
+            {"name": "Laurence Fishburne", "character": "Morpheus", "photo_url": f"file://{photo_paths[1]}"},
+        ],
+    )
+
+    out = _output(_config(themes={"cast_mosaic": {"enabled": True}}))
+    assert out._themes[0].name == "cast_mosaic"
+
+    out.on_new_item(movie, cache=cache)
+    out.update(movie, Artwork(url=f"file://{poster_path}", label="Poster"), poster_path)
+
+    payload = out._get_payload()
+    cast_payload = payload["themes"]["cast_mosaic"]["cast"]
+    assert len(cast_payload) == 2
+    assert cast_payload[0]["name"] == "Keanu Reeves"
+    assert cast_payload[0]["character"] == "Neo"
+    assert out.health_check() is None
+
+    for member in cast_payload:
+        v = member["image"].split("v=")[1]
+        resp = out.app.test_client().get(f"/image/current?v={v}")
+        assert resp.status_code == 200
+
+    body = out.app.test_client().get("/").data.decode()
+    assert body.count("window.themeHandlers.cast_mosaic = function") == 1
+
+
+def test_real_cast_mosaic_theme_end_to_end_no_cast_reported_on_health(tmp_path):
+    img_path = tmp_path / "poster.jpg"
+    img_path.write_bytes(b"x")
+
+    out = _output(_config(themes={"cast_mosaic": {"enabled": True}}))
+    movie = NowPlaying(source="kodi", media_type="movie", title="The Matrix", cast=[])
+
+    out.on_new_item(movie, cache=MagicMock())
+    out.update(movie, _artwork(), img_path)
+
+    payload = out._get_payload()
+    assert "cast_mosaic" not in payload.get("themes", {})
+
+    health = out.health_check()
+    assert health["themes"]["cast_mosaic"]["degraded"] is True
+
+
+def test_real_artist_spotlight_theme_end_to_end_music(tmp_path):
+    from mediainfo.media_data_store import MediaDataStore
+
+    photo_path = tmp_path / "artist.jpg"
+    photo_path.write_bytes(b"fake-photo")
+    media_data = MagicMock(spec=MediaDataStore)
+    media_data.get_artist_photo.return_value = photo_path
+
+    out = _output(_config(themes={"artist_spotlight": {"enabled": True}}))
+    out.set_media_data_store(media_data)
+    assert out._themes[0].name == "artist_spotlight"
+
+    song = _music(title="Bohemian Rhapsody", artist="Queen")
+    song.summary = "A British rock band."
+    img_path = tmp_path / "art.jpg"
+    img_path.write_bytes(b"x")
+    out.on_new_item(song, cache=MagicMock())
+    out.update(song, _artwork(), img_path)
+
+    payload = out._get_payload()
+    assert payload["themes"]["artist_spotlight"]["name"] == "Queen"
+    assert payload["themes"]["artist_spotlight"]["bio"] == "A British rock band."
+    media_data.get_artist_photo.assert_called_with("Queen")
+    assert out.health_check() is None
+
+    image_url = payload["themes"]["artist_spotlight"]["image"]
+    v = image_url.split("v=")[1]
+    resp = out.app.test_client().get(f"/image/current?v={v}")
+    assert resp.status_code == 200
+    assert resp.data == b"fake-photo"
+
+    body = out.app.test_client().get("/").data.decode()
+    assert body.count("window.themeHandlers.artist_spotlight = function") == 1
+
+
+def test_real_artist_spotlight_theme_end_to_end_no_photo_reported_on_health(tmp_path):
+    from mediainfo.media_data_store import MediaDataStore
+
+    media_data = MagicMock(spec=MediaDataStore)
+    media_data.get_artist_photo.return_value = None
+
+    out = _output(_config(themes={"artist_spotlight": {"enabled": True}}))
+    out.set_media_data_store(media_data)
+
+    song = _music()
+    img_path = tmp_path / "art.jpg"
+    img_path.write_bytes(b"x")
+    out.on_new_item(song, cache=MagicMock())
+    out.update(song, _artwork(), img_path)
+
+    payload = out._get_payload()
+    assert "artist_spotlight" not in payload.get("themes", {})
+
+    health = out.health_check()
+    assert health["themes"]["artist_spotlight"]["degraded"] is True

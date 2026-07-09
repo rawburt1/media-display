@@ -273,6 +273,10 @@ class ThemesOutput(Output):
                 with self._lock:
                     self._known_images[rendered.derived_image_path.stem] = rendered.derived_image_path
                 entry["image"] = f"/image/current?v={rendered.derived_image_path.stem}"
+            if rendered.derived_image_paths:
+                with self._lock:
+                    for path in rendered.derived_image_paths:
+                        self._known_images[path.stem] = path
             if active_names is not None and theme.name not in active_names:
                 continue
             result[theme.name] = entry

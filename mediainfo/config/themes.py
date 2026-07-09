@@ -104,6 +104,23 @@ class KenBurnsConfig:
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class ProgressBarConfig:
+    # A real-data (not decorative) full-width playback progress border
+    # along one screen edge - see mediainfo/themes/progress_bar.py.
+    # Media-type-agnostic: shows whenever a source reports both
+    # position and duration, regardless of music/movie/episode. A
+    # separate, new element from the themes page's own small built-in
+    # progress bar - this one is a permanent full-width border, not a
+    # replacement for it.
+    enabled: bool = False
+    # Full-width strip along this screen edge.
+    position: str = "bottom"  # "bottom" | "top"
+    thickness_px: int = 6
+    # A CSS color for the filled portion.
+    color: str = "#ffffff"
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class VinylThemeConfig:
     # Shows the album art as a spinning vinyl record - see
     # mediainfo/themes/vinyl.py. Music-only by design (a record-player
@@ -138,6 +155,22 @@ class MediaMosaicConfig:
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class CastMosaicConfig:
+    # A grid of top-billed cast headshots for the current movie/TV item -
+    # see mediainfo/themes/cast_mosaic.py. Needs NowPlaying.cast populated
+    # (enrichers.tmdb.fetch_cast) - degrades to nothing (reported via
+    # health_detail()) when no cast data is available. Movie/TV only -
+    # there's no cast concept for music.
+    enabled: bool = False
+    corner: str = "top-right"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    # Max width as a percentage of viewport width.
+    size_vw: int = 30
+    # Cap on how many cast members to show - further capped by however
+    # many enrichers.tmdb.cast_size actually stored on NowPlaying.cast.
+    max_cast: int = 6
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class EqualizerConfig:
     # A purely decorative "now playing audio" bar/wave animation - see
     # mediainfo/themes/equalizer.py. NOT a real audio visualizer: no
@@ -155,6 +188,36 @@ class EqualizerConfig:
     bar_count: int = 24
     # 0-1 - how visible the effect is.
     opacity: float = 0.7
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class ArtistSpotlightConfig:
+    # A portrait card with the artist's photo (and optionally a short
+    # bio) - see mediainfo/themes/artist_spotlight.py. Reuses
+    # MediaDataStore.get_artist_photo() (Wikipedia-first/Last.fm-
+    # fallback) for the photo and NowPlaying.summary for the bio - both
+    # already populated for music by existing enrichers, no new data
+    # source needed. Degrades to nothing (reported via health_detail())
+    # when no artist photo is found.
+    enabled: bool = False
+    corner: str = "bottom-left"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    # Max width as a percentage of viewport width.
+    size_vw: int = 25
+    # Show a short bio snippet (NowPlaying.summary) below the artist name.
+    show_bio: bool = True
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class LyricsTickerConfig:
+    # A karaoke-style ticker highlighting the current line of time-synced
+    # lyrics - see mediainfo/themes/lyrics_ticker.py. Music-only, and
+    # needs NowPlaying.synced_lyrics populated (e.g. by text_enrichers.lrclib)
+    # - degrades to nothing (reported via health_detail()) when unset.
+    enabled: bool = False
+    # Full-width strip along this screen edge.
+    position: str = "top"  # "top" | "bottom"
+    # Show the upcoming line, faded, below the current one.
+    show_next_line: bool = True
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
@@ -184,12 +247,16 @@ class TimelineConfig:
 # mediainfo/registries.py's own docstring for the general pattern this
 # mirrors).
 THEMES_CONFIG_TYPES: Dict[str, type] = {
+    "artist_spotlight": ArtistSpotlightConfig,
     "blurred_background": BlurredBackgroundConfig,
+    "cast_mosaic": CastMosaicConfig,
     "color_palette": ColorPaletteConfig,
     "equalizer": EqualizerConfig,
     "glow": GlowConfig,
     "ken_burns": KenBurnsConfig,
+    "lyrics_ticker": LyricsTickerConfig,
     "media_mosaic": MediaMosaicConfig,
+    "progress_bar": ProgressBarConfig,
     "timeline": TimelineConfig,
     "vinyl": VinylThemeConfig,
     "word_cloud": WordCloudConfig,
