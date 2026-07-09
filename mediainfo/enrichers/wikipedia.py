@@ -78,44 +78,16 @@ class WikipediaEnricher(ArtworkEnricher):
             return False, f"Error: {exc}"
 
     def _lookup(self, queries: List[str]) -> _CacheEntry:
-        try:
-            for query in queries:
-                title = self._search(query)
-                if not title:
-                    continue
-
-                summary = self._get_summary(title)
-                if not summary or summary.get("type") == "disambiguation":
-                    continue
-
-                extract = summary.get("extract")
-                if not extract:
-                    continue
-
-                # Prefer the full-resolution original over the thumbnail -
-                # Wikipedia's REST summary always downsizes the thumbnail to
-                # ~320px wide, which the cache's 640x480 minimum-size filter
-                # then rejects on every single fetch, discarding a usable
-                # originalimage that was right there in the same response.
-                thumbnail = (summary.get("originalimage") or {}).get("source") or (
-                    summary.get("thumbnail") or {}
-                ).get("source")
-                return extract, thumbnail
-        except Exception:
-            logger.exception("Wikipedia enrichment error")
-        return None
+        return lookup(queries)
 
     @staticmethod
     def _queries_for(np: NowPlaying) -> List[str]:
         if np.media_type == "music":
             if not np.subtitle:
                 return []
-            # Plain artist name first; many common-word band names (e.g.
-            # "Queen") resolve to a disambiguation page, so fall back to
-            # genre-specific disambiguators.
-            return [np.subtitle, f"{np.subtitle} (band)", f"{np.subtitle} (musician)"]
+            return music_artist_queries(np.subtitle)
         if np.artist:
-            return [np.artist, f"{np.artist} (band)", f"{np.artist} (musician)"]
+            return music_artist_queries(np.artist)
         if np.media_type == "movie":
             if not np.title:
                 return []
@@ -128,23 +100,67 @@ class WikipediaEnricher(ArtworkEnricher):
             return [f"{np.title} (TV series)"] if np.title else []
         return []
 
-    def _search(self, query: str) -> Optional[str]:
-        params: dict = {
-            "action": "query",
-            "list": "search",
-            "srsearch": query,
-            "srlimit": 1,
-            "format": "json",
-        }
-        response = requests.get(_SEARCH_URL, params=params, headers=_HEADERS, timeout=10)
-        response.raise_for_status()
-        results = (response.json().get("query") or {}).get("search") or []
-        return results[0]["title"] if results else None
 
-    def _get_summary(self, title: str) -> Optional[dict]:
-        url = _SUMMARY_URL.format(title=quote(title.replace(" ", "_")))
-        response = requests.get(url, headers=_HEADERS, timeout=10)
-        if response.status_code == 404:
-            return None
-        response.raise_for_status()
-        return response.json()
+def music_artist_queries(artist: str) -> List[str]:
+    """Query variants for a music artist name, in preference order - plain
+    name first; many common-word band names (e.g. "Queen") resolve to a
+    disambiguation page, so fall back to genre-specific disambiguators.
+    Shared by WikipediaEnricher and MediaDataStore's artist-photo lookup."""
+    return [artist, f"{artist} (band)", f"{artist} (musician)"]
+
+
+def lookup(queries: List[str]) -> _CacheEntry:
+    """Try each query in order, returning (extract, thumbnail-or-None) for
+    the first usable (non-disambiguation, has an extract) match, or None if
+    none of them resolve to anything usable. Shared by WikipediaEnricher
+    (via its instance-cached _lookup) and MediaDataStore's artist-photo
+    lookup, which has its own separate caching."""
+    try:
+        for query in queries:
+            title = search_page_title(query)
+            if not title:
+                continue
+
+            summary = get_summary(title)
+            if not summary or summary.get("type") == "disambiguation":
+                continue
+
+            extract = summary.get("extract")
+            if not extract:
+                continue
+
+            # Prefer the full-resolution original over the thumbnail -
+            # Wikipedia's REST summary always downsizes the thumbnail to
+            # ~320px wide, which the cache's 640x480 minimum-size filter
+            # then rejects on every single fetch, discarding a usable
+            # originalimage that was right there in the same response.
+            thumbnail = (summary.get("originalimage") or {}).get("source") or (
+                summary.get("thumbnail") or {}
+            ).get("source")
+            return extract, thumbnail
+    except Exception:
+        logger.exception("Wikipedia enrichment error")
+    return None
+
+
+def search_page_title(query: str) -> Optional[str]:
+    params: dict = {
+        "action": "query",
+        "list": "search",
+        "srsearch": query,
+        "srlimit": 1,
+        "format": "json",
+    }
+    response = requests.get(_SEARCH_URL, params=params, headers=_HEADERS, timeout=10)
+    response.raise_for_status()
+    results = (response.json().get("query") or {}).get("search") or []
+    return results[0]["title"] if results else None
+
+
+def get_summary(title: str) -> Optional[dict]:
+    url = _SUMMARY_URL.format(title=quote(title.replace(" ", "_")))
+    response = requests.get(url, headers=_HEADERS, timeout=10)
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    return response.json()

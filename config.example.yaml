@@ -694,11 +694,13 @@ outputs:
 enrichers:
 
   # Unified media-data cache (see `mediadata:` below) — checks the local
-  # on-disk cache before any other artwork enricher runs: album art for
-  # music (falling back to a real MusicBrainz [free] / Discogs [if
-  # enrichers.discogs.token is set] lookup on a miss), and poster+fanart
-  # for movies/TV episodes (via enrichers.tmdb's credential, falling back
-  # to enrichers.fanarttv's for movies only - reuses whatever credentials
+  # on-disk cache before any other artwork enricher runs: artist photo +
+  # album art for music (falling back to a real Wikipedia [free] /
+  # Last.fm [if enrichers.lastfm.api_key is set] lookup for the photo,
+  # and MusicBrainz [free] / Discogs [if enrichers.discogs.token is set]
+  # for the album art, on a miss), and poster+fanart for movies/TV
+  # episodes (via enrichers.tmdb's credential, falling back to
+  # enrichers.fanarttv's for movies only - reuses whatever credentials
   # those sections already have configured, no separate key needed).
   # Caches the result for next time either way. Off by default; listed
   # first (like `library:` below) so a cache hit here saves every

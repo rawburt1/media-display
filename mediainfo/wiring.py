@@ -85,6 +85,7 @@ def build_mediadata_store(config: Config, cache: ImageCache) -> Optional[MediaDa
         discogs_token=_enabled_credential(config, "discogs", "token"),
         tmdb_api_key=_enabled_credential(config, "tmdb", "api_key"),
         fanarttv_api_key=_enabled_credential(config, "fanarttv", "api_key"),
+        lastfm_api_key=_enabled_credential(config, "lastfm", "api_key"),
     )
 
 

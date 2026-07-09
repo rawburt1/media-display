@@ -71,34 +71,41 @@ class LastFmEnricher(ArtworkEnricher):
         )
 
     def _fetch_artist_image(self, artist: str) -> Optional[str]:
-        try:
-            resp = requests.get(
-                _API_URL,
-                params={
-                    "method": "artist.getinfo",
-                    "artist": artist,
-                    "api_key": self._api_key,
-                    "autocorrect": "1",
-                    "format": "json",
-                },
-                timeout=8,
-            )
-            resp.raise_for_status()
-        except Exception:
-            logger.exception("Last.fm API request failed for artist %r", artist)
-            return None
+        return fetch_artist_image(artist, self._api_key)
 
-        data = resp.json()
-        if "error" in data:
-            logger.debug("Last.fm error %s: %s", data.get("error"), data.get("message"))
-            return None
 
-        images = data.get("artist", {}).get("image", [])
-        by_size = {img.get("size"): img.get("#text", "") for img in images}
-
-        for size in _SIZE_PREFERENCE:
-            url = by_size.get(size, "")
-            if url and _PLACEHOLDER_HASH not in url:
-                return url
-
+def fetch_artist_image(artist: str, api_key: str) -> Optional[str]:
+    """Look up `artist`'s photo via Last.fm's artist.getinfo API, or None if
+    unavailable/unreachable/only the placeholder is on file. Shared by
+    LastFmEnricher and MediaDataStore's artist-photo lookup."""
+    try:
+        resp = requests.get(
+            _API_URL,
+            params={
+                "method": "artist.getinfo",
+                "artist": artist,
+                "api_key": api_key,
+                "autocorrect": "1",
+                "format": "json",
+            },
+            timeout=8,
+        )
+        resp.raise_for_status()
+    except Exception:
+        logger.exception("Last.fm API request failed for artist %r", artist)
         return None
+
+    data = resp.json()
+    if "error" in data:
+        logger.debug("Last.fm error %s: %s", data.get("error"), data.get("message"))
+        return None
+
+    images = data.get("artist", {}).get("image", [])
+    by_size = {img.get("size"): img.get("#text", "") for img in images}
+
+    for size in _SIZE_PREFERENCE:
+        url = by_size.get(size, "")
+        if url and _PLACEHOLDER_HASH not in url:
+            return url
+
+    return None

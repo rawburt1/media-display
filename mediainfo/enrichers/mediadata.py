@@ -1,6 +1,6 @@
 """MediaDataStore-backed artwork enricher: checks the local unified
-media-data cache (see mediainfo/media_data_store.py) for album art
-(music), or poster+fanart (movies/episodes), appending to
+media-data cache (see mediainfo/media_data_store.py) for album art +
+artist photo (music), or poster+fanart (movies/episodes), appending to
 now_playing.images exactly like every other artwork enricher - never
 replacing (that's reserved for PosterStore/ArtworkOverrideStore
 downstream, see orchestrator_artwork.py). Off by default
@@ -8,11 +8,12 @@ downstream, see orchestrator_artwork.py). Off by default
 enabled, mirroring LibraryEnricher's placement, so a cache hit here
 saves every enricher after it a redundant lookup.
 
-Music only checks album art, not fanart - MediaDataStore's album fanart
-fetch is a guaranteed no-op today (neither MusicBrainz nor Discogs has a
-distinct "album background art" concept), so there's nothing to gain
-from also calling it. Movies/episodes check both poster and fanart,
-since TMDb provides both.
+Music checks artist photo (marked is_artist_photo=True, so PixooOutput's
+music_album_art_only filter skips it) whenever an artist is known, and
+album art additionally once an album is known - not fanart, since
+MediaDataStore's album fanart fetch is a guaranteed no-op today (neither
+MusicBrainz nor Discogs has a distinct "album background art" concept).
+Movies/episodes check both poster and fanart, since TMDb provides both.
 """
 
 from __future__ import annotations
@@ -55,8 +56,15 @@ class MediaDataArtworkEnricher(ArtworkEnricher):
         # subtitle holds the artist for music items - see NowPlaying's
         # own docstring for why (same convention every other music
         # enricher already follows).
-        artist, album = now_playing.subtitle, now_playing.album
-        if not artist or not album:
+        artist = now_playing.subtitle
+        if not artist:
+            return
+
+        photo = store.get_artist_photo(artist)
+        self._append(now_playing, photo, "Artist photo (mediadata)", is_artist_photo=True)
+
+        album = now_playing.album
+        if not album:
             return
 
         path = store.get_album_art(artist, album, now_playing.year)
@@ -78,9 +86,13 @@ class MediaDataArtworkEnricher(ArtworkEnricher):
         self._append(now_playing, fanart, "Fanart (mediadata)")
 
     @staticmethod
-    def _append(now_playing: NowPlaying, path: Optional[Path], label: str) -> None:
+    def _append(
+        now_playing: NowPlaying, path: Optional[Path], label: str, is_artist_photo: bool = False
+    ) -> None:
         if path is None:
             return
         url = f"file://{path}"
         if not any(img.url == url for img in now_playing.images):
-            now_playing.images.append(Artwork(url=url, label=label))
+            now_playing.images.append(
+                Artwork(url=url, label=label, is_artist_photo=is_artist_photo)
+            )

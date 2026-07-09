@@ -14,6 +14,7 @@ from mediainfo.media_data_store import MediaDataStore
 
 def _store(
     tmp_path, refresh=None, cache=None, discogs_token="", tmdb_api_key="", fanarttv_api_key="",
+    lastfm_api_key="",
     **kwargs,
 ):
     return MediaDataStore(
@@ -22,6 +23,7 @@ def _store(
         discogs_token=discogs_token,
         tmdb_api_key=tmdb_api_key,
         fanarttv_api_key=fanarttv_api_key,
+        lastfm_api_key=lastfm_api_key,
     )
 
 
@@ -55,6 +57,14 @@ def test_album_dir_includes_artist_and_year(tmp_path):
     store = _store(tmp_path)
     expected = tmp_path / "music" / "Led Zeppelin" / "Houses of the Holy (1973)"
     assert store.album_dir("Led Zeppelin", "Houses of the Holy", 1973) == expected
+
+
+def test_artist_dir_is_the_album_dirs_parent(tmp_path):
+    store = _store(tmp_path)
+    assert store.artist_dir("Led Zeppelin") == tmp_path / "music" / "Led Zeppelin"
+    assert store.album_dir("Led Zeppelin", "Houses of the Holy", 1973).parent == store.artist_dir(
+        "Led Zeppelin"
+    )
 
 
 def test_movie_dir_omits_parens_when_year_missing(tmp_path):
@@ -547,6 +557,137 @@ def test_album_uses_music_days_refresh_policy(tmp_path):
         store.get_album_art("Led Zeppelin", "Houses of the Holy", 1973)
 
     fetch.assert_not_called()  # still fresh under the 365-day music policy
+
+
+# ---------------------------------------------------------------------------
+# Artist photo
+# ---------------------------------------------------------------------------
+
+def test_get_artist_photo_fetches_when_missing(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(
+        store, "_fetch_artist_photo", return_value=(b"photo-bytes", "wikipedia"),
+    ) as fetch:
+        result = store.get_artist_photo("Led Zeppelin")
+
+    assert result == store.artist_dir("Led Zeppelin") / "artist.jpg"
+    fetch.assert_called_once_with("Led Zeppelin")
+
+
+def test_refresh_artist_photo_forces_fetch_even_when_fresh(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.artist_dir("Led Zeppelin")
+    _seed_stale_entry(store, item_dir, "artist.jpg", "artist_photo", days_old=1)
+
+    with patch.object(store, "_fetch_artist_photo", return_value=(b"refreshed", "lastfm")) as fetch:
+        updated = store.refresh_artist_photo("Led Zeppelin")
+
+    fetch.assert_called_once_with("Led Zeppelin")
+    assert updated is True
+
+
+def test_artist_photo_uses_music_days_refresh_policy(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.artist_dir("Led Zeppelin")
+    # Stale for movies (180d)/series (30d) but not for music (365d default).
+    _seed_stale_entry(store, item_dir, "artist.jpg", "artist_photo", days_old=200)
+
+    with patch.object(store, "_fetch_artist_photo") as fetch:
+        store.get_artist_photo("Led Zeppelin")
+
+    fetch.assert_not_called()  # still fresh under the 365-day music policy
+
+
+# ---------------------------------------------------------------------------
+# Real _fetch_artist_photo implementation (mocking the underlying
+# Wikipedia/Last.fm HTTP calls, never a real network request - see
+# test_wikipedia.py/test_lastfm.py for the equivalent enricher-level tests
+# of the same underlying functions).
+# ---------------------------------------------------------------------------
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_fetch_artist_photo_via_wikipedia(mock_get, tmp_path):
+    search_response = MagicMock(
+        json=lambda: {"query": {"search": [{"title": "Led Zeppelin"}]}},
+        raise_for_status=MagicMock(),
+    )
+    summary_response = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "extract": "An English rock band.",
+            "originalimage": {"source": "https://example.com/original.jpg"},
+        },
+        raise_for_status=MagicMock(),
+    )
+    mock_get.side_effect = [search_response, summary_response]
+
+    cache = ImageCache(tmp_path / "cache")
+    with patch.object(cache, "download_temp", return_value=None) as download_temp:
+        store = _store(tmp_path / "store", cache=cache)
+        result = store._fetch_artist_photo("Led Zeppelin")
+
+    download_temp.assert_called_once()
+    assert download_temp.call_args.args[0].url == "https://example.com/original.jpg"
+    assert result is None  # download_temp returning None -> no bytes to write
+
+
+@patch("mediainfo.enrichers.lastfm.requests.get")
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_fetch_artist_photo_falls_back_to_lastfm(mock_wiki_get, mock_lastfm_get, tmp_path):
+    mock_wiki_get.return_value = MagicMock(
+        json=lambda: {"query": {"search": []}}, raise_for_status=MagicMock(),
+    )  # Wikipedia finds nothing
+    mock_lastfm_get.return_value = MagicMock(
+        json=lambda: {"artist": {"image": [{"size": "mega", "#text": "https://lastfm.example/x.jpg"}]}},
+        raise_for_status=MagicMock(),
+    )
+
+    cache = ImageCache(tmp_path / "cache")
+    with patch.object(cache, "download_temp", return_value=None) as download_temp:
+        store = _store(tmp_path / "store", cache=cache, lastfm_api_key="test-key")
+        store._fetch_artist_photo("Led Zeppelin")
+
+    assert download_temp.call_args.args[0].url == "https://lastfm.example/x.jpg"
+
+
+@patch("mediainfo.enrichers.wikipedia.requests.get")
+def test_fetch_artist_photo_no_lastfm_key_skips_fallback(mock_get, tmp_path):
+    mock_get.return_value = MagicMock(
+        json=lambda: {"query": {"search": []}}, raise_for_status=MagicMock(),
+    )
+
+    store = _store(tmp_path, lastfm_api_key="")  # blank - Last.fm never even attempted
+    with patch("mediainfo.media_data_store.lastfm.fetch_artist_image") as fetch_artist_image:
+        result = store._fetch_artist_photo("Led Zeppelin")
+
+    fetch_artist_image.assert_not_called()
+    assert result is None
+
+
+def test_fetch_artist_photo_without_cache_configured_returns_none(tmp_path):
+    store = _store(tmp_path)  # no cache= passed
+    with patch(
+        "mediainfo.media_data_store.wikipedia.lookup",
+        return_value=("bio", "https://example.com/x.jpg"),
+    ):
+        result = store._fetch_artist_photo("Led Zeppelin")
+
+    assert result is None
+
+
+def test_fetch_artist_photo_downloads_real_bytes(tmp_path):
+    store = _store(tmp_path / "store", cache=ImageCache(tmp_path / "cache"))
+    downloaded = tmp_path / "downloaded.jpg"
+    downloaded.write_bytes(b"real-photo-bytes")
+
+    with patch(
+        "mediainfo.media_data_store.wikipedia.lookup",
+        return_value=("bio", "https://example.com/x.jpg"),
+    ), patch.object(store._cache, "download_temp", return_value=downloaded):
+        result = store._fetch_artist_photo("Led Zeppelin")
+
+    assert result == (b"real-photo-bytes", "wikipedia")
+    assert not downloaded.exists()  # temp file cleaned up after reading
 
 
 # ---------------------------------------------------------------------------

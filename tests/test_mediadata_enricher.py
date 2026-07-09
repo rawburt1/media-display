@@ -32,6 +32,7 @@ def _episode(**kwargs):
 
 def test_adds_album_art_on_hit(tmp_path):
     store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.return_value = None
     art_path = tmp_path / "albumart.jpg"
     art_path.write_bytes(b"fake")
     store.get_album_art.return_value = art_path
@@ -47,6 +48,7 @@ def test_adds_album_art_on_hit(tmp_path):
 
 def test_does_not_replace_existing_images(tmp_path):
     store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.return_value = None
     art_path = tmp_path / "albumart.jpg"
     art_path.write_bytes(b"fake")
     store.get_album_art.return_value = art_path
@@ -61,6 +63,7 @@ def test_does_not_replace_existing_images(tmp_path):
 
 def test_does_not_add_duplicate_url(tmp_path):
     store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.return_value = None
     art_path = tmp_path / "albumart.jpg"
     art_path.write_bytes(b"fake")
     store.get_album_art.return_value = art_path
@@ -73,6 +76,7 @@ def test_does_not_add_duplicate_url(tmp_path):
 
 def test_no_op_on_store_miss():
     store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.return_value = None
     store.get_album_art.return_value = None
 
     np = _song()
@@ -156,14 +160,111 @@ def test_no_op_without_artist_or_album():
     np = _song(subtitle="", album="")
     MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
     assert np.images == []
+    store.get_artist_photo.assert_not_called()
     store.get_album_art.assert_not_called()
+
+
+def test_no_op_on_album_art_without_album():
+    store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.return_value = None
+
+    np = _song(album="")
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    store.get_artist_photo.assert_called_once_with("Pink Floyd")
+    store.get_album_art.assert_not_called()
+    assert np.images == []
 
 
 def test_swallows_store_exception():
     store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.return_value = None
     store.get_album_art.side_effect = RuntimeError("disk error")
 
     np = _song()
     MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
 
     assert np.images == []
+
+
+# ---------------------------------------------------------------------------
+# Artist photo (music)
+# ---------------------------------------------------------------------------
+
+def test_adds_artist_photo_on_hit(tmp_path):
+    store = Mock(spec=MediaDataStore)
+    photo_path = tmp_path / "artist.jpg"
+    photo_path.write_bytes(b"fake")
+    store.get_artist_photo.return_value = photo_path
+    store.get_album_art.return_value = None
+
+    np = _song()
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    store.get_artist_photo.assert_called_once_with("Pink Floyd")
+    assert len(np.images) == 1
+    assert np.images[0].url == f"file://{photo_path}"
+    assert "mediadata" in np.images[0].label.lower()
+    assert np.images[0].is_artist_photo is True
+
+
+def test_artist_photo_and_album_art_both_added(tmp_path):
+    store = Mock(spec=MediaDataStore)
+    photo_path = tmp_path / "artist.jpg"
+    photo_path.write_bytes(b"fake")
+    art_path = tmp_path / "albumart.jpg"
+    art_path.write_bytes(b"fake")
+    store.get_artist_photo.return_value = photo_path
+    store.get_album_art.return_value = art_path
+
+    np = _song()
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    urls = {img.url for img in np.images}
+    assert urls == {f"file://{photo_path}", f"file://{art_path}"}
+    by_url = {img.url: img for img in np.images}
+    assert by_url[f"file://{photo_path}"].is_artist_photo is True
+    assert by_url[f"file://{art_path}"].is_artist_photo is False
+
+
+def test_artist_photo_fetched_even_without_known_album(tmp_path):
+    store = Mock(spec=MediaDataStore)
+    photo_path = tmp_path / "artist.jpg"
+    photo_path.write_bytes(b"fake")
+    store.get_artist_photo.return_value = photo_path
+
+    np = _song(album="")
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    assert len(np.images) == 1
+    assert np.images[0].is_artist_photo is True
+    store.get_album_art.assert_not_called()
+
+
+def test_no_op_when_artist_photo_store_misses(tmp_path):
+    store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.return_value = None
+    art_path = tmp_path / "albumart.jpg"
+    art_path.write_bytes(b"fake")
+    store.get_album_art.return_value = art_path
+
+    np = _song()
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    assert len(np.images) == 1
+    assert np.images[0].is_artist_photo is False
+
+
+def test_swallows_artist_photo_store_exception():
+    store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.side_effect = RuntimeError("disk error")
+
+    np = _song()
+    MediaDataArtworkEnricher(config=object(), store=store).enrich(np)
+
+    assert np.images == []
+    # Artist photo is fetched before album art within one try/except (see
+    # enrich()), so a raise here aborts the rest of _enrich_music for this
+    # tick - album art is simply retried on the next tick, same as any
+    # other _safe_call-isolated enricher failure.
+    store.get_album_art.assert_not_called()

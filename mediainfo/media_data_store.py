@@ -4,13 +4,14 @@ with a `metadata.json` tracking where each piece of content came from and
 when it was last checked/updated.
 
 Wired into the live enrichment pipeline via mediainfo/enrichers/
-mediadata.py (artwork: music album art, movie/series posters+fanart) and
-mediadata_lyrics.py (music lyrics) - opt-in, off by default (see those
-modules). Movie/series artwork is TMDb-first, falling back to fanart.tv
-for movies only (fanart.tv's TV lookup needs a TVDB id this store has no
-way to resolve - see _fetch_series_artwork's docstring). Existing
-`mediainfo.cache.ImageCache` (flat, hash-named artwork cache, reused
-here for the actual download step - see _download_bytes),
+mediadata.py (artwork: music album art + artist photo, movie/series
+posters+fanart) and mediadata_lyrics.py (music lyrics) - opt-in, off by
+default (see those modules). Movie/series artwork is TMDb-first, falling
+back to fanart.tv for movies only (fanart.tv's TV lookup needs a TVDB id
+this store has no way to resolve - see _fetch_series_artwork's
+docstring). Artist photo is Wikipedia-first, falling back to Last.fm.
+Existing `mediainfo.cache.ImageCache` (flat, hash-named artwork cache,
+reused here for the actual download step - see _download_bytes),
 `mediainfo.text_cache.TextCache` (namespaced lyrics/AI-text cache),
 `mediainfo.poster_store.PosterStore`, and `mediainfo.artwork_overrides.
 ArtworkOverrideStore` are all untouched and keep working exactly as
@@ -21,6 +22,8 @@ Directory layout:
     {path}/movies/{Title} ({Year})/fanart.jpg
     {path}/movies/{Title} ({Year})/metadata.json
     {path}/series/{Title} ({Year})/... (same shape as movies)
+    {path}/music/{Artist}/artist.jpg
+    {path}/music/{Artist}/metadata.json (artist-level: just artist_photo)
     {path}/music/{Artist}/{Album} ({Year})/albumart.jpg
     {path}/music/{Artist}/{Album} ({Year})/fanart.jpg
     {path}/music/{Artist}/{Album} ({Year})/{Track Title}.lrc
@@ -39,9 +42,11 @@ Public API (see MediaDataStore's methods for details):
     get_movie_poster(title, year) / get_movie_fanart(title, year)
     get_series_poster(title, year) / get_series_fanart(title, year)
     get_album_art(artist, album, year) / get_album_fanart(artist, album, year)
+    get_artist_photo(artist)
     get_track_lyrics(artist, album, title, year=None)
     refresh_movie(title, year) / refresh_series(title, year)
-    refresh_album(artist, album, year) / refresh_track_lyrics(artist, album, title, year=None)
+    refresh_album(artist, album, year) / refresh_artist_photo(artist)
+    refresh_track_lyrics(artist, album, title, year=None)
 
 Each `get_*` follows cache_first + the per-media-type refresh policy in
 MediaDataConfig.refresh (movies_days/series_days/music_days; lyrics never
@@ -64,7 +69,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import MediaDataConfig
-from mediainfo.enrichers import discogs, fanarttv, lrclib, musicbrainz, tmdb
+from mediainfo.enrichers import discogs, fanarttv, lastfm, lrclib, musicbrainz, tmdb, wikipedia
 from mediainfo.models import Artwork
 
 # What a `_fetch_*` stub (or, later, a real implementation) returns:
@@ -110,6 +115,7 @@ class MediaDataStore:
         discogs_token: str = "",
         tmdb_api_key: str = "",
         fanarttv_api_key: str = "",
+        lastfm_api_key: str = "",
     ):
         self.config = config
         self.root = Path(config.path).resolve()
@@ -141,6 +147,10 @@ class MediaDataStore:
         # blank means "skip fanart.tv". Not used for series - see
         # _fetch_series_artwork's docstring for why.
         self._fanarttv_api_key = fanarttv_api_key
+        # Last.fm API key, for the artist-photo fallback when Wikipedia has
+        # nothing - blank means "skip Last.fm" (same "no error, just
+        # nothing to do" behavior as a blank discogs_token).
+        self._lastfm_api_key = lastfm_api_key
         # Short-lived memoization for _cached_lookup() - see
         # _LOOKUP_CACHE_SECONDS.
         self._lookup_cache: Dict[tuple, Tuple[float, Any]] = {}
@@ -605,6 +615,62 @@ class MediaDataStore:
             )
             updated = updated or changed
         return updated
+
+    def artist_dir(self, artist: str) -> Path:
+        """The artist's own directory (parent of its per-album
+        subdirectories) - where artist.jpg and its metadata.json live,
+        separate from any one album's metadata."""
+        return self.root / "music" / _sanitize(artist)
+
+    def get_artist_photo(self, artist: str) -> Optional[Path]:
+        """Wikipedia-first, Last.fm-fallback artist photo - reuses the
+        music_days refresh policy (an artist's photo changes about as
+        rarely as an album's cover art)."""
+        item_dir = self.artist_dir(artist)
+        return self._resolve_artwork(
+            item_dir, "artist.jpg", "artist_photo", self.config.refresh.music_days,
+            lambda: self._fetch_artist_photo(artist),
+        )
+
+    def refresh_artist_photo(self, artist: str) -> bool:
+        item_dir = self.artist_dir(artist)
+        return self._was_updated_by(
+            item_dir, "artist_photo",
+            lambda: self._resolve_artwork(
+                item_dir, "artist.jpg", "artist_photo", self.config.refresh.music_days,
+                lambda: self._fetch_artist_photo(artist), force=True,
+            ),
+        )
+
+    def _fetch_artist_photo(self, artist: str) -> FetchResult:
+        """Real implementation: Wikipedia first (free, no key), falling
+        back to Last.fm if an API key is configured and Wikipedia has
+        nothing - mirrors _fetch_album_artwork's "free source, then a
+        configured-key fallback" shape."""
+        resolved = self._resolve_artist_photo_url(artist)
+        if resolved is None:
+            return None
+        url, source = resolved
+        return self._download_bytes(url, source)
+
+    def _resolve_artist_photo_url(self, artist: str) -> Optional[Tuple[str, str]]:
+        try:
+            result = wikipedia.lookup(wikipedia.music_artist_queries(artist))
+            if result is not None:
+                _, thumbnail = result
+                if thumbnail:
+                    return thumbnail, "wikipedia"
+        except Exception:
+            logger.exception("MediaDataStore: Wikipedia lookup failed for artist %r", artist)
+
+        if not self._lastfm_api_key:
+            return None
+        try:
+            url = lastfm.fetch_artist_image(artist, self._lastfm_api_key)
+        except Exception:
+            logger.exception("MediaDataStore: Last.fm lookup failed for artist %r", artist)
+            return None
+        return (url, "lastfm") if url else None
 
     def _fetch_album_artwork(
         self, artist: str, album: str, year: Optional[int], kind: str
