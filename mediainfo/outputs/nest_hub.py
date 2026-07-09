@@ -98,14 +98,20 @@ class NestHubOutput(Output):
 
         cast = self._get_cast()
         if cast is None:
-            return
+            # Deliberately raises rather than silently no-op'ing - lets the
+            # orchestrator's _call_output() record it for health/alerting
+            # (see orchestrator.py:_call_output). _get_cast() already
+            # throttles/logs its own reconnect attempts, so this doesn't
+            # spam a fresh connection attempt on every tick.
+            raise ConnectionError(f"Nest Hub at {self.config.device_ip} is unreachable")
 
         try:
             cast.quit_app()
-            self._idle = True
-            self._last_url = None
         except Exception:
-            logger.exception("Failed to stop casting to Nest Hub")
+            self._cast = None
+            raise
+        self._idle = True
+        self._last_url = None
 
     def _run_server(self) -> None:
         self.app.run(host="0.0.0.0", port=self.config.server_port)
@@ -137,14 +143,19 @@ class NestHubOutput(Output):
 
         cast = self._get_cast()
         if cast is None:
-            return
+            # Deliberately raises rather than silently no-op'ing - lets the
+            # orchestrator's _call_output() record it for health/alerting
+            # (see orchestrator.py:_call_output). _get_cast() already
+            # throttles/logs its own reconnect attempts, so this doesn't
+            # spam a fresh connection attempt on every tick.
+            raise ConnectionError(f"Nest Hub at {self.config.device_ip} is unreachable")
 
         try:
             cast.media_controller.play_media(url, content_type)
-            self._last_url = url
         except Exception:
-            logger.exception("Failed to cast artwork to Nest Hub")
             self._cast = None
+            raise
+        self._last_url = url
 
     def _get_cast(self):
         if self._cast is not None:

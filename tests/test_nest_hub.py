@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from mediainfo.config import NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.nest_hub import NestHubOutput
@@ -78,11 +80,14 @@ def test_update_recasts_when_image_changes(mock_get_cast, tmp_path):
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
-def test_connection_error_does_not_raise(mock_get_cast, tmp_path):
+def test_connection_error_propagates(mock_get_cast, tmp_path):
+    # So the orchestrator's _call_output() can record it for health/
+    # alerting - see orchestrator.py:_call_output.
     mock_get_cast.side_effect = RuntimeError("connection refused")
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))  # should not raise
+    with pytest.raises(ConnectionError):
+        output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
@@ -90,8 +95,10 @@ def test_connection_error_does_not_retry_immediately(mock_get_cast, tmp_path):
     mock_get_cast.side_effect = RuntimeError("connection refused")
 
     output = _output()
-    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
-    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "def456.jpg"))
+    with pytest.raises(ConnectionError):
+        output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
+    with pytest.raises(ConnectionError):
+        output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "def456.jpg"))
 
     assert mock_get_cast.call_count == 1
 

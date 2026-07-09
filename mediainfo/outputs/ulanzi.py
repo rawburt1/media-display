@@ -168,29 +168,31 @@ class UlanziOutput(Output):
         if text == self._last_text:
             return
 
-        try:
-            if text:
-                requests.post(
-                    self._url,
-                    params={"name": self.config.app_name},
-                    # textCase=2 displays the text as sent, overriding
-                    # AWTRIX3's default of forcing everything to uppercase.
-                    json={"text": text, "textCase": 2},
-                    auth=self._auth,
-                    timeout=5,
-                )
-            else:
-                # An empty body removes the custom app, returning the
-                # display to its normal (clock) face.
-                requests.post(
-                    self._url,
-                    params={"name": self.config.app_name},
-                    data=b"",
-                    auth=self._auth,
-                    timeout=5,
-                )
-        except Exception:
-            logger.exception("Failed to update Ulanzi TC001 display")
-            return
+        # Deliberately no try/except here - letting connection/HTTP errors
+        # propagate lets the orchestrator's _call_output() record them for
+        # health/alerting (see orchestrator.py:_call_output). Swallowing
+        # them here used to mean a Ulanzi that dropped off the network was
+        # silently reported as healthy.
+        if text:
+            response = requests.post(
+                self._url,
+                params={"name": self.config.app_name},
+                # textCase=2 displays the text as sent, overriding
+                # AWTRIX3's default of forcing everything to uppercase.
+                json={"text": text, "textCase": 2},
+                auth=self._auth,
+                timeout=5,
+            )
+        else:
+            # An empty body removes the custom app, returning the
+            # display to its normal (clock) face.
+            response = requests.post(
+                self._url,
+                params={"name": self.config.app_name},
+                data=b"",
+                auth=self._auth,
+                timeout=5,
+            )
+        response.raise_for_status()
 
         self._last_text = text
