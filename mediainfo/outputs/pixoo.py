@@ -59,31 +59,33 @@ class PixooOutput(Output):
         self._post({"Command": "Channel/SetBrightness", "Brightness": level})
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+        # Deliberately no try/except here - letting connection errors
+        # propagate lets the orchestrator's _call_output() record them for
+        # health/alerting (see orchestrator.py:_call_output). Swallowing
+        # them here used to mean a Pixoo that dropped off the network was
+        # silently reported as healthy.
         size = self.config.size
-        try:
-            led_path = self.cache.get_derived_path(image_path, self._led_cache_key(), self._build_led_image)
-            image = Image.open(led_path).convert("RGB")
-            pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
+        led_path = self.cache.get_derived_path(image_path, self._led_cache_key(), self._build_led_image)
+        image = Image.open(led_path).convert("RGB")
+        pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
 
-            if self.config.preview_path:
-                _save_preview(image, Path(self.config.preview_path))
+        if self.config.preview_path:
+            _save_preview(image, Path(self.config.preview_path))
 
-            # Reset the gif id before each send so repeated single-frame
-            # updates never run into Pixoo's PicId exhaustion error.
-            self._post({"Command": "Draw/ResetHttpGifId"})
-            self._post(
-                {
-                    "Command": "Draw/SendHttpGif",
-                    "PicNum": 1,
-                    "PicWidth": size,
-                    "PicOffset": 0,
-                    "PicID": 1,
-                    "PicSpeed": 1000,
-                    "PicData": pixel_data,
-                }
-            )
-        except Exception:
-            logger.exception("Failed to send image to Pixoo at %s", self.config.ip)
+        # Reset the gif id before each send so repeated single-frame
+        # updates never run into Pixoo's PicId exhaustion error.
+        self._post({"Command": "Draw/ResetHttpGifId"})
+        self._post(
+            {
+                "Command": "Draw/SendHttpGif",
+                "PicNum": 1,
+                "PicWidth": size,
+                "PicOffset": 0,
+                "PicID": 1,
+                "PicSpeed": 1000,
+                "PicData": pixel_data,
+            }
+        )
 
     def _build_led_image(self, img: Image.Image) -> tuple:
         """The get_derived_path build callback: optional text removal, then

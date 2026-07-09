@@ -188,13 +188,16 @@ def test_uses_configured_app_name_and_basic_auth(mock_post):
 
 
 @patch("mediainfo.outputs.ulanzi.requests.post")
-def test_request_error_is_caught(mock_post):
+def test_request_error_propagates(mock_post):
+    # So the orchestrator's _call_output() can record it for health/
+    # alerting - see orchestrator.py:_call_output.
     mock_post.side_effect = Exception("boom")
     now_playing = NowPlaying(
         source="kodi", media_type="music", title="Comfortably Numb", subtitle="Pink Floyd"
     )
 
-    _output().on_new_item(now_playing, MagicMock())
+    with pytest.raises(Exception, match="boom"):
+        _output().on_new_item(now_playing, MagicMock())
 
 
 # ---------------------------------------------------------------------------

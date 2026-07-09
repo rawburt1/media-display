@@ -8,6 +8,7 @@ import base64
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from PIL import Image
 
 from mediainfo.cache import ImageCache
@@ -155,21 +156,25 @@ def test_update_no_preview_when_not_configured(tmp_path):
     mock_prev.assert_not_called()
 
 
-def test_update_does_not_raise_on_network_error(tmp_path):
+def test_update_raises_on_network_error(tmp_path):
+    # So the orchestrator's _call_output() can record it for health/
+    # alerting - see orchestrator.py:_call_output.
     img_path = _save_image(tmp_path / "art.jpg")
     output = PixooOutput(_config(), _cache(tmp_path))
 
     with patch.object(output, "_post", side_effect=OSError("connection refused")):
-        output.update(_now_playing(), _artwork(), img_path)  # must not raise
+        with pytest.raises(OSError):
+            output.update(_now_playing(), _artwork(), img_path)
 
 
-def test_update_does_not_raise_on_bad_image(tmp_path):
+def test_update_raises_on_bad_image(tmp_path):
     bad_path = tmp_path / "bad.jpg"
     bad_path.write_bytes(b"not an image")
     output = PixooOutput(_config(), _cache(tmp_path))
 
     with patch.object(output, "_post"):
-        output.update(_now_playing(), _artwork(), bad_path)  # must not raise
+        with pytest.raises(Exception):
+            output.update(_now_playing(), _artwork(), bad_path)
 
 
 # ---------------------------------------------------------------------------
