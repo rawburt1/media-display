@@ -40,6 +40,12 @@ class Output(ABC):
     # artist photos only ever get added for media_type == "music".
     music_album_art_only: bool = False
 
+    # Set to True (e.g. on WebOutput) to include lyrics word-cloud images
+    # (Artwork.is_wordcloud) in this output's rotation - False (the
+    # default) skips them everywhere else, since a dense text overlay
+    # doesn't read well on a small LED matrix or photo frame.
+    show_wordclouds: bool = False
+
     # List of Transform objects applied to every image before update() is
     # called.  Populated from the output's config `transforms:` key.
     transform_pipeline: List = []

@@ -21,6 +21,12 @@ class Artwork:
     # relying on fragile label string-matching (labels aren't consistent
     # across sources, e.g. Kodi's own album thumbnail is "Poster (Kodi)").
     is_artist_photo: bool = False
+    # True for a generated lyrics word-cloud image (see
+    # mediainfo/enrichers/mediadata.py and mediainfo/lyrics_wordcloud.py) -
+    # excluded by default (see Output.show_wordclouds) since a dense text
+    # overlay doesn't read well on a small LED matrix or photo frame; only
+    # WebOutput opts in.
+    is_wordcloud: bool = False
 
 
 @dataclass

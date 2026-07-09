@@ -5,13 +5,17 @@ when it was last checked/updated.
 
 Wired into the live enrichment pipeline via mediainfo/enrichers/
 mediadata.py (artwork: music album art + artist photo, movie/series
-posters+fanart) and mediadata_lyrics.py (music lyrics) - opt-in, off by
-default (see those modules). Movie/series artwork is TMDb-first, falling
-back to fanart.tv for movies only (fanart.tv's TV lookup needs a TVDB id
-this store has no way to resolve - see _fetch_series_artwork's
-docstring). Artist photo is Wikipedia-first, falling back to Last.fm.
-Existing `mediainfo.cache.ImageCache` (flat, hash-named artwork cache,
-reused here for the actual download step - see _download_bytes),
+posters+fanart, and a lyrics word cloud - see below) and
+mediadata_lyrics.py (music lyrics) - opt-in, off by default (see those
+modules). Movie/series artwork is TMDb-first, falling back to fanart.tv
+for movies only (fanart.tv's TV lookup needs a TVDB id this store has no
+way to resolve - see _fetch_series_artwork's docstring). Artist photo is
+Wikipedia-first, falling back to Last.fm. A lyrics word cloud (non-masked
+only - see get_track_wordcloud) is rendered locally, not fetched, once
+both lyrics and album art are cached, behind its own
+enrichers.mediadata.wordcloud.enabled switch. Existing
+`mediainfo.cache.ImageCache` (flat, hash-named artwork cache, reused here
+for the actual download step - see _download_bytes),
 `mediainfo.text_cache.TextCache` (namespaced lyrics/AI-text cache),
 `mediainfo.poster_store.PosterStore`, and `mediainfo.artwork_overrides.
 ArtworkOverrideStore` are all untouched and keep working exactly as
@@ -27,6 +31,7 @@ Directory layout:
     {path}/music/{Artist}/{Album} ({Year})/albumart.jpg
     {path}/music/{Artist}/{Album} ({Year})/fanart.jpg
     {path}/music/{Artist}/{Album} ({Year})/{Track Title}.lrc
+    {path}/music/{Artist}/{Album} ({Year})/{Track Title}.wordcloud_nomask.png
     {path}/music/{Artist}/{Album} ({Year})/metadata.json
 
 When year is unknown, the "(Year)" suffix is simply omitted from the
@@ -44,16 +49,19 @@ Public API (see MediaDataStore's methods for details):
     get_album_art(artist, album, year) / get_album_fanart(artist, album, year)
     get_artist_photo(artist)
     get_track_lyrics(artist, album, title, year=None)
+    get_track_wordcloud(artist, album, title, year=None)
     refresh_movie(title, year) / refresh_series(title, year)
     refresh_album(artist, album, year) / refresh_artist_photo(artist)
     refresh_track_lyrics(artist, album, title, year=None)
+    refresh_track_wordcloud(artist, album, title, year=None)
 
 Each `get_*` follows cache_first + the per-media-type refresh policy in
-MediaDataConfig.refresh (movies_days/series_days/music_days; lyrics never
-auto-refresh by age). Each `refresh_*` forces an immediate fetch attempt
-regardless of freshness - intended for a future config UI's "Refresh
-poster"/"Refresh fanart"/"Refresh lyrics" buttons - and returns whether
-anything was actually updated.
+MediaDataConfig.refresh (movies_days/series_days/music_days; lyrics and
+the word cloud never auto-refresh by age). Each `refresh_*` forces an
+immediate fetch (or, for the word cloud, regeneration) attempt regardless
+of freshness - intended for a future config UI's "Refresh poster"/
+"Refresh fanart"/"Refresh lyrics" buttons - and returns whether anything
+was actually updated.
 """
 
 from __future__ import annotations
@@ -61,6 +69,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import tempfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -398,6 +407,30 @@ class MediaDataStore:
 
         def set_entry(metadata: Dict[str, Any], entry: Dict[str, Any]) -> None:
             metadata.setdefault("tracks", {}).setdefault(title, {})["lyrics"] = entry
+
+        return self._resolve_content(
+            item_dir, filename, get_entry, set_entry, None, fetch_fn, force,
+        )
+
+    def _resolve_track_wordcloud(
+        self,
+        item_dir: Path,
+        filename: str,
+        title: str,
+        fetch_fn: Callable[[], FetchResult],
+        force: bool = False,
+    ) -> Optional[Path]:
+        """_resolve_content() for a nested metadata.json
+        tracks[title]["wordcloud"] entry - mirrors _resolve_track_lyrics,
+        including max_age_days=None (a generated word cloud is never
+        auto-refreshed by age; only a missing file or an explicit
+        refresh_track_wordcloud() call ever regenerates it)."""
+
+        def get_entry(metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            return metadata.get("tracks", {}).get(title, {}).get("wordcloud")
+
+        def set_entry(metadata: Dict[str, Any], entry: Dict[str, Any]) -> None:
+            metadata.setdefault("tracks", {}).setdefault(title, {})["wordcloud"] = entry
 
         return self._resolve_content(
             item_dir, filename, get_entry, set_entry, None, fetch_fn, force,
@@ -792,6 +825,88 @@ class MediaDataStore:
         if not lyrics:
             return None
         return lyrics.encode("utf-8"), "lrclib"
+
+    # -- lyrics word cloud ----------------------------------------------------
+    #
+    # A derived asset, not an external fetch: both lyrics and album art must
+    # already be resolvable (cache-first, so this itself triggers a fetch for
+    # either if missing) before anything is rendered. Like lyrics, never
+    # auto-refreshed by age - only a missing file or an explicit
+    # refresh_track_wordcloud() call regenerates it. Non-masked only (see
+    # mediainfo/lyrics_wordcloud.py - the masked mode doesn't reliably trace
+    # a photographic album cover's shape, so it isn't wired in here).
+
+    def get_track_wordcloud(
+        self, artist: str, album: str, title: str, year: Optional[int] = None
+    ) -> Optional[Path]:
+        """Non-masked lyrics word-cloud PNG for one track, colored from its
+        album art. Returns None if either lyrics or album art can't be
+        found. Stored next to the track's .lrc file (see the module
+        docstring's directory layout)."""
+        lyrics = self.get_track_lyrics(artist, album, title, year)
+        if not lyrics:
+            return None
+        album_art_path = self.get_album_art(artist, album, year)
+        if album_art_path is None:
+            return None
+
+        item_dir = self.album_dir(artist, album, year)
+        filename = f"{_sanitize(title)}.wordcloud_nomask.png"
+        return self._resolve_track_wordcloud(
+            item_dir, filename, title,
+            lambda: self._render_wordcloud(lyrics, album_art_path),
+        )
+
+    def refresh_track_wordcloud(
+        self, artist: str, album: str, title: str, year: Optional[int] = None
+    ) -> bool:
+        """Force a word-cloud regeneration attempt, regardless of whether
+        one is already cached - e.g. after refresh_track_lyrics() or
+        refresh_album() picked up new lyrics or new art. Returns True if
+        the word cloud was actually (re)generated; False (a no-op) if
+        lyrics or album art aren't resolvable."""
+        lyrics = self.get_track_lyrics(artist, album, title, year)
+        if not lyrics:
+            return False
+        album_art_path = self.get_album_art(artist, album, year)
+        if album_art_path is None:
+            return False
+
+        item_dir = self.album_dir(artist, album, year)
+        filename = f"{_sanitize(title)}.wordcloud_nomask.png"
+
+        def _entry() -> Optional[Dict[str, Any]]:
+            return self._read_metadata(item_dir).get("tracks", {}).get(title, {}).get("wordcloud")
+
+        before = (_entry() or {}).get("last_updated")
+        self._resolve_track_wordcloud(
+            item_dir, filename, title,
+            lambda: self._render_wordcloud(lyrics, album_art_path), force=True,
+        )
+        after = (_entry() or {}).get("last_updated")
+        return after != before
+
+    def _render_wordcloud(self, lyrics_text: str, album_art_path: Path) -> FetchResult:
+        """Real implementation: renders a non-masked word cloud (see
+        mediainfo/lyrics_wordcloud.py) to a temp file and reads it back as
+        bytes, matching every other _fetch_*'s (content_bytes, source)
+        contract even though nothing is actually downloaded over the
+        network - lets this reuse _resolve_content's cache/atomic-write/
+        metadata machinery unchanged. `wordcloud` (and the matplotlib it
+        pulls in) is imported lazily here rather than at module level,
+        since most installs never exercise this path (off by default -
+        see MediaDataWordcloudConfig)."""
+        from mediainfo.lyrics_wordcloud import generate as generate_wordcloud
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                tmp_path = Path(tmp_dir) / "wordcloud.png"
+                generate_wordcloud(lyrics_text, album_art_path, tmp_path, use_mask=False)
+                content = tmp_path.read_bytes()
+        except Exception:
+            logger.exception("MediaDataStore: word-cloud generation failed")
+            return None
+        return content, "generated"
 
     # -- year-discovered-later migration ----------------------------------
 

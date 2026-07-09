@@ -634,3 +634,9 @@ def test_history_image_404_for_unknown_entry(tmp_path):
     out = _output()
     out.set_history(_history_store(tmp_path))
     assert out.app.test_client().get("/history/image/999").status_code == 404
+
+
+def test_show_wordclouds_is_enabled():
+    from mediainfo.outputs.web import WebOutput
+
+    assert WebOutput.show_wordclouds is True

@@ -1831,6 +1831,101 @@ def test_regular_output_still_shows_artist_photo():
 
 
 # ---------------------------------------------------------------------------
+# Output.show_wordclouds (e.g. WebOutput) - only an output that opts in
+# shows lyrics word-cloud images (Artwork.is_wordcloud)
+# ---------------------------------------------------------------------------
+
+def test_output_without_wordclouds_skips_wordcloud_image():
+    album_art = Artwork(url="https://example.com/album.jpg", label="Album art (Spotify)")
+    wordcloud = Artwork(
+        url="https://example.com/wordcloud.png", label="Lyrics word cloud (mediadata)",
+        is_wordcloud=True,
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money", images=[wordcloud, album_art],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = False
+    output.show_wordclouds = False
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/album.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_called_once()
+    _, artwork, _ = output.update.call_args[0]
+    assert artwork is album_art
+
+
+def test_output_without_wordclouds_shows_nothing_when_only_wordcloud_available():
+    wordcloud = Artwork(
+        url="https://example.com/wordcloud.png", label="Lyrics word cloud (mediadata)",
+        is_wordcloud=True,
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money", images=[wordcloud],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = False
+    output.show_wordclouds = False
+    cache = MagicMock()
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_not_called()
+
+
+def test_output_with_wordclouds_enabled_shows_wordcloud():
+    wordcloud = Artwork(
+        url="https://example.com/wordcloud.png", label="Lyrics word cloud (mediadata)",
+        is_wordcloud=True,
+    )
+    now_playing = NowPlaying(
+        source="spotify", media_type="music", title="Money", images=[wordcloud],
+    )
+
+    output = MagicMock()
+    output.music_album_art_only = False
+    output.show_wordclouds = True
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/wordcloud.png"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    orchestrator = Orchestrator(
+        sources=[_StaticSource(now_playing)],
+        enrichers=[],
+        outputs=[output],
+        cache=cache,
+        poll_interval_seconds=1,
+        rotation_interval_seconds=30,
+    )
+    orchestrator._tick()
+
+    output.update.assert_called_once()
+    _, artwork, _ = output.update.call_args[0]
+    assert artwork is wordcloud
+
+
+# ---------------------------------------------------------------------------
 # request_artwork_refresh() - e.g. an MQTT "refresh artwork" button
 # ---------------------------------------------------------------------------
 
