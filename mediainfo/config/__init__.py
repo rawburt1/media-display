@@ -47,6 +47,7 @@ from mediainfo.config.idle import (
 )
 from mediainfo.config.outputs import (
     OUTPUT_CONFIG_TYPES,
+    AutoRotateConfig,
     ConfigUiConfig,
     FeedConfig,
     FolderConfig,
@@ -102,9 +103,11 @@ from mediainfo.config.themes import (
     THEMES_CONFIG_TYPES,
     BlurredBackgroundConfig,
     ColorPaletteConfig,
+    EqualizerConfig,
     GlowConfig,
     KenBurnsConfig,
     MediaMosaicConfig,
+    TimelineConfig,
     VinylThemeConfig,
     WordCloudConfig,
 )
@@ -114,6 +117,7 @@ __all__ = [
     "AlertConfig",
     "AppleTvConfig",
     "AuthConfig",
+    "AutoRotateConfig",
     "BlurredBackgroundConfig",
     "BrowserConfig",
     "CacheConfig",
@@ -124,6 +128,7 @@ __all__ = [
     "DiscogsConfig",
     "EmbyConfig",
     "ENRICHER_CONFIG_TYPES",
+    "EqualizerConfig",
     "FanartTvConfig",
     "FeedConfig",
     "FingerprintConfig",
@@ -177,6 +182,7 @@ __all__ = [
     "TheTvDbConfig",
     "THEMES_CONFIG_TYPES",
     "ThemesConfig",
+    "TimelineConfig",
     "TmdbConfig",
     "UlanziConfig",
     "UnsplashWallpaperConfig",

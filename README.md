@@ -90,9 +90,15 @@ Currently implemented:
   pulsing ambient glow behind the artwork, colored from it), Ken Burns
   (a slow, continuous pan/zoom on the artwork, the classic documentary
   effect), Vinyl (shows the album art as a spinning record - music only),
-  and Media Mosaic (a grid of other artwork for the same item - other
-  albums, other posters/fanart - alongside the current pick), with more
-  themes still being added - see the Display Themes roadmap
+  Media Mosaic (a grid of other artwork for the same item - other albums,
+  other posters/fanart - alongside the current pick), Timeline (a
+  list of the artist's other albums - music only, needs `enrichers.lidarr`
+  configured or it just shows the current album), and Equalizer (a
+  decorative bar/wave animation suggesting audio activity - music only,
+  not driven by a real audio signal), with more themes still being added
+  - see the Display Themes roadmap. `outputs.themes[].auto_rotate` can
+  optionally cycle between named presets (subsets of the enabled themes
+  above) on a timer, instead of always showing all of them at once
 - **Idle wallpapers**: Unsplash, Pexels, local folders (random pictures
   from your own collection - see `idle.local` below), Last.fm scrobble
   history (album art from your recent scrobbles), and/or your own music

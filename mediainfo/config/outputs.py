@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from typing import Dict, List
 
 import pydantic
 
@@ -139,6 +140,31 @@ class WebConfig(_OutputFilterMixin):
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class AutoRotateConfig:
+    """Cycles the themes output between named presets - each a subset of
+    the currently enabled themes - instead of always showing every
+    enabled theme's data at once. Every enabled theme's CSS/JS still
+    loads and its prepare() still runs every tick unchanged (see
+    ThemesOutput._prepare_themes) - only which themes' payload entries
+    actually reach the browser is filtered by the currently active
+    preset, so rotating is instant with no re-computation.
+
+    Off by default (enabled=False, or enabled with no presets) - the
+    output falls back to its pre-auto-rotate behavior of showing every
+    enabled theme simultaneously, unaffected."""
+
+    enabled: bool = False
+    # Seconds between rotating to the next preset.
+    interval_seconds: int = 60
+    # preset name -> list of theme names active while that preset is
+    # showing, e.g. {"minimal": ["color_palette"], "full": ["glow",
+    # "vinyl", "timeline"]}. A preset naming an unknown or disabled theme
+    # is accepted (just never produces a payload entry, same as any
+    # unrequested theme) - see ThemesOutput._active_theme_names().
+    presets: Dict[str, List[str]] = dataclasses.field(default_factory=dict)
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class ThemesConfig(_OutputFilterMixin):
     """A completely separate display from `web` (its own port, its own
     page) that layers selectable, combinable visual effects ("Display
@@ -159,6 +185,9 @@ class ThemesConfig(_OutputFilterMixin):
     # dataclass (mediainfo.config.themes.THEMES_CONFIG_TYPES) validates
     # its own entry via parse_themes(), called from ThemesOutput.__init__.
     themes: dict = dataclasses.field(default_factory=dict)
+    # Optionally cycle between named subsets of the enabled themes above,
+    # instead of always showing all of them at once - see AutoRotateConfig.
+    auto_rotate: AutoRotateConfig = dataclasses.field(default_factory=AutoRotateConfig)
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))

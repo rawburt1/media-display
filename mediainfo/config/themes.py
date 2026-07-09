@@ -137,6 +137,47 @@ class MediaMosaicConfig:
     max_tiles: int = 6
 
 
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class EqualizerConfig:
+    # A purely decorative "now playing audio" bar/wave animation - see
+    # mediainfo/themes/equalizer.py. NOT a real audio visualizer: no
+    # source in this codebase exposes a PCM/FFT signal to react to, so
+    # this is a continuous, self-driven CSS animation that just suggests
+    # audio activity while music plays. Music-only by design (like
+    # Vinyl), gated on now_playing.media_type == "music".
+    enabled: bool = False
+    style: str = "bars"  # "bars" | "wave"
+    # Full-width strip along this screen edge - all four corners are
+    # already claimed by other themes' defaults, see the module docstring
+    # in mediainfo/themes/equalizer.py.
+    position: str = "bottom"  # "bottom" | "top"
+    # Number of bars (style="bars" only).
+    bar_count: int = 24
+    # 0-1 - how visible the effect is.
+    opacity: float = 0.7
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class TimelineConfig:
+    # A list of the artist's other albums alongside the current one - see
+    # mediainfo/themes/timeline.py. Music-only by design (built from
+    # NowPlaying.discography, only ever populated for music - see the
+    # roadmap plan's media-type coverage table; a TV series episode-list
+    # equivalent is explicitly deferred pending a Sonarr-side data source
+    # that doesn't exist today).
+    #
+    # Degrades to showing just the current album when no discography is
+    # available (the common case - discography needs the optional,
+    # off-by-default Lidarr enricher configured and the artist found in
+    # it), rather than hiding - and reports that degraded state via
+    # ThemesOutput.health_check() so it's visible on /health instead of
+    # silently looking empty.
+    enabled: bool = False
+    corner: str = "top-left"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    # Cap on how many albums to list.
+    max_albums: int = 8
+
+
 # Registry mapping theme name to its config dataclass type. Adding a new
 # theme starts here (and in mediainfo.registries.THEME_CLASSES, and
 # mediainfo.themes.<name> for the implementation - see
@@ -145,9 +186,11 @@ class MediaMosaicConfig:
 THEMES_CONFIG_TYPES: Dict[str, type] = {
     "blurred_background": BlurredBackgroundConfig,
     "color_palette": ColorPaletteConfig,
+    "equalizer": EqualizerConfig,
     "glow": GlowConfig,
     "ken_burns": KenBurnsConfig,
     "media_mosaic": MediaMosaicConfig,
+    "timeline": TimelineConfig,
     "vinyl": VinylThemeConfig,
     "word_cloud": WordCloudConfig,
 }

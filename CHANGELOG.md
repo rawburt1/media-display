@@ -109,6 +109,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   "other artwork" in the relevant sense) and degrades to a single tile
   when only one candidate is available, rather than hiding. The
   currently-showing tile gets a highlighted border.
+- **Timeline theme** (`outputs.themes.themes.timeline`): a list of the
+  artist's other albums alongside the current one (`corner`,
+  `max_albums`), built from `NowPlaying.discography` (Lidarr). Music-only
+  by design. Degrades to showing just the current album when no
+  discography is available - the common case, since Lidarr is optional
+  and off by default - rather than hiding, and now that's genuinely
+  visible: `ThemesOutput` gained a `health_check()` that aggregates every
+  enabled theme's own `health_detail()` (e.g. "no discography - showing
+  current album only") into the existing system-wide `/health` JSON, the
+  same way any other output already contributes to it - no new endpoint
+  needed. Every Display Theme can use this same hook going forward for
+  its own degraded-state reporting, not just Timeline.
+- **Display Themes auto-rotate** (`outputs.themes.auto_rotate`): optionally
+  cycle the themes output between named presets - subsets of the themes
+  enabled under `outputs.themes.themes` - instead of always showing every
+  enabled theme's data at once (`enabled`, `interval_seconds`, `presets:
+  {name: [theme, ...]}`). Every enabled theme's CSS/JS still loads and its
+  `prepare()` still runs every tick unchanged regardless of the active
+  preset; only which themes' payload entries reach the browser is
+  filtered, so rotating is instant with no re-render or page reload. Off
+  by default, or on with no presets configured - either way every enabled
+  theme keeps showing simultaneously, unaffected.
+- **Equalizer theme** (`outputs.themes.themes.equalizer`): a decorative
+  bar or wave animation (`style: bars|wave`, `position: bottom|top`,
+  `bar_count`, `opacity`) suggesting audio activity while music plays.
+  Music-only by design, like Vinyl. Explicitly **not** a real audio
+  visualizer - no source in this codebase exposes an actual PCM/FFT audio
+  signal, so the animation is purely a self-driven, continuous CSS
+  loop (randomized per-bar timing/delay client-side to desynchronize the
+  bars, or a seamlessly-tiled scrolling SVG wave), never reacting to the
+  real audio.
 - **Playback history**: a persistent log of everything that has played
   (SQLite, `history:` config section, on by default), browsable at the
   web output's new `/history` page - grouped by day, with thumbnails

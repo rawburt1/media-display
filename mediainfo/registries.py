@@ -93,9 +93,11 @@ OUTPUT_EXTRA_ARGS = {
 THEME_CLASSES: dict[str, Union[str, type]] = {
     "blurred_background": "mediainfo.themes.blurred_background.BlurredBackgroundTheme",
     "color_palette": "mediainfo.themes.color_palette.ColorPaletteTheme",
+    "equalizer": "mediainfo.themes.equalizer.EqualizerTheme",
     "glow": "mediainfo.themes.glow.GlowTheme",
     "ken_burns": "mediainfo.themes.ken_burns.KenBurnsTheme",
     "media_mosaic": "mediainfo.themes.media_mosaic.MediaMosaicTheme",
+    "timeline": "mediainfo.themes.timeline.TimelineTheme",
     "vinyl": "mediainfo.themes.vinyl.VinylTheme",
     "word_cloud": "mediainfo.themes.word_cloud.WordCloudTheme",
 }
