@@ -8,12 +8,23 @@ Skips items that already have a rating (e.g. from the OMDb enricher) rather
 than overwriting it, and never clears an existing rating on a miss - so
 this and enrichers.omdb can both be enabled at once without one undoing
 the other's result depending on which happens to run first.
+
+Optionally (config.fetch_cast, off by default) also populates
+NowPlaying.cast - top-billed cast members with name/character/headshot,
+used by the Cast/Crew Mosaic Display Theme. This is a fully independent
+code path from the rating logic above (own cache, own id-resolution
+fallback) so it can't affect the already-established rating behavior.
+TV credits are show-level (/tv/{id}/credits - the show's regular cast),
+not per-episode guest stars - TMDb's per-episode credits endpoint needs a
+season+episode number NowPlaying doesn't track, a deliberate v1
+simplification (same spirit as other themes' own documented
+simplifications, e.g. Vinyl's lack of real play/pause detection).
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import requests
 
@@ -57,6 +68,33 @@ def fetch_rating(api_key: str, url: str) -> Optional[float]:
         return None
     response.raise_for_status()
     return _round(response.json().get("vote_average"))
+
+
+def fetch_cast(api_key: str, endpoint: str, tmdb_id: str, limit: int) -> List[Dict[str, str]]:
+    """Top-billed cast for a movie/TV show (endpoint: "movie" or "tv"),
+    capped to `limit`, most-prominent first (TMDb's own `cast` list is
+    already ordered by billing). Entries with no name are skipped;
+    `photo_url` is "" when TMDb has no headshot on file for that person.
+
+    Uses TMDb's "h632" profile size (~421x632 for a standard 2:3
+    headshot), not the smaller "w185" thumbnail used for e.g. the config
+    UI's own tiny previews - ImageCache's default min_width/min_height
+    (400x400, see mediainfo/cache.py) would silently reject "w185"
+    (185px wide) entirely, so every cast photo would 404 through the
+    Cast/Crew Mosaic theme."""
+    response = _get(api_key, f"{_BASE_URL}/{endpoint}/{tmdb_id}/credits")
+    if response.status_code == 404:
+        return []
+    response.raise_for_status()
+    cast = response.json().get("cast", [])[:limit]
+    return [
+        {
+            "name": member["name"],
+            "character": member.get("character", ""),
+            "photo_url": image_url(member.get("profile_path"), "h632") or "",
+        }
+        for member in cast if member.get("name")
+    ]
 
 
 def _best_match(results: list, year: Optional[int], date_field: str) -> Optional[dict]:
@@ -117,25 +155,30 @@ class TmdbEnricher(ArtworkEnricher):
         self.config = config
         # Cache misses too (None), keyed by (media_type, tmdb id or title).
         self._cache: Dict[tuple, Optional[float]] = {}
+        # Independent cache for the optional cast fetch below - keyed the
+        # same way, but never shares an entry with _cache (one holds a
+        # rating, the other a cast list).
+        self._cast_cache: Dict[tuple, List[Dict[str, str]]] = {}
 
     def enrich(self, now_playing: NowPlaying) -> None:
         if now_playing.media_type not in ("movie", "episode"):
             return
-        if now_playing.rating is not None:
-            return
 
         endpoint = "movie" if now_playing.media_type == "movie" else "tv"
-        tmdb_id = now_playing.ids.get("tmdb")
-        cache_key = (endpoint, tmdb_id or now_playing.title)
 
-        if cache_key in self._cache:
-            rating = self._cache[cache_key]
-        else:
-            rating = self._lookup(endpoint, tmdb_id, now_playing)
-            self._cache[cache_key] = rating
+        if now_playing.rating is None:
+            tmdb_id = now_playing.ids.get("tmdb")
+            cache_key = (endpoint, tmdb_id or now_playing.title)
+            if cache_key in self._cache:
+                rating = self._cache[cache_key]
+            else:
+                rating = self._lookup(endpoint, tmdb_id, now_playing)
+                self._cache[cache_key] = rating
+            if rating is not None:
+                now_playing.rating = rating
 
-        if rating is not None:
-            now_playing.rating = rating
+        if self.config.fetch_cast and not now_playing.cast:
+            now_playing.cast = self._lookup_cast(endpoint, now_playing)
 
     def _lookup(
         self, endpoint: str, tmdb_id: Optional[str], now_playing: NowPlaying
@@ -153,6 +196,33 @@ class TmdbEnricher(ArtworkEnricher):
         except Exception:
             logger.exception("TMDb enrichment error for %r", now_playing.title)
             return None
+
+    def _lookup_cast(self, endpoint: str, now_playing: NowPlaying) -> List[Dict[str, str]]:
+        cache_key = (endpoint, now_playing.ids.get("tmdb") or now_playing.title, now_playing.year)
+        if cache_key in self._cast_cache:
+            return self._cast_cache[cache_key]
+
+        cast = self._fetch_cast(endpoint, now_playing)
+        self._cast_cache[cache_key] = cast
+        return cast
+
+    def _fetch_cast(self, endpoint: str, now_playing: NowPlaying) -> List[Dict[str, str]]:
+        try:
+            tmdb_id = now_playing.ids.get("tmdb") or self._resolve_id_via_search(endpoint, now_playing)
+            if not tmdb_id:
+                return []
+            return fetch_cast(self.config.api_key, endpoint, tmdb_id, self.config.cast_size)
+        except Exception:
+            logger.exception("TMDb cast enrichment error for %r", now_playing.title)
+            return []
+
+    def _resolve_id_via_search(self, endpoint: str, now_playing: NowPlaying) -> Optional[str]:
+        if not now_playing.title:
+            return None
+        date_field = "release_date" if endpoint == "movie" else "first_air_date"
+        results = search(self.config.api_key, endpoint, now_playing.title, now_playing.year)
+        result = _best_match(results, now_playing.year, date_field)
+        return str(result["id"]) if result and result.get("id") else None
 
     def test_connection(self) -> Tuple[bool, str]:
         try:

@@ -789,6 +789,35 @@ outputs:
         # Cap on how many tiles to include.
         max_tiles: 6
 
+      # A grid of top-billed cast headshots for the current movie/TV
+      # item. Needs enrichers.tmdb.fetch_cast enabled above - otherwise
+      # degrades to nothing (reported on /health). Movie/TV only.
+      cast_mosaic:
+        enabled: true
+        # "top-right" (default), "bottom-right", "bottom-left",
+        # "top-left", or "center".
+        corner: top-right
+        # Max width as a percentage of screen width.
+        size_vw: 30
+        # Cap on how many cast members to show - further capped by
+        # enrichers.tmdb.cast_size above.
+        max_cast: 6
+
+      # A portrait card with the current artist's photo and a short bio
+      # blurb. Reuses the same artist photo lookup MediaDataStore already
+      # does (needs enrichers.mediadata enabled) and NowPlaying.summary
+      # (needs enrichers.wikipedia enabled) - no extra setup beyond that.
+      # Degrades to nothing (reported on /health) when no photo is found.
+      artist_spotlight:
+        enabled: true
+        # "bottom-left" (default), "bottom-right", "top-right",
+        # "top-left", or "center".
+        corner: bottom-left
+        # Max width as a percentage of screen width.
+        size_vw: 25
+        # Show a short bio snippet below the artist name.
+        show_bio: true
+
       # A list of the artist's other albums alongside the current one.
       # Music only. Needs enrichers.lidarr configured with the playing
       # artist actually in your Lidarr library to show real other albums
@@ -818,6 +847,31 @@ outputs:
         bar_count: 24
         # How visible the effect is, 0 (invisible) to 1 (fully visible).
         opacity: 0.7
+
+      # A karaoke-style ticker highlighting the current line of
+      # time-synced lyrics. Music only - needs NowPlaying.synced_lyrics
+      # populated (e.g. by text_enrichers.lrclib) -
+      # degrades to nothing (reported on /health) when unavailable.
+      lyrics_ticker:
+        enabled: true
+        # Full-width strip along this edge - "top" (default) or "bottom".
+        position: top
+        # Show the upcoming line, faded, below the current one.
+        show_next_line: true
+
+      # A real-data (not decorative) full-width playback progress border
+      # along one screen edge. Works for music, movies, and TV alike,
+      # whenever the source reports both position and duration. A
+      # separate element from the themes page's own small built-in
+      # progress bar under the title/subtitle - this one is a permanent
+      # full-width border.
+      progress_bar:
+        enabled: true
+        # Full-width strip along this edge - "bottom" (default) or "top".
+        position: bottom
+        thickness_px: 6
+        # A CSS color for the filled portion.
+        color: "#ffffff"
 
     # Optionally cycle between named subsets of the themes enabled above,
     # instead of always showing every one of them at once. Every enabled
@@ -983,6 +1037,13 @@ enrichers:
   tmdb:
     enabled: true
     api_key: YOUR_TMDB_API_KEY_OR_READ_ACCESS_TOKEN
+    # Off by default - one extra TMDb API call per new movie/TV item, to
+    # populate a top-billed cast list (name/character/headshot) for the
+    # themes output's Cast/Crew Mosaic below. TV credits are the show's
+    # regular cast, not per-episode guest stars.
+    fetch_cast: false
+    # Cap on how many top-billed cast members to store.
+    cast_size: 8
 
   # OMDb — IMDb rating (0-10) for movies and TV shows, also shown by the
   # `info` output. Free API key from https://www.omdbapi.com/apikey.aspx

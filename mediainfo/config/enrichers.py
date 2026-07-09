@@ -97,6 +97,13 @@ class TmdbConfig:
     # Token" (a JWT - detected automatically by its two dots and sent as a
     # Bearer header instead of a query param).
     api_key: str = ""
+    # Off by default - one extra TMDb API call per new movie/TV item, to
+    # populate NowPlaying.cast (used by the Cast/Crew Mosaic Display
+    # Theme). TV credits are show-level (regular cast), not per-episode
+    # guest stars.
+    fetch_cast: bool = False
+    # Cap on how many top-billed cast members to store.
+    cast_size: int = 8
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))

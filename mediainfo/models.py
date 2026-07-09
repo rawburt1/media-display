@@ -91,6 +91,11 @@ class NowPlaying:
     # calls its own output ("mood", "fun_fact", "context", ...) rather than
     # fixed fields, since the exact set is still to be decided.
     ai_text: Dict[str, str] = field(default_factory=dict)
+    # Top-billed cast (movies/TV), e.g. from the TMDb enricher's optional
+    # credits fetch (enrichers.tmdb.fetch_cast) - each
+    # {"name", "character", "photo_url"}; photo_url is "" when TMDb has
+    # no headshot for that person.
+    cast: List[Dict[str, str]] = field(default_factory=list)
 
     @property
     def identity(self) -> tuple:

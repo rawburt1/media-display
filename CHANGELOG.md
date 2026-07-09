@@ -140,6 +140,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   loop (randomized per-bar timing/delay client-side to desynchronize the
   bars, or a seamlessly-tiled scrolling SVG wave), never reacting to the
   real audio.
+- **Lyrics Ticker theme** (`outputs.themes.themes.lyrics_ticker`): a
+  karaoke-style ticker highlighting the current line of time-synced
+  lyrics (`position: top|bottom`, `show_next_line`), built from
+  `NowPlaying.synced_lyrics` (LRC text, e.g. from `text_enrichers.lrclib`) -
+  parsed once per item change into timed cues, then advanced client-side
+  against playback position using the same local, drift-corrected clock
+  trick the themes page's own small progress bar already uses. Music
+  only; degrades to nothing (reported via `health_detail()`) when synced
+  lyrics aren't available for the current track.
+- **Now Playing Progress theme** (`outputs.themes.themes.progress_bar`):
+  a real-data (not decorative, unlike Equalizer) full-width playback
+  progress border along one screen edge (`position: top|bottom`,
+  `thickness_px`, `color`). Media-type-agnostic - shows whenever a
+  source reports both position and duration, regardless of music/movie/
+  episode. A brand new element, separate from the themes page's own
+  small built-in progress bar under the title/subtitle - this one is a
+  permanent full-width border, not a replacement for it. `color` is
+  threaded through the WebSocket payload rather than spliced into
+  generated CSS, the same precedent Glow's `fixed_color` already
+  established.
+- **Cast/Crew Mosaic theme** (`outputs.themes.themes.cast_mosaic`): a
+  grid of top-billed cast headshots for the current movie/TV item
+  (`corner`, `size_vw`, `max_cast`), each a real DOM tile with a
+  name/character caption (never baked into pixels - this project has no
+  bundled font). Needs a new prerequisite: `enrichers.tmdb.fetch_cast`
+  (off by default, one extra TMDb API call per new item) and
+  `cast_size` populate a new `NowPlaying.cast` field via a new
+  `fetch_cast()` TMDb credits lookup, fully independent of the existing
+  rating-fetch code path. TV credits are show-level (regular cast), not
+  per-episode guest stars. Degrades to nothing (reported via
+  `health_detail()`) when no cast data is available. Also generalizes
+  the Display Theme plugin interface: `ThemeRenderResult` gained
+  `derived_image_paths` (a list, alongside the existing single
+  `derived_image_path`) for themes that need several individually-
+  addressable images rather than one baked composite.
+- **Artist Spotlight theme** (`outputs.themes.themes.artist_spotlight`):
+  a portrait card with the current artist's photo and a short bio blurb
+  (`corner`, `size_vw`, `show_bio`). Fully "ready now" - reuses two
+  already-existing sources with no new plumbing: `MediaDataStore.
+  get_artist_photo()` (Wikipedia-first/Last.fm-fallback, the same infra
+  Word Cloud's music branch already needs) for the photo, and
+  `NowPlaying.summary` for the bio (the Wikipedia enricher already
+  populates it for music too, not just movies/TV). Resolves the artist
+  name from `subtitle` for music or the dedicated `artist` field for
+  non-music broadcasts (e.g. an SVT concert), matching the Wikipedia
+  enricher's own logic for which items get an artist-style lookup.
+  Degrades to nothing (reported via `health_detail()`) when no photo is
+  found for a known artist.
 - **Playback history**: a persistent log of everything that has played
   (SQLite, `history:` config section, on by default), browsable at the
   web output's new `/history` page - grouped by day, with thumbnails
