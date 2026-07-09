@@ -89,9 +89,10 @@ Currently implemented:
   described under mediadata above for music), Glow (a soft, slowly
   pulsing ambient glow behind the artwork, colored from it), Ken Burns
   (a slow, continuous pan/zoom on the artwork, the classic documentary
-  effect), and Vinyl (shows the album art as a spinning record - music
-  only), with more themes still being added - see the Display Themes
-  roadmap
+  effect), Vinyl (shows the album art as a spinning record - music only),
+  and Media Mosaic (a grid of other artwork for the same item - other
+  albums, other posters/fanart - alongside the current pick), with more
+  themes still being added - see the Display Themes roadmap
 - **Idle wallpapers**: Unsplash, Pexels, local folders (random pictures
   from your own collection - see `idle.local` below), Last.fm scrobble
   history (album art from your recent scrobbles), and/or your own music

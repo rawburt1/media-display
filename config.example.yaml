@@ -774,6 +774,21 @@ outputs:
         # Seconds for one full rotation - lower spins faster.
         rotation_seconds: 8
 
+      # A grid of related artwork alongside the current pick - other
+      # albums by the artist, other posters/fanart for the item. Only
+      # uses artwork already available for the current item (never
+      # fetches anything new); degrades to a single tile when just one
+      # candidate image exists, rather than hiding.
+      media_mosaic:
+        enabled: true
+        # "top-right" (default), "bottom-right", "bottom-left",
+        # "top-left", or "center".
+        corner: top-right
+        # Max width as a percentage of screen width.
+        size_vw: 30
+        # Cap on how many tiles to include.
+        max_tiles: 6
+
 
 # ---------------------------------------------------------------------------
 # Enrichers  (extra artwork from online databases)
