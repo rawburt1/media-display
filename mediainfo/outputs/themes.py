@@ -24,8 +24,9 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from flask import Flask, jsonify, render_template, request, send_file
 from flask_sock import Sock
@@ -83,8 +84,35 @@ class ThemesOutput(Output):
         self._known_images: Dict[str, Path] = {}
         self._clients: set[Any] = set()
         self._clients_lock = threading.Lock()
+
+        # Auto-rotate (see config.AutoRotateConfig / _active_theme_names):
+        # preset names in stable config order, the currently active one
+        # (guarded by _lock, like the other mutable state above), and a
+        # background thread that advances it. Left empty/None when
+        # disabled or no presets are configured, which is what
+        # _active_theme_names() checks to fall back to "show every
+        # enabled theme" - today's pre-Phase-8 behavior.
+        self._preset_names: List[str] = (
+            list(config.auto_rotate.presets.keys()) if config.auto_rotate.enabled else []
+        )
+        self._active_preset: Optional[str] = self._preset_names[0] if self._preset_names else None
+        self._warn_unknown_preset_themes()
+        if self._preset_names:
+            threading.Thread(target=self._auto_rotate_loop, daemon=True).start()
+
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
+
+    def _warn_unknown_preset_themes(self) -> None:
+        enabled_names = {theme.name for theme in self._themes}
+        for preset_name, theme_names in self.config.auto_rotate.presets.items():
+            unknown = [n for n in theme_names if n not in enabled_names]
+            if unknown:
+                logger.warning(
+                    "Themes output: auto_rotate preset %r names theme(s) %s that "
+                    "aren't enabled - they'll never appear while this preset is active",
+                    preset_name, unknown,
+                )
 
     def set_media_data_store(self, store: Optional[MediaDataStore]) -> None:
         """Wired in post-construction by wiring.wire_media_data_store() -
@@ -115,6 +143,38 @@ class ThemesOutput(Output):
                 continue
             themes.append(theme_cls())
         return themes
+
+    def _auto_rotate_loop(self) -> None:
+        interval = max(1, self.config.auto_rotate.interval_seconds)
+        while True:
+            time.sleep(interval)
+            self._advance_preset()
+
+    def _advance_preset(self) -> None:
+        """Move to the next configured preset (wrapping around) and push
+        the re-filtered payload - split out from _auto_rotate_loop so
+        tests can trigger a rotation directly instead of sleeping."""
+        with self._lock:
+            # Invariant: whenever _preset_names is non-empty (the only
+            # time this method runs), _active_preset is always one of its
+            # members - set from _preset_names[0] at construction and
+            # only ever reassigned here, to another _preset_names member.
+            assert self._active_preset is not None
+            idx = self._preset_names.index(self._active_preset)
+            self._active_preset = self._preset_names[(idx + 1) % len(self._preset_names)]
+        self._push(self._get_payload())
+
+    def _active_theme_names(self) -> Optional[Set[str]]:
+        """The theme names allowed in the outgoing payload right now, or
+        None to mean "no filtering - include every prepared theme" (auto-
+        rotate off, or on with no presets configured - the default,
+        backward-compatible behavior)."""
+        if not self._preset_names:
+            return None
+        with self._lock:
+            active_preset = self._active_preset
+        assert active_preset is not None  # see _advance_preset's invariant note
+        return set(self.config.auto_rotate.presets.get(active_preset, []))
 
     def _client_assets(self):
         for theme in self._themes:
@@ -172,6 +232,9 @@ class ThemesOutput(Output):
         add_playback_position(payload, now_playing)
         if image_path is not None:
             payload["image"] = f"/image/current?v={image_path.stem}"
+        if self._preset_names:
+            with self._lock:
+                payload["active_preset"] = self._active_preset
 
         if artwork is not None and image_path is not None:
             themes_payload = self._prepare_themes(now_playing, artwork, image_path, cache)
@@ -188,6 +251,11 @@ class ThemesOutput(Output):
     ) -> dict:
         if cache is None:
             return {}
+        # Every enabled theme still prepares every tick regardless of the
+        # active auto-rotate preset (see _active_theme_names) - only which
+        # entries make it into `result` is filtered below, so rotating
+        # presets is instant and never waits on prepare() to catch up.
+        active_names = self._active_theme_names()
         result: dict = {}
         for theme in self._themes:
             try:
@@ -205,8 +273,28 @@ class ThemesOutput(Output):
                 with self._lock:
                     self._known_images[rendered.derived_image_path.stem] = rendered.derived_image_path
                 entry["image"] = f"/image/current?v={rendered.derived_image_path.stem}"
+            if active_names is not None and theme.name not in active_names:
+                continue
             result[theme.name] = entry
         return result
+
+    def health_check(self) -> Optional[dict]:
+        """Aggregates each enabled theme's own health_detail() (e.g.
+        Timeline reporting "no discography - showing current album only"
+        when Lidarr isn't configured) into {"themes": {name: detail}} -
+        picked up automatically for the system-wide /health JSON by
+        health.make_health_provider's generic `output.health_check()`
+        call for every output, no separate /health route needed here."""
+        degraded: Dict[str, dict] = {}
+        for theme in self._themes:
+            try:
+                detail = theme.health_detail(self._theme_config_for(theme))
+            except Exception:
+                logger.exception("Theme %r failed to report health", theme.name)
+                continue
+            if detail:
+                degraded[theme.name] = detail
+        return {"themes": degraded} if degraded else None
 
     def _push(self, payload: dict) -> None:
         broadcast(self._clients_lock, self._clients, payload)

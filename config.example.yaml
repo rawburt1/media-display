@@ -789,6 +789,59 @@ outputs:
         # Cap on how many tiles to include.
         max_tiles: 6
 
+      # A list of the artist's other albums alongside the current one.
+      # Music only. Needs enrichers.lidarr configured with the playing
+      # artist actually in your Lidarr library to show real other albums
+      # - otherwise it degrades to showing just the current album (still
+      # shown, not hidden), and reports that degraded state on /health.
+      timeline:
+        enabled: true
+        # "top-left" (default), "bottom-right", "bottom-left",
+        # "top-right", or "center".
+        corner: top-left
+        # Cap on how many albums to list.
+        max_albums: 8
+
+      # A decorative bar/wave animation suggesting audio activity. Music
+      # only. NOT a real audio visualizer - no source in this project
+      # exposes an actual audio signal (PCM/FFT) to react to; this is a
+      # continuous, self-driven CSS animation.
+      equalizer:
+        enabled: true
+        # "bars" (default) or "wave".
+        style: bars
+        # Full-width strip along this edge - "bottom" (default) or "top".
+        # All four screen corners are already used by other themes'
+        # defaults above.
+        position: bottom
+        # Number of bars, style="bars" only.
+        bar_count: 24
+        # How visible the effect is, 0 (invisible) to 1 (fully visible).
+        opacity: 0.7
+
+    # Optionally cycle between named subsets of the themes enabled above,
+    # instead of always showing every one of them at once. Every enabled
+    # theme's CSS/JS still loads and it still runs every tick regardless
+    # - only which themes' data actually reaches the browser is filtered
+    # by whichever preset is currently active, so switching is instant.
+    # Off by default (or on with no presets below) - every enabled theme
+    # above just shows simultaneously, same as if this section didn't
+    # exist at all.
+    auto_rotate:
+      enabled: false
+      # Seconds between rotating to the next preset.
+      interval_seconds: 60
+      # preset name -> list of theme names active while it's showing.
+      # A name not listed under `themes:` above simply never appears.
+      presets:
+        minimal:
+        - color_palette
+        full:
+        - color_palette
+        - blurred_background
+        - glow
+        - vinyl
+
 
 # ---------------------------------------------------------------------------
 # Enrichers  (extra artwork from online databases)
