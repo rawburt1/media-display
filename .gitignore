@@ -54,3 +54,6 @@ pictures
 
 # Editor swap files
 *.swp
+
+# Local deploy script (host-specific rsync target)
+deploy-vinyl-recognizer-rp4.sh
