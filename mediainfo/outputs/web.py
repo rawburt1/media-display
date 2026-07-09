@@ -75,6 +75,12 @@ class _ClientRotation:
 
 
 class WebOutput(Output):
+    # Unlike Pixoo/Nest Hub/etc., the browser page has room (and enough
+    # resolution) to show a lyrics word-cloud image legibly - the only
+    # output that opts into Artwork.is_wordcloud images (see
+    # Output.show_wordclouds and orchestrator_artwork.py).
+    show_wordclouds = True
+
     def __init__(
         self,
         config: WebConfig,

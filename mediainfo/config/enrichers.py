@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pydantic
 
 
@@ -40,6 +42,19 @@ class LibraryEnricherConfig:
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class MediaDataWordcloudConfig:
+    # Whether to render a lyrics word-cloud PNG for the playing track,
+    # colored from its album art, once both are available in the local
+    # media-data cache - stored next to the track's .lrc file (see
+    # MediaDataStore.get_track_wordcloud). A separate switch from the
+    # enricher's own `enabled` above, since this adds a real CPU cost per
+    # newly-seen track (word-cloud layout) and an extra dependency (the
+    # `wordcloud` package, which pulls in matplotlib) that album
+    # art/artist photo caching alone doesn't need. Off by default.
+    enabled: bool = False
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MediaDataArtworkEnricherConfig:
     # Checks the local unified media-data cache (see
     # mediainfo/media_data_store.py, configured via the top-level
@@ -48,6 +63,9 @@ class MediaDataArtworkEnricherConfig:
     # own; a cache miss falls through to a real MusicBrainz (free) /
     # Discogs (if enrichers.discogs.token is set) lookup.
     enabled: bool = False
+    wordcloud: MediaDataWordcloudConfig = dataclasses.field(
+        default_factory=MediaDataWordcloudConfig
+    )
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))

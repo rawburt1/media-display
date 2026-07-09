@@ -707,6 +707,14 @@ enrichers:
   # enricher after it a redundant lookup.
   mediadata:
     enabled: false
+    # Renders a lyrics word-cloud PNG for the playing track, colored from
+    # its album art, once both are cached locally - stored next to the
+    # track's .lrc file and shown on the web output (port 8090) only, not
+    # on Pixoo/Nest Hub/etc. Off by default: a separate switch from
+    # `enabled` above since it costs real CPU time per newly-seen track
+    # and needs the `wordcloud` package (pulls in matplotlib).
+    wordcloud:
+      enabled: false
 
   # Local music library — fills in album art for sources that don't
   # report an album at all (e.g. YouTube), by looking up the playing

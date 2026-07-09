@@ -182,9 +182,12 @@ class _ArtworkPipeline:
         tier: CacheTier = "music" if group.current.media_type == "music" else "default"
 
         skip_artist_photos = output.music_album_art_only and group.current.media_type == "music"
+        skip_wordclouds = not output.show_wordclouds
         for attempt in range(len(images)):
             artwork = images[state.order[(state.position + attempt) % len(state.order)]]
             if skip_artist_photos and artwork.is_artist_photo:
+                continue
+            if skip_wordclouds and artwork.is_wordcloud:
                 continue
             try:
                 image_path = self.cache.get_path(artwork, tier=tier)

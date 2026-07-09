@@ -126,7 +126,11 @@ Currently implemented:
   Last.fm) + album art (MusicBrainz, falling back to Discogs), and
   lyrics (LRCLIB) - existing `cache/`/`overrides/`/`posters/` are
   untouched and keep working exactly as before; this doesn't replace
-  them.
+  them. A further opt-in switch (`enrichers.mediadata.wordcloud.enabled`)
+  renders a lyrics word-cloud PNG per track, colored from its album art,
+  once both are cached - stored next to the track's `.lrc` file and shown
+  on the web output only (not on Pixoo/Nest Hub/etc., where dense text
+  doesn't read well).
 
 ## Setup
 

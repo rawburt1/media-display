@@ -14,6 +14,13 @@ album art additionally once an album is known - not fanart, since
 MediaDataStore's album fanart fetch is a guaranteed no-op today (neither
 MusicBrainz nor Discogs has a distinct "album background art" concept).
 Movies/episodes check both poster and fanart, since TMDb provides both.
+
+Also renders a lyrics word cloud for music, once lyrics and album art are
+both cached (marked is_wordcloud=True, so only WebOutput's
+show_wordclouds shows it - see orchestrator_artwork.py) - behind its own
+enrichers.mediadata.wordcloud.enabled switch (config.wordcloud.enabled),
+independent of this enricher's own `enabled` flag, since generation costs
+real CPU time per newly-seen track.
 """
 
 from __future__ import annotations
@@ -70,6 +77,13 @@ class MediaDataArtworkEnricher(ArtworkEnricher):
         path = store.get_album_art(artist, album, now_playing.year)
         self._append(now_playing, path, "Album art (mediadata)")
 
+        title = now_playing.title
+        if title and self.config.wordcloud.enabled:
+            wordcloud_path = store.get_track_wordcloud(artist, album, title, now_playing.year)
+            self._append(
+                now_playing, wordcloud_path, "Lyrics word cloud (mediadata)", is_wordcloud=True
+            )
+
     def _enrich_media(
         self,
         now_playing: NowPlaying,
@@ -87,12 +101,18 @@ class MediaDataArtworkEnricher(ArtworkEnricher):
 
     @staticmethod
     def _append(
-        now_playing: NowPlaying, path: Optional[Path], label: str, is_artist_photo: bool = False
+        now_playing: NowPlaying,
+        path: Optional[Path],
+        label: str,
+        is_artist_photo: bool = False,
+        is_wordcloud: bool = False,
     ) -> None:
         if path is None:
             return
         url = f"file://{path}"
         if not any(img.url == url for img in now_playing.images):
             now_playing.images.append(
-                Artwork(url=url, label=label, is_artist_photo=is_artist_photo)
+                Artwork(
+                    url=url, label=label, is_artist_photo=is_artist_photo, is_wordcloud=is_wordcloud
+                )
             )

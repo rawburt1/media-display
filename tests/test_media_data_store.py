@@ -1128,6 +1128,153 @@ def test_lyrics_and_artwork_share_the_same_album_metadata_file(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# get_track_wordcloud / refresh_track_wordcloud (lyrics word cloud - a
+# locally-rendered derived asset, not an external fetch; see
+# MediaDataStore._render_wordcloud)
+# ---------------------------------------------------------------------------
+
+def test_get_track_wordcloud_generates_when_missing(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"[00:01.00]hello world", "lrclib")):
+        store.get_track_lyrics("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
+    with patch.object(store, "_fetch_album_artwork", return_value=(b"art-bytes", "musicbrainz")):
+        store.get_album_art("Manfred Mann's Earth Band", "Watch", None)
+
+    with patch.object(
+        store, "_render_wordcloud", return_value=(b"wordcloud-bytes", "generated")
+    ) as render:
+        result = store.get_track_wordcloud(
+            "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
+        )
+
+    render.assert_called_once_with("[00:01.00]hello world", store.album_dir(
+        "Manfred Mann's Earth Band", "Watch", None) / "albumart.jpg")
+    expected_path = (
+        store.album_dir("Manfred Mann's Earth Band", "Watch", None)
+        / "Davy's on the Road Again.wordcloud_nomask.png"
+    )
+    assert result == expected_path
+    assert expected_path.read_bytes() == b"wordcloud-bytes"
+
+
+def test_get_track_wordcloud_returns_none_without_lyrics(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=None), \
+            patch.object(store, "get_album_art") as get_album_art, \
+            patch.object(store, "_render_wordcloud") as render:
+        result = store.get_track_wordcloud(
+            "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
+        )
+
+    assert result is None
+    get_album_art.assert_not_called()
+    render.assert_not_called()
+
+
+def test_get_track_wordcloud_returns_none_without_album_art(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"[00:01.00]hello", "lrclib")):
+        store.get_track_lyrics("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
+
+    with patch.object(store, "_fetch_album_artwork", return_value=None), \
+            patch.object(store, "_render_wordcloud") as render:
+        result = store.get_track_wordcloud(
+            "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
+        )
+
+    assert result is None
+    render.assert_not_called()
+
+
+def test_get_track_wordcloud_records_tracks_entry_in_album_metadata(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"[00:01.00]hello", "lrclib")):
+        store.get_track_lyrics("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
+    with patch.object(store, "_fetch_album_artwork", return_value=(b"art", "musicbrainz")):
+        store.get_album_art("Manfred Mann's Earth Band", "Watch", None)
+    with patch.object(store, "_render_wordcloud", return_value=(b"wc", "generated")):
+        store.get_track_wordcloud("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
+
+    metadata = store._read_metadata(store.album_dir("Manfred Mann's Earth Band", "Watch", None))
+    entry = metadata["tracks"]["Davy's on the Road Again"]["wordcloud"]
+    assert entry["path"] == "Davy's on the Road Again.wordcloud_nomask.png"
+    assert entry["source"] == "generated"
+    assert entry["last_checked"] == entry["last_updated"]
+
+
+def test_get_track_wordcloud_uses_cache_without_regenerating(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"[00:01.00]hello", "lrclib")):
+        store.get_track_lyrics("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
+    with patch.object(store, "_fetch_album_artwork", return_value=(b"art", "musicbrainz")):
+        store.get_album_art("Manfred Mann's Earth Band", "Watch", None)
+    with patch.object(store, "_render_wordcloud", return_value=(b"first-render", "generated")):
+        store.get_track_wordcloud("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
+
+    with patch.object(store, "_render_wordcloud") as render:
+        result = store.get_track_wordcloud(
+            "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
+        )
+
+    render.assert_not_called()
+    assert result.read_bytes() == b"first-render"
+
+
+def test_refresh_track_wordcloud_forces_regeneration_even_when_cached(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=(b"[00:01.00]hello", "lrclib")):
+        store.get_track_lyrics("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
+    with patch.object(store, "_fetch_album_artwork", return_value=(b"art", "musicbrainz")):
+        store.get_album_art("Manfred Mann's Earth Band", "Watch", None)
+    with patch.object(store, "_render_wordcloud", return_value=(b"first-render", "generated")):
+        store.get_track_wordcloud("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
+
+    with patch.object(store, "_render_wordcloud", return_value=(b"second-render", "generated")) as render:
+        updated = store.refresh_track_wordcloud(
+            "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
+        )
+
+    render.assert_called_once()
+    assert updated is True
+    assert store.get_track_wordcloud(
+        "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
+    ).read_bytes() == b"second-render"
+
+
+def test_refresh_track_wordcloud_returns_false_without_lyrics(tmp_path):
+    store = _store(tmp_path)
+    with patch.object(store, "_fetch_lyrics", return_value=None):
+        updated = store.refresh_track_wordcloud(
+            "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
+        )
+    assert updated is False
+
+
+def test_render_wordcloud_real_implementation(tmp_path):
+    """Exercises the real mediainfo.lyrics_wordcloud.generate() call (no
+    network involved - unlike the other _fetch_*'s "real implementation"
+    tests, there's no external boundary to mock here)."""
+    from PIL import Image
+
+    store = _store(tmp_path)
+    album_art_path = tmp_path / "art.jpg"
+    Image.new("RGB", (50, 50), (120, 140, 160)).save(album_art_path)
+
+    result = store._render_wordcloud("hello world\nhello again", album_art_path)
+
+    assert result is not None
+    content, source = result
+    assert source == "generated"
+    assert content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_render_wordcloud_logs_and_returns_none_on_failure(tmp_path):
+    store = _store(tmp_path)
+    result = store._render_wordcloud("hello world", tmp_path / "missing.jpg")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
 # MediaDataConfig/MediaDataRefreshConfig validation (pydantic dataclass
 # rollout - see mediainfo/config/shared.py; these two are converted
 # together since MediaDataConfig nests MediaDataRefreshConfig)
