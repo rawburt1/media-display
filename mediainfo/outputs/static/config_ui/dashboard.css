@@ -256,6 +256,19 @@ details.advanced-toggle > summary::-webkit-details-marker { display: none; }
 details.advanced-toggle > summary::before { content: "▸ "; }
 details.advanced-toggle[open] > summary::before { content: "▾ "; }
 
+/* First-run setup wizard (Fas 11) */
+.wizard-progress {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted); margin: 2px 0 14px;
+}
+.wizard-actions { margin-top: 16px; }
+.wizard-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--chip-bg); border: 1px solid var(--accent); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: var(--text);
+}
+.wizard-banner button[disabled] { opacity: 0.5; cursor: not-allowed; }
+
 @media (max-width: 860px) {
   #sidebar { display: none; }
   #topbar { display: flex; }

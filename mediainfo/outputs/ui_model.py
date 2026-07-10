@@ -118,3 +118,8 @@ class UiDashboard:
     # dimension from counts_by_status above (every component, by
     # status) - this is sources only, by activity.
     activity_summary: Dict[str, int] = dataclasses.field(default_factory=dict)
+    # True when no source and no output is enabled yet (Fas 11) - drives the
+    # config UI's first-run setup wizard auto-redirect. Computed fresh from
+    # the pipeline's enabled-component ids every request, never stored, so
+    # it self-corrects the moment a source and an output are both enabled.
+    needs_setup: bool = False
