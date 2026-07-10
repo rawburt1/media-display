@@ -73,17 +73,22 @@ function renderCategorySection(name) {
   }
   var category = CATEGORY_FOR_SECTION[name];
   var groups = CATEGORY_GROUPS[name];
+  var sectionItems = componentsData.filter(function(c) { return c.category === category; });
   var html = '<h1>' + esc(SECTION_TITLES[name]) + '</h1><p class="lede">Click a component to view or edit its settings.</p>';
+  html += filterBarHtml(name, sectionItems);
   var any = false;
   groups.forEach(function(group) {
-    var items = componentsData.filter(function(c) { return c.category === category && c.component_type === group.type; });
+    var items = sectionItems.filter(function(c) { return c.component_type === group.type; });
     if (!items.length) return;
     any = true;
+    html += '<div class="card-group">';
     if (groups.length > 1) html += '<h2 class="group-title">' + esc(group.label) + '</h2>';
-    html += '<div class="component-list">' + items.map(componentCard).join('') + '</div>';
+    html += '<div class="card-grid">' + items.map(function(c) { return cardTile(c, componentCard(c)); }).join('') + '</div>';
+    html += '</div>';
   });
   if (!any) html += '<div class="card"><span class="field-help">Nothing here yet.</span></div>';
   el.innerHTML = html;
+  applyCardFilters(name);
 }
 
 // ---------------------------------------------------------------------
@@ -450,13 +455,19 @@ function runDetailTest() {
 }
 
 // ---------------------------------------------------------------------
-// Health - action-oriented status list (Fas 6). Only components with a
-// real live health signal: sources/idle sources/enrichers/outputs -
-// themes/text_enrichers/flat sections always report health: "unknown"
-// (see ui_builder.py), same scope as the classic Status page's
-// /api/status. Filtering/search update visibility in place (no
-// re-render) so the search input never loses focus mid-keystroke - full
-// re-renders only happen on navigation or the 15s poll refresh.
+// Card grid: filtering + per-card hide (Fas 8), shared by Media/Metadata/
+// Appearance/Displays/Health. A component can appear on more than one of
+// these pages (e.g. a source shows on both Media and Health), so "hide"
+// is one global id set, not five independent ones - hide it from either
+// page and it disappears from both. Kept in localStorage: this is a
+// personal display preference, not config, so it doesn't touch
+// config.yaml or need a new API endpoint.
+//
+// Filtering (status chips + name search) reuses the exact in-place
+// DOM class-toggling approach Health's filter bar introduced in Fas 6
+// (toggle a "hidden" class rather than re-render), generalized to any
+// section: the search input never loses focus mid-keystroke, including
+// under the 15s poll tick (see dashboard.js's fetchComponents()).
 // ---------------------------------------------------------------------
 var HEALTH_TYPE_GROUPS = [
   { type: 'source', label: 'Sources' },
@@ -464,39 +475,111 @@ var HEALTH_TYPE_GROUPS = [
   { type: 'enricher', label: 'Enrichers' },
   { type: 'output', label: 'Displays' },
 ];
-var healthStatusFilter = 'all';
-var healthSearchQuery = '';
+var CARD_STATUS_FILTERS = ['all', 'connected', 'needs_configuration', 'error', 'disabled'];
+var sectionFilterState = {};
 
-function healthCardMatches(c) {
-  var statusOk = healthStatusFilter === 'all' || c.status === healthStatusFilter;
-  var searchOk = !healthSearchQuery || c.name.toLowerCase().indexOf(healthSearchQuery.toLowerCase()) !== -1;
+function getSectionFilterState(sectionName) {
+  if (!sectionFilterState[sectionName]) sectionFilterState[sectionName] = { status: 'all', query: '' };
+  return sectionFilterState[sectionName];
+}
+
+function loadHiddenCardIds() {
+  try {
+    var raw = localStorage.getItem('mediainfo-hidden-card-ids');
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) {
+    return new Set();
+  }
+}
+var hiddenCardIds = loadHiddenCardIds();
+function saveHiddenCardIds() {
+  try { localStorage.setItem('mediainfo-hidden-card-ids', JSON.stringify(Array.from(hiddenCardIds))); } catch (e) {}
+}
+
+// Wraps any card's HTML (componentCard()/healthCard()) with a hide/unhide
+// overlay button - deliberately NOT baked into componentCard() itself,
+// since Library's settings cards call componentCard() directly and must
+// stay exactly as they were (no grid, no hide button, no filter bar).
+function cardTile(c, innerHtml) {
+  var isHidden = hiddenCardIds.has(c.id);
+  return '<div class="card-tile" data-id="' + esc(c.id) + '">'
+    + '<button type="button" class="card-hide-btn" title="' + (isHidden ? 'Unhide' : 'Hide') + '" '
+    + 'aria-label="' + esc((isHidden ? 'Unhide ' : 'Hide ') + c.name) + '" '
+    + 'onclick="toggleCardHidden(event, \'' + esc(c.id) + '\')">' + (isHidden ? '↺' : '×') + '</button>'
+    + innerHtml
+    + '</div>';
+}
+
+// Hiding/unhiding isn't a text field mid-keystroke, so a full re-render
+// (rather than an in-place DOM tweak) is simplest and safe here.
+function toggleCardHidden(event, id) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (hiddenCardIds.has(id)) hiddenCardIds.delete(id); else hiddenCardIds.add(id);
+  saveHiddenCardIds();
+  if (currentSection === 'health') renderHealthSection();
+  else if (FILTERABLE_SECTIONS.indexOf(currentSection) !== -1) renderCategorySection(currentSection);
+}
+
+function filterBarHtml(sectionName, items) {
+  var state = getSectionFilterState(sectionName);
+  var hiddenCount = items.filter(function(c) { return hiddenCardIds.has(c.id); }).length;
+  var chips = CARD_STATUS_FILTERS.map(function(f) {
+    return '<button type="button" class="chip' + (state.status === f ? ' active' : '') + '" '
+      + 'data-filter="' + f + '" onclick="onCardFilterClick(\'' + sectionName + '\', \'' + f + '\')">'
+      + esc(f === 'all' ? 'All' : (STATUS_LABELS[f] || f)) + '</button>';
+  }).join('');
+  chips += '<button type="button" class="chip chip-hidden' + (state.status === 'hidden' ? ' active' : '') + '" '
+    + 'data-filter="hidden" onclick="onCardFilterClick(\'' + sectionName + '\', \'hidden\')">'
+    + 'Hidden (' + hiddenCount + ')</button>';
+  return '<div class="filters">' + chips
+    + '<input type="text" id="' + sectionName + '-search" class="filter-search-input" placeholder="Search…" '
+    + 'aria-label="Search by name" value="' + esc(state.query) + '" '
+    + 'oninput="onCardSearchInput(\'' + sectionName + '\', this.value)">'
+    + '</div>';
+}
+
+function cardMatchesFilters(c, sectionName) {
+  var state = getSectionFilterState(sectionName);
+  var isHidden = hiddenCardIds.has(c.id);
+  if (state.status === 'hidden') return isHidden;
+  if (isHidden) return false;
+  var statusOk = state.status === 'all' || c.status === state.status;
+  var searchOk = !state.query || c.name.toLowerCase().indexOf(state.query.toLowerCase()) !== -1;
   return statusOk && searchOk;
 }
 
-function applyHealthFilters() {
-  document.querySelectorAll('#section-health .health-card').forEach(function(card) {
-    var c = componentsById[card.dataset.id];
-    card.classList.toggle('hidden', !(c && healthCardMatches(c)));
+function applyCardFilters(sectionName) {
+  var sectionEl = document.getElementById('section-' + sectionName);
+  if (!sectionEl) return;
+  var hiddenCount = 0;
+  sectionEl.querySelectorAll('.card-tile[data-id]').forEach(function(tile) {
+    var c = componentsById[tile.dataset.id];
+    if (c && hiddenCardIds.has(c.id)) hiddenCount++;
+    tile.classList.toggle('hidden', !(c && cardMatchesFilters(c, sectionName)));
   });
-  document.querySelectorAll('#section-health .health-group').forEach(function(group) {
+  sectionEl.querySelectorAll('.card-group').forEach(function(group) {
     var anyVisible = false;
-    group.querySelectorAll('.health-card').forEach(function(card) {
-      if (!card.classList.contains('hidden')) anyVisible = true;
+    group.querySelectorAll('.card-tile').forEach(function(tile) {
+      if (!tile.classList.contains('hidden')) anyVisible = true;
     });
     group.classList.toggle('hidden', !anyVisible);
   });
-  document.querySelectorAll('#section-health .chip[data-health-filter]').forEach(function(chip) {
-    chip.classList.toggle('active', chip.dataset.healthFilter === healthStatusFilter);
+  var state = getSectionFilterState(sectionName);
+  sectionEl.querySelectorAll('.chip[data-filter]').forEach(function(chip) {
+    chip.classList.toggle('active', chip.dataset.filter === state.status);
   });
+  var hiddenChip = sectionEl.querySelector('.chip-hidden');
+  if (hiddenChip) hiddenChip.textContent = 'Hidden (' + hiddenCount + ')';
 }
 
-function onHealthFilterClick(filter) {
-  healthStatusFilter = filter;
-  applyHealthFilters();
+function onCardFilterClick(sectionName, filter) {
+  getSectionFilterState(sectionName).status = filter;
+  applyCardFilters(sectionName);
 }
-function onHealthSearchInput(value) {
-  healthSearchQuery = value;
-  applyHealthFilters();
+function onCardSearchInput(sectionName, value) {
+  getSectionFilterState(sectionName).query = value;
+  applyCardFilters(sectionName);
 }
 
 // Sources/enrichers test the last *saved* config (no body - matches
@@ -543,7 +626,7 @@ function healthTestControl(c) {
 
 function healthCard(c) {
   var warningText = (c.warnings && c.warnings.length) ? c.warnings[0] : '';
-  return '<div class="component-card health-card" data-id="' + esc(c.id) + '">'
+  return '<div class="component-card health-card">'
     + '<a class="body" href="#component/' + esc(c.id) + '">'
     + '<div class="name">' + esc(c.name) + '</div>'
     + '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>'
@@ -560,6 +643,10 @@ function renderHealthSection() {
     return;
   }
 
+  var healthItems = componentsData.filter(function(c) {
+    return HEALTH_TYPE_GROUPS.some(function(g) { return g.type === c.component_type; });
+  });
+
   var html = '<h1>Health</h1><p class="lede">Live status for everything that reports one, with quick actions where they help.</p>';
 
   html += '<a class="component-card" href="#component/alerts" style="display:block;max-width:360px;margin-bottom:14px;">'
@@ -574,27 +661,19 @@ function renderHealthSection() {
       + '</div></div>';
   }
 
-  html += '<div class="filters">'
-    + ['all', 'connected', 'needs_configuration', 'error', 'disabled'].map(function(f) {
-      return '<button type="button" class="chip' + (healthStatusFilter === f ? ' active' : '') + '" '
-        + 'data-health-filter="' + f + '" onclick="onHealthFilterClick(\'' + f + '\')">'
-        + esc(f === 'all' ? 'All' : (STATUS_LABELS[f] || f)) + '</button>';
-    }).join('')
-    + '<input type="text" id="health-search" placeholder="Search…" aria-label="Search health items by name" '
-    + 'value="' + esc(healthSearchQuery) + '" oninput="onHealthSearchInput(this.value)">'
-    + '</div>';
+  html += filterBarHtml('health', healthItems);
 
   HEALTH_TYPE_GROUPS.forEach(function(group) {
-    var items = componentsData.filter(function(c) { return c.component_type === group.type; });
+    var items = healthItems.filter(function(c) { return c.component_type === group.type; });
     if (!items.length) return;
-    html += '<div class="health-group">'
+    html += '<div class="card-group">'
       + '<h2 class="group-title">' + esc(group.label) + '</h2>'
-      + '<div class="component-list">' + items.map(healthCard).join('') + '</div>'
+      + '<div class="card-grid">' + items.map(function(c) { return cardTile(c, healthCard(c)); }).join('') + '</div>'
       + '</div>';
   });
 
   el.innerHTML = html;
-  applyHealthFilters();
+  applyCardFilters('health');
 }
 
 // ---------------------------------------------------------------------
@@ -613,7 +692,8 @@ function renderHealthSection() {
 // their own sub-panel (own element id) so adding an override, removing
 // one, or a 15s poll tick can refresh just that panel without wiping
 // out whatever's mid-typing in the search box - same reasoning as
-// Health's applyHealthFilters() split, just three panels instead of one.
+// Health/Media/Metadata/Appearance/Displays' applyCardFilters() split
+// (Fas 6/8), just three panels instead of one.
 // ---------------------------------------------------------------------
 var libraryQuery = '';
 var librarySearchResults = null; // null = no search yet, [] = no matches
@@ -626,7 +706,7 @@ function libraryPageHtml() {
     + '<div class="card">'
     + '<h2 class="group-title">Browse</h2>'
     + '<div id="library-stats" class="field-help">Loading…</div>'
-    + '<input type="text" id="library-search" placeholder="Search artists…" aria-label="Search library artists" '
+    + '<input type="text" id="library-search" class="filter-search-input" placeholder="Search artists…" aria-label="Search library artists" '
     + 'value="' + esc(libraryQuery) + '" oninput="onLibrarySearchInput(this.value)" style="margin-top:8px;">'
     + '<div id="library-search-results" class="component-list" style="margin-top:12px;"></div>'
     + '</div>'
