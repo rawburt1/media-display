@@ -136,6 +136,7 @@ TEXT_ENRICHER_CLASSES: dict[str, Union[str, type]] = {
 }
 
 IDLE_CLASSES: dict[str, Union[str, type]] = {
+    "arts": "mediainfo.idle.arts.ArtsWallpaperSource",
     "lastfm": "mediainfo.idle.lastfm.LastFmWallpaperSource",
     "library": "mediainfo.idle.library.LibraryWallpaperSource",
     "local": "mediainfo.idle.local.LocalWallpaperSource",

@@ -66,6 +66,12 @@ class _IdleBatchManager:
         self._call_output = call_output
         self._build_rotation_states = build_rotation_states
         self.idle_source = idle_source
+        # The transform_pipeline of whichever source produced the current
+        # batch (self.images) - see refetch() and _show_image_for_output().
+        # [] until the first successful refetch; a batch loaded from disk
+        # at startup has no known attribution either, so this stays []
+        # until the next live fetch succeeds (self-healing, not persisted).
+        self._current_transform_pipeline: List = []
         self._persist_path = self.cache.idle_dir / _PERSIST_FILENAME
         self.images: List[Artwork] = self._load_persisted_batch()
         self.rotation_state: Dict[int, "_RotationState"] = {}
@@ -179,6 +185,15 @@ class _IdleBatchManager:
                 source="idle", media_type="wallpaper", title="", subtitle="", images=images
             )
             self.last_batch_fetch = now
+            # Whichever source actually produced this batch - the
+            # CompositeIdleWallpaperSource case (last_used) and the
+            # single-source case (idle_source itself) both handled by the
+            # same getattr, since only one source's pictures ever make up
+            # a given batch (see idle/composite.py). The second getattr
+            # tolerates duck-typed idle sources (e.g. test doubles) that
+            # predate transform_pipeline and don't define it.
+            winner = getattr(self.idle_source, "last_used", self.idle_source)
+            self._current_transform_pipeline = list(getattr(winner, "transform_pipeline", []) or [])
             self._push_current_batch()
             self._save_persisted_batch(images)
             return True
@@ -284,7 +299,11 @@ class _IdleBatchManager:
                 original_path = self.cache.download_temp(artwork)
                 if original_path is None:
                     continue
-                image_path = self.cache.get_transformed_path(original_path, output.transform_pipeline)
+                # Source-level styling (e.g. arts' own crop/filter) runs
+                # first, then whatever this specific output's own pipeline
+                # applies - see _current_transform_pipeline in refetch().
+                pipeline = self._current_transform_pipeline + output.transform_pipeline
+                image_path = self.cache.get_transformed_path(original_path, pipeline)
             except Exception:
                 logger.exception("Failed to fetch idle wallpaper %s", artwork.url)
                 _unlink_temp(original_path)

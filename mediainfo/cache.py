@@ -124,7 +124,8 @@ class ImageCache:
         if existing is not None:
             return existing
 
-        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=_HEADERS)
+        headers = {**_HEADERS, **artwork.headers} if artwork.headers else _HEADERS
+        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=headers)
         response.raise_for_status()
 
         if not self._meets_minimum_size(response.content):
@@ -205,7 +206,8 @@ class ImageCache:
             path = Path(urlparse(artwork.url).path)
             return path if path.exists() else None
 
-        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=_HEADERS)
+        headers = {**_HEADERS, **artwork.headers} if artwork.headers else _HEADERS
+        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=headers)
         response.raise_for_status()
 
         if not self._meets_minimum_size(response.content):

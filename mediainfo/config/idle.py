@@ -3,6 +3,8 @@ outputs when nothing is playing)."""
 
 from __future__ import annotations
 
+import dataclasses
+
 import pydantic
 
 
@@ -86,9 +88,29 @@ class LibraryIdleConfig:
     rotation_interval_seconds: int = 300
 
 
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class ArtsWallpaperConfig:
+    enabled: bool = False
+    # How often (in seconds) to fetch a fresh batch of artworks while idle.
+    # Each output then independently rotates through that batch (in its
+    # own random order) using the top-level rotation_interval_seconds.
+    rotation_interval_seconds: int = 300
+    # Number of artworks to fetch per batch.
+    batch_size: int = 10
+    # Image transforms (crop, filters, ...) applied to every picture from
+    # this source specifically, before any per-output transform pipeline -
+    # lets "arts" have its own look (e.g. a different crop strategy or
+    # color treatment) independent of other idle sources/outputs. Same
+    # pipeline syntax as an output's own `transforms:` (see
+    # mediainfo.transforms.parse_pipeline) - list-typed, so edited via the
+    # Advanced raw-YAML editor like every other transforms field.
+    transforms: list = dataclasses.field(default_factory=list)
+
+
 # Registry mapping config section names to their dataclass types. Adding a
 # new idle wallpaper source starts here.
 IDLE_CONFIG_TYPES: dict[str, type] = {
+    "arts": ArtsWallpaperConfig,
     "lastfm": LastFmHistoryConfig,
     "library": LibraryIdleConfig,
     "local": LocalWallpaperConfig,

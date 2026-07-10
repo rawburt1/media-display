@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import random
 import time
-from typing import List
+from typing import List, Optional
 
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import Artwork
@@ -36,6 +36,13 @@ class CompositeIdleWallpaperSource(IdleWallpaperSource):
         # rotation_interval_seconds (e.g. a freshly booted CI runner).
         self._last_fetch = [float("-inf")] * len(sources)
         self._cached: List[List[Artwork]] = [[] for _ in sources]
+        # Whichever source's pictures were actually returned by the most
+        # recent get_wallpapers() call - lets callers (see
+        # mediainfo.orchestrator_idle._IdleBatchManager) apply that one
+        # source's own transform_pipeline to the current batch, since
+        # exactly one source's pictures make up any given batch (never
+        # blended - see the module docstring).
+        self.last_used: Optional[IdleWallpaperSource] = None
 
     def get_wallpapers(self) -> List[Artwork]:
         now = time.monotonic()
@@ -51,5 +58,6 @@ class CompositeIdleWallpaperSource(IdleWallpaperSource):
             random.shuffle(order)
         for i in order:
             if self._cached[i]:
+                self.last_used = self.sources[i]
                 return self._cached[i]
         return []
