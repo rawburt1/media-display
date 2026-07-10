@@ -1,19 +1,21 @@
 'use strict';
 
-// Dashboard shell (Fas 2-4 of the GUI redesign) - the new landing page at
-// "/". Dashboard/Pipeline/Media/Metadata/Appearance/Displays are all
-// rendered in-shell via hash-based client routing (see renderFromHash()
-// below); Library/Health/Advanced stay plain <a href> links straight into
-// the classic shell (see templates/config_ui/dashboard.html), since those
-// don't have (or don't need) an in-shell equivalent yet.
+// Dashboard shell (Fas 2-6 of the GUI redesign) - the new landing page at
+// "/". Dashboard/Pipeline/Media/Metadata/Appearance/Displays/Health are
+// all rendered in-shell via hash-based client routing (see
+// renderFromHash() below); Library/Advanced stay plain <a href> links
+// straight into the classic shell (see templates/config_ui/
+// dashboard.html), since those don't have (or don't need) an in-shell
+// equivalent yet.
 //
 // This file owns the shell chrome (nav/theme/routing) plus Dashboard and
-// Pipeline. Media/Metadata/Appearance/Displays' component-list rendering
-// and the per-component detail page (essential/advanced fields, save/
-// discard/test-connection - Fas 4) live in components.js, loaded after
-// this file and sharing its esc()/theme helpers, componentsData/
-// componentsById, and the confirmDiscardIfDirty() guard via the
-// hasUnsavedComponentEdits flag below.
+// Pipeline. Media/Metadata/Appearance/Displays' component-list rendering,
+// Health's action-oriented status list (Fas 6), and the per-component
+// detail page (essential/advanced fields, save/discard/test-connection -
+// Fas 4) live in components.js, loaded after this file and sharing its
+// esc()/theme helpers, componentsData/componentsById, and the
+// confirmDiscardIfDirty() guard via the hasUnsavedComponentEdits flag
+// below.
 //
 // This file only ever reads from the read-only /api/ui/* endpoints
 // (Fas 1); components.js is the one file that writes, via the exact same
@@ -21,10 +23,11 @@
 // shell already uses - no new backend surface anywhere in this redesign.
 
 var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
-var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS);
+var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['health']);
 var SECTION_TITLES = {
   dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
   metadata: 'Metadata', appearance: 'Appearance', displays: 'Displays',
+  health: 'Health',
 };
 // UiComponent.category uses "display" (singular); the nav/section id uses
 // "displays" - this is the one place that mapping happens.
@@ -142,6 +145,7 @@ function renderSection(name, param) {
   if (name === 'dashboard') renderDashboard();
   else if (name === 'pipeline') renderPipeline();
   else if (CATEGORY_SECTIONS.indexOf(name) !== -1) renderCategorySection(name);
+  else if (name === 'health') renderHealthSection();
   else if (name === 'component') renderComponentDetail(param);
 }
 
@@ -295,6 +299,16 @@ function fetchComponents() {
     data.forEach(function(c) { componentsById[c.id] = c; });
     if (currentSection === 'pipeline') renderPipeline();
     else if (CATEGORY_SECTIONS.indexOf(currentSection) !== -1) renderCategorySection(currentSection);
+    else if (currentSection === 'health') {
+      // A full re-render would reset the search input's value/focus out
+      // from under someone mid-keystroke (it happens to have focus right
+      // when a 15s poll tick lands) - just re-apply the filters against
+      // the freshly-fetched data instead, and let the next real render
+      // (navigation, or a poll while not typing) catch up the card
+      // contents themselves.
+      if (document.activeElement && document.activeElement.id === 'health-search') applyHealthFilters();
+      else renderHealthSection();
+    }
   }).catch(function() {});
 }
 
@@ -304,7 +318,7 @@ function fetchComponents() {
 setInterval(function() {
   fetchDashboard();
   if (currentSection === 'pipeline') { fetchPipeline(); fetchComponents(); }
-  else if (CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
+  else if (currentSection === 'health' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
 }, 15000);
 
 Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents()]).then(renderFromHash);

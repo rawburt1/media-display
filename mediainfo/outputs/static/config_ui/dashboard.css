@@ -159,10 +159,30 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 }
 .component-card:hover { border-color: var(--accent); }
 .component-card .body { padding: 10px 14px; }
+.component-card a.body { display: block; text-decoration: none; color: inherit; }
 .component-card .name { font-size: 13.5px; font-weight: 600; color: var(--bright); margin-bottom: 4px; }
 .component-card .desc { font-size: 12px; color: var(--muted); margin-top: 4px; max-width: 60ch; }
 .component-card .warning { font-size: 11px; color: var(--warn); margin-top: 4px; }
 .component-card-accent { height: 8px; }
+.hidden { display: none !important; }
+
+/* -- Health (Fas 6) -- */
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.chip {
+  background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); }
+.chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+#health-search {
+  flex: 1; min-width: 160px; max-width: 280px; background: var(--bg); border: 1px solid var(--control-border);
+  border-radius: 999px; color: var(--bright); padding: 7px 14px; font: inherit; font-size: 13px;
+}
+.health-group.hidden { display: none; }
+.health-card .test-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px 12px; border-top: 1px solid var(--border);
+}
+.health-card .test-row .test-result { margin: 0; flex: 1 1 auto; }
 
 /* -- component detail page (Fas 4) -- */
 .back-link { display: inline-block; font-size: 12.5px; color: var(--link); text-decoration: none; margin-bottom: 10px; }

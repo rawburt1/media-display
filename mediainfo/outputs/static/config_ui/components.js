@@ -448,3 +448,151 @@ function runDetailTest() {
     btn.textContent = 'Test connection';
   });
 }
+
+// ---------------------------------------------------------------------
+// Health - action-oriented status list (Fas 6). Only components with a
+// real live health signal: sources/idle sources/enrichers/outputs -
+// themes/text_enrichers/flat sections always report health: "unknown"
+// (see ui_builder.py), same scope as the classic Status page's
+// /api/status. Filtering/search update visibility in place (no
+// re-render) so the search input never loses focus mid-keystroke - full
+// re-renders only happen on navigation or the 15s poll refresh.
+// ---------------------------------------------------------------------
+var HEALTH_TYPE_GROUPS = [
+  { type: 'source', label: 'Sources' },
+  { type: 'idle_source', label: 'Idle screen' },
+  { type: 'enricher', label: 'Enrichers' },
+  { type: 'output', label: 'Displays' },
+];
+var healthStatusFilter = 'all';
+var healthSearchQuery = '';
+
+function healthCardMatches(c) {
+  var statusOk = healthStatusFilter === 'all' || c.status === healthStatusFilter;
+  var searchOk = !healthSearchQuery || c.name.toLowerCase().indexOf(healthSearchQuery.toLowerCase()) !== -1;
+  return statusOk && searchOk;
+}
+
+function applyHealthFilters() {
+  document.querySelectorAll('#section-health .health-card').forEach(function(card) {
+    var c = componentsById[card.dataset.id];
+    card.classList.toggle('hidden', !(c && healthCardMatches(c)));
+  });
+  document.querySelectorAll('#section-health .health-group').forEach(function(group) {
+    var anyVisible = false;
+    group.querySelectorAll('.health-card').forEach(function(card) {
+      if (!card.classList.contains('hidden')) anyVisible = true;
+    });
+    group.classList.toggle('hidden', !anyVisible);
+  });
+  document.querySelectorAll('#section-health .chip[data-health-filter]').forEach(function(chip) {
+    chip.classList.toggle('active', chip.dataset.healthFilter === healthStatusFilter);
+  });
+}
+
+function onHealthFilterClick(filter) {
+  healthStatusFilter = filter;
+  applyHealthFilters();
+}
+function onHealthSearchInput(value) {
+  healthSearchQuery = value;
+  applyHealthFilters();
+}
+
+// Sources/enrichers test the last *saved* config (no body - matches
+// components.js's own runDetailTest() and the classic shell's source/
+// enricher test, both of which read from disk server-side). Outputs
+// deliberately get a link to their detail page instead of an inline
+// test button here - see the module-level plan notes: /api/test/output
+// needs the instance's actual current field values in the request body,
+// which this list view doesn't hold (only the detail page does).
+function runHealthTest(btn) {
+  var kind = btn.dataset.componentType;
+  var typeName = btn.dataset.typeName;
+  var resultEl = btn.nextElementSibling;
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  resultEl.className = 'test-result show';
+  resultEl.textContent = 'Running…';
+
+  var url = kind === 'source'
+    ? '/api/test/source/' + encodeURIComponent(typeName)
+    : '/api/test/enricher/' + encodeURIComponent(typeName);
+
+  fetch(url, { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
+    resultEl.classList.add(d.ok ? 'ok' : 'fail');
+    resultEl.textContent = d.message;
+  }).catch(function() {
+    resultEl.classList.add('fail');
+    resultEl.textContent = 'Request failed.';
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Test connection';
+  });
+}
+
+function healthTestControl(c) {
+  if (c.component_type === 'output') {
+    return '<a class="btn secondary small" href="#component/' + esc(c.id) + '">Test connection →</a>';
+  }
+  if (!c.supports_test) return '';
+  var typeName = c.config_path.split('.')[1];
+  return '<button type="button" class="btn secondary small" onclick="runHealthTest(this)" '
+    + 'data-component-type="' + esc(c.component_type) + '" data-type-name="' + esc(typeName) + '">Test connection</button>';
+}
+
+function healthCard(c) {
+  var warningText = (c.warnings && c.warnings.length) ? c.warnings[0] : '';
+  return '<div class="component-card health-card" data-id="' + esc(c.id) + '">'
+    + '<a class="body" href="#component/' + esc(c.id) + '">'
+    + '<div class="name">' + esc(c.name) + '</div>'
+    + '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>'
+    + (warningText ? '<div class="warning">' + esc(warningText) + '</div>' : '')
+    + '</a>'
+    + '<div class="test-row">' + healthTestControl(c) + '<div class="test-result" id="test-result-' + esc(c.id) + '"></div></div>'
+    + '</div>';
+}
+
+function renderHealthSection() {
+  var el = document.getElementById('section-health');
+  if (!componentsData) {
+    el.innerHTML = '<h1>Health</h1><p class="lede">Loading…</p>';
+    return;
+  }
+
+  var html = '<h1>Health</h1><p class="lede">Live status for everything that reports one, with quick actions where they help.</p>';
+
+  html += '<a class="component-card" href="#component/alerts" style="display:block;max-width:360px;margin-bottom:14px;">'
+    + '<div class="body"><div class="name">Configure alerting →</div>'
+    + '<div class="desc">Get notified when a source or output has been failing for a while.</div></div></a>';
+
+  if (dashboardData && dashboardData.restart_required) {
+    html += '<div class="card" style="border-color:var(--warn);margin-bottom:14px;">'
+      + '<div class="row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+      + '<span>A restart is needed for recent display/authentication changes to take effect.</span>'
+      + '<button type="button" class="btn danger small" onclick="runRestartAction(\'/api/restart\')">Restart mediainfo</button>'
+      + '</div></div>';
+  }
+
+  html += '<div class="filters">'
+    + ['all', 'connected', 'needs_configuration', 'error', 'disabled'].map(function(f) {
+      return '<button type="button" class="chip' + (healthStatusFilter === f ? ' active' : '') + '" '
+        + 'data-health-filter="' + f + '" onclick="onHealthFilterClick(\'' + f + '\')">'
+        + esc(f === 'all' ? 'All' : (STATUS_LABELS[f] || f)) + '</button>';
+    }).join('')
+    + '<input type="text" id="health-search" placeholder="Search…" aria-label="Search health items by name" '
+    + 'value="' + esc(healthSearchQuery) + '" oninput="onHealthSearchInput(this.value)">'
+    + '</div>';
+
+  HEALTH_TYPE_GROUPS.forEach(function(group) {
+    var items = componentsData.filter(function(c) { return c.component_type === group.type; });
+    if (!items.length) return;
+    html += '<div class="health-group">'
+      + '<h2 class="group-title">' + esc(group.label) + '</h2>'
+      + '<div class="component-list">' + items.map(healthCard).join('') + '</div>'
+      + '</div>';
+  });
+
+  el.innerHTML = html;
+  applyHealthFilters();
+}
