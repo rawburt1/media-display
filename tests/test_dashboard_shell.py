@@ -66,13 +66,21 @@ def test_form_and_dashboard_routes_are_unaffected(config_path):
 # ---------------------------------------------------------------------------
 
 
+def test_new_shell_nav_has_in_shell_category_sections(config_path):
+    # Since Fas 4, Media/Metadata/Appearance/Displays are rendered in-shell
+    # (client-side hash routing, see static/config_ui/components.js) rather
+    # than linking out to the classic shell - only Library/Health/Advanced
+    # remain plain links (next test).
+    out = ConfigUiOutput(_config(), config_path)
+    body = out.app.test_client().get("/").data
+    for section in (b"media", b"metadata", b"appearance", b"displays"):
+        assert b'data-section="' + section + b'"' in body, section
+
+
 def test_new_shell_nav_links_into_classic_sections(config_path):
     out = ConfigUiOutput(_config(), config_path)
     body = out.app.test_client().get("/").data
     for href in (
-        b'href="/form#sources"',
-        b'href="/form#artwork"',
-        b'href="/form#outputs"',
         b'href="/library"',
         b'href="/dashboard"',
         b'href="/form"',
@@ -105,6 +113,12 @@ def test_new_shell_no_auth_warning_for_loopback_caller(config_path):
 def test_dashboard_static_js_is_served(config_path):
     out = ConfigUiOutput(_config(), config_path)
     resp = out.app.test_client().get("/static/config_ui/dashboard.js")
+    assert resp.status_code == 200
+
+
+def test_components_static_js_is_served(config_path):
+    out = ConfigUiOutput(_config(), config_path)
+    resp = out.app.test_client().get("/static/config_ui/components.js")
     assert resp.status_code == 200
 
 

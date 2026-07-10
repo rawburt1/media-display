@@ -13,15 +13,15 @@
     <nav id="nav" aria-label="Primary">
       <button type="button" data-section="dashboard">Dashboard</button>
       <button type="button" data-section="pipeline">Pipeline</button>
-      <a class="nav-link" href="/form#sources">Media</a>
-      <a class="nav-link" href="/form#artwork">Metadata</a>
-      <a class="nav-link" href="/form#outputs">Appearance</a>
-      <a class="nav-link" href="/form#outputs">Displays</a>
+      <button type="button" data-section="media">Media</button>
+      <button type="button" data-section="metadata">Metadata</button>
+      <button type="button" data-section="appearance">Appearance</button>
+      <button type="button" data-section="displays">Displays</button>
       <a class="nav-link" href="/library">Library</a>
       <a class="nav-link" href="/dashboard">Health</a>
       <a class="nav-link" href="/form">Advanced</a>
     </nav>
-    <div class="nav-hint">Media/Metadata/Appearance/Displays open the classic settings editor for now.</div>
+    <div class="nav-hint">Advanced opens the classic settings editor (raw YAML, backups, and anything not covered here yet).</div>
     <div class="sidebar-footer">
       <button type="button" id="theme-toggle" onclick="toggleTheme()">Light / dark</button>
     </div>
@@ -40,9 +40,15 @@
 
       <div class="section" id="section-dashboard" tabindex="-1"><h1>Dashboard</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-pipeline" tabindex="-1"><h1>Pipeline</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-media" tabindex="-1"><h1>Media</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-metadata" tabindex="-1"><h1>Metadata</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-appearance" tabindex="-1"><h1>Appearance</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-displays" tabindex="-1"><h1>Displays</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-component" tabindex="-1"><h1>Component</h1><p class="lede">Loading…</p></div>
     </main>
   </div>
 </div>
 
 <script src="{{ url_for('static', filename='config_ui/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='config_ui/components.js') }}"></script>
 </body></html>
