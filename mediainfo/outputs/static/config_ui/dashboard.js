@@ -153,8 +153,8 @@ var STATUS_LABELS = {
   needs_configuration: 'Needs configuration', error: 'Error', unknown: 'Unknown',
 };
 
-function statTile(num, label, statusClass) {
-  return '<div class="stat-card"><div class="stat-num">' + num + '</div>'
+function bentoStatItem(num, label, statusClass) {
+  return '<div class="bento-item bento-item--stat"><div class="stat-num">' + num + '</div>'
     + '<div class="stat-label"><span class="badge ' + (statusClass || '') + '">' + esc(label) + '</span></div></div>';
 }
 
@@ -182,36 +182,39 @@ function renderDashboard() {
   var np = d.now_playing;
 
   var html = '<h1>Dashboard</h1><p class="lede">A quick look at what mediainfo is doing right now, and anything that needs your attention.</p>';
+  html += '<div class="bento-grid">';
 
-  html += '<div class="card">';
+  html += '<div class="bento-item bento-item--now-playing">';
   if (np) {
-    html += '<div class="now-playing"><div>'
+    html += '<div class="eyebrow">Now playing' + (d.active_source ? ' · ' + esc(d.active_source) : '') + '</div>'
       + '<div class="title">' + esc(np.title) + '</div>'
       + (np.subtitle ? '<div class="subtitle">' + esc(np.subtitle) + '</div>' : '')
-      + '<div class="subtitle">via ' + esc(d.active_source || np.source) + ' · ' + esc(np.media_type) + '</div>'
-      + '</div></div>';
+      + (np.media_type ? '<div class="subtitle">' + esc(np.media_type) + '</div>' : '');
   } else {
-    html += '<div class="now-playing"><span class="subtitle">Nothing is playing right now.</span></div>';
+    html += '<div class="eyebrow">Now playing</div><div class="subtitle">Nothing is playing right now.</div>';
   }
   html += '</div>';
 
   var counts = (d.health && d.health.counts_by_status) || {};
-  html += '<div class="stat-grid">' + Object.keys(counts).map(function(status) {
-    return statTile(counts[status], STATUS_LABELS[status] || status, 'b-' + status);
-  }).join('') + '</div>';
+  html += Object.keys(counts).map(function(status) {
+    return bentoStatItem(counts[status], STATUS_LABELS[status] || status, 'b-' + status);
+  }).join('');
 
-  html += '<h2 class="group-title">Needs attention</h2>';
   var warnings = (d.health && d.health.warnings) || [];
+  html += '<div class="bento-item bento-item--warnings">';
   if (warnings.length === 0) {
-    html += '<div class="card"><span style="color:var(--ok);font-size:13px;">Everything looks good.</span></div>';
+    html += '<div class="row"><span>Everything looks good</span><span class="badge b-connected">Healthy</span></div>';
   } else {
-    html += '<ul class="warning-list">' + warnings.map(function(w) {
-      return '<li class="warning-item">' + esc(w) + '</li>';
-    }).join('') + '</ul>';
+    html += warnings.map(function(w) {
+      return '<div class="row"><span>' + esc(w) + '</span><span class="badge b-needs_configuration">Action needed</span></div>';
+    }).join('');
   }
+  html += '</div>';
 
-  html += '<div class="action-row">' + (d.quick_actions || []).map(actionButton).join('') + '</div>';
+  html += '<div class="bento-item bento-item--actions">'
+    + (d.quick_actions || []).map(actionButton).join('') + '</div>';
 
+  html += '</div>';
   el.innerHTML = html;
 }
 
