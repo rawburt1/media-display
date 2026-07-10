@@ -105,11 +105,22 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 .auth-warning strong { color: #fb923c; }
 .auth-warning a { color: #fb923c; }
 
-.pipeline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 10px; }
+.pipeline-grid { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 10px; }
+.pipeline-stage { flex: 1 1 200px; min-width: 180px; position: relative; }
 .pipeline-stage h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin: 0 0 8px; }
-.pipeline-stage ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.pipeline-stage li { background: var(--chip-bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; color: var(--bright); }
-.pipeline-stage .empty { color: var(--muted); font-size: 12px; font-style: italic; background: none; border: none; padding: 0; }
+.pipeline-stage:not(:last-child)::after {
+  content: "→"; position: absolute; top: 30px; right: -20px; color: var(--muted2); font-size: 16px;
+}
+.pipeline-stage-empty { color: var(--muted); font-size: 12px; font-style: italic; }
+.pipeline-card {
+  display: block; background: var(--chip-bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; margin-bottom: 6px; text-decoration: none;
+}
+.pipeline-card:hover { border-color: var(--accent); }
+.pipeline-card .name { font-size: 12.5px; font-weight: 600; color: var(--bright); margin-bottom: 4px; }
+.pipeline-card .warning { font-size: 11px; color: var(--warn); margin-top: 4px; }
+.pipeline-idle-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pipeline-idle-row .pipeline-card { flex: 0 1 200px; margin-bottom: 0; }
 
 .test-result { font-size: 11.5px; font-family: ui-monospace, monospace; margin-top: 8px;
                padding: 7px 10px; border-radius: 6px; background: var(--mono-bg);
@@ -120,6 +131,7 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
   #sidebar { display: none; }
   #topbar { display: flex; }
   #main { padding: 18px 16px 60px; max-width: 100%; }
+  .pipeline-stage::after { display: none; }
 }
 body.nav-open #sidebar {
   display: flex; position: fixed; z-index: 30; top: 0; left: 0; height: 100vh; width: 78vw; max-width: 280px;
