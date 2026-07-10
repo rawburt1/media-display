@@ -1,24 +1,46 @@
 'use strict';
 
-// Dashboard shell (Fas 2-3 of the GUI redesign) - the new landing page at
-// "/". Only two nav entries are rendered by this file (Dashboard,
-// Pipeline); every other nav entry is a plain <a href> straight into the
-// classic shell (see templates/config_ui/dashboard.html) since their real
-// in-shell pages don't exist yet (Media/Metadata/Appearance/Displays:
-// Fas 4). Pipeline (Fas 3) is a *read-only* visual flow of the currently
-// enabled components (Media -> Metadata -> Appearance -> Displays, plus a
-// separate idle-fallback row) - no reordering/editing, just a nicer view
-// of the same /api/ui/pipelines + /api/ui/components data. This file only
-// ever reads from the read-only /api/ui/* endpoints (Fas 1) plus the two
-// POST endpoints (/api/restart, /api/test/source/<name>) that already
-// existed before Fas 2 - no new write path is introduced here.
+// Dashboard shell (Fas 2-4 of the GUI redesign) - the new landing page at
+// "/". Dashboard/Pipeline/Media/Metadata/Appearance/Displays are all
+// rendered in-shell via hash-based client routing (see renderFromHash()
+// below); Library/Health/Advanced stay plain <a href> links straight into
+// the classic shell (see templates/config_ui/dashboard.html), since those
+// don't have (or don't need) an in-shell equivalent yet.
+//
+// This file owns the shell chrome (nav/theme/routing) plus Dashboard and
+// Pipeline. Media/Metadata/Appearance/Displays' component-list rendering
+// and the per-component detail page (essential/advanced fields, save/
+// discard/test-connection - Fas 4) live in components.js, loaded after
+// this file and sharing its esc()/theme helpers, componentsData/
+// componentsById, and the confirmDiscardIfDirty() guard via the
+// hasUnsavedComponentEdits flag below.
+//
+// This file only ever reads from the read-only /api/ui/* endpoints
+// (Fas 1); components.js is the one file that writes, via the exact same
+// /api/config/form, /api/test/*, and /api/restart endpoints the classic
+// shell already uses - no new backend surface anywhere in this redesign.
 
-var NAV_TITLES = { dashboard: 'Dashboard', pipeline: 'Pipeline' };
+var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
+var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS);
+var SECTION_TITLES = {
+  dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
+  metadata: 'Metadata', appearance: 'Appearance', displays: 'Displays',
+};
+// UiComponent.category uses "display" (singular); the nav/section id uses
+// "displays" - this is the one place that mapping happens.
+var CATEGORY_TO_SECTION = { media: 'media', metadata: 'metadata', appearance: 'appearance', display: 'displays' };
+
 var currentSection = 'dashboard';
+var currentParam = null;
 var dashboardData = null;
 var pipelineData = null;
 var componentsData = null;
 var componentsById = {};
+
+// Set by components.js while a component detail page has local, unsaved
+// edits - guards in-app navigation (confirmDiscardIfDirty(), below) and a
+// real page unload/close (beforeunload, below).
+var hasUnsavedComponentEdits = false;
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
@@ -56,29 +78,71 @@ function toggleNav() {
 }
 
 // ---------------------------------------------------------------------
-// Navigation between the two JS-rendered sections
+// Hash-based routing - a single source of truth (renderFromHash, driven
+// by the hashchange event) instead of separate click-time and init-time
+// render paths, so back/forward and typed-in hashes all work the same way.
+// Supports a dynamic second segment for component detail pages, e.g.
+// "#component/sources.kodi".
 // ---------------------------------------------------------------------
-function goToSection(name) {
-  currentSection = name;
-  location.hash = name;
+function confirmDiscardIfDirty() {
+  if (!hasUnsavedComponentEdits) return true;
+  if (!confirm('Discard unsaved changes?')) return false;
+  hasUnsavedComponentEdits = false;
+  return true;
+}
+
+function parseHash() {
+  var raw = location.hash.replace('#', '');
+  var parts = raw.split('/');
+  var section = (NAV_SECTIONS.indexOf(parts[0]) !== -1 || parts[0] === 'component') ? parts[0] : 'dashboard';
+  var param = parts.slice(1).join('/') || null;
+  return { section: section, param: param };
+}
+
+function setActiveNav(name) {
   document.querySelectorAll('#nav button[data-section]').forEach(function(b) {
     b.classList.toggle('active', b.dataset.section === name);
   });
-  document.querySelectorAll('.section').forEach(function(s) {
-    s.classList.toggle('active', s.id === 'section-' + name);
-  });
-  document.getElementById('topbar-title').textContent = NAV_TITLES[name] || '';
-  if (document.body.classList.contains('nav-open')) closeNav();
-  renderSection(name);
 }
+
+function renderFromHash() {
+  var parsed = parseHash();
+  currentSection = parsed.section;
+  currentParam = parsed.param;
+  // A component detail page highlights whichever category nav button it
+  // belongs to (set by renderComponentDetail() once it knows the
+  // component) rather than a dedicated "component" nav entry, which
+  // doesn't exist.
+  if (currentSection !== 'component') setActiveNav(currentSection);
+  document.querySelectorAll('.section').forEach(function(s) {
+    s.classList.toggle('active', s.id === 'section-' + currentSection);
+  });
+  document.getElementById('topbar-title').textContent = SECTION_TITLES[currentSection] || '';
+  if (document.body.classList.contains('nav-open')) closeNav();
+  renderSection(currentSection, currentParam);
+}
+
 document.getElementById('nav').addEventListener('click', function(e) {
   var btn = e.target.closest('button[data-section]');
-  if (btn) goToSection(btn.dataset.section);
+  if (btn && confirmDiscardIfDirty()) location.hash = btn.dataset.section;
+});
+// Delegated guard for every in-shell "#..." link (component/list cards,
+// "Back to <category>" links) - real (non-hash) links, e.g. the auth
+// banner's "/form" link, are untouched.
+document.getElementById('main').addEventListener('click', function(e) {
+  var a = e.target.closest('a[href^="#"]');
+  if (a && !confirmDiscardIfDirty()) e.preventDefault();
+});
+window.addEventListener('hashchange', renderFromHash);
+window.addEventListener('beforeunload', function(e) {
+  if (hasUnsavedComponentEdits) { e.preventDefault(); e.returnValue = ''; }
 });
 
-function renderSection(name) {
+function renderSection(name, param) {
   if (name === 'dashboard') renderDashboard();
   else if (name === 'pipeline') renderPipeline();
+  else if (CATEGORY_SECTIONS.indexOf(name) !== -1) renderCategorySection(name);
+  else if (name === 'component') renderComponentDetail(param);
 }
 
 // ---------------------------------------------------------------------
@@ -162,7 +226,8 @@ function fetchDashboard() {
 // Pipeline section - read-only visual flow of currently enabled
 // components (Fas 3). No reordering/editing: just /api/ui/pipelines'
 // bucketed ids, each looked up against /api/ui/components for a name +
-// status badge + first warning, rendered as a clickable card.
+// status badge + first warning, rendered as a clickable card that opens
+// that component's new detail page (Fas 4).
 // ---------------------------------------------------------------------
 var PIPELINE_STAGES = [
   { key: 'media_component_ids', label: 'Media' },
@@ -175,8 +240,7 @@ function pipelineCard(id) {
   var c = componentsById[id];
   if (!c) return '<div class="pipeline-card"><div class="name">' + esc(id) + '</div></div>';
   var warning = c.warnings && c.warnings.length ? '<div class="warning">' + esc(c.warnings[0]) + '</div>' : '';
-  var href = (c.actions && c.actions[0] && c.actions[0].href) || '/form';
-  return '<a class="pipeline-card" href="' + esc(href) + '">'
+  return '<a class="pipeline-card" href="#component/' + esc(c.id) + '">'
     + '<div class="name">' + esc(c.name) + '</div>'
     + '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>'
     + warning
@@ -227,6 +291,7 @@ function fetchComponents() {
     componentsById = {};
     data.forEach(function(c) { componentsById[c.id] = c; });
     if (currentSection === 'pipeline') renderPipeline();
+    else if (CATEGORY_SECTIONS.indexOf(currentSection) !== -1) renderCategorySection(currentSection);
   }).catch(function() {});
 }
 
@@ -236,9 +301,7 @@ function fetchComponents() {
 setInterval(function() {
   fetchDashboard();
   if (currentSection === 'pipeline') { fetchPipeline(); fetchComponents(); }
+  else if (CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
 }, 15000);
 
-Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents()]).then(function() {
-  var hash = location.hash.replace('#', '');
-  goToSection(hash && NAV_TITLES[hash] ? hash : 'dashboard');
-});
+Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents()]).then(renderFromHash);
