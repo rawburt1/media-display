@@ -1,37 +1,41 @@
 'use strict';
 
-// Dashboard shell (Fas 2-6 of the GUI redesign) - the new landing page at
-// "/". Dashboard/Pipeline/Media/Metadata/Appearance/Displays/Health are
-// all rendered in-shell via hash-based client routing (see
-// renderFromHash() below); Library/Advanced stay plain <a href> links
-// straight into the classic shell (see templates/config_ui/
-// dashboard.html), since those don't have (or don't need) an in-shell
-// equivalent yet.
+// Dashboard shell (Fas 2-7 of the GUI redesign) - the new landing page at
+// "/". Dashboard/Pipeline/Media/Metadata/Appearance/Displays/Library/
+// Health are all rendered in-shell via hash-based client routing (see
+// renderFromHash() below); Advanced stays a plain <a href> link straight
+// into the classic shell (see templates/config_ui/dashboard.html), since
+// raw YAML/backups/etc. don't have (or need) an in-shell equivalent yet.
 //
 // This file owns the shell chrome (nav/theme/routing) plus Dashboard and
 // Pipeline. Media/Metadata/Appearance/Displays' component-list rendering,
-// Health's action-oriented status list (Fas 6), and the per-component
-// detail page (essential/advanced fields, save/discard/test-connection -
-// Fas 4) live in components.js, loaded after this file and sharing its
-// esc()/theme helpers, componentsData/componentsById, and the
+// Health's action-oriented status list (Fas 6), Library's browse/
+// overrides/settings page (Fas 7), and the per-component detail page
+// (essential/advanced fields, save/discard/test-connection - Fas 4) live
+// in components.js, loaded after this file and sharing its esc()/theme
+// helpers, componentsData/componentsById, and the
 // confirmDiscardIfDirty() guard via the hasUnsavedComponentEdits flag
 // below.
 //
 // This file only ever reads from the read-only /api/ui/* endpoints
 // (Fas 1); components.js is the one file that writes, via the exact same
-// /api/config/form, /api/test/*, and /api/restart endpoints the classic
-// shell already uses - no new backend surface anywhere in this redesign.
+// /api/config/form, /api/test/*, /api/library/*, /api/overrides*, and
+// /api/restart endpoints the classic shell already uses - no new backend
+// surface anywhere in this redesign.
 
 var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
-var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['health']);
+var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'health']);
 var SECTION_TITLES = {
   dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
   metadata: 'Metadata', appearance: 'Appearance', displays: 'Displays',
-  health: 'Health',
+  library: 'Library', health: 'Health',
 };
 // UiComponent.category uses "display" (singular); the nav/section id uses
-// "displays" - this is the one place that mapping happens.
-var CATEGORY_TO_SECTION = { media: 'media', metadata: 'metadata', appearance: 'appearance', display: 'displays' };
+// "displays" - this is the one place that mapping happens. "library"
+// matches its section id directly, but still needs an explicit entry
+// here so a library-category component's detail page ("← Back to
+// Library" link, nav highlight) doesn't fall back to "dashboard".
+var CATEGORY_TO_SECTION = { media: 'media', metadata: 'metadata', appearance: 'appearance', display: 'displays', library: 'library' };
 
 var currentSection = 'dashboard';
 var currentParam = null;
@@ -145,6 +149,7 @@ function renderSection(name, param) {
   if (name === 'dashboard') renderDashboard();
   else if (name === 'pipeline') renderPipeline();
   else if (CATEGORY_SECTIONS.indexOf(name) !== -1) renderCategorySection(name);
+  else if (name === 'library') renderLibrarySection(param);
   else if (name === 'health') renderHealthSection();
   else if (name === 'component') renderComponentDetail(param);
 }
@@ -299,7 +304,13 @@ function fetchComponents() {
     data.forEach(function(c) { componentsById[c.id] = c; });
     if (currentSection === 'pipeline') renderPipeline();
     else if (CATEGORY_SECTIONS.indexOf(currentSection) !== -1) renderCategorySection(currentSection);
-    else if (currentSection === 'health') {
+    else if (currentSection === 'library') {
+      // Same reasoning as Health below, but Library's settings cards are
+      // only one part of a page that also holds live search/artist-detail
+      // state - refresh just that one sub-panel instead of the whole
+      // section (see renderLibrarySettingsCards()).
+      renderLibrarySettingsCards();
+    } else if (currentSection === 'health') {
       // A full re-render would reset the search input's value/focus out
       // from under someone mid-keystroke (it happens to have focus right
       // when a 15s poll tick lands) - just re-apply the filters against
@@ -318,7 +329,7 @@ function fetchComponents() {
 setInterval(function() {
   fetchDashboard();
   if (currentSection === 'pipeline') { fetchPipeline(); fetchComponents(); }
-  else if (currentSection === 'health' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
+  else if (currentSection === 'health' || currentSection === 'library' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
 }, 15000);
 
 Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents()]).then(renderFromHash);
