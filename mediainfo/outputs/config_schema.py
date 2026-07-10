@@ -35,6 +35,7 @@ from mediainfo.config import (
     HistoryConfig,
     LibraryConfig,
     LoggingConfig,
+    MediaDataConfig,
     OverridesConfig,
     PostersConfig,
 )
@@ -105,6 +106,10 @@ _FLAT_SECTIONS: Dict[str, type] = {
     "alerts": AlertConfig,
     "auth": AuthConfig,
     "logging": LoggingConfig,
+    # MediaDataConfig.refresh is a nested dataclass, excluded by
+    # _scalar_fields like `transforms`/`themes` elsewhere - only `path` and
+    # `cache_first` are exposed here.
+    "mediadata": MediaDataConfig,
 }
 
 # Form display titles for _FLAT_SECTIONS, in page order - sent to the page
@@ -119,6 +124,7 @@ _FLAT_SECTION_TITLES = [
     ("alerts", "Alerts"),
     ("auth", "Authentication"),
     ("logging", "Logging"),
+    ("mediadata", "Unified Media Data Cache"),
 ]
 
 # List-typed fields simple enough (a flat list of strings) to edit as a

@@ -92,16 +92,24 @@ def test_schema_includes_all_categories(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/schema").get_json()
     # One key per _FLAT_SECTIONS entry (cache/history/library/overrides/
-    # posters/alerts/auth/logging), the four per-type-registry categories,
-    # "themes" (the individual Display Theme plugins nested inside a
-    # "themes" output instance - see mediainfo/config/themes.py), plus
-    # filter_meta and the presentation-metadata keys the guided UI needs
-    # (flat_sections/type_info/category_info/enricher_groups).
+    # posters/alerts/auth/logging/mediadata), the four per-type-registry
+    # categories, "themes" (the individual Display Theme plugins nested
+    # inside a "themes" output instance - see mediainfo/config/themes.py),
+    # plus filter_meta and the presentation-metadata keys the guided UI
+    # needs (flat_sections/type_info/category_info/enricher_groups).
     assert set(data.keys()) == {
         "general", "cache", "history", "library", "overrides", "posters", "alerts", "auth", "logging",
+        "mediadata",
         "sources", "outputs", "enrichers", "idle", "themes", "filter_meta",
         "flat_sections", "type_info", "category_info", "enricher_groups",
     }
+
+
+def test_schema_mediadata_section_has_its_two_scalar_fields(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/schema").get_json()
+    field_names = {f["name"] for f in data["mediadata"]}
+    assert field_names == {"path", "cache_first"}
 
 
 def test_form_saves_history_section(config_path):
