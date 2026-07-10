@@ -26,11 +26,23 @@ import pyatv
 from mediainfo.config import AppleTvConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.sources.base import MediaSource
+from mediainfo.status import AvailabilityReason, classify_connection_exception
 
 logger = logging.getLogger(__name__)
 
-# DeviceState.name values that count as "playing".
+# DeviceState.name values that count as "playing" vs. "paused" (used to
+# set both NowPlaying detection - unchanged - and availability_reason).
 _PLAYING_STATES = frozenset(["playing", "loading"])
+_PAUSED_STATES = frozenset(["paused"])
+
+# pyatv's own exceptions for bad/missing credentials - distinguished from
+# a plain connection failure so a device off vs. an actual pairing
+# problem don't both collapse into the same Health="Error".
+_AUTH_EXCEPTIONS = (
+    pyatv.exceptions.AuthenticationError,
+    pyatv.exceptions.InvalidCredentialsError,
+    pyatv.exceptions.NoCredentialsError,
+)
 
 # Artwork is written here keyed by SHA-256 of its bytes so different art
 # produces different filenames (cache invalidation) while identical art
@@ -112,9 +124,20 @@ class AppleTvSource(MediaSource):
             logger.warning("Apple TV: connection lost; will reconnect next poll")
             await self._disconnect()
             self.last_poll_failed = True
+            # It was reachable a moment ago - a dropped connection is more
+            # likely the device going to sleep than a fresh failure.
+            self.availability_reason = AvailabilityReason.SLEEPING
             return None
 
-        if _enum_name(playing.device_state) not in _PLAYING_STATES:
+        state = _enum_name(playing.device_state)
+        if state in _PLAYING_STATES:
+            self.availability_reason = AvailabilityReason.PLAYING
+        elif state in _PAUSED_STATES:
+            self.availability_reason = AvailabilityReason.PAUSED
+        else:
+            self.availability_reason = AvailabilityReason.IDLE
+
+        if state not in _PLAYING_STATES:
             return None
 
         title = playing.title or ""
@@ -155,15 +178,23 @@ class AppleTvSource(MediaSource):
         try:
             results = await pyatv.scan(self._loop, hosts=[self._config.host])
             if not results:
+                # An mDNS/Bonjour scan finding nothing is a reliable signal
+                # for this protocol specifically - the device is off or
+                # asleep, not a real integration problem.
                 logger.warning("Apple TV: no device found at %s", self._config.host)
+                self.availability_reason = AvailabilityReason.POWERED_OFF
                 return
 
             conf = results[0]
             _apply_credentials(conf, self._config)
             self._atv = await pyatv.connect(conf, self._loop)
             logger.info("Apple TV: connected to %s", conf.name)
-        except Exception:
+        except _AUTH_EXCEPTIONS:
+            logger.exception("Apple TV: authentication failed for %s", self._config.host)
+            self.availability_reason = AvailabilityReason.AUTH_FAILED
+        except Exception as exc:
             logger.exception("Apple TV: failed to connect to %s", self._config.host)
+            self.availability_reason = classify_connection_exception(exc)
 
     async def _disconnect(self) -> None:
         if self._atv is not None:

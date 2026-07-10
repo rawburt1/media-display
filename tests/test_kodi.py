@@ -3,8 +3,11 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from mediainfo.config import KodiConfig
 from mediainfo.sources.kodi import KodiSource, resolve_kodi_image_url
+from mediainfo.status import AvailabilityReason
 
 
 def test_resolve_kodi_image_url():
@@ -59,6 +62,7 @@ def test_no_active_players_returns_none(mock_post):
     source = _source()
     assert source.get_now_playing() is None
     assert source.last_poll_failed is False  # connected fine, just idle
+    assert source.availability_reason == AvailabilityReason.IDLE
 
 
 @patch("mediainfo.sources.kodi.requests.post")
@@ -77,10 +81,12 @@ def test_movie_item(mock_post):
         },
     )
 
-    now_playing = _source().get_now_playing()
+    source = _source()
+    now_playing = source.get_now_playing()
 
     assert now_playing.source == "kodi"
     assert now_playing.media_type == "movie"
+    assert source.availability_reason == AvailabilityReason.PLAYING
     assert now_playing.title == "Inception"
     assert now_playing.subtitle == ""
     assert now_playing.year == 2010
@@ -245,6 +251,50 @@ def test_request_error_returns_none(mock_post):
     source = _source()
     assert source.get_now_playing() is None
     assert source.last_poll_failed is True
+    # A generic exception isn't recognizably a network issue - falls back
+    # to a plain integration error rather than claiming "unreachable".
+    assert source.availability_reason == AvailabilityReason.API_ERROR
+
+
+@patch("mediainfo.sources.kodi.requests.post")
+def test_connection_error_sets_network_unreachable(mock_post):
+    # The characteristic shape of "the Kodi box is powered off": nothing
+    # answers on the LAN at all.
+    mock_post.side_effect = requests.exceptions.ConnectionError("no route to host")
+
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is True
+    assert source.availability_reason == AvailabilityReason.NETWORK_UNREACHABLE
+
+
+@patch("mediainfo.sources.kodi.requests.post")
+def test_http_401_sets_auth_failed(mock_post):
+    response = MagicMock()
+    response.status_code = 401
+    response.raise_for_status.side_effect = requests.exceptions.HTTPError(response=response)
+    mock_post.return_value = response
+
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is True
+    assert source.availability_reason == AvailabilityReason.AUTH_FAILED
+
+
+@patch("mediainfo.sources.kodi.requests.post")
+def test_http_500_sets_api_error_not_network_unreachable(mock_post):
+    # A reachable server that responded with an error is not the same as
+    # an unreachable one - regression guard for requests.exceptions.HTTPError
+    # (a requests.exceptions.RequestException, itself an OSError subclass)
+    # being misclassified as NETWORK_UNREACHABLE.
+    response = MagicMock()
+    response.status_code = 500
+    response.raise_for_status.side_effect = requests.exceptions.HTTPError(response=response)
+    mock_post.return_value = response
+
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.availability_reason == AvailabilityReason.API_ERROR
 
 
 # ---------------------------------------------------------------------------
