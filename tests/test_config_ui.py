@@ -62,6 +62,28 @@ def library_config_path(tmp_path):
     return path
 
 
+@pytest.fixture
+def incomplete_config_path(tmp_path):
+    """Like config_path, but blanks out sources.kodi.host - a field
+    _REQUIRED_FIELDS (config_schema.py) marks required - while leaving the
+    source enabled and its other fields (including the secret
+    sources.kodi.password) untouched. Exercises the "enabled but missing a
+    required field" case: the Overview page's "missing required settings"
+    warning is computed client-side from /api/schema + /api/config (see
+    ConfigUiOutput._compute_overview's docstring), so what must hold at the
+    API layer is that /api/schema still marks the field required and
+    /api/config still reports it empty without leaking unrelated secrets.
+    """
+    path = tmp_path / "config.yaml"
+    text = EXAMPLE_CONFIG.read_text(encoding="utf-8")
+    text = text.replace(
+        "host: 192.168.1.21       # IP address of the machine running Kodi",
+        'host: ""                 # IP address of the machine running Kodi',
+    )
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 # ---------------------------------------------------------------------------
 # /api/schema
 # ---------------------------------------------------------------------------
@@ -132,6 +154,42 @@ def test_schema_does_not_mark_host_as_secret(config_path):
     data = out.app.test_client().get("/api/schema").get_json()
     fields = {f["name"]: f for f in data["sources"]["kodi"]}
     assert fields["host"]["secret"] is False
+
+
+# ---------------------------------------------------------------------------
+# Required-field contract: /api/schema's "required" flag and /api/config's
+# reporting of an enabled-but-incomplete component are what the Overview
+# page's client-side "missing required settings" warning relies on.
+# ---------------------------------------------------------------------------
+
+def test_schema_marks_kodi_host_as_required(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/schema").get_json()
+    fields = {f["name"]: f for f in data["sources"]["kodi"]}
+    assert fields["host"]["required"] is True
+
+
+def test_schema_does_not_mark_non_required_field_as_required(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/schema").get_json()
+    fields = {f["name"]: f for f in data["sources"]["kodi"]}
+    assert fields["port"]["required"] is False
+
+
+def test_get_config_reports_empty_value_for_missing_required_field(incomplete_config_path):
+    out = _output(incomplete_config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert data["values"]["sources.kodi.enabled"] is True
+    assert data["values"]["sources.kodi.host"] == ""
+
+
+def test_get_config_does_not_leak_secrets_when_a_sibling_field_is_missing(incomplete_config_path):
+    out = _output(incomplete_config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    # kodi.password is still set in this fixture (only host was blanked) -
+    # it must stay reported as set-but-masked, never as a raw value.
+    assert data["secrets_set"]["sources.kodi.password"] is True
+    assert data["values"]["sources.kodi.password"] == ""
 
 
 # ---------------------------------------------------------------------------
