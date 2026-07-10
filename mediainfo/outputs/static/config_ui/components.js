@@ -35,17 +35,34 @@ var CATEGORY_GROUPS = {
   ],
 };
 
+// Deterministic hue from a component id, used only for the Appearance
+// (theme) cards' decorative accent strip below - not a real preview of
+// what the theme looks like (that would require actually rendering it,
+// out of scope here), just a way to tell theme cards apart at a glance.
+function hueForId(id) {
+  var h = 0;
+  for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360;
+  return h;
+}
+
 function componentCard(c) {
   var readOnly = c.component_type === 'text_enricher';
   var badge = readOnly
     ? '<span class="badge b-unknown">View only</span>'
     : '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>';
   var warning = c.warnings && c.warnings.length ? '<div class="warning">' + esc(c.warnings[0]) + '</div>' : '';
-  return '<a class="component-card" href="#component/' + esc(c.id) + '">'
-    + '<div class="name">' + esc(c.name) + '</div>' + badge
+  var accent = '';
+  var cardClass = 'component-card';
+  if (c.component_type === 'theme') {
+    var hue = hueForId(c.id);
+    cardClass += ' component-card--theme';
+    accent = '<div class="component-card-accent" style="background:linear-gradient(135deg, hsl(' + hue + ',70%,55%), hsl(' + ((hue + 45) % 360) + ',70%,55%));"></div>';
+  }
+  return '<a class="' + cardClass + '" href="#component/' + esc(c.id) + '">' + accent
+    + '<div class="body"><div class="name">' + esc(c.name) + '</div>' + badge
     + (c.description ? '<div class="desc">' + esc(c.description) + '</div>' : '')
     + warning
-    + '</a>';
+    + '</div></a>';
 }
 
 function renderCategorySection(name) {
@@ -79,6 +96,15 @@ var detailOutputsWorking = null;     // output/theme: full instance array (deep 
 var detailOutputType = null;         // output type name detailOutputsWorking belongs to
 var detailThemeName = null;          // set only for component_type "theme"
 var detailAdvancedOpen = false;
+// A save's confirmation ("Saved - changes take effect...") is set on the
+// *current* #detail-save-status element, but the save handler immediately
+// triggers a refetch to show fresh server state (flips secret badges
+// etc.) - that refetch's own render replaces the whole section, including
+// a brand new (empty) #detail-save-status, wiping the message out before
+// anyone can read it. Stashing it here and having
+// renderComponentDetailBody() apply it once after that fresh render lands
+// avoids the race instead of racing the DOM directly.
+var detailPendingStatus = null;
 
 function classicHrefFor(c) {
   if (c.component_type === 'text_enricher') return '/form#advanced';
@@ -258,6 +284,15 @@ function renderComponentDetailBody() {
   }
 
   el.innerHTML = html;
+
+  if (detailPendingStatus) {
+    var statusEl = document.getElementById('detail-save-status');
+    if (statusEl) {
+      statusEl.textContent = detailPendingStatus.text;
+      statusEl.className = detailPendingStatus.className;
+    }
+    detailPendingStatus = null;
+  }
 }
 
 function loadOutputInstances(c) {
@@ -353,10 +388,12 @@ function saveDetailComponent() {
       statusEl.className = 'err';
       return;
     }
-    statusEl.textContent = d.restart_required
-      ? 'Saved. A restart is needed for outputs/authentication changes to take effect.'
-      : 'Saved - changes take effect within a few seconds.';
-    statusEl.className = 'ok';
+    detailPendingStatus = {
+      text: d.restart_required
+        ? 'Saved. A restart is needed for outputs/authentication changes to take effect.'
+        : 'Saved - changes take effect within a few seconds.',
+      className: 'ok',
+    };
     hasUnsavedComponentEdits = false;
     detailEdits = {};
     detailReplacingSecret = {};
