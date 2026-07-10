@@ -87,6 +87,27 @@ class PixooOutput(Output):
             }
         )
 
+    def on_idle(self) -> None:
+        # Same protocol as update(), sent with an all-zero (black) buffer -
+        # there's no dedicated "clear" command in the Pixoo HTTP API. This
+        # is what keeps the display from getting stuck on stale artwork
+        # when e.g. every candidate image gets filtered out for this
+        # output (see orchestrator_artwork.py's show_image_for_output).
+        size = self.config.size
+        blank = base64.b64encode(bytes(size * size * 3)).decode("ascii")
+        self._post({"Command": "Draw/ResetHttpGifId"})
+        self._post(
+            {
+                "Command": "Draw/SendHttpGif",
+                "PicNum": 1,
+                "PicWidth": size,
+                "PicOffset": 0,
+                "PicID": 1,
+                "PicSpeed": 1000,
+                "PicData": blank,
+            }
+        )
+
     def _build_led_image(self, img: Image.Image) -> tuple:
         """The get_derived_path build callback: optional text removal, then
         the LED-preparation pipeline. Returns (image, decision-record) so

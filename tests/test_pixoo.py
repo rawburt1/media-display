@@ -134,6 +134,48 @@ def test_update_sends_16x16_pixels_when_size_16(tmp_path):
     assert gif_payload["PicWidth"] == 16
 
 
+# ---------------------------------------------------------------------------
+# on_idle
+# ---------------------------------------------------------------------------
+
+def test_on_idle_sends_correct_commands(tmp_path):
+    output = PixooOutput(_config(), _cache(tmp_path))
+
+    with patch.object(output, "_post") as mock_post:
+        output.on_idle()
+
+    assert mock_post.call_count == 2
+    commands = [c.args[0]["Command"] for c in mock_post.call_args_list]
+    assert commands == ["Draw/ResetHttpGifId", "Draw/SendHttpGif"]
+
+
+def test_on_idle_sends_an_all_black_frame(tmp_path):
+    output = PixooOutput(_config(), _cache(tmp_path))
+
+    sent_payloads = []
+    with patch.object(output, "_post", side_effect=lambda p: sent_payloads.append(p)):
+        output.on_idle()
+
+    gif_payload = next(p for p in sent_payloads if p.get("Command") == "Draw/SendHttpGif")
+    raw = base64.b64decode(gif_payload["PicData"])
+    assert len(raw) == 64 * 64 * 3
+    assert raw == bytes(64 * 64 * 3)
+    assert gif_payload["PicWidth"] == 64
+
+
+def test_on_idle_sends_correctly_sized_frame_for_size_16(tmp_path):
+    output = PixooOutput(_config(size=16), _cache(tmp_path))
+
+    sent_payloads = []
+    with patch.object(output, "_post", side_effect=lambda p: sent_payloads.append(p)):
+        output.on_idle()
+
+    gif_payload = next(p for p in sent_payloads if p.get("Command") == "Draw/SendHttpGif")
+    raw = base64.b64decode(gif_payload["PicData"])
+    assert len(raw) == 16 * 16 * 3
+    assert gif_payload["PicWidth"] == 16
+
+
 def test_update_saves_preview_when_configured(tmp_path):
     img_path = _save_image(tmp_path / "art.jpg")
     preview_path = tmp_path / "preview.png"
