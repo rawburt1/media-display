@@ -23,7 +23,9 @@ def no_server(monkeypatch):
 
 
 def _output(config_path):
-    return ConfigUiOutput(ConfigUiConfig(enabled=True, host="127.0.0.1", port=8094), config_path)
+    return ConfigUiOutput(
+        ConfigUiConfig(enabled=True, host="127.0.0.1", port=8094), config_path
+    )
 
 
 @pytest.fixture
@@ -60,6 +62,7 @@ def _by_id(components, id_):
 # ---------------------------------------------------------------------------
 # build_components(): category/type mapping
 # ---------------------------------------------------------------------------
+
 
 def test_enabled_source_is_media_component(config_path):
     kodi = _by_id(_components(config_path), "sources.kodi")
@@ -155,7 +158,10 @@ def test_alerts_is_health_component(config_path):
 # Required-field / needs_configuration status
 # ---------------------------------------------------------------------------
 
-def test_enabled_component_missing_required_field_needs_configuration(incomplete_config_path):
+
+def test_enabled_component_missing_required_field_needs_configuration(
+    incomplete_config_path,
+):
     kodi = _by_id(_components(incomplete_config_path), "sources.kodi")
     assert kodi.status == "needs_configuration"
     assert kodi.configured is False
@@ -185,14 +191,19 @@ def test_secret_required_field_set_is_not_flagged_missing(config_path):
 # Health mapping
 # ---------------------------------------------------------------------------
 
+
 def test_health_error_status_maps_to_component_error(config_path):
     out = _output(config_path)
     schema = _build_schema()
     values, secrets_set = out._store.get_values()
     output_instances, output_secrets_set = out._store.get_output_instances()
     health = {
-        "sources": [{"name": "kodi", "status": "error", "last_error": "Could not connect"}],
-        "outputs": [], "enrichers": [], "idle_sources": [],
+        "sources": [
+            {"name": "kodi", "status": "error", "last_error": "Could not connect"}
+        ],
+        "outputs": [],
+        "enrichers": [],
+        "idle_sources": [],
     }
     components = build_components(
         schema, values, secrets_set, output_instances, output_secrets_set, {}, health
@@ -206,6 +217,7 @@ def test_health_error_status_maps_to_component_error(config_path):
 # ---------------------------------------------------------------------------
 # Secrets: never leak a raw value, across every built component
 # ---------------------------------------------------------------------------
+
 
 def test_no_component_leaks_a_secret_value(config_path):
     for c in _components(config_path):
@@ -225,12 +237,15 @@ def test_config_path_points_at_the_right_yaml_location(config_path):
 # /api/ui/components, /api/ui/component/<id>
 # ---------------------------------------------------------------------------
 
+
 def test_api_ui_components_returns_a_list(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/ui/components").get_json()
     assert isinstance(data, list)
     assert len(data) > 0
-    assert {"id", "category", "component_type", "status", "essential_fields"} <= data[0].keys()
+    assert {"id", "category", "component_type", "status", "essential_fields"} <= data[
+        0
+    ].keys()
 
 
 def test_api_ui_component_returns_the_matching_one(config_path):
@@ -259,6 +274,7 @@ def test_api_ui_components_does_not_leak_secrets(config_path):
 # ---------------------------------------------------------------------------
 # /api/ui/pipelines
 # ---------------------------------------------------------------------------
+
 
 def test_api_ui_pipelines_returns_one_default_pipeline(config_path):
     out = _output(config_path)
@@ -290,6 +306,7 @@ def test_pipeline_with_no_enabled_sources_is_empty_not_broken(tmp_path):
 # /api/ui/dashboard
 # ---------------------------------------------------------------------------
 
+
 def test_api_ui_dashboard_returns_expected_shape(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/ui/dashboard").get_json()
@@ -299,7 +316,9 @@ def test_api_ui_dashboard_returns_expected_shape(config_path):
     assert "health" in data and "counts_by_status" in data["health"]
 
 
-def test_api_ui_dashboard_has_no_warnings_for_intentionally_disabled_components(config_path):
+def test_api_ui_dashboard_has_no_warnings_for_intentionally_disabled_components(
+    config_path,
+):
     out = _output(config_path)
     data = out.app.test_client().get("/api/ui/dashboard").get_json()
     assert data["health"]["warnings"] == []
@@ -316,3 +335,23 @@ def test_api_ui_dashboard_works_without_currently_playing_data(config_path):
     data = out.app.test_client().get("/api/ui/dashboard").get_json()
     assert data["now_playing"] is None
     assert data["active_source"] is None
+
+
+def test_dashboard_quick_actions_has_no_restart_action_by_default(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    assert data["restart_required"] is False
+    assert [a["id"] for a in data["quick_actions"]].count("restart") == 0
+
+
+def test_dashboard_quick_actions_leads_with_restart_action_when_restart_required(
+    config_path,
+):
+    out = _output(config_path)
+    out._restart_required = True
+    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    assert data["restart_required"] is True
+    first = data["quick_actions"][0]
+    assert first["id"] == "restart"
+    assert first["kind"] == "restart"
+    assert first["href"] == "/api/restart"

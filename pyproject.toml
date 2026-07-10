@@ -10,10 +10,11 @@ license = { file = "LICENSE" }
 mediainfo = "mediainfo.__main__:main"
 
 # The web outputs' pages are .html files inside the package (see
-# mediainfo/outputs/templates/) - without this they'd be silently dropped
+# mediainfo/outputs/templates/), plus the config UI's static JS/CSS (see
+# mediainfo/outputs/static/) - without this they'd be silently dropped
 # from a `pip install .`, breaking those routes at runtime only.
 [tool.setuptools.package-data]
-"mediainfo.outputs" = ["templates/*/*.html"]
+"mediainfo.outputs" = ["templates/*/*.html", "static/*/*.css", "static/*/*.js"]
 
 [tool.mypy]
 ignore_missing_imports = true

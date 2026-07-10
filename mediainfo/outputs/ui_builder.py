@@ -61,30 +61,72 @@ _HEALTH_STATUS_MAP = {
 # isn't even a dataclass) and text_enrichers (see module docstring).
 _EXTRA_TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
     "flat": {
-        "cache": {"label": "Artwork Cache", "description": "Local disk cache for downloaded artwork/images."},
-        "history": {"label": "Playback History", "description": "Self-hosted scrobble log of everything played, across every source."},
-        "library": {"label": "Music Library Cache", "description": "Local SQLite cache of artist/album/track metadata, avoiding repeat external lookups."},
-        "overrides": {"label": "Artwork Overrides", "description": "Manual per-title artwork pins."},
-        "posters": {"label": "Poster Store", "description": "Static poster images matched per show."},
-        "mediadata": {"label": "Unified Media Data Cache", "description": "Shared on-disk artwork/lyrics/metadata cache used by the mediadata enrichers."},
-        "auth": {"label": "Authentication", "description": "HTTP Basic Auth for outputs reachable beyond your LAN."},
-        "logging": {"label": "Logging", "description": "Log level and optional log file."},
-        "alerts": {"label": "Alerts", "description": "Webhook notifications when a source or output has been failing for a while."},
+        "cache": {
+            "label": "Artwork Cache",
+            "description": "Local disk cache for downloaded artwork/images.",
+        },
+        "history": {
+            "label": "Playback History",
+            "description": "Self-hosted scrobble log of everything played, across every source.",
+        },
+        "library": {
+            "label": "Music Library Cache",
+            "description": "Local SQLite cache of artist/album/track metadata, avoiding repeat external lookups.",
+        },
+        "overrides": {
+            "label": "Artwork Overrides",
+            "description": "Manual per-title artwork pins.",
+        },
+        "posters": {
+            "label": "Poster Store",
+            "description": "Static poster images matched per show.",
+        },
+        "mediadata": {
+            "label": "Unified Media Data Cache",
+            "description": "Shared on-disk artwork/lyrics/metadata cache used by the mediadata enrichers.",
+        },
+        "auth": {
+            "label": "Authentication",
+            "description": "HTTP Basic Auth for outputs reachable beyond your LAN.",
+        },
+        "logging": {
+            "label": "Logging",
+            "description": "Log level and optional log file.",
+        },
+        "alerts": {
+            "label": "Alerts",
+            "description": "Webhook notifications when a source or output has been failing for a while.",
+        },
         "general": {"label": "General", "description": "Polling and rotation timing."},
     },
     "text_enrichers": {
-        "lrclib": {"label": "LRCLIB", "description": "Free, public time-synced lyrics lookup - no API key needed."},
-        "mediadata": {"label": "Local Media Data Cache (lyrics)", "description": "Checks the local unified media-data cache for lyrics before falling back to LRCLIB."},
-        "ollama_text": {"label": "Ollama (local AI text)", "description": "Generates text via a local Ollama instance."},
+        "lrclib": {
+            "label": "LRCLIB",
+            "description": "Free, public time-synced lyrics lookup - no API key needed.",
+        },
+        "mediadata": {
+            "label": "Local Media Data Cache (lyrics)",
+            "description": "Checks the local unified media-data cache for lyrics before falling back to LRCLIB.",
+        },
+        "ollama_text": {
+            "label": "Ollama (local AI text)",
+            "description": "Generates text via a local Ollama instance.",
+        },
     },
 }
 
 # Which top-level GUI category each flat section belongs to (see Fas 0
 # inventory doc §4.1).
 _CATEGORY_FOR_FLAT_SECTION = {
-    "cache": "library", "history": "library", "library": "library",
-    "overrides": "library", "posters": "library", "mediadata": "library",
-    "auth": "advanced", "logging": "advanced", "general": "advanced",
+    "cache": "library",
+    "history": "library",
+    "library": "library",
+    "overrides": "library",
+    "posters": "library",
+    "mediadata": "library",
+    "auth": "advanced",
+    "logging": "advanced",
+    "general": "advanced",
     "alerts": "health",
 }
 
@@ -126,7 +168,11 @@ def _missing_required_fields(
     for f in fields:
         if not f["required"]:
             continue
-        is_set = bool(local_secrets_set.get(f["name"])) if f["secret"] else bool(local_values.get(f["name"]))
+        is_set = (
+            bool(local_secrets_set.get(f["name"]))
+            if f["secret"]
+            else bool(local_values.get(f["name"]))
+        )
         if not is_set:
             missing.append(f["name"])
     return missing
@@ -147,7 +193,9 @@ def _build_fields(
             secret=f["secret"],
             essential=f["essential"],
             value="" if f["secret"] else local_values.get(f["name"]),
-            secret_set=bool(local_secrets_set.get(f["name"], False)) if f["secret"] else False,
+            secret_set=bool(local_secrets_set.get(f["name"], False))
+            if f["secret"]
+            else False,
             default=f["default"],
             widget=f.get("widget"),
             choices=f.get("choices"),
@@ -156,7 +204,9 @@ def _build_fields(
     return essential, advanced
 
 
-def _status_for(enabled: bool, missing_required: List[str], health_entry: Optional[dict]) -> str:
+def _status_for(
+    enabled: bool, missing_required: List[str], health_entry: Optional[dict]
+) -> str:
     if not enabled:
         return "disabled"
     if missing_required:
@@ -166,7 +216,9 @@ def _status_for(enabled: bool, missing_required: List[str], health_entry: Option
     return "enabled"
 
 
-def _warnings_for(enabled: bool, missing_required: List[str], health_entry: Optional[dict]) -> List[str]:
+def _warnings_for(
+    enabled: bool, missing_required: List[str], health_entry: Optional[dict]
+) -> List[str]:
     """Only surfaces issues for enabled components - a disabled component
     with unfilled fields isn't a warning (matches _compute_overview's
     existing "needs attention" semantics: only enabled-but-broken things
@@ -182,7 +234,9 @@ def _warnings_for(enabled: bool, missing_required: List[str], health_entry: Opti
 def _default_actions(supports_test: bool, test_href: Optional[str]) -> List[UiAction]:
     actions = [UiAction(id="configure", label="Configure", kind="link", href="/form")]
     if supports_test:
-        actions.append(UiAction(id="test", label="Test connection", kind="test", href=test_href))
+        actions.append(
+            UiAction(id="test", label="Test connection", kind="test", href=test_href)
+        )
     return actions
 
 
@@ -210,27 +264,30 @@ def _registry_components(
         health_entry = health_by_key.get(type_name)
         info = config_schema._TYPE_INFO.get(section_key, {}).get(type_name, {})
         config_path = f"{section_key}.{type_name}"
-        components.append(UiComponent(
-            id=config_path,
-            name=info.get("label", type_name),
-            category=category,
-            component_type=component_type,
-            description=info.get("description", ""),
-            enabled=enabled,
-            configured=not missing,
-            status=_status_for(enabled, missing, health_entry),
-            health=(health_entry or {}).get("status", "unknown"),
-            config_path=config_path,
-            supports_test=supports_test,
-            supports_multiple=False,
-            requires_restart=False,
-            essential_fields=essential,
-            advanced_fields=advanced,
-            warnings=_warnings_for(enabled, missing, health_entry),
-            actions=_default_actions(
-                supports_test, test_href_fmt.format(type_name) if test_href_fmt else None
-            ),
-        ))
+        components.append(
+            UiComponent(
+                id=config_path,
+                name=info.get("label", type_name),
+                category=category,
+                component_type=component_type,
+                description=info.get("description", ""),
+                enabled=enabled,
+                configured=not missing,
+                status=_status_for(enabled, missing, health_entry),
+                health=(health_entry or {}).get("status", "unknown"),
+                config_path=config_path,
+                supports_test=supports_test,
+                supports_multiple=False,
+                requires_restart=False,
+                essential_fields=essential,
+                advanced_fields=advanced,
+                warnings=_warnings_for(enabled, missing, health_entry),
+                actions=_default_actions(
+                    supports_test,
+                    test_href_fmt.format(type_name) if test_href_fmt else None,
+                ),
+            )
+        )
     return components
 
 
@@ -254,31 +311,38 @@ def _output_components(
         health_entry = health_by_type.get(type_name)
         info = config_schema._TYPE_INFO.get("outputs", {}).get(type_name, {})
         config_path = f"outputs.{type_name}"
-        components.append(UiComponent(
-            id=config_path,
-            name=info.get("label", type_name),
-            category="display",
-            component_type="output",
-            description=info.get("description", ""),
-            enabled=enabled,
-            configured=not missing,
-            status=_status_for(enabled, missing, health_entry),
-            health=(health_entry or {}).get("status", "unknown"),
-            config_path=config_path,
-            supports_test=True,
-            supports_multiple=True,
-            requires_restart=True,  # output changes are what trip the global restart flag - see UiDashboard.restart_required for the live signal
-            essential_fields=essential,
-            advanced_fields=advanced,
-            warnings=_warnings_for(enabled, missing, health_entry) + (
-                [f"{len(instances)} instances configured - showing the first"] if len(instances) > 1 else []
-            ),
-            actions=_default_actions(True, "/api/test/output"),
-        ))
+        components.append(
+            UiComponent(
+                id=config_path,
+                name=info.get("label", type_name),
+                category="display",
+                component_type="output",
+                description=info.get("description", ""),
+                enabled=enabled,
+                configured=not missing,
+                status=_status_for(enabled, missing, health_entry),
+                health=(health_entry or {}).get("status", "unknown"),
+                config_path=config_path,
+                supports_test=True,
+                supports_multiple=True,
+                requires_restart=True,  # output changes are what trip the global restart flag - see UiDashboard.restart_required for the live signal
+                essential_fields=essential,
+                advanced_fields=advanced,
+                warnings=_warnings_for(enabled, missing, health_entry)
+                + (
+                    [f"{len(instances)} instances configured - showing the first"]
+                    if len(instances) > 1
+                    else []
+                ),
+                actions=_default_actions(True, "/api/test/output"),
+            )
+        )
     return components
 
 
-def _theme_components(schema_themes: Dict[str, List[dict]], output_instances: Dict[str, List[dict]]) -> List[UiComponent]:
+def _theme_components(
+    schema_themes: Dict[str, List[dict]], output_instances: Dict[str, List[dict]]
+) -> List[UiComponent]:
     themes_instances = output_instances.get("themes") or [{}]
     themes_enabled = bool(themes_instances[0].get("enabled"))
     raw_themes: Dict[str, Any] = themes_instances[0].get("themes") or {}
@@ -291,25 +355,27 @@ def _theme_components(schema_themes: Dict[str, List[dict]], output_instances: Di
         enabled = themes_enabled and bool(local_values.get("enabled"))
         info = config_schema._TYPE_INFO.get("themes", {}).get(theme_name, {})
         config_path = f"themes.{theme_name}"
-        components.append(UiComponent(
-            id=config_path,
-            name=info.get("label", theme_name),
-            category="appearance",
-            component_type="theme",
-            description=info.get("description", ""),
-            enabled=enabled,
-            configured=True,
-            status="enabled" if enabled else "disabled",
-            health="unknown",
-            config_path=config_path,
-            supports_test=False,
-            supports_multiple=False,
-            requires_restart=False,
-            essential_fields=essential,
-            advanced_fields=advanced,
-            warnings=[],
-            actions=_default_actions(False, None),
-        ))
+        components.append(
+            UiComponent(
+                id=config_path,
+                name=info.get("label", theme_name),
+                category="appearance",
+                component_type="theme",
+                description=info.get("description", ""),
+                enabled=enabled,
+                configured=True,
+                status="enabled" if enabled else "disabled",
+                health="unknown",
+                config_path=config_path,
+                supports_test=False,
+                supports_multiple=False,
+                requires_restart=False,
+                essential_fields=essential,
+                advanced_fields=advanced,
+                warnings=[],
+                actions=_default_actions(False, None),
+            )
+        )
     return components
 
 
@@ -323,29 +389,33 @@ def _text_enricher_components(text_enrichers_raw: Dict[str, Any]) -> List[UiComp
         enabled = bool(local_values.get("enabled"))
         info = _EXTRA_TYPE_INFO["text_enrichers"].get(type_name, {})
         config_path = f"text_enrichers.{type_name}"
-        components.append(UiComponent(
-            id=config_path,
-            name=info.get("label", type_name),
-            category="metadata",
-            component_type="text_enricher",
-            description=info.get("description", ""),
-            enabled=enabled,
-            configured=True,
-            status="enabled" if enabled else "disabled",
-            health="unknown",
-            config_path=config_path,
-            supports_test=False,
-            supports_multiple=False,
-            requires_restart=False,
-            essential_fields=essential,
-            advanced_fields=advanced,
-            warnings=[],
-            actions=_default_actions(False, None),
-        ))
+        components.append(
+            UiComponent(
+                id=config_path,
+                name=info.get("label", type_name),
+                category="metadata",
+                component_type="text_enricher",
+                description=info.get("description", ""),
+                enabled=enabled,
+                configured=True,
+                status="enabled" if enabled else "disabled",
+                health="unknown",
+                config_path=config_path,
+                supports_test=False,
+                supports_multiple=False,
+                requires_restart=False,
+                essential_fields=essential,
+                advanced_fields=advanced,
+                warnings=[],
+                actions=_default_actions(False, None),
+            )
+        )
     return components
 
 
-def _flat_section_components(schema: dict, values: Dict[str, Any], text_enrichers_raw: Dict[str, Any]) -> List[UiComponent]:
+def _flat_section_components(
+    schema: dict, values: Dict[str, Any], text_enrichers_raw: Dict[str, Any]
+) -> List[UiComponent]:
     components = []
     for section_key, info in _EXTRA_TYPE_INFO["flat"].items():
         fields = schema.get(section_key, [])
@@ -368,25 +438,27 @@ def _flat_section_components(schema: dict, values: Dict[str, Any], text_enricher
             enabled = True
             status = "unknown"
         config_path = section_key
-        components.append(UiComponent(
-            id=config_path,
-            name=info["label"],
-            category=_CATEGORY_FOR_FLAT_SECTION[section_key],
-            component_type=section_key,
-            description=info["description"],
-            enabled=enabled,
-            configured=True,
-            status=status,
-            health="unknown",
-            config_path=config_path,
-            supports_test=False,
-            supports_multiple=False,
-            requires_restart=False,
-            essential_fields=essential,
-            advanced_fields=advanced,
-            warnings=[],
-            actions=_default_actions(False, None),
-        ))
+        components.append(
+            UiComponent(
+                id=config_path,
+                name=info["label"],
+                category=_CATEGORY_FOR_FLAT_SECTION[section_key],
+                component_type=section_key,
+                description=info["description"],
+                enabled=enabled,
+                configured=True,
+                status=status,
+                health="unknown",
+                config_path=config_path,
+                supports_test=False,
+                supports_multiple=False,
+                requires_restart=False,
+                essential_fields=essential,
+                advanced_fields=advanced,
+                warnings=[],
+                actions=_default_actions(False, None),
+            )
+        )
     return components
 
 
@@ -415,19 +487,40 @@ def build_components(
 
     components: List[UiComponent] = []
     components += _registry_components(
-        "sources", SOURCE_CONFIG_TYPES, "media", "source",
-        schema.get("sources", {}), values, secrets_set, sources_health,
-        supports_test=True, test_href_fmt="/api/test/source/{}",
+        "sources",
+        SOURCE_CONFIG_TYPES,
+        "media",
+        "source",
+        schema.get("sources", {}),
+        values,
+        secrets_set,
+        sources_health,
+        supports_test=True,
+        test_href_fmt="/api/test/source/{}",
     )
     components += _registry_components(
-        "idle", IDLE_CONFIG_TYPES, "media", "idle_source",
-        schema.get("idle", {}), values, secrets_set, idle_health,
-        supports_test=False, test_href_fmt=None,
+        "idle",
+        IDLE_CONFIG_TYPES,
+        "media",
+        "idle_source",
+        schema.get("idle", {}),
+        values,
+        secrets_set,
+        idle_health,
+        supports_test=False,
+        test_href_fmt=None,
     )
     components += _registry_components(
-        "enrichers", ENRICHER_CONFIG_TYPES, "metadata", "enricher",
-        schema.get("enrichers", {}), values, secrets_set, enrichers_health,
-        supports_test=True, test_href_fmt="/api/test/enricher/{}",
+        "enrichers",
+        ENRICHER_CONFIG_TYPES,
+        "metadata",
+        "enricher",
+        schema.get("enrichers", {}),
+        values,
+        secrets_set,
+        enrichers_health,
+        supports_test=True,
+        test_href_fmt="/api/test/enricher/{}",
     )
     components += _text_enricher_components(text_enrichers_raw)
     components += _output_components(
@@ -476,9 +569,57 @@ def build_dashboard(
         for w in c.warnings:
             warnings.append(f"{c.name}: {w}")
     if overview.get("exposed_without_auth"):
-        warnings.append("The config UI is reachable beyond this machine with no login required.")
+        warnings.append(
+            "The config UI is reachable beyond this machine with no login required."
+        )
 
-    overall_status = "error" if counts_by_status.get("error") else health.get("status", "ok")
+    overall_status = (
+        "error" if counts_by_status.get("error") else health.get("status", "ok")
+    )
+
+    restart_required = bool(overview.get("restart_required"))
+    quick_actions: List[UiAction] = []
+    if restart_required:
+        # Surfaced first since it's the one action that's actually
+        # actionable right now - the rest are always-available links.
+        quick_actions.append(
+            UiAction(
+                id="restart",
+                label="Restart mediainfo",
+                kind="restart",
+                href="/api/restart",
+            )
+        )
+    quick_actions += [
+        UiAction(
+            id="configure_media", label="Configure Media", kind="link", href="/form"
+        ),
+        UiAction(
+            id="configure_metadata",
+            label="Configure Metadata",
+            kind="link",
+            href="/form",
+        ),
+        UiAction(
+            id="configure_appearance",
+            label="Change Appearance",
+            kind="link",
+            href="/form",
+        ),
+        UiAction(
+            id="configure_displays",
+            label="Configure Displays",
+            kind="link",
+            href="/form",
+        ),
+        UiAction(id="open_health", label="Open Health", kind="link", href="/dashboard"),
+        UiAction(
+            id="open_classic_settings",
+            label="Open Classic Settings",
+            kind="link",
+            href="/form",
+        ),
+    ]
 
     return UiDashboard(
         status=overall_status,
@@ -490,14 +631,7 @@ def build_dashboard(
             counts_by_status=counts_by_status,
             warnings=warnings,
         ),
-        restart_required=bool(overview.get("restart_required")),
+        restart_required=restart_required,
         exposed_without_auth=bool(overview.get("exposed_without_auth")),
-        quick_actions=[
-            UiAction(id="configure_media", label="Configure Media", kind="link", href="/form"),
-            UiAction(id="configure_metadata", label="Configure Metadata", kind="link", href="/form"),
-            UiAction(id="configure_appearance", label="Change Appearance", kind="link", href="/form"),
-            UiAction(id="configure_displays", label="Configure Displays", kind="link", href="/form"),
-            UiAction(id="open_health", label="Open Health", kind="link", href="/dashboard"),
-            UiAction(id="open_classic_settings", label="Open Classic Settings", kind="link", href="/form"),
-        ],
+        quick_actions=quick_actions,
     )
