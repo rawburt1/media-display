@@ -5,10 +5,12 @@ import concurrent.futures
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pyatv.exceptions
 import pytest
 
 from mediainfo.config import AppleTvConfig
 from mediainfo.sources.appletv import AppleTvSource, _enum_name, _map_media_type
+from mediainfo.status import AvailabilityReason
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +92,7 @@ def test_fetch_returns_now_playing_for_music():
     assert result.album == "A Night at the Opera"
     assert result.media_type == "music"
     assert result.source == "appletv"
+    assert src.availability_reason == AvailabilityReason.PLAYING
 
 
 def test_fetch_maps_video_to_movie():
@@ -133,14 +136,22 @@ def test_fetch_returns_none_images_when_no_artwork():
 # _fetch — not playing
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("state", ["Paused", "Idle", "Stopped"])
-def test_fetch_returns_none_when_not_playing(state):
+@pytest.mark.parametrize(
+    "state,expected_reason",
+    [
+        ("Paused", AvailabilityReason.PAUSED),
+        ("Idle", AvailabilityReason.IDLE),
+        ("Stopped", AvailabilityReason.IDLE),
+    ],
+)
+def test_fetch_returns_none_when_not_playing(state, expected_reason):
     src = _source()
     src._atv = MagicMock()
     src._atv.metadata.playing = AsyncMock(return_value=_playing(state=state))
     assert run(src._fetch()) is None
     # Connected fine, legitimately nothing playing - not a connection failure.
     assert src.last_poll_failed is False
+    assert src.availability_reason == expected_reason
 
 
 def test_fetch_returns_none_when_title_empty():
@@ -166,6 +177,9 @@ def test_fetch_returns_none_when_not_connected_and_scan_finds_nothing():
     with patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[])):
         assert run(src._fetch()) is None
     assert src.last_poll_failed is True
+    # A scan finding nothing is this protocol's reliable "device is off"
+    # signal - not the same as a real connect/auth failure.
+    assert src.availability_reason == AvailabilityReason.POWERED_OFF
 
 
 def test_fetch_disconnects_on_playing_exception():
@@ -178,6 +192,39 @@ def test_fetch_disconnects_on_playing_exception():
     assert result is None
     assert src._atv is None  # disconnected
     assert src.last_poll_failed is True
+    # It was reachable a moment ago - reads as the device going to sleep,
+    # not a fresh failure.
+    assert src.availability_reason == AvailabilityReason.SLEEPING
+
+
+def test_connect_sets_auth_failed_on_pyatv_authentication_error():
+    src = _source()
+    mock_conf = MagicMock()
+    with (
+        patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[mock_conf])),
+        patch(
+            "mediainfo.sources.appletv.pyatv.connect",
+            new=AsyncMock(side_effect=pyatv.exceptions.AuthenticationError("bad credentials")),
+        ),
+    ):
+        run(src._connect())
+    assert src._atv is None
+    assert src.availability_reason == AvailabilityReason.AUTH_FAILED
+
+
+def test_connect_sets_network_unreachable_on_connect_os_error():
+    src = _source()
+    mock_conf = MagicMock()
+    with (
+        patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[mock_conf])),
+        patch(
+            "mediainfo.sources.appletv.pyatv.connect",
+            new=AsyncMock(side_effect=OSError("no route to host")),
+        ),
+    ):
+        run(src._connect())
+    assert src._atv is None
+    assert src.availability_reason == AvailabilityReason.NETWORK_UNREACHABLE
 
 
 def test_fetch_connects_and_returns_result_on_fresh_start():
@@ -197,6 +244,7 @@ def test_fetch_connects_and_returns_result_on_fresh_start():
 
     assert result is not None
     assert result.title == "Bohemian Rhapsody"
+    assert src.availability_reason == AvailabilityReason.PLAYING
 
 
 def test_connect_passes_loop_to_pyatv_scan_and_connect():
