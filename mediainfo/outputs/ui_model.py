@@ -13,11 +13,16 @@ from typing import Any, Dict, List, Optional
 # Top-level page a component belongs to.
 UiCategory = str  # "media" | "metadata" | "appearance" | "display" | "library" | "health" | "system" | "advanced"
 
-# UiComponent.status. "missing_dependency" and "restart_required" are part
-# of the vocabulary but not yet derivable from any existing signal (no
-# structured "dependency missing" data, and restart-required is only
-# tracked globally, not per component - see UiDashboard.restart_required)
-# - reserved for a future phase rather than faked here.
+# UiComponent.status: "connected" | "enabled" | "disabled" |
+# "needs_configuration" | "warning" | "error" | "unknown". "warning" (Fas
+# 10) is Health.WARNING translated via mediainfo.status.translate_availability
+# - a real problem is not yet confirmed (e.g. a device that might just be
+# briefly unreachable), distinct from "error"'s confirmed-broken meaning.
+# "missing_dependency" and "restart_required" are part of the vocabulary
+# but not yet derivable from any existing signal (no structured
+# "dependency missing" data, and restart-required is only tracked
+# globally, not per component - see UiDashboard.restart_required) -
+# reserved for a future phase rather than faked here.
 UiStatus = str
 
 
@@ -69,6 +74,15 @@ class UiComponent:
     advanced_fields: List[UiField] = dataclasses.field(default_factory=list)
     warnings: List[str] = dataclasses.field(default_factory=list)
     actions: List[UiAction] = dataclasses.field(default_factory=list)
+    # What the device is doing right now (Fas 10) - independent of
+    # `status`/`health` above, which are about whether the integration is
+    # actually broken. Only populated for component_type "source" (real
+    # playback devices); everything else (outputs/enrichers/themes/flat
+    # sections, and idle_source for now) leaves both None - see
+    # mediainfo.status.Activity for the vocabulary and ui_builder.py's
+    # build_components() for where this gets set.
+    activity: Optional[str] = None
+    activity_label: Optional[str] = None
 
 
 @dataclasses.dataclass
@@ -98,3 +112,9 @@ class UiDashboard:
     restart_required: bool
     exposed_without_auth: bool
     quick_actions: List[UiAction] = dataclasses.field(default_factory=list)
+    # Counts of source components by Activity value (playing/paused/idle/
+    # sleeping/unknown - see mediainfo.status.Activity), Fas 10's device
+    # summary ("Playing: 3, Idle: 5, Sleeping: 18, ..."). A different
+    # dimension from counts_by_status above (every component, by
+    # status) - this is sources only, by activity.
+    activity_summary: Dict[str, int] = dataclasses.field(default_factory=dict)

@@ -46,11 +46,13 @@ from mediainfo.outputs.ui_model import (
 _NON_DISPLAY_OUTPUT_TYPES = frozenset({"config", "themes"})
 
 # health.py's per-category status strings, normalized to ui_model's richer
-# UiComponent.status vocabulary.
+# UiComponent.status vocabulary. "warning" (Fas 10) is a pure addition -
+# every other raw value/mapping is unchanged from before.
 _HEALTH_STATUS_MAP = {
     "active": "connected",
     "idle": "connected",
     "ok": "connected",
+    "warning": "warning",
     "error": "error",
     "disabled": "disabled",
     "not_configured": "needs_configuration",
@@ -286,6 +288,12 @@ def _registry_components(
                     supports_test,
                     test_href_fmt.format(type_name) if test_href_fmt else None,
                 ),
+                # Only ever present for sources - health.py only sets
+                # these two keys in its sources loop (see
+                # mediainfo.status.Activity), so this naturally stays
+                # None for idle_source/enricher entries too.
+                activity=(health_entry or {}).get("activity"),
+                activity_label=(health_entry or {}).get("activity_label"),
             )
         )
     return components
@@ -563,9 +571,12 @@ def build_dashboard(
 ) -> UiDashboard:
     health = health or {}
     counts_by_status: Dict[str, int] = {}
+    activity_summary: Dict[str, int] = {}
     warnings: List[str] = []
     for c in components:
         counts_by_status[c.status] = counts_by_status.get(c.status, 0) + 1
+        if c.component_type == "source" and c.activity:
+            activity_summary[c.activity] = activity_summary.get(c.activity, 0) + 1
         for w in c.warnings:
             warnings.append(f"{c.name}: {w}")
     if overview.get("exposed_without_auth"):
@@ -634,4 +645,5 @@ def build_dashboard(
         restart_required=restart_required,
         exposed_without_auth=bool(overview.get("exposed_without_auth")),
         quick_actions=quick_actions,
+        activity_summary=activity_summary,
     )

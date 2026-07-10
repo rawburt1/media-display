@@ -164,7 +164,21 @@ function renderSection(name, param) {
 // ---------------------------------------------------------------------
 var STATUS_LABELS = {
   connected: 'Connected', enabled: 'Enabled', disabled: 'Disabled',
-  needs_configuration: 'Needs configuration', error: 'Error', unknown: 'Unknown',
+  needs_configuration: 'Needs configuration', warning: 'Warning', error: 'Error', unknown: 'Unknown',
+};
+
+// Activity (Fas 10) is a separate concept from the status badges above -
+// what a source is doing right now, never a failure signal on its own
+// (see mediainfo.status.Activity). Used for the Dashboard's aggregate
+// counts below and, per-card, by components.js's healthCard(). The card-
+// level label text itself comes from the backend (activity_label) so it
+// stays in sync with mediainfo.status's translation table; this map is
+// just the CSS class per value for the Dashboard's own aggregate tiles.
+var ACTIVITY_LABELS = {
+  playing: 'Playing', paused: 'Paused', idle: 'Idle', sleeping: 'Sleeping', unknown: 'Unknown',
+};
+var ACTIVITY_LABEL_CLASS = {
+  playing: 'a-playing', paused: 'a-paused', idle: 'a-idle', sleeping: 'a-sleeping', unknown: 'a-unknown',
 };
 
 function bentoStatItem(num, label, statusClass) {
@@ -208,6 +222,11 @@ function renderDashboard() {
     html += '<div class="eyebrow">Now playing</div><div class="subtitle">Nothing is playing right now.</div>';
   }
   html += '</div>';
+
+  var activity = d.activity_summary || {};
+  html += Object.keys(activity).map(function(a) {
+    return bentoStatItem(activity[a], ACTIVITY_LABELS[a] || a, ACTIVITY_LABEL_CLASS[a] || '');
+  }).join('');
 
   var counts = (d.health && d.health.counts_by_status) || {};
   html += Object.keys(counts).map(function(status) {
