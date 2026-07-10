@@ -1,6 +1,6 @@
 'use strict';
 
-// Dashboard shell (Fas 2-7 of the GUI redesign) - the new landing page at
+// Dashboard shell (Fas 2-8 of the GUI redesign) - the new landing page at
 // "/". Dashboard/Pipeline/Media/Metadata/Appearance/Displays/Library/
 // Health are all rendered in-shell via hash-based client routing (see
 // renderFromHash() below); Advanced stays a plain <a href> link straight
@@ -8,13 +8,13 @@
 // raw YAML/backups/etc. don't have (or need) an in-shell equivalent yet.
 //
 // This file owns the shell chrome (nav/theme/routing) plus Dashboard and
-// Pipeline. Media/Metadata/Appearance/Displays' component-list rendering,
-// Health's action-oriented status list (Fas 6), Library's browse/
-// overrides/settings page (Fas 7), and the per-component detail page
-// (essential/advanced fields, save/discard/test-connection - Fas 4) live
-// in components.js, loaded after this file and sharing its esc()/theme
-// helpers, componentsData/componentsById, and the
-// confirmDiscardIfDirty() guard via the hasUnsavedComponentEdits flag
+// Pipeline. Media/Metadata/Appearance/Displays' card-grid rendering
+// (filterable + hideable since Fas 8), Health's action-oriented card grid
+// (Fas 6/8), Library's browse/overrides/settings page (Fas 7), and the
+// per-component detail page (essential/advanced fields, save/discard/
+// test-connection - Fas 4) live in components.js, loaded after this file
+// and sharing its esc()/theme helpers, componentsData/componentsById, and
+// the confirmDiscardIfDirty() guard via the hasUnsavedComponentEdits flag
 // below.
 //
 // This file only ever reads from the read-only /api/ui/* endpoints
@@ -24,6 +24,11 @@
 // surface anywhere in this redesign.
 
 var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
+// The five sections with a card-grid + filter bar + per-card hide (Fas 8) -
+// see components.js's cardTile()/applyCardFilters()/filterBarHtml(). Library
+// deliberately isn't included: it reuses componentCard()/.component-list
+// for its settings cards, but stays plain - no grid, no hide, no filter.
+var FILTERABLE_SECTIONS = CATEGORY_SECTIONS.concat(['health']);
 var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'health']);
 var SECTION_TITLES = {
   dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
@@ -303,22 +308,23 @@ function fetchComponents() {
     componentsById = {};
     data.forEach(function(c) { componentsById[c.id] = c; });
     if (currentSection === 'pipeline') renderPipeline();
-    else if (CATEGORY_SECTIONS.indexOf(currentSection) !== -1) renderCategorySection(currentSection);
     else if (currentSection === 'library') {
-      // Same reasoning as Health below, but Library's settings cards are
-      // only one part of a page that also holds live search/artist-detail
-      // state - refresh just that one sub-panel instead of the whole
-      // section (see renderLibrarySettingsCards()).
+      // Same reasoning as the filterable sections below, but Library's
+      // settings cards are only one part of a page that also holds live
+      // search/artist-detail state - refresh just that one sub-panel
+      // instead of the whole section (see renderLibrarySettingsCards()).
       renderLibrarySettingsCards();
-    } else if (currentSection === 'health') {
+    } else if (FILTERABLE_SECTIONS.indexOf(currentSection) !== -1) {
       // A full re-render would reset the search input's value/focus out
       // from under someone mid-keystroke (it happens to have focus right
       // when a 15s poll tick lands) - just re-apply the filters against
       // the freshly-fetched data instead, and let the next real render
       // (navigation, or a poll while not typing) catch up the card
-      // contents themselves.
-      if (document.activeElement && document.activeElement.id === 'health-search') applyHealthFilters();
-      else renderHealthSection();
+      // contents themselves. See components.js's applyCardFilters().
+      var active = document.activeElement;
+      if (active && active.id === currentSection + '-search') applyCardFilters(currentSection);
+      else if (currentSection === 'health') renderHealthSection();
+      else renderCategorySection(currentSection);
     }
   }).catch(function() {});
 }

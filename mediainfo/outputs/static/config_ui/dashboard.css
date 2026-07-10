@@ -166,7 +166,8 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 .component-card-accent { height: 8px; }
 .hidden { display: none !important; }
 
-/* -- Health (Fas 6) -- */
+/* -- Filter bar: chips + search (Fas 6, generalized to all card-grid
+   pages in Fas 8) -- */
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
 .chip {
   background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
@@ -174,15 +175,27 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 }
 .chip:hover { border-color: var(--accent); }
 .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-#health-search, #library-search {
+.filter-search-input {
   flex: 1; min-width: 160px; max-width: 280px; background: var(--bg); border: 1px solid var(--control-border);
   border-radius: 999px; color: var(--bright); padding: 7px 14px; font: inherit; font-size: 13px;
 }
-.health-group.hidden { display: none; }
 .health-card .test-row {
   display: flex; align-items: center; gap: 10px; padding: 8px 14px 12px; border-top: 1px solid var(--border);
 }
 .health-card .test-row .test-result { margin: 0; flex: 1 1 auto; }
+
+/* -- Card grid + per-card hide (Fas 8): Media/Metadata/Appearance/
+   Displays/Health. .component-list itself (Library) is untouched. -- */
+.card-group { margin-bottom: 4px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.card-tile { position: relative; }
+.card-hide-btn {
+  position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; z-index: 2; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--chip-bg); border: 1px solid var(--border); border-radius: 999px;
+  color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer;
+}
+.card-hide-btn:hover { border-color: var(--danger); color: var(--danger); }
 
 /* -- Library (Fas 7) -- */
 .override-list { display: flex; flex-direction: column; gap: 8px; }
