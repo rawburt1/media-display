@@ -84,6 +84,57 @@ def test_payload_when_playing_with_image(tmp_path):
     assert payload["art_label"] == "Album art"
 
 
+def test_image_survives_caller_deleting_the_original_path(tmp_path):
+    # Regression test: orchestrator_idle.py downloads idle wallpapers to a
+    # temp file and deletes it immediately after update() returns (the
+    # caller owns that file, not this output) - but _get_payload() can be
+    # called again much later (a WebSocket client connecting, or
+    # /api/now-playing being polled), fully decoupled from that update()
+    # call. update() must keep its own copy so this doesn't crash/404.
+    out = _output()
+    img = tmp_path / "abc123.jpg"
+    img.write_bytes(b"fake-bytes")
+    out.update(_music(), _artwork(), img)
+
+    img.unlink()  # simulate orchestrator_idle's immediate cleanup
+
+    payload = out._get_payload()
+    assert payload["image"] == "/image/current?v=abc123"
+    resp = out.app.test_client().get("/image/current?v=abc123")
+    assert resp.status_code == 200
+    assert resp.data == b"fake-bytes"
+
+
+def test_second_update_replaces_and_cleans_up_the_owned_copy(tmp_path):
+    out = _output()
+    img1 = tmp_path / "img1.jpg"
+    img1.write_bytes(b"first")
+    out.update(_music(), _artwork(), img1)
+    first_owned_path = out._owned_image_path
+    assert first_owned_path.exists()
+
+    img2 = tmp_path / "img2.jpg"
+    img2.write_bytes(b"second")
+    out.update(_music(), _artwork(), img2)
+
+    assert not first_owned_path.exists()  # superseded copy cleaned up
+    assert out._owned_image_path.read_bytes() == b"second"
+
+
+def test_repushing_the_same_image_does_not_delete_it(tmp_path):
+    # A periodic re-push of an unchanged item (see _maybe_rotate) copies
+    # the same filename over itself - must not unlink the file it just
+    # wrote (old_owned_path == stable_path in that case).
+    out = _output()
+    img = tmp_path / "abc123.jpg"
+    img.write_bytes(b"fake-bytes")
+    out.update(_music(), _artwork(), img)
+    out.update(_music(), _artwork(), img)
+
+    assert out._owned_image_path.exists()
+    assert out._owned_image_path.read_bytes() == b"fake-bytes"
+
+
 def test_payload_includes_playback_position_when_reported():
     out = _output()
     np = _music()

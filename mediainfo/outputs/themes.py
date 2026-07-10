@@ -23,6 +23,8 @@ aggregation plumbing here needs no changes as each one ships.
 from __future__ import annotations
 
 import logging
+import shutil
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -77,6 +79,19 @@ class ThemesOutput(Output):
         self._now_playing: Optional[NowPlaying] = None
         self._artwork: Optional[Artwork] = None
         self._image_path: Optional[Path] = None
+        # update() copies image_path into this directory (keeping its
+        # original filename/stem, so the public /image/current?v=<stem> URL
+        # and _known_images keys are unaffected) so _get_payload() (and thus
+        # _prepare_themes()/theme.prepare()) can still read it whenever it's
+        # next called - a WebSocket client connecting, or /api/now-playing
+        # being polled, both call it fully decoupled in time from the
+        # original update(). For idle wallpapers, the caller
+        # (orchestrator_idle) deletes the original image_path immediately
+        # after update() returns - see update() below, same reasoning/
+        # pattern as NestHubOutput.update()'s own copy-before-the-caller-
+        # deletes-it.
+        self._owned_image_dir = Path(tempfile.mkdtemp(prefix="mediainfo-themes-"))
+        self._owned_image_path: Optional[Path] = None
         self._cache: Optional[ImageCache] = None
         # stem -> Path, covering both the main resolved image and any
         # derived per-theme composite (see _prepare_themes) - /image/current
@@ -186,12 +201,31 @@ class ThemesOutput(Output):
         return self._theme_configs.get(theme.name)
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+        # Copy to a file we manage ourselves - see _owned_image_dir above
+        # for why. Keeps image_path's own filename (rather than a fresh
+        # random one) so the public /image/current?v=<stem> URL stays the
+        # same as before this copy existed - stable/content-addressable for
+        # regular playback (image_path.stem is already a content hash - see
+        # ImageCache.get_path()), and simply whatever name download_temp()
+        # gave it for idle wallpapers.
+        stable_path: Optional[Path] = None
+        if image_path is not None:
+            stable_path = self._owned_image_dir / image_path.name
+            shutil.copy2(image_path, stable_path)
+
         with self._lock:
+            old_owned_path = self._owned_image_path
             self._now_playing = now_playing
             self._artwork = artwork
-            self._image_path = image_path
-            if image_path is not None:
-                self._known_images[image_path.stem] = image_path
+            self._image_path = stable_path
+            self._owned_image_path = stable_path
+            if stable_path is not None:
+                self._known_images[stable_path.stem] = stable_path
+        # Same image re-pushed (e.g. a rotation re-push of an unchanged
+        # item) copies over itself - only unlink a *different*, superseded
+        # file, never the one we just wrote.
+        if old_owned_path is not None and old_owned_path != stable_path:
+            old_owned_path.unlink(missing_ok=True)
         self._push(self._get_payload())
 
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
