@@ -10,13 +10,22 @@ schema generation and per-output filter helpers), config_store.py (reading
 and saving config.yaml), and appletv_pairing.py (the Apple TV pairing
 wizard) - plus the tiny config_yaml_io.py shared by the latter two.
 
-The page is a single-page app (templates/config_ui/app.html): one Flask-
-rendered shell with a sidebar nav and vanilla-JS client-side routing across
-nine sections (Overview, Media sources, Displays & outputs, Artwork &
-metadata, Idle screen, Automation & schedules, Library & overrides, System
-status, Advanced configuration). library.html and overrides.html remain
-their own full pages, linked from the shell's "Library & overrides"
-section. There is no build step - just the templates as shipped.
+"/" serves the new Dashboard shell (templates/config_ui/dashboard.html,
+static/config_ui/dashboard.{js,css} - see _dashboard_shell() below): a
+lighter SPA that renders Dashboard/Pipeline itself and otherwise links
+straight into the classic shell for Media/Metadata/Appearance/Displays/
+Library/Health/Advanced (those in-shell pages don't exist yet - see
+docs/gui-redesign-phase0-inventory.md for the phased plan). The classic
+shell (templates/config_ui/app.html) still exists unchanged, reachable via
+/form (or "Advanced" in the new nav): one Flask-rendered shell with a
+sidebar nav and vanilla-JS client-side routing across nine sections
+(Overview, Media sources, Displays & outputs, Artwork & metadata, Idle
+screen, Automation & schedules, Library & overrides, System status,
+Advanced configuration). library.html and overrides.html remain their own
+full pages, linked from the classic shell's "Library & overrides" section.
+Neither shell has a build step - just the templates/static files as
+shipped. `ui: dashboard` keeps "/" on the classic health-grid unchanged,
+for anyone who already set that preference (see index() below).
 
 The form is generated from the registered source/output/enricher/idle
 config dataclasses (mediainfo.config.SOURCE_CONFIG_TYPES etc.), so any
@@ -143,10 +152,18 @@ from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.appletv_pairing import AppleTvPairingManager
 from mediainfo.outputs.base import Output
 from mediainfo.outputs.config_dashboard import test_enricher, test_output, test_source
-from mediainfo.outputs.config_schema import _HIDDEN_TYPE_CATEGORIES, _as_instance_list, _build_schema
+from mediainfo.outputs.config_schema import (
+    _HIDDEN_TYPE_CATEGORIES,
+    _as_instance_list,
+    _build_schema,
+)
 from mediainfo.outputs.config_store import ConfigStore
 from mediainfo.outputs.config_yaml_io import _read_config
-from mediainfo.outputs.ui_builder import build_components, build_dashboard, build_pipeline
+from mediainfo.outputs.ui_builder import (
+    build_components,
+    build_dashboard,
+    build_pipeline,
+)
 from mediainfo.web_auth import install_auth, is_loopback_address
 
 logger = logging.getLogger(__name__)
@@ -215,7 +232,9 @@ class ConfigUiOutput(Output):
         active-source summary."""
         self._health_fn = fn
 
-    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+    def update(
+        self, now_playing: NowPlaying, artwork: Artwork, image_path: Path
+    ) -> None:
         pass
 
     def on_idle(self) -> None:
@@ -225,7 +244,9 @@ class ConfigUiOutput(Output):
         pass
 
     def _run_server(self) -> None:
-        logger.info("Starting config server on %s:%s", self.config.host, self.config.port)
+        logger.info(
+            "Starting config server on %s:%s", self.config.host, self.config.port
+        )
         self.app.run(host=self.config.host, port=self.config.port, threaded=True)
 
     # -- request handling -------------------------------------------------
@@ -246,7 +267,9 @@ class ConfigUiOutput(Output):
         if self._library is None or self._library_db_path != db_path:
             if self._library is not None:
                 self._library.close()
-            self._library = MusicLibrary(db_path, max_age_days=library_cfg.get("max_age_days", 30))
+            self._library = MusicLibrary(
+                db_path, max_age_days=library_cfg.get("max_age_days", 30)
+            )
             self._library_db_path = db_path
         return self._library
 
@@ -264,7 +287,8 @@ class ConfigUiOutput(Output):
         def _count_enabled(category: str, registry: Dict[str, type]) -> int:
             section = data.get(category) or {}
             return sum(
-                1 for name in registry
+                1
+                for name in registry
                 if isinstance(section.get(name), dict) and section[name].get("enabled")
             )
 
@@ -308,7 +332,11 @@ class ConfigUiOutput(Output):
         of any single request's own address (unlike _show_auth_warning,
         which is about whether *this visitor* should see the banner)."""
         auth_on = bool(self.auth_config and self.auth_config.enabled)
-        return not is_loopback_address(self.config.host) and self.config.host != "localhost" and not auth_on
+        return (
+            not is_loopback_address(self.config.host)
+            and self.config.host != "localhost"
+            and not auth_on
+        )
 
     def _build_ui_components(self):
         """Backend for /api/ui/* - translates the same schema/config/health
@@ -323,15 +351,24 @@ class ConfigUiOutput(Output):
         text_enrichers_raw = data.get("text_enrichers") or {}
         health = self._health_fn() if self._health_fn is not None else None
         return build_components(
-            schema, values, secrets_set, output_instances, output_secrets_set,
-            text_enrichers_raw, health,
+            schema,
+            values,
+            secrets_set,
+            output_instances,
+            output_secrets_set,
+            text_enrichers_raw,
+            health,
         )
 
     def _build_ui_dashboard(self):
         components = self._build_ui_components()
         pipeline = build_pipeline(components)
         health = self._health_fn() if self._health_fn is not None else None
-        return components, pipeline, build_dashboard(components, pipeline, self._compute_overview(), health)
+        return (
+            components,
+            pipeline,
+            build_dashboard(components, pipeline, self._compute_overview(), health),
+        )
 
     # -- Apple TV pairing ---------------------------------------------
     #
@@ -341,7 +378,9 @@ class ConfigUiOutput(Output):
     # since tests monkeypatch these two names directly on this class.
 
     @staticmethod
-    def _run_appletv_async(loop: asyncio.AbstractEventLoop, coro, timeout: float = 30) -> Any:
+    def _run_appletv_async(
+        loop: asyncio.AbstractEventLoop, coro, timeout: float = 30
+    ) -> Any:
         """Run `coro` on `loop` (which belongs to a different thread) and
         block this thread until it completes. Split out so tests can
         monkeypatch it to use asyncio.run() instead of a real background
@@ -351,7 +390,9 @@ class ConfigUiOutput(Output):
         return future.result(timeout=timeout)
 
     @staticmethod
-    def _stop_appletv_loop(loop: asyncio.AbstractEventLoop, thread: threading.Thread) -> None:
+    def _stop_appletv_loop(
+        loop: asyncio.AbstractEventLoop, thread: threading.Thread
+    ) -> None:
         loop.call_soon_threadsafe(loop.stop)
         thread.join(timeout=5)
         loop.close()
@@ -376,9 +417,24 @@ class ConfigUiOutput(Output):
                 initial_section=initial_section,
             )
 
+        def _dashboard_shell():
+            return render_template(
+                "config_ui/dashboard.html",
+                show_auth_warning=self._show_auth_warning(),
+            )
+
         @app.get("/")
         def index():
-            return _shell("status" if self.config.ui == "dashboard" else "overview")
+            # `ui: dashboard` keeps landing on the classic health-grid,
+            # unchanged - anyone who already opted into that view keeps
+            # seeing exactly what they see today. Everyone else (the
+            # default) now lands on the new Dashboard shell - see
+            # docs/gui-redesign-phase0-inventory.md §3 for the naming
+            # history and mediainfo/outputs/templates/config_ui/
+            # dashboard.html for the new shell itself.
+            if self.config.ui == "dashboard":
+                return _shell("status")
+            return _dashboard_shell()
 
         # Both entry points are always reachable on every instance,
         # regardless of `ui` - only the *default* section shown at "/"
@@ -402,17 +458,21 @@ class ConfigUiOutput(Output):
         def get_config():
             with self._lock:
                 raw_yaml = (
-                    self.config_path.read_text(encoding="utf-8") if self.config_path.exists() else ""
+                    self.config_path.read_text(encoding="utf-8")
+                    if self.config_path.exists()
+                    else ""
                 )
             values, values_secrets = self._store.get_values()
             outputs, output_secrets = self._store.get_output_instances()
-            return jsonify({
-                "values": values,
-                "outputs": outputs,
-                "raw_yaml": raw_yaml,
-                "secrets_set": {**values_secrets, **output_secrets},
-                "hidden_types": self._store.get_hidden_types(),
-            })
+            return jsonify(
+                {
+                    "values": values,
+                    "outputs": outputs,
+                    "raw_yaml": raw_yaml,
+                    "secrets_set": {**values_secrets, **output_secrets},
+                    "hidden_types": self._store.get_hidden_types(),
+                }
+            )
 
         @app.get("/api/overview")
         def overview():
@@ -475,7 +535,11 @@ class ConfigUiOutput(Output):
             category = body.get("category")
             name = body.get("name")
             hidden = bool(body.get("hidden"))
-            if category not in _HIDDEN_TYPE_CATEGORIES or not isinstance(name, str) or not name:
+            if (
+                category not in _HIDDEN_TYPE_CATEGORIES
+                or not isinstance(name, str)
+                or not name
+            ):
                 return jsonify({"ok": False, "error": "Invalid category or name."}), 400
             error = self._store.set_hidden_type(category, name, hidden)
             if error:
@@ -485,9 +549,14 @@ class ConfigUiOutput(Output):
         @app.get("/api/config/backups")
         def list_config_backups():
             backups = list_backups(self.config_path)
-            return jsonify({
-                "backups": [{"filename": b.name, "mtime": b.stat().st_mtime} for b in backups]
-            })
+            return jsonify(
+                {
+                    "backups": [
+                        {"filename": b.name, "mtime": b.stat().st_mtime}
+                        for b in backups
+                    ]
+                }
+            )
 
         @app.post("/api/config/backups/restore")
         def restore_config_backup():
@@ -500,7 +569,10 @@ class ConfigUiOutput(Output):
                 return jsonify({"ok": False, "error": error}), 400
             if restart_required:
                 self._restart_required = True
-            response: Dict[str, Any] = {"ok": True, "restart_required": self._restart_required}
+            response: Dict[str, Any] = {
+                "ok": True,
+                "restart_required": self._restart_required,
+            }
             try:
                 Config.load(self.config_path)
             except Exception as exc:
@@ -539,7 +611,9 @@ class ConfigUiOutput(Output):
             host = (body.get("host") or "").strip()
             protocol = (body.get("protocol") or "companion").strip().lower()
             if not host:
-                return jsonify({"ok": False, "error": "Enter the Apple TV's host/IP first."}), 400
+                return jsonify(
+                    {"ok": False, "error": "Enter the Apple TV's host/IP first."}
+                ), 400
             try:
                 result = self._appletv.start(host, protocol)
             except Exception as exc:
@@ -576,7 +650,9 @@ class ConfigUiOutput(Output):
             if not query:
                 return jsonify([])
             results = self._get_library().search(query)
-            return jsonify([{"id": artist_id, "name": name} for artist_id, name in results])
+            return jsonify(
+                [{"id": artist_id, "name": name} for artist_id, name in results]
+            )
 
         @app.get("/api/library/artist/<int:artist_id>")
         def library_artist(artist_id: int):
@@ -586,13 +662,15 @@ class ConfigUiOutput(Output):
                 return jsonify({"error": "Artist not found"}), 404
             albums = library.albums_for_artist(artist_id)
             tracks = library.tracks_for_artist(artist_id)
-            return jsonify({
-                "id": artist_id,
-                "name": name,
-                "mbid": library.get_mbid("artist", artist_id),
-                "albums": [{"id": i, "title": t, "mbid": m} for i, t, m in albums],
-                "tracks": [{"id": i, "title": t, "mbid": m} for i, t, m in tracks],
-            })
+            return jsonify(
+                {
+                    "id": artist_id,
+                    "name": name,
+                    "mbid": library.get_mbid("artist", artist_id),
+                    "albums": [{"id": i, "title": t, "mbid": m} for i, t, m in albums],
+                    "tracks": [{"id": i, "title": t, "mbid": m} for i, t, m in tracks],
+                }
+            )
 
         @app.get("/overrides")
         def overrides_page():
@@ -646,14 +724,18 @@ class ConfigUiOutput(Output):
         @app.get("/api/status")
         def status():
             if self._health_fn is None:
-                return jsonify({"sources": [], "outputs": [], "enrichers": [], "idle_sources": []})
+                return jsonify(
+                    {"sources": [], "outputs": [], "enrichers": [], "idle_sources": []}
+                )
             data = self._health_fn()
-            return jsonify({
-                "sources": data.get("sources", []),
-                "outputs": data.get("outputs", []),
-                "enrichers": data.get("enrichers", []),
-                "idle_sources": data.get("idle_sources", []),
-            })
+            return jsonify(
+                {
+                    "sources": data.get("sources", []),
+                    "outputs": data.get("outputs", []),
+                    "enrichers": data.get("enrichers", []),
+                    "idle_sources": data.get("idle_sources", []),
+                }
+            )
 
         @app.post("/api/test/source/<name>")
         def test_source_route(name: str):
@@ -737,13 +819,15 @@ class ConfigUiOutput(Output):
                 image.save(buf, format="PNG")
                 return base64.b64encode(buf.getvalue()).decode("ascii")
 
-            return jsonify({
-                "ok": True,
-                "original": _png_b64(original),
-                "cropped": _png_b64(cropped),
-                "final": _png_b64(final),
-                "final_upscaled": _png_b64(upscaled),
-            })
+            return jsonify(
+                {
+                    "ok": True,
+                    "original": _png_b64(original),
+                    "cropped": _png_b64(cropped),
+                    "final": _png_b64(final),
+                    "final_upscaled": _png_b64(upscaled),
+                }
+            )
 
         install_auth(app, self.auth_config)
         return app
