@@ -475,7 +475,7 @@ var HEALTH_TYPE_GROUPS = [
   { type: 'enricher', label: 'Enrichers' },
   { type: 'output', label: 'Displays' },
 ];
-var CARD_STATUS_FILTERS = ['all', 'connected', 'needs_configuration', 'error', 'disabled'];
+var CARD_STATUS_FILTERS = ['all', 'connected', 'needs_configuration', 'warning', 'error', 'disabled'];
 var sectionFilterState = {};
 
 function getSectionFilterState(sectionName) {
@@ -626,10 +626,17 @@ function healthTestControl(c) {
 
 function healthCard(c) {
   var warningText = (c.warnings && c.warnings.length) ? c.warnings[0] : '';
+  // Health (status badge) and Activity (Fas 10) are shown as two
+  // independent badges - a device can be Healthy and Sleeping at the
+  // same time, that's the whole point of separating the two concepts.
+  var activityBadge = c.activity
+    ? '<span class="badge ' + esc(ACTIVITY_LABEL_CLASS[c.activity] || '') + '">' + esc(c.activity_label || c.activity) + '</span>'
+    : '';
   return '<div class="component-card health-card">'
     + '<a class="body" href="#component/' + esc(c.id) + '">'
     + '<div class="name">' + esc(c.name) + '</div>'
     + '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>'
+    + activityBadge
     + (warningText ? '<div class="warning">' + esc(warningText) + '</div>' : '')
     + '</a>'
     + '<div class="test-row">' + healthTestControl(c) + '<div class="test-result" id="test-result-' + esc(c.id) + '"></div></div>'

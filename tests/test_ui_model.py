@@ -12,7 +12,8 @@ import pytest
 from mediainfo.config import ConfigUiConfig
 from mediainfo.outputs.config_schema import _build_schema
 from mediainfo.outputs.config_ui import ConfigUiOutput
-from mediainfo.outputs.ui_builder import build_components
+from mediainfo.outputs.ui_builder import build_components, build_dashboard
+from mediainfo.outputs.ui_model import UiComponent, UiPipeline
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 
@@ -214,6 +215,74 @@ def test_health_error_status_maps_to_component_error(config_path):
     assert "Could not connect" in kodi.warnings
 
 
+def test_health_warning_status_maps_to_component_warning(config_path):
+    """Fas 10: "warning" is a new, additive raw status - a Warning-health
+    device (e.g. NETWORK_UNREACHABLE) must not read as "error"."""
+    out = _output(config_path)
+    schema = _build_schema()
+    values, secrets_set = out._store.get_values()
+    output_instances, output_secrets_set = out._store.get_output_instances()
+    health = {
+        "sources": [{"name": "kodi", "status": "warning", "last_error": "Unavailable"}],
+        "outputs": [],
+        "enrichers": [],
+        "idle_sources": [],
+    }
+    components = build_components(
+        schema, values, secrets_set, output_instances, output_secrets_set, {}, health
+    )
+    kodi = _by_id(components, "sources.kodi")
+    assert kodi.status == "warning"
+
+
+def test_source_gets_activity_from_health_entry(config_path):
+    out = _output(config_path)
+    schema = _build_schema()
+    values, secrets_set = out._store.get_values()
+    output_instances, output_secrets_set = out._store.get_output_instances()
+    health = {
+        "sources": [
+            {"name": "kodi", "status": "idle", "activity": "sleeping", "activity_label": "Sleeping"}
+        ],
+        "outputs": [],
+        "enrichers": [],
+        "idle_sources": [],
+    }
+    components = build_components(
+        schema, values, secrets_set, output_instances, output_secrets_set, {}, health
+    )
+    kodi = _by_id(components, "sources.kodi")
+    assert kodi.activity == "sleeping"
+    assert kodi.activity_label == "Sleeping"
+
+
+def test_non_source_component_has_no_activity(config_path):
+    """Outputs/enrichers/themes are Health-only - activity always None,
+    regardless of what health.py reports for other component types."""
+    for c in _components(config_path):
+        if c.component_type != "source":
+            assert c.activity is None
+            assert c.activity_label is None
+
+
+def test_output_ignores_activity_even_if_present_in_health_entry(config_path):
+    out = _output(config_path)
+    schema = _build_schema()
+    values, secrets_set = out._store.get_values()
+    output_instances, output_secrets_set = out._store.get_output_instances()
+    health = {
+        "sources": [],
+        "outputs": [{"type": "web", "status": "ok", "activity": "playing"}],
+        "enrichers": [],
+        "idle_sources": [],
+    }
+    components = build_components(
+        schema, values, secrets_set, output_instances, output_secrets_set, {}, health
+    )
+    web = _by_id(components, "outputs.web")
+    assert web.activity is None
+
+
 # ---------------------------------------------------------------------------
 # Secrets: never leak a raw value, across every built component
 # ---------------------------------------------------------------------------
@@ -342,6 +411,54 @@ def test_dashboard_quick_actions_has_no_restart_action_by_default(config_path):
     data = out.app.test_client().get("/api/ui/dashboard").get_json()
     assert data["restart_required"] is False
     assert [a["id"] for a in data["quick_actions"]].count("restart") == 0
+
+
+def test_api_ui_dashboard_includes_empty_activity_summary_without_health_provider(config_path):
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    assert data["activity_summary"] == {}
+
+
+# ---------------------------------------------------------------------------
+# build_dashboard(): activity_summary (Fas 10)
+# ---------------------------------------------------------------------------
+
+
+def _component(component_type="source", activity=None, status="connected"):
+    return UiComponent(
+        id=f"sources.{activity or 'x'}",
+        name="x",
+        category="media",
+        component_type=component_type,
+        description="",
+        enabled=True,
+        configured=True,
+        status=status,
+        health="unknown",
+        config_path="sources.x",
+        supports_test=False,
+        supports_multiple=False,
+        requires_restart=False,
+        activity=activity,
+    )
+
+
+def test_build_dashboard_counts_activity_by_source_only():
+    pipeline = UiPipeline(id="default", name="Default")
+    components = [
+        _component(component_type="source", activity="playing"),
+        _component(component_type="source", activity="playing"),
+        _component(component_type="source", activity="sleeping"),
+        # Not a source - must not contribute even though it has an
+        # activity value (outputs/enrichers never legitimately do, but
+        # this guards the isolation regardless).
+        _component(component_type="output", activity="playing"),
+        # A source with no activity (unmigrated + no health wired) - must
+        # not appear as a bogus "None" bucket.
+        _component(component_type="source", activity=None),
+    ]
+    dashboard = build_dashboard(components, pipeline, {}, None)
+    assert dashboard.activity_summary == {"playing": 2, "sleeping": 1}
 
 
 def test_dashboard_quick_actions_leads_with_restart_action_when_restart_required(
