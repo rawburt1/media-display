@@ -111,6 +111,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import dataclasses
 import io
 import json
 import logging
@@ -145,6 +146,7 @@ from mediainfo.outputs.config_dashboard import test_enricher, test_output, test_
 from mediainfo.outputs.config_schema import _HIDDEN_TYPE_CATEGORIES, _as_instance_list, _build_schema
 from mediainfo.outputs.config_store import ConfigStore
 from mediainfo.outputs.config_yaml_io import _read_config
+from mediainfo.outputs.ui_builder import build_components, build_dashboard, build_pipeline
 from mediainfo.web_auth import install_auth, is_loopback_address
 
 logger = logging.getLogger(__name__)
@@ -308,6 +310,29 @@ class ConfigUiOutput(Output):
         auth_on = bool(self.auth_config and self.auth_config.enabled)
         return not is_loopback_address(self.config.host) and self.config.host != "localhost" and not auth_on
 
+    def _build_ui_components(self):
+        """Backend for /api/ui/* - translates the same schema/config/health
+        data _build_schema()/ConfigStore/self._health_fn already expose into
+        the ui_model.UiComponent list (see ui_builder.py). Read-only, adds
+        no new config reading/writing path."""
+        with self._lock:
+            data = _read_config(self.config_path)
+        schema = _build_schema()
+        values, secrets_set = self._store.get_values()
+        output_instances, output_secrets_set = self._store.get_output_instances()
+        text_enrichers_raw = data.get("text_enrichers") or {}
+        health = self._health_fn() if self._health_fn is not None else None
+        return build_components(
+            schema, values, secrets_set, output_instances, output_secrets_set,
+            text_enrichers_raw, health,
+        )
+
+    def _build_ui_dashboard(self):
+        components = self._build_ui_components()
+        pipeline = build_pipeline(components)
+        health = self._health_fn() if self._health_fn is not None else None
+        return components, pipeline, build_dashboard(components, pipeline, self._compute_overview(), health)
+
     # -- Apple TV pairing ---------------------------------------------
     #
     # The pairing state machine itself lives in AppleTvPairingManager
@@ -392,6 +417,35 @@ class ConfigUiOutput(Output):
         @app.get("/api/overview")
         def overview():
             return jsonify(self._compute_overview())
+
+        # -- New UI model endpoints (Fas 1 of the GUI redesign) -----------
+        # Read-only translations of the same schema/config/health data the
+        # routes above already expose - see ui_builder.py. Additive: none
+        # of the routes above change.
+
+        @app.get("/api/ui/components")
+        def ui_components():
+            components = self._build_ui_components()
+            return jsonify([dataclasses.asdict(c) for c in components])
+
+        @app.get("/api/ui/component/<id>")
+        def ui_component(id: str):
+            components = self._build_ui_components()
+            for c in components:
+                if c.id == id:
+                    return jsonify(dataclasses.asdict(c))
+            return jsonify({"error": f"Unknown component id: {id}"}), 404
+
+        @app.get("/api/ui/pipelines")
+        def ui_pipelines():
+            components = self._build_ui_components()
+            pipeline = build_pipeline(components)
+            return jsonify([dataclasses.asdict(pipeline)])
+
+        @app.get("/api/ui/dashboard")
+        def ui_dashboard():
+            _components, _pipeline, dashboard = self._build_ui_dashboard()
+            return jsonify(dataclasses.asdict(dashboard))
 
         @app.post("/api/config/form")
         def save_form():
