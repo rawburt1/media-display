@@ -249,7 +249,8 @@ function renderComponentDetailBody() {
   var sectionName = CATEGORY_TO_SECTION[c.category] || 'dashboard';
   var readOnly = c.component_type === 'text_enricher';
 
-  var html = '<a class="back-link" href="#' + esc(sectionName) + '">← Back to ' + esc(SECTION_TITLES[sectionName] || 'list') + '</a>';
+  var html = wizardBannerHtml();
+  html += '<a class="back-link" href="#' + esc(sectionName) + '">← Back to ' + esc(SECTION_TITLES[sectionName] || 'list') + '</a>';
   html += '<h1>' + esc(c.name) + '</h1>';
   if (c.description) html += '<p class="lede">' + esc(c.description) + '</p>';
   html += '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>';

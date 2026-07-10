@@ -33,7 +33,7 @@ var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library
 var SECTION_TITLES = {
   dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
   metadata: 'Metadata', appearance: 'Appearance', displays: 'Displays',
-  library: 'Library', health: 'Health',
+  library: 'Library', health: 'Health', wizard: 'Setup',
 };
 // UiComponent.category uses "display" (singular); the nav/section id uses
 // "displays" - this is the one place that mapping happens. "library"
@@ -106,7 +106,7 @@ function confirmDiscardIfDirty() {
 function parseHash() {
   var raw = location.hash.replace('#', '');
   var parts = raw.split('/');
-  var section = (NAV_SECTIONS.indexOf(parts[0]) !== -1 || parts[0] === 'component') ? parts[0] : 'dashboard';
+  var section = (NAV_SECTIONS.indexOf(parts[0]) !== -1 || parts[0] === 'component' || parts[0] === 'wizard') ? parts[0] : 'dashboard';
   var param = parts.slice(1).join('/') || null;
   return { section: section, param: param };
 }
@@ -157,6 +157,7 @@ function renderSection(name, param) {
   else if (name === 'library') renderLibrarySection(param);
   else if (name === 'health') renderHealthSection();
   else if (name === 'component') renderComponentDetail(param);
+  else if (name === 'wizard') renderWizard();
 }
 
 // ---------------------------------------------------------------------
@@ -245,6 +246,7 @@ function renderDashboard() {
   html += '</div>';
 
   html += '<div class="bento-item bento-item--actions">'
+    + '<a class="btn secondary" href="#wizard">Run setup wizard</a>'
     + (d.quick_actions || []).map(actionButton).join('') + '</div>';
 
   html += '</div>';
@@ -357,4 +359,16 @@ setInterval(function() {
   else if (currentSection === 'health' || currentSection === 'library' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
 }, 15000);
 
-Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents()]).then(renderFromHash);
+Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents()]).then(function() {
+  // First-run wizard (Fas 11): a bare initial load (no hash at all - not a
+  // bookmark, not back/forward navigation) with nothing configured yet goes
+  // straight into the wizard instead of the empty Dashboard. needs_setup is
+  // recomputed by the backend every request, so this never fires again once
+  // a source and an output are both enabled. Setting location.hash fires its
+  // own hashchange -> renderFromHash(), so only call it directly otherwise.
+  if (dashboardData && dashboardData.needs_setup && !location.hash) {
+    location.hash = 'wizard';
+  } else {
+    renderFromHash();
+  }
+});

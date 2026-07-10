@@ -646,4 +646,10 @@ def build_dashboard(
         exposed_without_auth=bool(overview.get("exposed_without_auth")),
         quick_actions=quick_actions,
         activity_summary=activity_summary,
+        # OR, not AND: a source with nowhere to show it (or a display with
+        # nothing to show) is just as unfinished as having neither - the
+        # real-world default (config.starter.yaml, what setup.sh installs)
+        # already enables several outputs but zero sources, so this must
+        # fire on "missing either half", not "missing both".
+        needs_setup=not pipeline.media_component_ids or not pipeline.display_component_ids,
     )

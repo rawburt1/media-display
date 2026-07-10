@@ -461,6 +461,43 @@ def test_build_dashboard_counts_activity_by_source_only():
     assert dashboard.activity_summary == {"playing": 2, "sleeping": 1}
 
 
+# ---------------------------------------------------------------------------
+# build_dashboard(): needs_setup (Fas 11)
+# ---------------------------------------------------------------------------
+
+
+def test_needs_setup_true_when_no_source_or_output_enabled():
+    pipeline = UiPipeline(id="default", name="Default")
+    dashboard = build_dashboard([], pipeline, {}, None)
+    assert dashboard.needs_setup is True
+
+
+def test_needs_setup_true_when_only_a_source_is_enabled():
+    # A source with nowhere to show it is just as unfinished as having
+    # neither - OR, not AND (see build_dashboard()).
+    pipeline = UiPipeline(id="default", name="Default", media_component_ids=["sources.kodi"])
+    dashboard = build_dashboard([], pipeline, {}, None)
+    assert dashboard.needs_setup is True
+
+
+def test_needs_setup_true_when_only_an_output_is_enabled():
+    # The real-world default (config.starter.yaml, what setup.sh installs)
+    # enables several outputs but zero sources - this must still trigger
+    # the wizard, since nothing will ever appear on those displays.
+    pipeline = UiPipeline(id="default", name="Default", display_component_ids=["outputs.web"])
+    dashboard = build_dashboard([], pipeline, {}, None)
+    assert dashboard.needs_setup is True
+
+
+def test_needs_setup_false_when_source_and_output_are_both_enabled():
+    pipeline = UiPipeline(
+        id="default", name="Default",
+        media_component_ids=["sources.kodi"], display_component_ids=["outputs.web"],
+    )
+    dashboard = build_dashboard([], pipeline, {}, None)
+    assert dashboard.needs_setup is False
+
+
 def test_dashboard_quick_actions_leads_with_restart_action_when_restart_required(
     config_path,
 ):
