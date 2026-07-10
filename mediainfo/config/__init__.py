@@ -38,6 +38,7 @@ from mediainfo.config.enrichers import (
     WikipediaConfig,
 )
 from mediainfo.config.idle import (
+    ArtsWallpaperConfig,
     IDLE_CONFIG_TYPES,
     LastFmHistoryConfig,
     LibraryIdleConfig,
@@ -121,6 +122,7 @@ __all__ = [
     "AlertConfig",
     "AppleTvConfig",
     "ArtistSpotlightConfig",
+    "ArtsWallpaperConfig",
     "AuthConfig",
     "AutoRotateConfig",
     "BlurredBackgroundConfig",

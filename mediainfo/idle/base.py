@@ -38,6 +38,16 @@ class IdleWallpaperSource(ABC):
     # for future capability queries without another base-class change.
     capabilities: frozenset = frozenset()
 
+    # List of Transform objects applied to every picture from this source
+    # specifically, before any per-output transform pipeline - lets one
+    # idle source have its own look (crop/filter/...) independent of other
+    # idle sources and outputs. Empty (the default) means no source-level
+    # styling, exactly today's behavior. Populated from the source's own
+    # config `transforms:` key, mirroring Output.transform_pipeline - see
+    # mediainfo.orchestrator_idle._IdleBatchManager for where it's combined
+    # with the destination output's own pipeline.
+    transform_pipeline: List = []
+
     @abstractmethod
     def get_wallpapers(self) -> List[Artwork]:
         """Return a fresh batch of wallpapers, or [] if none are available."""

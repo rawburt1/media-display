@@ -205,6 +205,47 @@ def test_idle_source_shows_wallpaper():
     output.on_idle.assert_not_called()
 
 
+def test_idle_source_transform_pipeline_applied_before_output_pipeline():
+    # Regression guard for Fas 12: a source-level pipeline (e.g. the "arts"
+    # idle source's own crop/filter) must run first, then the output's own
+    # - both combined into one call to get_transformed_path().
+    output = MagicMock()
+    output.transform_pipeline = ["output-transform"]
+    cache = MagicMock()
+    cache.download_temp.return_value = "/tmp/wallpaper.jpg"
+    cache.get_transformed_path.side_effect = lambda path, transforms: path
+    artwork = Artwork(url="https://example.com/art.jpg", label="Art")
+    idle_source = _FakeIdleSource([artwork])
+    idle_source.transform_pipeline = ["source-transform"]
+
+    orchestrator = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
+    orchestrator._tick()
+
+    cache.get_transformed_path.assert_called_once_with(
+        "/tmp/wallpaper.jpg", ["source-transform", "output-transform"]
+    )
+
+
+def test_idle_source_without_transform_pipeline_behaves_as_before():
+    # _FakeIdleSource predates transform_pipeline (like any duck-typed idle
+    # source) - must not raise, and must fall back to the output's own
+    # pipeline alone.
+    output = MagicMock()
+    output.transform_pipeline = ["output-transform"]
+    cache = MagicMock()
+    cache.download_temp.return_value = "/tmp/wallpaper.jpg"
+    cache.get_transformed_path.side_effect = lambda path, transforms: path
+    artwork = Artwork(url="https://example.com/art.jpg", label="Art")
+    idle_source = _FakeIdleSource([artwork])
+
+    orchestrator = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
+    orchestrator._tick()
+
+    cache.get_transformed_path.assert_called_once_with(
+        "/tmp/wallpaper.jpg", ["output-transform"]
+    )
+
+
 def test_idle_wallpaper_does_not_refetch_before_interval():
     output = MagicMock()
     cache = MagicMock()

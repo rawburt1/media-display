@@ -253,6 +253,7 @@ _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
         "wikipedia": {"label": "Wikipedia", "description": "Adds a short plot or artist summary from Wikipedia - no API key needed."},
     },
     "idle": {
+        "arts": {"label": "Art pictures", "description": "Shows public-domain artworks from the Art Institute of Chicago's open collection while idle - no API key needed."},
         "lastfm": {"label": "Last.fm scrobble history", "description": "Shows album art from your recent Last.fm listening history while idle."},
         "library": {"label": "Local music library", "description": "Shows album art for random albums from your local music library while idle."},
         "local": {"label": "Local folder", "description": "Shows pictures from a local folder (e.g. your own photos) while idle."},
