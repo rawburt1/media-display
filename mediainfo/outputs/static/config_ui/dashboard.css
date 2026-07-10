@@ -174,7 +174,7 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 }
 .chip:hover { border-color: var(--accent); }
 .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-#health-search {
+#health-search, #library-search {
   flex: 1; min-width: 160px; max-width: 280px; background: var(--bg); border: 1px solid var(--control-border);
   border-radius: 999px; color: var(--bright); padding: 7px 14px; font: inherit; font-size: 13px;
 }
@@ -183,6 +183,22 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
   display: flex; align-items: center; gap: 10px; padding: 8px 14px 12px; border-top: 1px solid var(--border);
 }
 .health-card .test-row .test-result { margin: 0; flex: 1 1 auto; }
+
+/* -- Library (Fas 7) -- */
+.override-list { display: flex; flex-direction: column; gap: 8px; }
+.override-card {
+  display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 14px;
+}
+.override-card img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: var(--bg); }
+.override-card .info { flex: 1; min-width: 0; }
+.override-card .title { font-size: 13px; font-weight: 600; color: var(--bright); }
+.override-card .subtitle { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.detail-list { list-style: none; padding: 0; margin: 0; }
+.detail-list li { font-size: 12.5px; color: var(--text); padding: 6px 0; border-top: 1px solid var(--border); }
+.detail-list li:first-child { border-top: none; }
+.mbid { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+.no-mbid { font-size: 10.5px; color: var(--danger); opacity: 0.75; }
 
 /* -- component detail page (Fas 4) -- */
 .back-link { display: inline-block; font-size: 12.5px; color: var(--link); text-decoration: none; margin-bottom: 10px; }
@@ -199,6 +215,7 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
   color: var(--bright); padding: 7px 10px; font-size: 13px;
 }
 .field-control input[type=checkbox] { width: 17px; height: 17px; }
+.field-control input[type=file] { font-size: 12.5px; color: var(--muted); }
 .secret-box { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .secret-badge { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
 .secret-badge.set { background: #052012; color: var(--ok); }

@@ -596,3 +596,225 @@ function renderHealthSection() {
   el.innerHTML = html;
   applyHealthFilters();
 }
+
+// ---------------------------------------------------------------------
+// Library (Fas 7) - two things bundled under one nav entry, matching the
+// spec's information architecture: browsing (search artists, drill into
+// an artist's albums/tracks; artwork overrides CRUD) ported from the
+// classic library.html/overrides.html pages onto this shell's own
+// endpoints (/api/library/*, /api/overrides*, unchanged), plus the six
+// library-category flat-section settings components (cache/history/
+// library/overrides/posters/mediadata) via the same componentCard() used
+// by every other category section - those were already fully editable
+// via #component/<id> since Fas 4, they just weren't reachable from an
+// in-shell Library page yet.
+//
+// Search results and the overrides list/settings cards each live in
+// their own sub-panel (own element id) so adding an override, removing
+// one, or a 15s poll tick can refresh just that panel without wiping
+// out whatever's mid-typing in the search box - same reasoning as
+// Health's applyHealthFilters() split, just three panels instead of one.
+// ---------------------------------------------------------------------
+var libraryQuery = '';
+var librarySearchResults = null; // null = no search yet, [] = no matches
+var librarySearchTimer = null;
+var libraryStats = null;
+var overridesData = null; // { enabled, items: [{title, subtitle, filename}] }
+
+function libraryPageHtml() {
+  return '<h1>Library</h1><p class="lede">Browse your music library, manage artwork overrides, and tune library-related settings.</p>'
+    + '<div class="card">'
+    + '<h2 class="group-title">Browse</h2>'
+    + '<div id="library-stats" class="field-help">Loading…</div>'
+    + '<input type="text" id="library-search" placeholder="Search artists…" aria-label="Search library artists" '
+    + 'value="' + esc(libraryQuery) + '" oninput="onLibrarySearchInput(this.value)" style="margin-top:8px;">'
+    + '<div id="library-search-results" class="component-list" style="margin-top:12px;"></div>'
+    + '</div>'
+    + '<div class="card">'
+    + '<h2 class="group-title">Artwork overrides</h2>'
+    + '<p class="field-help">Pin a specific image for a title/subtitle that never gets a good poster from any '
+    + 'enricher - matched by exact title + subtitle (e.g. movie title, or song title + artist), case-insensitive.</p>'
+    + '<div id="library-overrides-panel">Loading…</div>'
+    + '</div>'
+    + '<div id="library-settings-cards"></div>'
+    + '<p class="field-help">Prefer the classic pages? <a href="/library">Library</a> &middot; <a href="/overrides">Overrides</a></p>';
+}
+
+function renderLibrarySection(param) {
+  var el = document.getElementById('section-library');
+  if (param && param.indexOf('artist/') === 0) {
+    renderLibraryArtistDetail(param.slice('artist/'.length));
+    return;
+  }
+  if (document.getElementById('library-search')) {
+    // The list view is already showing (e.g. renderFromHash() landing a
+    // second time shortly after navigation, once the page's own initial
+    // Promise.all(...).then(renderFromHash) resolves - or simply
+    // navigating back here from another section without ever visiting the
+    // artist-detail view in between). Rebuilding the whole section here
+    // would tear down and recreate the search <input>, silently discarding
+    // whatever the user is mid-typing. Nothing here can have gone stale
+    // except the settings cards, so just refresh those - same idea as the
+    // poll-tick path below.
+    renderLibrarySettingsCards();
+    return;
+  }
+  el.innerHTML = libraryPageHtml();
+  renderLibrarySearchResults();
+  renderLibrarySettingsCards();
+  if (libraryStats) renderLibraryStats(); else fetchLibraryStats();
+  if (overridesData) renderOverridesPanel(); else fetchOverrides();
+}
+
+function renderLibrarySettingsCards() {
+  var el = document.getElementById('library-settings-cards');
+  if (!el) return; // artist-detail sub-view is open right now, not the list
+  if (!componentsData) { el.innerHTML = ''; return; }
+  var items = componentsData.filter(function(c) { return c.category === 'library'; });
+  if (!items.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<h2 class="group-title">Settings</h2><div class="component-list">' + items.map(componentCard).join('') + '</div>';
+}
+
+// ---------------------------------------------------------------------
+// Browse: search + artist detail
+// ---------------------------------------------------------------------
+function libraryArtistCard(a) {
+  return '<a class="component-card" href="#library/artist/' + esc(a.id) + '"><div class="body"><div class="name">' + esc(a.name) + '</div></div></a>';
+}
+
+function renderLibrarySearchResults() {
+  var el = document.getElementById('library-search-results');
+  if (!el) return;
+  if (librarySearchResults === null) el.innerHTML = '';
+  else if (librarySearchResults.length === 0) el.innerHTML = '<span class="field-help">No matching artists.</span>';
+  else el.innerHTML = librarySearchResults.map(libraryArtistCard).join('');
+}
+
+function onLibrarySearchInput(value) {
+  libraryQuery = value;
+  clearTimeout(librarySearchTimer);
+  var q = value.trim();
+  if (!q) {
+    librarySearchResults = null;
+    renderLibrarySearchResults();
+    return;
+  }
+  librarySearchTimer = setTimeout(function() {
+    fetch('/api/library/search?q=' + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(data) {
+      librarySearchResults = data;
+      renderLibrarySearchResults();
+    }).catch(function() {});
+  }, 200);
+}
+
+function renderLibraryStats() {
+  var el = document.getElementById('library-stats');
+  if (!el || !libraryStats) return;
+  el.textContent = libraryStats.artists + ' artist(s), ' + libraryStats.albums + ' album(s), ' + libraryStats.tracks + ' track(s)';
+}
+
+function fetchLibraryStats() {
+  fetch('/api/library/stats').then(function(r) { return r.json(); }).then(function(data) {
+    libraryStats = data;
+    renderLibraryStats();
+  }).catch(function() {});
+}
+
+function renderMbid(mbid) {
+  return mbid ? '<span class="mbid">' + esc(mbid) + '</span>' : '<span class="no-mbid">no mbid</span>';
+}
+
+function libraryDetailListItems(rows) {
+  if (!rows.length) return '<li>None</li>';
+  return rows.map(function(row) { return '<li>' + esc(row.title) + ' &mdash; ' + renderMbid(row.mbid) + '</li>'; }).join('');
+}
+
+function renderLibraryArtistDetail(id) {
+  var el = document.getElementById('section-library');
+  var backLink = '<a class="back-link" href="#library">← Back to Library</a>';
+  el.innerHTML = backLink + '<h1>Artist</h1><p class="lede">Loading…</p>';
+  fetch('/api/library/artist/' + encodeURIComponent(id)).then(function(r) { return r.json(); }).then(function(a) {
+    if (a.error) {
+      el.innerHTML = backLink + '<h1>Artist</h1><p class="lede">' + esc(a.error) + '</p>';
+      return;
+    }
+    el.innerHTML = backLink
+      + '<h1>' + esc(a.name) + '</h1><p class="lede">' + renderMbid(a.mbid) + '</p>'
+      + '<h2 class="group-title">Albums (' + a.albums.length + ')</h2>'
+      + '<div class="card"><ul class="detail-list">' + libraryDetailListItems(a.albums) + '</ul></div>'
+      + '<h2 class="group-title">Tracks (' + a.tracks.length + ')</h2>'
+      + '<div class="card"><ul class="detail-list">' + libraryDetailListItems(a.tracks) + '</ul></div>';
+  }).catch(function() {
+    el.innerHTML = backLink + '<h1>Artist</h1><p class="lede">Failed to load.</p>';
+  });
+}
+
+// ---------------------------------------------------------------------
+// Artwork overrides: list + add/remove, same wire contract as the
+// classic overrides.html (multipart POST, JSON-body DELETE).
+// ---------------------------------------------------------------------
+function fetchOverrides() {
+  fetch('/api/overrides').then(function(r) { return r.json(); }).then(function(data) {
+    overridesData = data;
+    renderOverridesPanel();
+  }).catch(function() {});
+}
+
+function overrideCard(item) {
+  return '<div class="override-card">'
+    + '<img src="/api/overrides/image/' + encodeURIComponent(item.filename) + '" alt="">'
+    + '<div class="info"><div class="title">' + esc(item.title) + '</div>'
+    + '<div class="subtitle">' + esc(item.subtitle || '(no subtitle)') + '</div></div>'
+    + '<button type="button" class="btn danger small" data-title="' + esc(item.title) + '" data-subtitle="' + esc(item.subtitle || '') + '" '
+    + 'onclick="removeOverride(this)">Remove</button>'
+    + '</div>';
+}
+
+function renderOverridesPanel() {
+  var el = document.getElementById('library-overrides-panel');
+  if (!el || !overridesData) return;
+  var html = '';
+  if (overridesData.enabled === false) {
+    html += '<div class="warning-item">Overrides are disabled - enable it in the Settings cards below to turn this on.</div>';
+  } else {
+    html += '<form id="override-add-form" onsubmit="submitOverrideForm(event)">'
+      + '<div class="field"><div class="field-row"><div class="field-label">Title</div>'
+      + '<div class="field-control"><input type="text" name="title" required></div></div></div>'
+      + '<div class="field"><div class="field-row"><div class="field-label">Subtitle</div>'
+      + '<div class="field-control"><input type="text" name="subtitle">'
+      + '<div class="field-help">Artist, episode label, etc. - leave blank if not applicable.</div></div></div></div>'
+      + '<div class="field"><div class="field-row"><div class="field-label">Image file</div>'
+      + '<div class="field-control"><input type="file" name="file" accept="image/*" required></div></div></div>'
+      + '<div style="margin-top:10px;"><button type="submit" class="btn small">Save override</button> '
+      + '<span id="override-form-status" class="field-help"></span></div>'
+      + '</form>';
+  }
+  var items = overridesData.items || [];
+  html += '<div class="override-list" style="margin-top:14px;">'
+    + (items.length ? items.map(overrideCard).join('') : '<span class="field-help">No overrides yet.</span>')
+    + '</div>';
+  el.innerHTML = html;
+}
+
+function submitOverrideForm(e) {
+  e.preventDefault();
+  var form = e.target;
+  var statusEl = document.getElementById('override-form-status');
+  statusEl.textContent = 'Saving…';
+  fetch('/api/overrides', { method: 'POST', body: new FormData(form) })
+    .then(function(r) { return r.json().then(function(data) { return [r.ok, data]; }); })
+    .then(function(result) {
+      if (result[0]) { form.reset(); fetchOverrides(); }
+      else statusEl.textContent = result[1].error || 'Failed to save override.';
+    })
+    .catch(function() { statusEl.textContent = 'Request failed.'; });
+}
+
+function removeOverride(btn) {
+  btn.disabled = true;
+  fetch('/api/overrides', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: btn.dataset.title, subtitle: btn.dataset.subtitle }),
+  }).then(function() { fetchOverrides(); }).catch(function() { btn.disabled = false; });
+}
