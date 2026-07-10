@@ -1776,7 +1776,9 @@ def test_music_album_art_only_output_skips_artist_photo():
     assert artwork is album_art
 
 
-def test_music_album_art_only_output_shows_nothing_when_only_artist_photos_available():
+def test_music_album_art_only_output_goes_idle_when_only_artist_photos_available():
+    # Regression test: this output must not keep showing whatever it last
+    # displayed forever - it should be explicitly cleared to idle instead.
     artist_photo = Artwork(
         url="https://example.com/artist.jpg", label="Photo (Wikipedia)", is_artist_photo=True
     )
@@ -1799,6 +1801,7 @@ def test_music_album_art_only_output_shows_nothing_when_only_artist_photos_avail
     orchestrator._tick()
 
     output.update.assert_not_called()
+    output.on_idle.assert_called_once()
 
 
 def test_regular_output_still_shows_artist_photo():
