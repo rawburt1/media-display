@@ -18,7 +18,7 @@
 # wild today is implicitly version 1. Only ever bump this yourself if a
 # future changelog entry tells you to; mediainfo migrates old versions
 # forward automatically.
-config_version: 1
+config_version: 2
 
 # ---------------------------------------------------------------------------
 # Polling
@@ -55,6 +55,26 @@ nothing_playing_grace_seconds: 2
 # ollama_text) uses that value instead of this default.
 enrichment_deadline_seconds: 30
 
+
+# ---------------------------------------------------------------------------
+# HTTP server
+# ---------------------------------------------------------------------------
+# Every Flask-based output (web, config, themes, info, feed, video, nest_hub)
+# shares this one HTTP server - one process, one port, one listener - instead
+# of each owning a separate port the way it used to. Each output still has
+# its own `enabled` flag and mounts under its own path prefix: `web` (the
+# now-playing display) at "/", everything else at "/<name>", e.g. "/config",
+# "/themes", "/feed". See the comments on each output below for its exact
+# path(s).
+
+http:
+  # 0.0.0.0 listens on all network interfaces - required to reach it from
+  # another machine (including from inside Docker, when accessing from the
+  # host). Set to 127.0.0.1 to restrict it to this machine only - note this
+  # also affects `outputs.config`, which has unauthenticated write access to
+  # this file unless `auth.enabled: true` is set below; see SECURITY.md.
+  host: 0.0.0.0
+  port: 8090
 
 # ---------------------------------------------------------------------------
 # Source priority
@@ -361,11 +381,8 @@ outputs:
   # see SECURITY.md.
   config:
     enabled: true
-    # host defaults to 127.0.0.1 (loopback only — not reachable from the LAN).
-    # Set to 0.0.0.0 to allow access from other machines. Required when running
-    # inside Docker and accessing from the host. See SECURITY.md.
-    host: 0.0.0.0
-    port: 8094
+    # Reachable at /config on the shared http.host:http.port above. See
+    # SECURITY.md.
     # "form" (default): the full editable form above. "dashboard": a
     # status overview of sources/outputs/enrichers instead - filterable
     # by status, with a per-item "Test connection" button and an "Edit"
@@ -380,13 +397,11 @@ outputs:
   # RSS/Atom feed — "now playing" history as a machine-readable feed.
   # Subscribe with any feed reader or home-automation tool (Home Assistant,
   # Node-RED, etc.) to track what has been playing.
-  # Two formats are served from the same port:
-  #   /rss    — RSS 2.0  (application/rss+xml)
-  #   /atom   — Atom 1.0 (application/atom+xml)
+  # Two formats are served under /feed:
+  #   /feed/rss    — RSS 2.0  (application/rss+xml)
+  #   /feed/atom   — Atom 1.0 (application/atom+xml)
   feed:
     enabled: true
-    host: 0.0.0.0
-    port: 8086
     title: Now Playing               # Channel/feed title shown in feed readers
 
   # Folder output — writes the current artwork as image files in a directory.
@@ -412,8 +427,7 @@ outputs:
   # resolution rather than scaled down for a small physical display.
   info:
     enabled: true
-    host: 0.0.0.0
-    port: 8093
+    # Reachable at /info on the shared http.host:http.port above.
     # See outputs.web's transition_exclude above.
     transition_exclude: []
 
@@ -469,19 +483,19 @@ outputs:
   nest_hub:
     enabled: true
     device_ip: 192.168.1.50     # IP of the Nest Hub
-    server_host: 192.168.1.10   # LAN address of THIS machine
-    server_port: 8092            # Port for the built-in image server
+    server_host: 192.168.1.10   # LAN address of THIS machine (uses http.port above)
 
-  # Multiple Nest Hubs — living room and bedroom, each on its own server port:
+  # Multiple Nest Hubs — living room and bedroom. Every instance past the
+  # first needs a unique `label` (any output type) so their image URLs don't
+  # collide on the shared server:
   # nest_hub:
   #   - enabled: true
   #     device_ip: 192.168.1.50
   #     server_host: 192.168.1.10
-  #     server_port: 8092
   #   - enabled: true
   #     device_ip: 192.168.1.51
   #     server_host: 192.168.1.10
-  #     server_port: 8093
+  #     label: bedroom
 
   # Divoom Pixoo — LED pixel display.
   # Works with the Pixoo64 (64×64, default) and the Pixoo 16×16 Pixel Art
@@ -583,7 +597,6 @@ outputs:
   #   enabled: true
   #   device_ip: 192.168.1.50
   #   server_host: 192.168.1.10
-  #   server_port: 8092
   #   allow_media_types:
   #     - movie
   #     - episode
@@ -644,11 +657,9 @@ outputs:
   # Video output — full-screen browser page with ambient video wallpapers.
   # Shows artwork when something is playing; switches to looping video clips
   # fetched from Pexels (or Pixabay) when idle.
-  # Open http://<this-machine>:8091 on any browser or smart TV.
+  # Open http://<this-machine>:<http.port>/video on any browser or smart TV.
   video:
     enabled: true
-    host: 0.0.0.0
-    port: 8091
     source: pexels               # "pexels" or "pixabay"
     # Comma-separated search terms; one is picked at random each refresh.
     queries: nature,ocean,mountains,forests
@@ -662,53 +673,49 @@ outputs:
     # See outputs.web's transition_exclude above.
     transition_exclude: []
 
-  # Multiple video outputs — living room TV on 8091, bedroom TV on 8093:
+  # Multiple video outputs — living room and bedroom TV. Every instance past
+  # the first needs a unique `label` (any output type) so its path doesn't
+  # collide with the first ("/video" vs "/video-<label>"):
   # video:
   #   - enabled: true
-  #     host: 0.0.0.0
-  #     port: 8091
   #     source: pexels
   #     queries: nature,ocean,mountains
   #     pexels_api_key: YOUR_PEXELS_API_KEY
   #   - enabled: true
-  #     host: 0.0.0.0
-  #     port: 8093
   #     source: pexels
   #     queries: cityscapes,architecture
   #     pexels_api_key: YOUR_PEXELS_API_KEY
+  #     label: bedroom
 
-  # Web output — serves a browser page with full-screen artwork.
-  # Open http://<this-machine>:8090 on any browser or smart TV.
+  # Web output — serves a browser page with full-screen artwork. This is the
+  # main now-playing display, mounted at the root path.
+  # Open http://<this-machine>:<http.port>/ on any browser or smart TV.
   web:
     enabled: true
-    host: 0.0.0.0            # Listen on all network interfaces
-    port: 8090
     # Each image change picks a random transition: fade, slide-left,
     # slide-right, slide-up, slide-down, or zoom. All are used by default;
     # list any to skip here, e.g. [slide-up, slide-down]. Also available on
     # `info` and `video` below.
     transition_exclude: []
 
-  # Multiple web outputs — e.g. different ports for different rooms:
+  # Multiple web outputs — e.g. one per room. Only the first can mount at
+  # "/"; every instance past the first needs a unique `label` and is
+  # reachable at "/web-<label>" instead:
   # web:
   #   - enabled: true
-  #     host: 0.0.0.0
-  #     port: 8090
   #   - enabled: true
-  #     host: 0.0.0.0
-  #     port: 8094
+  #     label: bedroom
 
   # Themes output — a completely separate full-screen display from `web`
-  # above (its own port, its own page) that layers selectable, combinable
+  # above (its own path, its own page) that layers selectable, combinable
   # Display Themes on top of the current artwork/metadata - e.g. a color
   # palette, a blurred background, a glow. Enabled themes render
   # simultaneously into one combined look, not as alternate single-active
-  # skins. Open http://<this-machine>:8097 on any browser or smart TV. More
-  # themes are still being added - see the Display Themes roadmap plan.
+  # skins. Open http://<this-machine>:<http.port>/themes on any browser or
+  # smart TV. More themes are still being added - see the Display Themes
+  # roadmap plan.
   themes:
     enabled: false
-    host: 0.0.0.0
-    port: 8097
     # See outputs.web's transition_exclude above.
     transition_exclude: []
     # One entry per theme, keyed by theme name - only the themes listed
@@ -950,8 +957,8 @@ enrichers:
     enabled: false
     # Renders a lyrics word-cloud PNG for the playing track, colored from
     # its album art, once both are cached locally - stored next to the
-    # track's .lrc file and shown on the web output (port 8090) only, not
-    # on Pixoo/Nest Hub/etc. Off by default: a separate switch from
+    # track's .lrc file and shown on the web output (the root "/" path) only,
+    # not on Pixoo/Nest Hub/etc. Off by default: a separate switch from
     # `enabled` above since it costs real CPU time per newly-seen track
     # and needs the `wordcloud` package (pulls in matplotlib).
     wordcloud:
@@ -1365,7 +1372,7 @@ overrides:
 # ---------------------------------------------------------------------------
 # On by default. A persistent log of everything that has played - across
 # every source, not just music - browsable at the web output's /history
-# page (e.g. http://<host>:8090/history), with thumbnails resolved from
+# page (e.g. http://<host>:<http.port>/history), with thumbnails resolved from
 # the regular artwork cache. Each genuinely new item gets one row; a
 # repeat of the most recent entry within dedupe_window_seconds (e.g. a
 # source blip that stops and resumes the same track) is not logged twice.

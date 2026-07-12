@@ -11,7 +11,7 @@ mkdir -p config cache library logs adb_keys artwork spotify_cache overrides
 if [ ! -f config/config.yaml ]; then
     cp config.starter.yaml config/config.yaml
     echo "Created config/config.yaml - after 'docker compose up -d', open"
-    echo "http://<this-machine>:8094 to add your sources/displays from the"
+    echo "http://<this-machine>:8090/config to add your sources/displays from the"
     echo "browser (see config.example.yaml for the full option reference if"
     echo "you'd rather edit YAML by hand)."
 else

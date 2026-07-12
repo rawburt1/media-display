@@ -7,9 +7,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Changed
+- **Breaking: one shared HTTP server/port for every Flask-based output**
+  (`web`, `config`, `themes`, `info`, `feed`, `video`, `nest_hub`), replacing
+  the previous seven independently-configured ports. `web` (the now-playing
+  display) is at `/`; every other output moves under its own path prefix
+  (`/config`, `/themes`, `/info`, `/feed`, `/video`, `/nest_hub`), governed
+  by one new top-level `http:` section (`host`/`port`, default
+  `0.0.0.0:8090`). Per-output `host`/`port` (and `nest_hub.server_port`)
+  config keys are removed; `config_version: 2` migrates an old config.yaml
+  automatically, dropping those keys (`nest_hub.server_host` is kept) and
+  warning if it finds a non-default `outputs.config.host`. Running a second
+  instance of the same output type now needs a unique `label` field instead
+  of a distinct port. `docker-compose.yml` now publishes one port
+  (`HTTP_PORT`, default 8090) instead of seven; see the updated
+  `config.example.yaml`, README.md, and SECURITY.md (the "Operating modes"
+  table changed: `http.host` now governs every output at once, so `config`
+  can no longer be bound more restrictively than the rest short of
+  disabling it). Fixes the "port zoo" usability problem and enables real
+  graceful shutdown (H1 in
+  `docs/architecture-usability-review-2026-07.md`).
 - **Config UI redesign**: the config output's editable form and separate
   read-only dashboard are now one guided single-page app
-  (`outputs.config`, still on port 8094 by default) with a sidebar nav
+  (`outputs.config`, reachable at `/config`) with a sidebar nav
   across nine sections (Overview, Media sources, Displays & outputs,
   Artwork & metadata, Idle screen, Automation & schedules, Library &
   overrides, System status, Advanced configuration), essential-vs-advanced
@@ -50,8 +69,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   config.yaml forward automatically instead of a pydantic
   `extra="forbid"` error turning a working install into a broken one on
   upgrade. See `mediainfo/config/migrations.py`.
-- **Display Themes (foundation)**: a new `outputs.themes` display (port
-  8097 by default), completely separate from `web` (8090) - lays the
+- **Display Themes (foundation)**: a new `outputs.themes` display
+  (reachable at `/themes`), completely separate from `web` (at `/`) - lays the
   groundwork for a modular system of selectable, combinable visual
   effects (color palette, blurred background, glow, and more - see the
   Display Themes roadmap plan) that render simultaneously on top of the

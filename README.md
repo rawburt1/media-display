@@ -65,12 +65,12 @@ Currently implemented:
   scrolling text instead of artwork (e.g. "Artist - Song",
   "Title (Year)", "Show s01e01"); video output serves a full-screen web
   player that shows idle stock-footage clips (Pexels/Pixabay) and switches
-  to artwork when something plays; info output (`http://<host>:8093/`)
+  to artwork when something plays; info output (`http://<host>:8090/info`)
   pairs the current artwork at its original (high) resolution with the
   Wikipedia summary text; MQTT publishes now-playing state to a broker topic;
   feed output serves RSS/Atom feeds describing only the currently playing
   item, including the Wikipedia summary when available; config output
-  (`http://<host>:8094/`) is a web page for editing every config option
+  (`http://<host>:8090/config`) is a web page for editing every config option
   above (sources, outputs, enrichers, idle sources, polling intervals,
   including most list-valued fields like Sonos speaker IPs) without
   hand-editing YAML - saved changes are hot-reloaded within a few seconds,
@@ -78,7 +78,7 @@ Currently implemented:
   display across *every* output (falling back to idle wallpapers/text
   instead) while it's on, so a song's title/artist never leaks onto a
   screen mid-round of Hitster or similar music-guessing games; themes
-  output (`http://<host>:8097/`) is a completely separate full-screen
+  output (`http://<host>:8090/themes`) is a completely separate full-screen
   display from `web` that layers selectable, combinable Display Themes on
   top of the current artwork - enabled themes render simultaneously into
   one combined look. Off by default; ships today with Color Palette (a
@@ -231,7 +231,7 @@ rather than the project root because it's bind-mounted as a directory, so
 editors/tools that save by replacing the file (rather than writing in
 place) don't orphan the mount.
 
-Open `http://<this-machine>:8094/` - the guided config UI - and add
+Open `http://<this-machine>:8090/config` - the guided config UI - and add
 whichever sources (Kodi, Plex, Spotify, ...) and displays you actually use
 from there; no YAML editing needed. Most changes apply within a few
 seconds; the page tells you when one needs a restart instead (see
@@ -265,7 +265,7 @@ cp config.starter.yaml config.yaml
 python -m mediainfo --config config.yaml
 ```
 
-Open `http://<this-machine>:8094/` - the guided config UI - and add your
+Open `http://<this-machine>:8090/config` - the guided config UI - and add your
 sources/displays from there (or `nano config.yaml` - see
 `config.example.yaml` for every available option, if you'd rather edit
 YAML by hand). The web page is at `http://<this-machine>:8090/` once at
@@ -313,18 +313,20 @@ To update later: `git pull && pip install -r requirements.txt`.
 
 ## Configuration
 
-Most of this is easiest done from the config UI (`http://<this-machine>:8094/`
+Most of this is easiest done from the config UI (`http://<this-machine>:8090/config`
 - see `outputs.config` below) rather than by hand. See `config.example.yaml`
 for every available option if you're editing YAML directly - `config.yaml`
 itself starts out as a copy of `config.starter.yaml` (just the config UI and
 a few harmless local outputs, no sources), not the full example file. Key
 things to fill in:
 
-- **`config_version`**: schema version of the file, currently always `1`.
-  Safe to leave out entirely (treated the same as `1`) - it exists so a
-  future field rename can transparently upgrade old config.yaml files
-  instead of rejecting them at startup. You should never need to set this
-  by hand; just don't remove it if a future upgrade adds/bumps it.
+- **`config_version`**: schema version of the file, currently `2`. Safe to
+  leave out entirely (an absent version is treated as `1` and migrated
+  forward automatically, e.g. dropping the per-output `host`/`port` keys
+  `config_version: 2` removed) - it exists so a future field rename can
+  transparently upgrade old config.yaml files instead of rejecting them at
+  startup. You should never need to set this by hand; just don't remove it
+  if a future upgrade adds/bumps it.
 - **`priority`**: ordered list of source names. When more than one source
   is active at once, the first one in this list wins. A source that's
   `enabled: true` but missing from this list is never actually polled -
@@ -459,10 +461,14 @@ things to fill in:
   `vinyl_recognizer/README.md` for setup.
 - Any entry under `outputs` can be a single config (as below) or a list of
   configs, to run multiple instances of that output at once - e.g. several
-  Ulanzi displays in different rooms, or web servers on different ports. If
-  you add multiple `web` or `nest_hub` instances, make sure each one uses a
-  distinct `port`/`server_port` and update `docker-compose.yml` accordingly.
-- **`outputs.config`**: `host`/`port` (default 8094) for a guided web app
+  Ulanzi displays in different rooms, or several `web`/`nest_hub` instances.
+  Every Flask-based output (`web`, `config`, `themes`, `info`, `feed`,
+  `video`, `nest_hub`) shares one HTTP server (`http:` - see
+  `config.example.yaml`); if you add a second instance of one of those
+  types, give it a unique `label` (e.g. `label: bedroom`) so it mounts at
+  its own path (`/video-bedroom`) instead of colliding with the first.
+- **`outputs.config`**: served under `/config` on the shared HTTP server
+  (`http://<this-machine>:8090/config` by default) - a guided web app
   that configures mediainfo without needing to know YAML - a single-page
   shell (sidebar nav on desktop, a hamburger menu on narrow screens) with
   nine sections: Overview, Media sources, Displays & outputs, Artwork &
@@ -563,8 +569,9 @@ things to fill in:
   slide from any side, or zoom); `transition_exclude` (a list of names)
   drops any of them from the pool - this output, `info`, and `video` all
   support it.
-- **`outputs.themes`**: host/port for the separate Display Themes display
-  (see above) - a broadcast page, not per-client-rotated like `web`.
+- **`outputs.themes`**: served under `/themes` on the shared HTTP server -
+  the separate Display Themes display (see above), a broadcast page, not
+  per-client-rotated like `web`.
   `themes:` (nested inside this section) holds one entry per individual
   theme, keyed by theme name - see config.example.yaml for the currently
   available themes and their own options (just `color_palette` today).
@@ -579,12 +586,12 @@ things to fill in:
 - **`outputs.nest_hub`**: casts the current artwork to a Google Nest Hub
   (or other Chromecast-compatible display) using the Google Cast protocol.
   `device_ip` is the Nest Hub's IP address. Since Cast devices load media
-  via an HTTP URL rather than a direct push, this output also runs its own
-  small HTTP server (on `server_port`, default 8092) that serves the
-  current image - set `server_host` to this machine's LAN address so the
-  Nest Hub can reach it (the port is exposed in `docker-compose.yml`).
-  While idle (and no idle wallpaper source is configured), the Nest Hub's
-  cast session is stopped so it returns to its normal ambient display.
+  via an HTTP URL rather than a direct push, this output serves the current
+  image under `/nest_hub` on the shared HTTP server - set `server_host` to
+  this machine's LAN address so the Nest Hub can reach it (the port is
+  exposed in `docker-compose.yml` as part of `http:`). While idle (and no
+  idle wallpaper source is configured), the Nest Hub's cast session is
+  stopped so it returns to its normal ambient display.
 - **`outputs.ulanzi`**: shows the current item as scrolling text on a Ulanzi
   TC001 (or other [AWTRIX3](https://blueforcer.github.io/awtrix3/)) display,
   via its local HTTP API - no artwork is sent. `device_ip` is the device's
@@ -595,9 +602,10 @@ things to fill in:
   face) while idle. For music, release/version suffixes (e.g.
   "- 2011 Remaster", "(Live)", "[Deluxe Edition]") are stripped from the
   song title.
-- **`outputs.video`**: serves a full-screen web player (`host`/`port`) that
-  shows idle stock-footage clips and switches to the current artwork when
-  something plays. `source` is `pexels` or `pixabay`; `queries` is a
+- **`outputs.video`**: serves a full-screen web player (under `/video` on
+  the shared HTTP server) that shows idle stock-footage clips and switches
+  to the current artwork when something plays. `source` is `pexels` or
+  `pixabay`; `queries` is a
   comma-separated list of search terms (e.g. `nature,ocean,mountains`); set
   `pexels_api_key` (https://www.pexels.com/api/) or `pixabay_api_key`
   (https://pixabay.com/api/docs/) to match. `batch_size` clips are fetched
@@ -611,14 +619,14 @@ things to fill in:
   refresh-artwork button, a next-image button (advances rotation
   immediately), and a restart button - all via MQTT Discovery, no YAML
   needed on the HA side.
-- **`outputs.feed`**: serves RSS (`/rss`) and Atom (`/atom`) feeds
+- **`outputs.feed`**: serves RSS (`/feed/rss`) and Atom (`/feed/atom`) feeds
   describing only the currently playing item (single entry, replaced
   whenever it changes, empty while idle), with artwork as an enclosure,
-  plus an HTML discovery page at `/`. `title` names the feed. The entry's
-  description includes the Wikipedia summary (see `enrichers.wikipedia`)
-  when one was found for that item.
-- **`outputs.info`**: `host`/`port` (default 8093) for a web page pairing
-  the current artwork with its bio/plot summary - artist bio for music,
+  plus an HTML discovery page at `/feed`. `title` names the feed. The
+  entry's description includes the Wikipedia summary (see
+  `enrichers.wikipedia`) when one was found for that item.
+- **`outputs.info`**: served under `/info` on the shared HTTP server - a web
+  page pairing the current artwork with its bio/plot summary - artist bio for music,
   movie info, or TV show info, supplied by `enrichers.wikipedia`. No image
   transforms are applied by default, so artwork is shown at its original
   resolution rather than scaled down as on the small physical displays.
@@ -773,8 +781,8 @@ things to fill in:
   time. Artist/album/track name matching is fuzzy-tolerant (case,
   accents, "&" vs "and", and punctuation are ignored), so a source
   reporting "Simon and Garfunkel" still matches a library entry imported
-  as "Simon & Garfunkel". Browse/search the library at `/library` on the
-  `config` output's port (e.g. http://localhost:8094/library).
+  as "Simon & Garfunkel". Browse/search the library at `/library` under the
+  `config` output's path (e.g. http://localhost:8090/config/library).
 - **`logging.level`**: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`, or
   `CRITICAL`. Switch to `DEBUG` when troubleshooting why a source isn't
   detecting playback - it logs things like each Sonos coordinator
@@ -827,9 +835,10 @@ things to fill in:
 - **`overrides`**: on by default (`enabled: true`). Lets you pin a specific
   image for a title/subtitle that never gets a good poster from any
   enricher (matched by exact title + subtitle, case-insensitive) - manage
-  these from the config UI's "Overrides" page (`http://<host>:8094/overrides`),
-  no YAML editing needed: upload an image, type the title (and subtitle,
-  if applicable - leave blank for e.g. a movie with no subtitle), save.
+  these from the config UI's "Overrides" page
+  (`http://<host>:8090/config/overrides`), no YAML editing needed: upload
+  an image, type the title (and subtitle, if applicable - leave blank for
+  e.g. a movie with no subtitle), save.
   A match replaces whatever enrichment found for that item entirely, and
   isn't subject to the 640×480 minimum-size check other downloaded
   artwork goes through, since it's a deliberate choice rather than an

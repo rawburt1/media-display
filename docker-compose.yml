@@ -24,27 +24,20 @@ services:
       # Set your IANA zone in .env (e.g. TZ=Europe/Stockholm).
       - TZ=${TZ:-Etc/UTC}
     ports:
-      - "${WEB_PORT:-8090}:8090"
-      - "${VIDEO_PORT:-8091}:8091"
-      - "${NEST_HUB_PORT:-8092}:8092"
-      - "${INFO_PORT:-8093}:8093"
-      # outputs.config (the guided config UI) - read+write access to
-      # config.yaml, including any credentials in it, with no login unless
-      # you set auth.enabled: true. Published by default so a fresh
-      # install is reachable from a browser with zero YAML editing - fine
-      # on a trusted home LAN, but see SECURITY.md before exposing this
-      # machine's ports beyond it.
-      - "${CONFIG_PORT:-8094}:8094"
-      - "${CONFIG_PORT_ALT:-8095}:8095" # outputs.config second instance, if configured
-      - "${FEED_PORT:-8086}:8086"       # outputs.feed (RSS/Atom)
+      # One shared HTTP server for every Flask-based output (web, config,
+      # themes, info, feed, video, nest_hub) - see the `http:` section in
+      # config.example.yaml. outputs.web (now-playing display) is at "/";
+      # everything else is at "/<name>", e.g. "/config", "/themes", "/feed".
+      # SECURITY: outputs.config (the guided config UI, under /config) has
+      # read+write access to config.yaml, including any credentials in it,
+      # with no login unless you set auth.enabled: true - fine on a trusted
+      # home LAN, but see SECURITY.md before exposing this machine's ports
+      # beyond it.
+      - "${HTTP_PORT:-8090}:8090"
       # sources.browser (the browser-extension WebSocket source) listens
       # for inbound connections, unlike every other source - only needed
       # if that source is enabled.
       - "${BROWSER_SOURCE_PORT:-8096}:8096"
-      # outputs.themes - a separate full-screen display from outputs.web
-      # that layers selectable Display Themes on top of the current
-      # artwork; only needed if that output is enabled.
-      - "${THEMES_PORT:-8097}:8097"
     volumes:
       # A directory mount (not a single-file mount) so config.yaml stays
       # readable/writable across edits that replace the file via rename

@@ -1,16 +1,21 @@
 # Starter config - this is what setup.sh copies to config/config.yaml on a
 # fresh install. It has no sources/displays configured yet on purpose: after
 # `docker compose up -d` (or `python -m mediainfo --config config.yaml` for a
-# manual install), open http://<this-machine>:8094 in a browser - that's the
-# guided config UI - and add the media sources and displays you actually use
-# from there. No YAML editing required.
+# manual install), open http://<this-machine>:8090/config in a browser -
+# that's the guided config UI - and add the media sources and displays you
+# actually use from there. No YAML editing required.
 #
 # Prefer editing YAML by hand instead? config.example.yaml (in the project
 # root) documents every available source/output/enricher/idle wallpaper
 # option, each with its own comments on what it needs and where to get any
 # API key - copy whatever sections you need from it into this file.
 
-config_version: 1
+config_version: 2
+
+# Every output below shares one HTTP server, defaulting to 0.0.0.0:8090 (all
+# network interfaces, required to reach it from another machine or from
+# inside Docker) - see the `http:` section in config.example.yaml if you
+# want to change the host or port.
 
 outputs:
   # Guided config UI - see the comment at the top of this file.
@@ -19,13 +24,12 @@ outputs:
   # machine's ports beyond a trusted LAN.
   config:
     enabled: true
-    host: 0.0.0.0
 
   # Local web page - http://<this-machine>:8090/
   web:
     enabled: true
 
-  # RSS/Atom "now playing" feed - /rss and /atom on port 8086.
+  # RSS/Atom "now playing" feed - http://<this-machine>:8090/feed/rss and /feed/atom.
   feed:
     enabled: true
 
@@ -33,7 +37,7 @@ outputs:
   folder:
     enabled: true
 
-  # High-resolution artwork + bio/plot summary page - http://<this-machine>:8093/
+  # High-resolution artwork + bio/plot summary page - http://<this-machine>:8090/info
   info:
     enabled: true
 

@@ -18,11 +18,11 @@ EXPOSE 8090
 # Uses /health/live (always returns 200 OK as long as the app is running)
 # rather than /health (readiness: reports per-source/output status), so
 # external-source failures (Apple TV offline, Plex unreachable, etc.) do
-# not trigger container restarts. Requires outputs.web (or outputs.config /
-# outputs.info / outputs.feed / outputs.video) to be enabled in config.yaml;
-# if no HTTP output is active there is no listener on any port and this
-# check will fail — disable it in that case with HEALTHCHECK NONE in a
-# docker-compose.yml override.
+# not trigger container restarts. This route is registered by outputs.web
+# at the root of the shared HTTP server (see http: in config.example.yaml),
+# so it requires outputs.web specifically to be enabled in config.yaml; if
+# it's disabled this check will fail — disable it in that case with
+# HEALTHCHECK NONE in a docker-compose.yml override.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8090/health/live', timeout=5)"
 
