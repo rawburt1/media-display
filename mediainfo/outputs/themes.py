@@ -30,13 +30,13 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Blueprint, jsonify, render_template, request, send_file
 from flask_sock import Sock
 from markupsafe import Markup
 
 from mediainfo.app_services import AppServices
 from mediainfo.cache import ImageCache
-from mediainfo.config import AuthConfig, AutoRotatePresetConfig, ThemesConfig
+from mediainfo.config import AutoRotatePresetConfig, ThemesConfig
 from mediainfo.config.outputs import parse_presets
 from mediainfo.config.themes import parse_themes
 from mediainfo.media_data_store import MediaDataStore
@@ -51,7 +51,6 @@ from mediainfo.outputs.websocket_push import (
 from mediainfo.registries import get_theme_class
 from mediainfo.themes.base import DisplayTheme
 from mediainfo.transforms import parse_pipeline
-from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -64,15 +63,32 @@ logger = logging.getLogger(__name__)
 _IDLE_MEDIA_TYPE_ALIAS = {"idle": "wallpaper"}
 
 
+def _prefix_image_urls(value: Any, prefix: str) -> Any:
+    """Recursively prepend url_prefix to every "/image/current..." URL
+    embedded in a theme's own extra_payload (e.g. Cast Mosaic's per-actor
+    headshots, nested inside a list of dicts; Ken Burns/Vinyl's single flat
+    "image" key) - themes build these URLs themselves, per
+    ThemeRenderResult.derived_image_paths' documented contract in
+    mediainfo/themes/base.py, so the prefix can't be applied once at a
+    single known key - it has to walk whatever shape extra_payload turns
+    out to be.
+    """
+    if isinstance(value, str):
+        return prefix + value if value.startswith("/image/current") else value
+    if isinstance(value, dict):
+        return {k: _prefix_image_urls(v, prefix) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_prefix_image_urls(v, prefix) for v in value]
+    return value
+
+
 class ThemesOutput(Output):
     def __init__(
         self,
         config: ThemesConfig,
-        auth_config: Optional[AuthConfig] = None,
         media_data: Optional[MediaDataStore] = None,
     ):
         self.config = config
-        self.auth_config = auth_config
         self.media_data = media_data
         self.transform_pipeline = parse_pipeline(config.transforms)
         # Markup: generated CSS/JS is code, not text - autoescaping it
@@ -113,6 +129,11 @@ class ThemesOutput(Output):
         self._known_images: Dict[str, Path] = {}
         self._clients: set[Any] = set()
         self._clients_lock = threading.Lock()
+        # Set by build_http_blueprint() once wiring.py has computed it -
+        # baked into every /image/current URL handed to clients (both here
+        # and in _prepare_themes()), since it's a relative path a browser
+        # resolves against the current page.
+        self._url_prefix = ""
 
         # Auto-rotate (see config.AutoRotateConfig / _active_theme_names):
         # presets split into two groups. _rotation_pool holds unconditioned
@@ -140,9 +161,6 @@ class ThemesOutput(Output):
         self._warn_preset_issues()
         if self._rotation_pool:
             threading.Thread(target=self._auto_rotate_loop, daemon=True).start()
-
-        self.app = self._build_app()
-        threading.Thread(target=self._run_server, daemon=True).start()
 
     def _warn_preset_issues(self) -> None:
         enabled_names = {theme.name for theme in self._themes}
@@ -332,7 +350,7 @@ class ThemesOutput(Output):
         }
         add_playback_position(payload, now_playing)
         if image_path is not None:
-            payload["image"] = f"/image/current?v={image_path.stem}"
+            payload["image"] = f"{self._url_prefix}/image/current?v={image_path.stem}"
         preset_name = self._current_preset_name()
         if preset_name is not None:
             payload["active_preset"] = preset_name
@@ -373,13 +391,15 @@ class ThemesOutput(Output):
                 continue
             if rendered is None:
                 continue
-            entry = dict(rendered.extra_payload)
+            entry = _prefix_image_urls(dict(rendered.extra_payload), self._url_prefix)
             if rendered.derived_image_path is not None:
                 with self._lock:
                     self._known_images[rendered.derived_image_path.stem] = (
                         rendered.derived_image_path
                     )
-                entry["image"] = f"/image/current?v={rendered.derived_image_path.stem}"
+                entry["image"] = (
+                    f"{self._url_prefix}/image/current?v={rendered.derived_image_path.stem}"
+                )
             if rendered.derived_image_paths:
                 with self._lock:
                     for path in rendered.derived_image_paths:
@@ -410,23 +430,21 @@ class ThemesOutput(Output):
     def _push(self, payload: dict) -> None:
         broadcast(self._clients_lock, self._clients, payload)
 
-    def _run_server(self) -> None:
-        logger.info("Starting themes server on %s:%s", self.config.host, self.config.port)
-        self.app.run(host=self.config.host, port=self.config.port, threaded=True)
+    def build_http_blueprint(self, url_prefix: str, sock: Optional[Sock] = None) -> Blueprint:
+        self._url_prefix = url_prefix
+        bp = Blueprint("themes", __name__)
 
-    def _build_app(self) -> Flask:
-        app = Flask(__name__)
-        sock = Sock(app)
+        if sock is not None:
+            register_websocket_route(
+                sock,
+                "/ws",
+                self._clients_lock,
+                self._clients,
+                get_initial_payload=lambda conn: self._get_payload(),
+                bp=bp,
+            )
 
-        register_websocket_route(
-            sock,
-            "/ws",
-            self._clients_lock,
-            self._clients,
-            get_initial_payload=lambda conn: self._get_payload(),
-        )
-
-        @app.get("/")
+        @bp.get("/")
         def index():
             return render_template(
                 "themes/index.html",
@@ -434,13 +452,14 @@ class ThemesOutput(Output):
                 transitions_js=self._transitions_js,
                 theme_css=self._theme_css,
                 theme_js=self._theme_js,
+                url_prefix=url_prefix,
             )
 
-        @app.get("/api/now-playing")
+        @bp.get("/api/now-playing")
         def now_playing_json():
             return jsonify(self._get_payload())
 
-        @app.get("/image/current")
+        @bp.get("/image/current")
         def current_image():
             requested = request.args.get("v")
             with self._lock:
@@ -453,5 +472,4 @@ class ThemesOutput(Output):
 
             return send_file(image_path)
 
-        install_auth(app, self.auth_config)
-        return app
+        return bp

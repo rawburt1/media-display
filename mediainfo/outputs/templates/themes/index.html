@@ -133,7 +133,7 @@
     setInterval(renderProgress, 1000);
 
     function connect() {
-      const ws = new WebSocket("ws://" + location.host + "/ws");
+      const ws = new WebSocket("ws://" + location.host + "{{ url_prefix }}/ws");
       ws.onmessage = (event) => { applyState(JSON.parse(event.data)); };
       ws.onclose = () => { setTimeout(connect, 3000); };
       ws.onerror = () => { ws.close(); };

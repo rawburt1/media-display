@@ -14,6 +14,7 @@ from unittest.mock import MagicMock
 
 import pydantic
 import pytest
+from flask import Flask
 
 from mediainfo.config import ThemesConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -21,7 +22,7 @@ from mediainfo.themes.base import DisplayTheme, ThemeClientAssets, ThemeRenderRe
 
 
 def _config(**kwargs):
-    return ThemesConfig(enabled=True, host="127.0.0.1", port=8097, **kwargs)
+    return ThemesConfig(enabled=True, **kwargs)
 
 
 def _music(title="Bohemian Rhapsody", artist="Queen"):
@@ -69,6 +70,16 @@ def _output(config=None):
     return ThemesOutput(config or _config())
 
 
+def _client(out, url_prefix=""):
+    """See tests/test_nest_hub.py for the harness pattern (H1, see
+    docs/architecture-usability-review-2026-07.md). Built as
+    Flask("mediainfo.outputs.themes") so templates/ resolves - see
+    tests/test_feeds.py for why."""
+    app = Flask("mediainfo.outputs.themes")
+    app.register_blueprint(out.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
+
+
 # ---------------------------------------------------------------------------
 # _get_payload
 # ---------------------------------------------------------------------------
@@ -114,7 +125,7 @@ def test_image_survives_caller_deleting_the_original_path(tmp_path):
 
     payload = out._get_payload()
     assert payload["image"] == "/image/current?v=abc123"
-    resp = out.app.test_client().get("/image/current?v=abc123")
+    resp = _client(out).get("/image/current?v=abc123")
     assert resp.status_code == 200
     assert resp.data == b"fake-bytes"
 
@@ -162,7 +173,7 @@ def test_payload_includes_playback_position_when_reported():
 
 def test_index_page_serves():
     out = _output()
-    resp = out.app.test_client().get("/")
+    resp = _client(out).get("/")
     assert resp.status_code == 200
     assert b"themeHandlers" in resp.data
 
@@ -173,14 +184,14 @@ def test_image_endpoint_serves_by_stem(tmp_path):
     img.write_bytes(b"fake-bytes")
     out.update(_music(), _artwork(), img)
 
-    resp = out.app.test_client().get("/image/current?v=abc123")
+    resp = _client(out).get("/image/current?v=abc123")
     assert resp.status_code == 200
     assert resp.data == b"fake-bytes"
 
 
 def test_image_endpoint_404_when_nothing_playing():
     out = _output()
-    resp = out.app.test_client().get("/image/current")
+    resp = _client(out).get("/image/current")
     assert resp.status_code == 404
 
 
@@ -294,7 +305,7 @@ def test_theme_client_assets_are_aggregated(fake_glow_theme):
 
 def test_theme_client_assets_injected_into_page(fake_glow_theme):
     out = _output(_config(themes={"glow": {"enabled": True}}))
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert ".glow { color: red; }" in body
     assert "console.log('glow');" in body
 
@@ -443,7 +454,7 @@ def test_derived_theme_image_is_servable(monkeypatch, tmp_path):
     image_url = payload["themes"]["glow"]["image"]
     v = image_url.split("v=")[1]
 
-    resp = out.app.test_client().get(f"/image/current?v={v}")
+    resp = _client(out).get(f"/image/current?v={v}")
     assert resp.status_code == 200
     assert resp.data == b"derived-bytes"
 
@@ -695,7 +706,7 @@ def test_real_color_palette_theme_end_to_end(tmp_path):
     payload = out._get_payload()
     assert payload["themes"]["color_palette"]["colors"] == ["#0a141e"]
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     # Exactly once, not just "in" - guards against a template placeholder
     # accidentally sitting inside a comment (see the regression test
     # below), which would duplicate the injected content and run it out
@@ -723,11 +734,11 @@ def test_real_blurred_background_theme_end_to_end(tmp_path):
     image_url = payload["themes"]["blurred_background"]["image"]
     v = image_url.split("v=")[1]
 
-    resp = out.app.test_client().get(f"/image/current?v={v}")
+    resp = _client(out).get(f"/image/current?v={v}")
     assert resp.status_code == 200
     assert resp.content_type == "image/png"
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.blurred_background = function") == 1
 
 
@@ -760,7 +771,7 @@ def test_real_themes_page_has_valid_script_no_stray_placeholder_text(tmp_path):
     out.on_new_item(_music(), cache=cache)
     out.update(_music(), _artwork(), img_path)
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.color_palette = function") == 1
     assert body.count("window.themeHandlers.blurred_background = function") == 1
     assert "{{ theme_css }}" not in body
@@ -801,7 +812,7 @@ def test_real_word_cloud_theme_end_to_end_music(tmp_path):
     image_url = payload["themes"]["word_cloud"]["image"]
     v = image_url.split("v=")[1]
 
-    resp = out.app.test_client().get(f"/image/current?v={v}")
+    resp = _client(out).get(f"/image/current?v={v}")
     assert resp.status_code == 200
     assert resp.data == b"fake-wordcloud-png"
 
@@ -830,11 +841,11 @@ def test_real_word_cloud_theme_end_to_end_movie(tmp_path):
     image_url = payload["themes"]["word_cloud"]["image"]
     v = image_url.split("v=")[1]
 
-    resp = out.app.test_client().get(f"/image/current?v={v}")
+    resp = _client(out).get(f"/image/current?v={v}")
     assert resp.status_code == 200
     assert resp.content_type == "image/png"
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert "window.themeHandlers.word_cloud" in body
 
 
@@ -853,7 +864,7 @@ def test_real_glow_theme_end_to_end(tmp_path):
     payload = out._get_payload()
     assert payload["themes"]["glow"]["color"] == "#c83232"
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert "window.themeHandlers.glow" in body
     assert "theme-glow" in body
 
@@ -871,7 +882,7 @@ def test_real_ken_burns_theme_end_to_end(tmp_path):
     payload = out._get_payload()
     assert payload["themes"]["ken_burns"]["image"] == f"/image/current?v={img_path.stem}"
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.ken_burns = function") == 1
     assert "15s" in body
 
@@ -889,7 +900,7 @@ def test_real_vinyl_theme_end_to_end_music(tmp_path):
     payload = out._get_payload()
     assert payload["themes"]["vinyl"]["image"] == f"/image/current?v={img_path.stem}"
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.vinyl = function") == 1
     assert "6s" in body
 
@@ -938,11 +949,11 @@ def test_real_media_mosaic_theme_end_to_end(tmp_path):
     image_url = payload["themes"]["media_mosaic"]["image"]
     v = image_url.split("v=")[1]
 
-    resp = out.app.test_client().get(f"/image/current?v={v}")
+    resp = _client(out).get(f"/image/current?v={v}")
     assert resp.status_code == 200
     assert resp.content_type == "image/png"
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.media_mosaic = function") == 1
 
 
@@ -969,7 +980,7 @@ def test_real_timeline_theme_end_to_end_with_discography(tmp_path):
     assert "IV" in payload["themes"]["timeline"]["albums"]
     assert out.health_check() is None  # not degraded - real discography was available
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.timeline = function") == 1
 
 
@@ -1009,7 +1020,7 @@ def test_real_equalizer_theme_end_to_end_music(tmp_path):
     payload = out._get_payload()
     assert payload["themes"]["equalizer"] == {"active": True}
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.equalizer = function") == 1
     assert "style-wave" in body
 
@@ -1050,7 +1061,7 @@ def test_real_lyrics_ticker_theme_end_to_end_music(tmp_path):
     ]
     assert out.health_check() is None
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.lyrics_ticker = function") == 1
     assert "position-bottom" in body
 
@@ -1096,7 +1107,7 @@ def test_real_progress_bar_theme_end_to_end_music(tmp_path):
         "color": "#ff8800",
     }
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.progress_bar = function") == 1
     assert "position-top" in body
 
@@ -1182,10 +1193,10 @@ def test_real_cast_mosaic_theme_end_to_end(tmp_path):
 
     for member in cast_payload:
         v = member["image"].split("v=")[1]
-        resp = out.app.test_client().get(f"/image/current?v={v}")
+        resp = _client(out).get(f"/image/current?v={v}")
         assert resp.status_code == 200
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.cast_mosaic = function") == 1
 
 
@@ -1204,6 +1215,55 @@ def test_real_cast_mosaic_theme_end_to_end_no_cast_reported_on_health(tmp_path):
 
     health = out.health_check()
     assert health["themes"]["cast_mosaic"]["degraded"] is True
+
+
+def test_theme_image_urls_get_the_computed_prefix_flat_case(tmp_path):
+    # ken_burns/vinyl embed a single flat "image" key in extra_payload -
+    # see _prefix_image_urls() in mediainfo/outputs/themes.py.
+    img_path = tmp_path / "art.jpg"
+    img_path.write_bytes(b"x")
+
+    out = _output(_config(themes={"vinyl": {"enabled": True}}))
+    out.build_http_blueprint("/themes")  # wiring.py calls this before any update()
+    out.on_new_item(_music(), cache=MagicMock())
+    out.update(_music(), _artwork(), img_path)
+
+    payload = out._get_payload()
+    assert payload["themes"]["vinyl"]["image"] == f"/themes/image/current?v={img_path.stem}"
+
+
+def test_theme_image_urls_get_the_computed_prefix_nested_case(tmp_path):
+    # Cast Mosaic embeds a list of dicts, each with its own "image" key,
+    # nested under extra_payload["cast"] - proves _prefix_image_urls()
+    # walks arbitrary nesting, not just a top-level "image" key.
+    from PIL import Image
+
+    from mediainfo.cache import ImageCache
+
+    photo_path = tmp_path / "keanu.jpg"
+    Image.new("RGB", (50, 50), (10, 20, 30)).save(photo_path)
+    poster_path = tmp_path / "poster.jpg"
+    Image.new("RGB", (64, 64), (10, 10, 10)).save(poster_path)
+    cache = ImageCache(tmp_path / "cache")
+
+    movie = NowPlaying(
+        source="kodi",
+        media_type="movie",
+        title="The Matrix",
+        cast=[{"name": "Keanu Reeves", "character": "Neo", "photo_url": f"file://{photo_path}"}],
+    )
+
+    out = _output(_config(themes={"cast_mosaic": {"enabled": True}}))
+    out.build_http_blueprint("/themes")
+    out.on_new_item(movie, cache=cache)
+    out.update(movie, Artwork(url=f"file://{poster_path}", label="Poster"), poster_path)
+
+    payload = out._get_payload()
+    image_url = payload["themes"]["cast_mosaic"]["cast"][0]["image"]
+    assert image_url.startswith("/themes/image/current?v=")
+
+    resp = _client(out, url_prefix="/themes").get(image_url)
+    assert resp.status_code == 200
 
 
 def test_real_artist_spotlight_theme_end_to_end_music(tmp_path):
@@ -1233,11 +1293,11 @@ def test_real_artist_spotlight_theme_end_to_end_music(tmp_path):
 
     image_url = payload["themes"]["artist_spotlight"]["image"]
     v = image_url.split("v=")[1]
-    resp = out.app.test_client().get(f"/image/current?v={v}")
+    resp = _client(out).get(f"/image/current?v={v}")
     assert resp.status_code == 200
     assert resp.data == b"fake-photo"
 
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert body.count("window.themeHandlers.artist_spotlight = function") == 1
 
 

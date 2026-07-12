@@ -14,12 +14,12 @@ import threading
 from pathlib import Path
 from typing import Any, Optional
 
-from flask import Flask, jsonify, render_template, send_file
+from flask import Blueprint, jsonify, render_template, send_file
 from flask_sock import Sock
 from markupsafe import Markup
 
 from mediainfo.cache import ImageCache
-from mediainfo.config import AuthConfig, InfoConfig
+from mediainfo.config import InfoConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
@@ -29,15 +29,13 @@ from mediainfo.outputs.websocket_push import (
     register_websocket_route,
 )
 from mediainfo.transforms import parse_pipeline
-from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
 
 class InfoOutput(Output):
-    def __init__(self, config: InfoConfig, auth_config: Optional[AuthConfig] = None):
+    def __init__(self, config: InfoConfig):
         self.config = config
-        self.auth_config = auth_config
         self.transform_pipeline = parse_pipeline(config.transforms)
         # Markup: the transitions CSS/JS is code, not text - autoescaping it
         # would corrupt it (see templates/info/index.html).
@@ -49,8 +47,10 @@ class InfoOutput(Output):
         self._image_path: Optional[Path] = None
         self._clients: set[Any] = set()
         self._clients_lock = threading.Lock()
-        self.app = self._build_app()
-        threading.Thread(target=self._run_server, daemon=True).start()
+        # Set by build_http_blueprint() once wiring.py has computed it -
+        # baked into the /image/current URL handed to clients, since it's a
+        # relative path a browser resolves against the current page.
+        self._url_prefix = ""
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         with self._lock:
@@ -94,41 +94,40 @@ class InfoOutput(Output):
         }
         add_playback_position(payload, now_playing)
         if image_path is not None:
-            payload["image"] = f"/image/current?v={image_path.stem}"
+            payload["image"] = f"{self._url_prefix}/image/current?v={image_path.stem}"
         return payload
 
     def _push(self, payload: dict) -> None:
         broadcast(self._clients_lock, self._clients, payload)
 
-    def _run_server(self) -> None:
-        logger.info("Starting info server on %s:%s", self.config.host, self.config.port)
-        self.app.run(host=self.config.host, port=self.config.port, threaded=True)
+    def build_http_blueprint(self, url_prefix: str, sock: Optional[Sock] = None) -> Blueprint:
+        self._url_prefix = url_prefix
+        bp = Blueprint("info", __name__)
 
-    def _build_app(self) -> Flask:
-        app = Flask(__name__)
-        sock = Sock(app)
+        if sock is not None:
+            register_websocket_route(
+                sock,
+                "/ws",
+                self._clients_lock,
+                self._clients,
+                get_initial_payload=lambda conn: self._get_payload(),
+                bp=bp,
+            )
 
-        register_websocket_route(
-            sock,
-            "/ws",
-            self._clients_lock,
-            self._clients,
-            get_initial_payload=lambda conn: self._get_payload(),
-        )
-
-        @app.get("/")
+        @bp.get("/")
         def index():
             return render_template(
                 "info/index.html",
                 transitions_css=self._transitions_css,
                 transitions_js=self._transitions_js,
+                url_prefix=url_prefix,
             )
 
-        @app.get("/api/now-playing")
+        @bp.get("/api/now-playing")
         def now_playing_json():
             return jsonify(self._get_payload())
 
-        @app.get("/image/current")
+        @bp.get("/image/current")
         def current_image():
             with self._lock:
                 image_path = self._image_path
@@ -138,5 +137,4 @@ class InfoOutput(Output):
 
             return send_file(image_path)
 
-        install_auth(app, self.auth_config)
-        return app
+        return bp

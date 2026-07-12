@@ -4,13 +4,14 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+from flask import Flask
 
 from mediainfo.config import InfoConfig
 from mediainfo.models import Artwork, NowPlaying
 
 
 def _config(**kwargs):
-    return InfoConfig(enabled=True, host="127.0.0.1", port=8093, **kwargs)
+    return InfoConfig(enabled=True, **kwargs)
 
 
 def _music(
@@ -63,6 +64,16 @@ def _output(config=None):
     return InfoOutput(config or _config())
 
 
+def _client(out, url_prefix=""):
+    """See tests/test_nest_hub.py for the harness pattern (H1, see
+    docs/architecture-usability-review-2026-07.md). Built as
+    Flask("mediainfo.outputs.info") so templates/ resolves - see
+    tests/test_feeds.py for why."""
+    app = Flask("mediainfo.outputs.info")
+    app.register_blueprint(out.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
+
+
 # ---------------------------------------------------------------------------
 # _get_payload
 # ---------------------------------------------------------------------------
@@ -109,7 +120,7 @@ def test_payload_omits_playback_position_when_unknown():
 
 def test_index_page_has_progress_bar():
     out = _output()
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert 'id="progress"' in body
 
 
@@ -211,14 +222,14 @@ def test_default_transform_pipeline_is_empty():
 
 def test_index_page_includes_all_transitions_by_default():
     out = _output()
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert "t-slide-left" in body
     assert "prepareForTransition" in body
 
 
 def test_index_page_excludes_configured_transitions():
     out = _output(_config(transition_exclude=["slide-left", "zoom"]))
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     variants_section = body.split("TRANSITION_VARIANTS = ")[1].split(";")[0]
     assert "t-slide-left" not in variants_section
     assert "t-zoom" not in variants_section
@@ -226,7 +237,7 @@ def test_index_page_excludes_configured_transitions():
 
 def test_index_page_served():
     out = _output()
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.get("/")
     assert resp.status_code == 200
     assert b"Now Playing" in resp.data
@@ -235,7 +246,7 @@ def test_index_page_served():
 def test_now_playing_json_endpoint():
     out = _output()
     out.on_new_item(_music(summary="bio text"), MagicMock())
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.get("/api/now-playing")
     data = resp.get_json()
     assert data["summary"] == "bio text"
@@ -243,6 +254,16 @@ def test_now_playing_json_endpoint():
 
 def test_current_image_404_when_none():
     out = _output()
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.get("/image/current")
     assert resp.status_code == 404
+
+
+def test_payload_image_url_includes_computed_prefix(tmp_path):
+    out = _output()
+    out.build_http_blueprint("/info")  # wiring.py calls this before any update()
+    img = tmp_path / "abc123.jpg"
+    img.write_bytes(b"x")
+    out.update(_music(), _artwork(), img)
+    payload = out._get_payload()
+    assert payload["image"] == f"/info/image/current?v={img.stem}"

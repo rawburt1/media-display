@@ -199,16 +199,14 @@ def parse_presets(raw: Dict[str, Any]) -> Dict[str, AutoRotatePresetConfig]:
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class ThemesConfig(_OutputFilterMixin):
-    """A completely separate display from `web` (its own port, its own
-    page) that layers selectable, combinable visual effects ("Display
-    Themes" - see mediainfo/themes/) on top of the current artwork/
-    metadata. Themes enabled at once render simultaneously into one
-    combined look, not as alternate single-active skins - see
+    """A completely separate display from `web` (its own page, at the
+    /themes path) that layers selectable, combinable visual effects
+    ("Display Themes" - see mediainfo/themes/) on top of the current
+    artwork/metadata. Themes enabled at once render simultaneously into
+    one combined look, not as alternate single-active skins - see
     mediainfo/outputs/themes.py."""
 
     enabled: bool = False
-    host: str = "0.0.0.0"
-    port: int = 8097
     transforms: list = dataclasses.field(default_factory=list)
     # Image-change transition variants to exclude - see WebConfig above.
     transition_exclude: list = dataclasses.field(default_factory=list)
@@ -226,8 +224,6 @@ class ThemesConfig(_OutputFilterMixin):
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class InfoConfig(_OutputFilterMixin):
     enabled: bool = False
-    host: str = "0.0.0.0"
-    port: int = 8093
     # Image transforms applied before display. Left empty by default so
     # this output shows artwork at its original (high) resolution, unlike
     # outputs aimed at small physical displays.

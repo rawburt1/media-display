@@ -66,7 +66,6 @@ OUTPUT_CLASSES: dict[str, Union[str, type]] = {
 OUTPUT_EXTRA_ARGS = {
     "config": lambda config, config_path, cache: (config_path, config.auth),
     "web": lambda config, config_path, cache: (config.rotation_interval_seconds, cache),
-    "info": lambda config, config_path, cache: (config.auth,),
     "video": lambda config, config_path, cache: (config.auth,),
     # http_port, not config.auth like the others (nest_hub's blueprint
     # doesn't call install_auth itself anymore - see
@@ -84,8 +83,9 @@ OUTPUT_EXTRA_ARGS = {
     # (mirrors info/web's own image-path resolution: the orchestrator
     # already resolves/transforms the image before update() is called;
     # a theme's own per-item ImageCache.get_derived_path() bakes happen
-    # in on_new_item(), which already receives cache as an argument).
-    "themes": lambda config, config_path, cache: (config.auth,),
+    # in on_new_item(), which already receives cache as an argument). No
+    # longer needs config.auth either - install_auth() is centralized in
+    # SharedHttpServer now.
 }
 
 # Display Theme plugins (see mediainfo/themes/base.py) hosted by the
@@ -161,11 +161,11 @@ OUTPUT_DETAIL_FIELDS: dict = {
     "config": ["label", "port"],
     "feed": ["label", "title"],
     "folder": ["label", "dir"],
-    "info": ["label", "port"],
+    "info": ["label"],
     "mqtt": ["label", "host", "port", "topic"],
     "nest_hub": ["label", "device_ip"],
     "pixoo": ["label", "ip"],
-    "themes": ["label", "port"],
+    "themes": ["label"],
     "ulanzi": ["label", "device_ip"],
     "video": ["label", "port"],
     "web": ["label"],
