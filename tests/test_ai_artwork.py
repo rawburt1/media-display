@@ -166,6 +166,28 @@ def test_no_images_in_response_leaves_now_playing_unchanged(mock_post, tmp_path)
 
 
 @patch("mediainfo.enrichers.ai_artwork.requests.post")
+def test_empty_base64_image_is_not_cached_or_applied(mock_post, tmp_path):
+    # A present-but-empty base64 string decodes to b"" with no exception -
+    # must not be written to disk, since `enrich()`'s cache-hit check is
+    # just `if not path.exists()`: a 0-byte file would be reused forever.
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    resp.json.return_value = {"images": [""]}
+    mock_post.return_value = resp
+    enricher = AiArtworkEnricher(_config(), tmp_path)
+    np = _music()
+
+    enricher.enrich(np)
+
+    assert np.images == []
+    assert list(tmp_path.glob("*.png")) == []
+
+    # Not cached as a "hit" either, so a later play retries generation.
+    enricher.enrich(_music())
+    assert mock_post.call_count == 2
+
+
+@patch("mediainfo.enrichers.ai_artwork.requests.post")
 def test_network_exception_does_not_raise(mock_post, tmp_path):
     mock_post.side_effect = RuntimeError("connection refused")
     enricher = AiArtworkEnricher(_config(), tmp_path)

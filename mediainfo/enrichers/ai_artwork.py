@@ -106,7 +106,16 @@ class AiArtworkEnricher(ArtworkEnricher):
             images = response.json().get("images") or []
             if not images:
                 return None
-            return base64.b64decode(images[0])
+            image_bytes = base64.b64decode(images[0])
+            if not image_bytes:
+                # An empty (but present) base64 string decodes to b"" with
+                # no exception - writing that to path below would create a
+                # permanent 0-byte "cache hit" (see enrich(): `if not
+                # path.exists()` never re-generates once the file exists),
+                # so every future play of this song would silently reuse
+                # broken artwork forever.
+                return None
+            return image_bytes
         except Exception:
             logger.exception(
                 "AI artwork generation failed for %s - %s", now_playing.subtitle, now_playing.title
