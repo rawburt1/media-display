@@ -34,6 +34,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from flask_sock import Sock
 from markupsafe import Markup
 
+from mediainfo.app_services import AppServices
 from mediainfo.cache import ImageCache
 from mediainfo.config import AuthConfig, ThemesConfig
 from mediainfo.config.themes import parse_themes
@@ -41,7 +42,11 @@ from mediainfo.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
-from mediainfo.outputs.websocket_push import add_playback_position, broadcast, register_websocket_route
+from mediainfo.outputs.websocket_push import (
+    add_playback_position,
+    broadcast,
+    register_websocket_route,
+)
 from mediainfo.registries import get_theme_class
 from mediainfo.themes.base import DisplayTheme
 from mediainfo.transforms import parse_pipeline
@@ -64,16 +69,18 @@ class ThemesOutput(Output):
         # Markup: generated CSS/JS is code, not text - autoescaping it
         # would corrupt it (see templates/themes/index.html).
         self._transitions_css = Markup(transitions.transitions_css())
-        self._transitions_js = Markup(transitions.transitions_js(config.transition_exclude))
+        self._transitions_js = Markup(
+            transitions.transitions_js(config.transition_exclude)
+        )
 
         self._theme_configs: Dict[str, Any] = parse_themes(config.themes)
         self._themes: List[DisplayTheme] = self._build_themes(self._theme_configs)
-        self._theme_css = Markup("\n".join(
-            assets.css for assets in self._client_assets() if assets.css
-        ))
-        self._theme_js = Markup("\n".join(
-            assets.js for assets in self._client_assets() if assets.js
-        ))
+        self._theme_css = Markup(
+            "\n".join(assets.css for assets in self._client_assets() if assets.css)
+        )
+        self._theme_js = Markup(
+            "\n".join(assets.js for assets in self._client_assets() if assets.js)
+        )
 
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
@@ -108,9 +115,13 @@ class ThemesOutput(Output):
         # _active_theme_names() checks to fall back to "show every
         # enabled theme" - today's pre-Phase-8 behavior.
         self._preset_names: List[str] = (
-            list(config.auto_rotate.presets.keys()) if config.auto_rotate.enabled else []
+            list(config.auto_rotate.presets.keys())
+            if config.auto_rotate.enabled
+            else []
         )
-        self._active_preset: Optional[str] = self._preset_names[0] if self._preset_names else None
+        self._active_preset: Optional[str] = (
+            self._preset_names[0] if self._preset_names else None
+        )
         self._warn_unknown_preset_themes()
         if self._preset_names:
             threading.Thread(target=self._auto_rotate_loop, daemon=True).start()
@@ -126,19 +137,24 @@ class ThemesOutput(Output):
                 logger.warning(
                     "Themes output: auto_rotate preset %r names theme(s) %s that "
                     "aren't enabled - they'll never appear while this preset is active",
-                    preset_name, unknown,
+                    preset_name,
+                    unknown,
                 )
 
     def set_media_data_store(self, store: Optional[MediaDataStore]) -> None:
-        """Wired in post-construction by wiring.wire_media_data_store() -
-        MediaDataStore is built inside start_orchestrator(), after outputs
-        are already instantiated, so it can't be a constructor arg the way
-        `config`/`auth_config` are (same reason WebOutput.set_history()/
-        set_health_provider() exist as setters rather than constructor
-        params). None means no theme needing it (e.g. Word Cloud for
-        music) can produce anything until this is called with a real
-        store, or config leaves mediadata unconfigured entirely."""
+        """Wired in post-construction by attach() (see AppServices.
+        mediadata_store) - MediaDataStore is built inside
+        start_orchestrator(), after outputs are already instantiated, so
+        it can't be a constructor arg the way `config`/`auth_config` are
+        (same reason WebOutput.set_history()/set_health_provider() exist
+        as setters rather than constructor params). None means no theme
+        needing it (e.g. Word Cloud for music) can produce anything until
+        this is called with a real store, or config leaves mediadata
+        unconfigured entirely."""
         self.media_data = store
+
+    def attach(self, services: AppServices) -> None:
+        self.set_media_data_store(services.mediadata_store)
 
     @staticmethod
     def _build_themes(theme_configs: Dict[str, Any]) -> List[DisplayTheme]:
@@ -176,7 +192,9 @@ class ThemesOutput(Output):
             # only ever reassigned here, to another _preset_names member.
             assert self._active_preset is not None
             idx = self._preset_names.index(self._active_preset)
-            self._active_preset = self._preset_names[(idx + 1) % len(self._preset_names)]
+            self._active_preset = self._preset_names[
+                (idx + 1) % len(self._preset_names)
+            ]
         self._push(self._get_payload())
 
     def _active_theme_names(self) -> Optional[Set[str]]:
@@ -200,7 +218,9 @@ class ThemesOutput(Output):
     def _theme_config_for(self, theme: DisplayTheme) -> Any:
         return self._theme_configs.get(theme.name)
 
-    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+    def update(
+        self, now_playing: NowPlaying, artwork: Artwork, image_path: Path
+    ) -> None:
         # Copy to a file we manage ourselves - see _owned_image_dir above
         # for why. Keeps image_path's own filename (rather than a fresh
         # random one) so the public /image/current?v=<stem> URL stays the
@@ -271,7 +291,9 @@ class ThemesOutput(Output):
                 payload["active_preset"] = self._active_preset
 
         if artwork is not None and image_path is not None:
-            themes_payload = self._prepare_themes(now_playing, artwork, image_path, cache)
+            themes_payload = self._prepare_themes(
+                now_playing, artwork, image_path, cache
+            )
             if themes_payload:
                 payload["themes"] = themes_payload
         return payload
@@ -294,7 +316,11 @@ class ThemesOutput(Output):
         for theme in self._themes:
             try:
                 rendered = theme.prepare(
-                    now_playing, artwork, image_path, cache, self.media_data,
+                    now_playing,
+                    artwork,
+                    image_path,
+                    cache,
+                    self.media_data,
                     self._theme_config_for(theme),
                 )
             except Exception:
@@ -305,7 +331,9 @@ class ThemesOutput(Output):
             entry = dict(rendered.extra_payload)
             if rendered.derived_image_path is not None:
                 with self._lock:
-                    self._known_images[rendered.derived_image_path.stem] = rendered.derived_image_path
+                    self._known_images[rendered.derived_image_path.stem] = (
+                        rendered.derived_image_path
+                    )
                 entry["image"] = f"/image/current?v={rendered.derived_image_path.stem}"
             if rendered.derived_image_paths:
                 with self._lock:
@@ -338,7 +366,9 @@ class ThemesOutput(Output):
         broadcast(self._clients_lock, self._clients, payload)
 
     def _run_server(self) -> None:
-        logger.info("Starting themes server on %s:%s", self.config.host, self.config.port)
+        logger.info(
+            "Starting themes server on %s:%s", self.config.host, self.config.port
+        )
         self.app.run(host=self.config.host, port=self.config.port, threaded=True)
 
     def _build_app(self) -> Flask:
@@ -346,7 +376,10 @@ class ThemesOutput(Output):
         sock = Sock(app)
 
         register_websocket_route(
-            sock, "/ws", self._clients_lock, self._clients,
+            sock,
+            "/ws",
+            self._clients_lock,
+            self._clients,
             get_initial_payload=lambda conn: self._get_payload(),
         )
 

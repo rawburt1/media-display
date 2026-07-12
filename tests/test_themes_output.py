@@ -25,7 +25,9 @@ def _config(**kwargs):
 
 
 def _music(title="Bohemian Rhapsody", artist="Queen"):
-    return NowPlaying(source="kodi", media_type="music", title=title, subtitle=artist, images=[])
+    return NowPlaying(
+        source="kodi", media_type="music", title=title, subtitle=artist, images=[]
+    )
 
 
 def _artwork(label="Album art"):
@@ -53,12 +55,14 @@ def no_server(monkeypatch):
 
 def _output(config=None):
     from mediainfo.outputs.themes import ThemesOutput
+
     return ThemesOutput(config or _config())
 
 
 # ---------------------------------------------------------------------------
 # _get_payload
 # ---------------------------------------------------------------------------
+
 
 def test_payload_when_idle():
     out = _output()
@@ -174,6 +178,7 @@ def test_image_endpoint_404_when_nothing_playing():
 # _push / broadcast
 # ---------------------------------------------------------------------------
 
+
 def test_push_sends_json_to_all_clients():
     out = _output()
     conn_a = _FakeConn()
@@ -216,6 +221,7 @@ def test_on_idle_pushes_empty_payload():
 # artwork+metadata display.
 # ---------------------------------------------------------------------------
 
+
 def test_no_themes_registered_by_default():
     out = _output()
     assert out._themes == []
@@ -232,6 +238,7 @@ def test_payload_has_no_themes_key_when_none_enabled(tmp_path):
 # ---------------------------------------------------------------------------
 # Theme aggregation - using a fake DisplayTheme, since none ships yet.
 # ---------------------------------------------------------------------------
+
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class _FakeGlowConfig:
@@ -252,7 +259,8 @@ class _FakeGlowTheme(DisplayTheme):
 @pytest.fixture
 def fake_glow_theme(monkeypatch):
     monkeypatch.setattr(
-        "mediainfo.config.themes.THEMES_CONFIG_TYPES", {"glow": _FakeGlowConfig},
+        "mediainfo.config.themes.THEMES_CONFIG_TYPES",
+        {"glow": _FakeGlowConfig},
     )
     monkeypatch.setattr("mediainfo.registries.THEME_CLASSES", {"glow": _FakeGlowTheme})
 
@@ -313,7 +321,8 @@ class _RaisingTheme(DisplayTheme):
 
 def test_theme_prepare_exception_is_caught_not_raised(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "mediainfo.config.themes.THEMES_CONFIG_TYPES", {"glow": _FakeGlowConfig},
+        "mediainfo.config.themes.THEMES_CONFIG_TYPES",
+        {"glow": _FakeGlowConfig},
     )
     monkeypatch.setattr("mediainfo.registries.THEME_CLASSES", {"glow": _RaisingTheme})
     out = _output(_config(themes={"glow": {"enabled": True}}))
@@ -336,6 +345,7 @@ def test_unknown_theme_name_is_skipped(caplog):
 # health_check() - aggregates each theme's own health_detail()
 # ---------------------------------------------------------------------------
 
+
 class _HealthyTheme(DisplayTheme):
     name = "glow"
 
@@ -349,7 +359,8 @@ class _DegradedTheme(DisplayTheme):
 
 def test_health_check_none_when_no_theme_reports_anything(monkeypatch):
     monkeypatch.setattr(
-        "mediainfo.config.themes.THEMES_CONFIG_TYPES", {"glow": _FakeGlowConfig},
+        "mediainfo.config.themes.THEMES_CONFIG_TYPES",
+        {"glow": _FakeGlowConfig},
     )
     monkeypatch.setattr("mediainfo.registries.THEME_CLASSES", {"glow": _HealthyTheme})
     out = _output(_config(themes={"glow": {"enabled": True}}))
@@ -363,12 +374,15 @@ def test_health_check_none_when_no_themes_enabled():
 
 def test_health_check_aggregates_degraded_theme(monkeypatch):
     monkeypatch.setattr(
-        "mediainfo.config.themes.THEMES_CONFIG_TYPES", {"glow": _FakeGlowConfig},
+        "mediainfo.config.themes.THEMES_CONFIG_TYPES",
+        {"glow": _FakeGlowConfig},
     )
     monkeypatch.setattr("mediainfo.registries.THEME_CLASSES", {"glow": _DegradedTheme})
     out = _output(_config(themes={"glow": {"enabled": True}}))
 
-    assert out.health_check() == {"themes": {"glow": {"degraded": True, "reason": "something is off"}}}
+    assert out.health_check() == {
+        "themes": {"glow": {"degraded": True, "reason": "something is off"}}
+    }
 
 
 class _RaisingHealthTheme(DisplayTheme):
@@ -380,12 +394,17 @@ class _RaisingHealthTheme(DisplayTheme):
 
 def test_health_check_swallows_exception_from_one_theme(monkeypatch):
     monkeypatch.setattr(
-        "mediainfo.config.themes.THEMES_CONFIG_TYPES", {"glow": _FakeGlowConfig},
+        "mediainfo.config.themes.THEMES_CONFIG_TYPES",
+        {"glow": _FakeGlowConfig},
     )
-    monkeypatch.setattr("mediainfo.registries.THEME_CLASSES", {"glow": _RaisingHealthTheme})
+    monkeypatch.setattr(
+        "mediainfo.registries.THEME_CLASSES", {"glow": _RaisingHealthTheme}
+    )
     out = _output(_config(themes={"glow": {"enabled": True}}))
 
-    assert out.health_check() is None  # doesn't raise, just reports nothing for this theme
+    assert (
+        out.health_check() is None
+    )  # doesn't raise, just reports nothing for this theme
 
 
 class _BakingTheme(DisplayTheme):
@@ -403,7 +422,8 @@ def test_derived_theme_image_is_servable(monkeypatch, tmp_path):
     the bug this test guards against: only tracking the main image_path
     and silently 404ing on any theme-derived image URL."""
     monkeypatch.setattr(
-        "mediainfo.config.themes.THEMES_CONFIG_TYPES", {"glow": _FakeGlowConfig},
+        "mediainfo.config.themes.THEMES_CONFIG_TYPES",
+        {"glow": _FakeGlowConfig},
     )
     monkeypatch.setattr("mediainfo.registries.THEME_CLASSES", {"glow": _BakingTheme})
 
@@ -428,6 +448,7 @@ def test_derived_theme_image_is_servable(monkeypatch, tmp_path):
 # once. Two fake themes so filtering has something real to filter.
 # ---------------------------------------------------------------------------
 
+
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class _FakeVinylConfig:
     enabled: bool = False
@@ -437,7 +458,9 @@ class _FakeVinylTheme(DisplayTheme):
     name = "vinyl"
 
     def client_assets(self, config):
-        return ThemeClientAssets(css=".vinyl { color: black; }", js="console.log('vinyl');")
+        return ThemeClientAssets(
+            css=".vinyl { color: black; }", js="console.log('vinyl');"
+        )
 
     def prepare(self, now_playing, artwork, image_path, cache, media_data, config):
         return ThemeRenderResult(extra_payload={"spinning": True})
@@ -465,7 +488,9 @@ def _two_theme_output(**auto_rotate_kwargs):
     return out
 
 
-def test_auto_rotate_off_by_default_shows_every_enabled_theme(fake_two_themes, tmp_path):
+def test_auto_rotate_off_by_default_shows_every_enabled_theme(
+    fake_two_themes, tmp_path
+):
     out = _two_theme_output()
     img = tmp_path / "abc.jpg"
     img.write_bytes(b"x")
@@ -476,7 +501,9 @@ def test_auto_rotate_off_by_default_shows_every_enabled_theme(fake_two_themes, t
     assert "active_preset" not in payload
 
 
-def test_auto_rotate_enabled_no_presets_shows_every_enabled_theme(fake_two_themes, tmp_path):
+def test_auto_rotate_enabled_no_presets_shows_every_enabled_theme(
+    fake_two_themes, tmp_path
+):
     out = _two_theme_output(enabled=True)  # presets left empty
     img = tmp_path / "abc.jpg"
     img.write_bytes(b"x")
@@ -489,7 +516,8 @@ def test_auto_rotate_enabled_no_presets_shows_every_enabled_theme(fake_two_theme
 
 def test_auto_rotate_filters_payload_to_active_preset(fake_two_themes, tmp_path):
     out = _two_theme_output(
-        enabled=True, presets={"minimal": ["glow"], "full": ["glow", "vinyl"]},
+        enabled=True,
+        presets={"minimal": ["glow"], "full": ["glow", "vinyl"]},
     )
     img = tmp_path / "abc.jpg"
     img.write_bytes(b"x")
@@ -500,17 +528,22 @@ def test_auto_rotate_filters_payload_to_active_preset(fake_two_themes, tmp_path)
     assert set(payload["themes"]) == {"glow"}
 
 
-def test_auto_rotate_still_loads_css_js_for_themes_outside_active_preset(fake_two_themes):
+def test_auto_rotate_still_loads_css_js_for_themes_outside_active_preset(
+    fake_two_themes,
+):
     """Filtering only affects the per-tick payload, not the once-baked
     page CSS/JS - a preset switch must not require a page reload."""
     out = _two_theme_output(enabled=True, presets={"minimal": ["glow"]})
     assert ".glow" in out._theme_css
-    assert ".vinyl" in out._theme_css  # vinyl's CSS still ships, even though filtered out
+    assert (
+        ".vinyl" in out._theme_css
+    )  # vinyl's CSS still ships, even though filtered out
 
 
 def test_advance_preset_rotates_to_next_and_pushes(fake_two_themes, tmp_path):
     out = _two_theme_output(
-        enabled=True, presets={"minimal": ["glow"], "full": ["glow", "vinyl"]},
+        enabled=True,
+        presets={"minimal": ["glow"], "full": ["glow", "vinyl"]},
     )
     img = tmp_path / "abc.jpg"
     img.write_bytes(b"x")
@@ -528,7 +561,8 @@ def test_advance_preset_rotates_to_next_and_pushes(fake_two_themes, tmp_path):
 
 def test_advance_preset_wraps_around(fake_two_themes, tmp_path):
     out = _two_theme_output(
-        enabled=True, presets={"minimal": ["glow"], "full": ["glow", "vinyl"]},
+        enabled=True,
+        presets={"minimal": ["glow"], "full": ["glow", "vinyl"]},
     )
     out._advance_preset()
     assert out._active_preset == "full"
@@ -550,13 +584,16 @@ def test_auto_rotate_preset_naming_unenabled_theme_is_logged(fake_two_themes, ca
 # the aggregation plumbing exercised above.
 # ---------------------------------------------------------------------------
 
+
 def test_real_color_palette_theme_end_to_end(tmp_path):
     from PIL import Image
 
     img_path = tmp_path / "art.png"
     Image.new("RGB", (32, 32), (10, 20, 30)).save(img_path)
 
-    out = _output(_config(themes={"color_palette": {"enabled": True, "swatch_count": 1}}))
+    out = _output(
+        _config(themes={"color_palette": {"enabled": True, "swatch_count": 1}})
+    )
     assert out._themes[0].name == "color_palette"
 
     out.on_new_item(_music(), cache=MagicMock())
@@ -619,10 +656,14 @@ def test_real_themes_page_has_valid_script_no_stray_placeholder_text(tmp_path):
     Image.new("RGB", (64, 64), (80, 120, 160)).save(img_path)
     cache = ImageCache(tmp_path / "cache")
 
-    out = _output(_config(themes={
-        "color_palette": {"enabled": True},
-        "blurred_background": {"enabled": True},
-    }))
+    out = _output(
+        _config(
+            themes={
+                "color_palette": {"enabled": True},
+                "blurred_background": {"enabled": True},
+            }
+        )
+    )
     out.on_new_item(_music(), cache=cache)
     out.update(_music(), _artwork(), img_path)
 
@@ -652,7 +693,11 @@ def test_real_word_cloud_theme_end_to_end_music(tmp_path):
     assert out._themes[0].name == "word_cloud"
 
     song = NowPlaying(
-        source="kodi", media_type="music", title="Bohemian Rhapsody", subtitle="Queen", album="A Night at the Opera",
+        source="kodi",
+        media_type="music",
+        title="Bohemian Rhapsody",
+        subtitle="Queen",
+        album="A Night at the Opera",
     )
     img_path = tmp_path / "art.jpg"
     img_path.write_bytes(b"x")
@@ -678,7 +723,12 @@ def test_real_word_cloud_theme_end_to_end_movie(tmp_path):
     cache = ImageCache(tmp_path / "cache")
 
     out = _output(_config(themes={"word_cloud": {"enabled": True}}))
-    movie = NowPlaying(source="kodi", media_type="movie", title="Alien", summary="A crew in deep space.")
+    movie = NowPlaying(
+        source="kodi",
+        media_type="movie",
+        title="Alien",
+        summary="A crew in deep space.",
+    )
 
     out.on_new_item(movie, cache=cache)
     out.update(movie, _artwork(), img_path)
@@ -719,14 +769,18 @@ def test_real_ken_burns_theme_end_to_end(tmp_path):
     img_path = tmp_path / "art.jpg"
     img_path.write_bytes(b"x")
 
-    out = _output(_config(themes={"ken_burns": {"enabled": True, "duration_seconds": 15}}))
+    out = _output(
+        _config(themes={"ken_burns": {"enabled": True, "duration_seconds": 15}})
+    )
     assert out._themes[0].name == "ken_burns"
 
     out.on_new_item(_music(), cache=MagicMock())
     out.update(_music(), _artwork(), img_path)
 
     payload = out._get_payload()
-    assert payload["themes"]["ken_burns"]["image"] == f"/image/current?v={img_path.stem}"
+    assert (
+        payload["themes"]["ken_burns"]["image"] == f"/image/current?v={img_path.stem}"
+    )
 
     body = out.app.test_client().get("/").data.decode()
     assert body.count("window.themeHandlers.ken_burns = function") == 1
@@ -778,8 +832,13 @@ def test_real_media_mosaic_theme_end_to_end(tmp_path):
     cache = ImageCache(tmp_path / "cache")
 
     album = NowPlaying(
-        source="kodi", media_type="music", title="Song", subtitle="Artist",
-        images=[Artwork(url=f"file://{p}", label=f"Art {i}") for i, p in enumerate(paths)],
+        source="kodi",
+        media_type="music",
+        title="Song",
+        subtitle="Artist",
+        images=[
+            Artwork(url=f"file://{p}", label=f"Art {i}") for i, p in enumerate(paths)
+        ],
     )
 
     out = _output(_config(themes={"media_mosaic": {"enabled": True}}))
@@ -808,7 +867,10 @@ def test_real_timeline_theme_end_to_end_with_discography(tmp_path):
     assert out._themes[0].name == "timeline"
 
     song = NowPlaying(
-        source="kodi", media_type="music", title="Kashmir", subtitle="Led Zeppelin",
+        source="kodi",
+        media_type="music",
+        title="Kashmir",
+        subtitle="Led Zeppelin",
         album="Physical Graffiti",
         discography=["IV – Stairway to Heaven", "Physical Graffiti – Kashmir"],
     )
@@ -830,8 +892,12 @@ def test_real_timeline_theme_end_to_end_degraded_reported_on_health(tmp_path):
 
     out = _output(_config(themes={"timeline": {"enabled": True}}))
     song = NowPlaying(
-        source="kodi", media_type="music", title="Kashmir", subtitle="Led Zeppelin",
-        album="Physical Graffiti", discography=[],
+        source="kodi",
+        media_type="music",
+        title="Kashmir",
+        subtitle="Led Zeppelin",
+        album="Physical Graffiti",
+        discography=[],
     )
     out.on_new_item(song, cache=MagicMock())
     out.update(song, _artwork(), img_path)
@@ -879,11 +945,15 @@ def test_real_lyrics_ticker_theme_end_to_end_music(tmp_path):
     img_path = tmp_path / "art.jpg"
     img_path.write_bytes(b"x")
 
-    out = _output(_config(themes={"lyrics_ticker": {"enabled": True, "position": "bottom"}}))
+    out = _output(
+        _config(themes={"lyrics_ticker": {"enabled": True, "position": "bottom"}})
+    )
     assert out._themes[0].name == "lyrics_ticker"
 
     song = _music()
-    song.synced_lyrics = "[00:12.50]Davy's on the road again\n[00:16.00]hear him singing"
+    song.synced_lyrics = (
+        "[00:12.50]Davy's on the road again\n[00:16.00]hear him singing"
+    )
     song.position_seconds = 13.0
     song.duration_seconds = 200.0
     out.on_new_item(song, cache=MagicMock())
@@ -902,7 +972,9 @@ def test_real_lyrics_ticker_theme_end_to_end_music(tmp_path):
     assert "position-bottom" in body
 
 
-def test_real_lyrics_ticker_theme_end_to_end_no_synced_lyrics_reported_on_health(tmp_path):
+def test_real_lyrics_ticker_theme_end_to_end_no_synced_lyrics_reported_on_health(
+    tmp_path,
+):
     img_path = tmp_path / "art.jpg"
     img_path.write_bytes(b"x")
 
@@ -923,7 +995,13 @@ def test_real_progress_bar_theme_end_to_end_music(tmp_path):
     img_path = tmp_path / "art.jpg"
     img_path.write_bytes(b"x")
 
-    out = _output(_config(themes={"progress_bar": {"enabled": True, "position": "top", "color": "#ff8800"}}))
+    out = _output(
+        _config(
+            themes={
+                "progress_bar": {"enabled": True, "position": "top", "color": "#ff8800"}
+            }
+        )
+    )
     assert out._themes[0].name == "progress_bar"
 
     song = _music()
@@ -934,7 +1012,9 @@ def test_real_progress_bar_theme_end_to_end_music(tmp_path):
 
     payload = out._get_payload()
     assert payload["themes"]["progress_bar"] == {
-        "position_seconds": 42.5, "duration_seconds": 180.0, "color": "#ff8800",
+        "position_seconds": 42.5,
+        "duration_seconds": 180.0,
+        "color": "#ff8800",
     }
 
     body = out.app.test_client().get("/").data.decode()
@@ -991,10 +1071,20 @@ def test_real_cast_mosaic_theme_end_to_end(tmp_path):
     cache = ImageCache(tmp_path / "cache")
 
     movie = NowPlaying(
-        source="kodi", media_type="movie", title="The Matrix",
+        source="kodi",
+        media_type="movie",
+        title="The Matrix",
         cast=[
-            {"name": "Keanu Reeves", "character": "Neo", "photo_url": f"file://{photo_paths[0]}"},
-            {"name": "Laurence Fishburne", "character": "Morpheus", "photo_url": f"file://{photo_paths[1]}"},
+            {
+                "name": "Keanu Reeves",
+                "character": "Neo",
+                "photo_url": f"file://{photo_paths[0]}",
+            },
+            {
+                "name": "Laurence Fishburne",
+                "character": "Morpheus",
+                "photo_url": f"file://{photo_paths[1]}",
+            },
         ],
     )
 
@@ -1092,3 +1182,28 @@ def test_real_artist_spotlight_theme_end_to_end_no_photo_reported_on_health(tmp_
 
     health = out.health_check()
     assert health["themes"]["artist_spotlight"]["degraded"] is True
+
+
+# ---------------------------------------------------------------------------
+# attach() - see mediainfo.app_services.AppServices
+# ---------------------------------------------------------------------------
+
+
+def test_attach_wires_media_data_store():
+    from mediainfo.app_services import AppServices
+    from mediainfo.media_data_store import MediaDataStore
+
+    out = _output()
+    media_data = MagicMock(spec=MediaDataStore)
+
+    out.attach(AppServices(mediadata_store=media_data))
+
+    assert out.media_data is media_data
+
+
+def test_attach_passes_through_none_media_data_store():
+    from mediainfo.app_services import AppServices
+
+    out = _output()
+    out.attach(AppServices(mediadata_store=None))
+    assert out.media_data is None

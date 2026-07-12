@@ -133,6 +133,7 @@ from typing import Any, Dict, Optional
 from flask import Flask, jsonify, render_template, request, send_file
 from PIL import Image, UnidentifiedImageError
 
+from mediainfo.app_services import AppServices
 from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache, flatten_transparency
 from mediainfo.config import (
@@ -222,8 +223,8 @@ class ConfigUiOutput(Output):
 
     def set_artwork_overrides(self, store: Optional[ArtworkOverrideStore]) -> None:
         """Register the artwork override store, so the "Overrides" page
-        can list/add/remove pins - see wiring.wire_artwork_overrides.
-        None means the feature is disabled (overrides.enabled: false)."""
+        can list/add/remove pins - see AppServices.overrides. None means
+        the feature is disabled (overrides.enabled: false)."""
         self._overrides = store
 
     def set_health_provider(self, fn) -> None:
@@ -231,6 +232,13 @@ class ConfigUiOutput(Output):
         the System status section and the Overview page's now-playing/
         active-source summary."""
         self._health_fn = fn
+
+    def attach(self, services: AppServices) -> None:
+        self.set_hitster_safe_handlers(
+            services.get_hitster_safe, services.set_hitster_safe
+        )
+        self.set_artwork_overrides(services.overrides)
+        self.set_health_provider(services.health_provider)
 
     def update(
         self, now_playing: NowPlaying, artwork: Artwork, image_path: Path

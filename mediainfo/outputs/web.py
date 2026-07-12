@@ -40,6 +40,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from flask_sock import Sock
 from markupsafe import Markup
 
+from mediainfo.app_services import AppServices
 from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.config import AuthConfig, WebConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -95,7 +96,9 @@ class WebOutput(Output):
         # Markup: the transitions CSS/JS is code, not text - autoescaping it
         # would corrupt it (see templates/web/index.html).
         self._transitions_css = Markup(transitions.transitions_css())
-        self._transitions_js = Markup(transitions.transitions_js(config.transition_exclude))
+        self._transitions_js = Markup(
+            transitions.transitions_js(config.transition_exclude)
+        )
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         # Set at construction so idle wallpapers can resolve images even
@@ -127,10 +130,16 @@ class WebOutput(Output):
 
     def set_history(self, history) -> None:
         """Register the PlaybackHistory store backing the /history page -
-        see wiring.wire_history. None means the feature is disabled."""
+        see AppServices.history. None means the feature is disabled."""
         self._history = history
 
-    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+    def attach(self, services: AppServices) -> None:
+        self.set_health_provider(services.health_provider)
+        self.set_history(services.history)
+
+    def update(
+        self, now_playing: NowPlaying, artwork: Artwork, image_path: Path
+    ) -> None:
         with self._lock:
             self._now_playing = now_playing
             self._artwork = artwork
@@ -223,7 +232,9 @@ class WebOutput(Output):
         self._next_offset += 1
         jitter = random.uniform(0, self.rotation_interval_seconds)
         self._client_rotation[conn] = _ClientRotation(
-            order=self._shared_order, position=position, next_due=time.monotonic() - jitter
+            order=self._shared_order,
+            position=position,
+            next_due=time.monotonic() - jitter,
         )
 
     def _personalized_payload(self, conn: Any) -> dict:
@@ -261,7 +272,9 @@ class WebOutput(Output):
                 tier = "default"
 
             for attempt in range(len(images)):
-                artwork = images[state.order[(state.position + attempt) % len(state.order)]]
+                artwork = images[
+                    state.order[(state.position + attempt) % len(state.order)]
+                ]
                 path = self._resolve_artwork_path(cache, artwork, tier)
                 if path is None:
                     continue
@@ -322,13 +335,18 @@ class WebOutput(Output):
 
     def _send_to_one(self, conn: Any, payload: dict) -> None:
         send_to_one(
-            self._clients_lock, self._clients, conn, payload,
+            self._clients_lock,
+            self._clients,
+            conn,
+            payload,
             on_drop=lambda c: self._client_rotation.pop(c, None),
         )
 
     def _push(self, payload: dict) -> None:
         broadcast(
-            self._clients_lock, self._clients, payload,
+            self._clients_lock,
+            self._clients,
+            payload,
             on_drop=lambda c: self._client_rotation.pop(c, None),
         )
 
@@ -341,7 +359,10 @@ class WebOutput(Output):
         sock = Sock(app)
 
         register_websocket_route(
-            sock, "/ws", self._clients_lock, self._clients,
+            sock,
+            "/ws",
+            self._clients_lock,
+            self._clients,
             get_initial_payload=self._personalized_payload,
             on_connect=self._assign_client_rotation,
             on_disconnect=lambda conn: self._client_rotation.pop(conn, None),

@@ -58,6 +58,7 @@ from typing import Callable, Optional
 
 import paho.mqtt.client as mqtt
 
+from mediainfo.app_services import AppServices
 from mediainfo.cache import ImageCache
 from mediainfo.config import MqttConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -98,32 +99,46 @@ class MqttOutput(Output):
         try:
             self._client.connect_async(config.host, config.port, keepalive=60)
         except Exception:
-            logger.warning("MQTT: could not initiate connection to %s:%s", config.host, config.port)
+            logger.warning(
+                "MQTT: could not initiate connection to %s:%s", config.host, config.port
+            )
         self._client.loop_start()
 
     # -- cross-cutting wiring (see wiring.py) ------------------------------
 
-    def set_health_provider(self, fn: Callable[[], dict]) -> None:
+    def set_health_provider(self, fn: Optional[Callable[[], dict]]) -> None:
         """Register a callable returning the health JSON dict - published
         as a "problem" binary_sensor when ha_discovery is enabled (see
         on_schedule_tick/_publish_health_state)."""
         self._health_fn = fn
 
-    def set_hitster_safe_handlers(self, get_fn: Callable[[], bool], set_fn: Callable[[bool], None]) -> None:
+    def set_hitster_safe_handlers(
+        self,
+        get_fn: Optional[Callable[[], bool]],
+        set_fn: Optional[Callable[[bool], None]],
+    ) -> None:
         """Register the orchestrator's Hitster-safe get/set, so an HA
         "switch" entity can read and toggle it (see _on_message)."""
         self._hitster_safe_get = get_fn
         self._hitster_safe_set = set_fn
 
-    def set_refresh_artwork_handler(self, fn: Callable[[], None]) -> None:
+    def set_refresh_artwork_handler(self, fn: Optional[Callable[[], None]]) -> None:
         """Register a callable (Orchestrator.request_artwork_refresh) an
         HA "button" entity triggers (see _on_message)."""
         self._refresh_artwork_fn = fn
 
-    def set_rotate_now_handler(self, fn: Callable[[], None]) -> None:
+    def set_rotate_now_handler(self, fn: Optional[Callable[[], None]]) -> None:
         """Register a callable (Orchestrator.request_rotation_now) an HA
         "button" entity triggers (see _on_message)."""
         self._rotate_now_fn = fn
+
+    def attach(self, services: AppServices) -> None:
+        self.set_health_provider(services.health_provider)
+        self.set_hitster_safe_handlers(
+            services.get_hitster_safe, services.set_hitster_safe
+        )
+        self.set_refresh_artwork_handler(services.request_artwork_refresh)
+        self.set_rotate_now_handler(services.request_rotation_now)
 
     @property
     def _availability_topic(self) -> str:
@@ -153,18 +168,22 @@ class MqttOutput(Output):
     def _health_state_topic(self) -> str:
         return f"{self.config.topic}/health/state"
 
-    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+    def update(
+        self, now_playing: NowPlaying, artwork: Artwork, image_path: Path
+    ) -> None:
         pass
 
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
-        self._publish({
-            "state": "playing",
-            "source": now_playing.source,
-            "media_type": now_playing.media_type,
-            "title": now_playing.title,
-            "subtitle": now_playing.subtitle,
-            "album": now_playing.album,
-        })
+        self._publish(
+            {
+                "state": "playing",
+                "source": now_playing.source,
+                "media_type": now_playing.media_type,
+                "title": now_playing.title,
+                "subtitle": now_playing.subtitle,
+                "album": now_playing.album,
+            }
+        )
 
     def on_idle(self) -> None:
         self._publish({"state": "idle"})
@@ -256,8 +275,12 @@ class MqttOutput(Output):
 
     def _subscribe_commands(self) -> None:
         try:
-            self._client.subscribe(self._hitster_safe_command_topic, qos=self.config.qos)
-            self._client.subscribe(self._refresh_artwork_command_topic, qos=self.config.qos)
+            self._client.subscribe(
+                self._hitster_safe_command_topic, qos=self.config.qos
+            )
+            self._client.subscribe(
+                self._refresh_artwork_command_topic, qos=self.config.qos
+            )
             self._client.subscribe(self._rotate_now_command_topic, qos=self.config.qos)
             self._client.subscribe(self._restart_command_topic, qos=self.config.qos)
         except Exception:
@@ -356,7 +379,9 @@ class MqttOutput(Output):
             },
         }
         for object_id, payload in binary_sensors.items():
-            self._publish_discovery_entity("binary_sensor", node, object_id, device, payload)
+            self._publish_discovery_entity(
+                "binary_sensor", node, object_id, device, payload
+            )
 
         switches: dict[str, dict] = {
             "hitster_safe": {
@@ -407,11 +432,17 @@ class MqttOutput(Output):
         entry = dict(payload)
         entry["availability_topic"] = self._availability_topic
         entry["device"] = device
-        topic = f"{self.config.ha_discovery_prefix}/{component}/{node}/{object_id}/config"
+        topic = (
+            f"{self.config.ha_discovery_prefix}/{component}/{node}/{object_id}/config"
+        )
         try:
             # retain=True regardless of config.retain: an unretained
             # discovery config disappears for any HA that (re)starts
             # after we published it, which defeats the point.
-            self._client.publish(topic, json.dumps(entry), qos=self.config.qos, retain=True)
+            self._client.publish(
+                topic, json.dumps(entry), qos=self.config.qos, retain=True
+            )
         except Exception:
-            logger.exception("MQTT: failed to publish HA discovery config for %s", object_id)
+            logger.exception(
+                "MQTT: failed to publish HA discovery config for %s", object_id
+            )

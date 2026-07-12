@@ -8,6 +8,8 @@ from unittest.mock import MagicMock, patch
 
 from mediainfo.text_cache import TextCache
 from mediainfo.wiring import (
+    attach_services,
+    build_app_services,
     build_artwork_overrides,
     build_enrichers,
     build_idle_source,
@@ -16,12 +18,6 @@ from mediainfo.wiring import (
     build_text_enrichers,
     instantiate_outputs,
     start_orchestrator,
-    wire_artwork_overrides,
-    wire_artwork_refresh,
-    wire_health_providers,
-    wire_hitster_safe,
-    wire_media_data_store,
-    wire_rotate_now,
 )
 
 
@@ -49,6 +45,7 @@ def _minimal_config(**kwargs):
 # ---------------------------------------------------------------------------
 # instantiate_outputs
 # ---------------------------------------------------------------------------
+
 
 def test_instantiate_outputs_calls_start_on_each():
     output_cfg = MagicMock()
@@ -86,6 +83,7 @@ def test_instantiate_outputs_skips_disabled():
 # ---------------------------------------------------------------------------
 # build_sources / build_enrichers / build_idle_source
 # ---------------------------------------------------------------------------
+
 
 def test_build_sources_empty_priority():
     cfg = _minimal_config()
@@ -208,6 +206,7 @@ def test_build_enrichers_passes_mediadata_store_to_mediadata_aware_enrichers():
 # build_mediadata_store
 # ---------------------------------------------------------------------------
 
+
 def test_build_mediadata_store_none_when_neither_plugin_enabled():
     cfg = _minimal_config(enrichers={}, text_enrichers={})
     assert build_mediadata_store(cfg, MagicMock()) is None
@@ -232,7 +231,11 @@ def test_build_mediadata_store_constructed_when_artwork_enabled():
         result = build_mediadata_store(cfg, fake_cache)
 
     fake_cls.assert_called_once_with(
-        cfg.mediadata, cache=fake_cache, discogs_token="", tmdb_api_key="", fanarttv_api_key="",
+        cfg.mediadata,
+        cache=fake_cache,
+        discogs_token="",
+        tmdb_api_key="",
+        fanarttv_api_key="",
         lastfm_api_key="",
     )
     assert result is fake_cls.return_value
@@ -284,7 +287,11 @@ def test_build_mediadata_store_passes_tmdb_and_fanarttv_keys_when_enabled():
     tmdb_cfg = MagicMock(enabled=True, api_key="tmdb-key")
     fanarttv_cfg = MagicMock(enabled=True, api_key="fanarttv-key")
     cfg = _minimal_config(
-        enrichers={"mediadata": artwork_cfg, "tmdb": tmdb_cfg, "fanarttv": fanarttv_cfg},
+        enrichers={
+            "mediadata": artwork_cfg,
+            "tmdb": tmdb_cfg,
+            "fanarttv": fanarttv_cfg,
+        },
         text_enrichers={},
     )
     fake_cls = MagicMock(return_value=MagicMock())
@@ -302,7 +309,11 @@ def test_build_mediadata_store_skips_tmdb_and_fanarttv_keys_when_disabled():
     tmdb_cfg = MagicMock(enabled=False, api_key="tmdb-key")
     fanarttv_cfg = MagicMock(enabled=False, api_key="fanarttv-key")
     cfg = _minimal_config(
-        enrichers={"mediadata": artwork_cfg, "tmdb": tmdb_cfg, "fanarttv": fanarttv_cfg},
+        enrichers={
+            "mediadata": artwork_cfg,
+            "tmdb": tmdb_cfg,
+            "fanarttv": fanarttv_cfg,
+        },
         text_enrichers={},
     )
     fake_cls = MagicMock(return_value=MagicMock())
@@ -319,7 +330,8 @@ def test_build_mediadata_store_passes_lastfm_key_when_enabled():
     artwork_cfg = MagicMock(enabled=True)
     lastfm_cfg = MagicMock(enabled=True, api_key="lastfm-key")
     cfg = _minimal_config(
-        enrichers={"mediadata": artwork_cfg, "lastfm": lastfm_cfg}, text_enrichers={},
+        enrichers={"mediadata": artwork_cfg, "lastfm": lastfm_cfg},
+        text_enrichers={},
     )
     fake_cls = MagicMock(return_value=MagicMock())
 
@@ -334,7 +346,8 @@ def test_build_mediadata_store_skips_lastfm_key_when_disabled():
     artwork_cfg = MagicMock(enabled=True)
     lastfm_cfg = MagicMock(enabled=False, api_key="lastfm-key")
     cfg = _minimal_config(
-        enrichers={"mediadata": artwork_cfg, "lastfm": lastfm_cfg}, text_enrichers={},
+        enrichers={"mediadata": artwork_cfg, "lastfm": lastfm_cfg},
+        text_enrichers={},
     )
     fake_cls = MagicMock(return_value=MagicMock())
 
@@ -348,6 +361,7 @@ def test_build_mediadata_store_skips_lastfm_key_when_disabled():
 # ---------------------------------------------------------------------------
 # build_text_enrichers (roadmap item 7 foundation - no real plugin yet)
 # ---------------------------------------------------------------------------
+
 
 def test_build_text_enrichers_empty_by_default():
     cfg = _minimal_config()
@@ -397,7 +411,8 @@ def test_build_text_enrichers_shares_one_cache_across_plugins():
     cfg = _minimal_config(text_enrichers={"lrclib": lrclib_cfg, "other": other_cfg})
 
     with patch(
-        "mediainfo.registries.TEXT_ENRICHER_CLASSES", {"lrclib": fake_cls, "other": fake_cls}
+        "mediainfo.registries.TEXT_ENRICHER_CLASSES",
+        {"lrclib": fake_cls, "other": fake_cls},
     ):
         result = build_text_enrichers(cfg)
 
@@ -413,7 +428,9 @@ def test_build_text_enrichers_passes_mediadata_store_to_mediadata_aware_enricher
 
     with (
         patch("mediainfo.registries.TEXT_ENRICHER_CLASSES", {"mediadata": fake_cls}),
-        patch("mediainfo.registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES", {"mediadata"}),
+        patch(
+            "mediainfo.registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES", {"mediadata"}
+        ),
     ):
         result = build_text_enrichers(cfg, mediadata_store=fake_store)
 
@@ -466,7 +483,10 @@ def test_build_idle_source_wraps_multiple_enabled_sources_in_composite():
         result = build_idle_source(cfg)
 
     assert isinstance(result, CompositeIdleWallpaperSource)
-    assert result.sources == [fake_unsplash_cls.return_value, fake_lastfm_cls.return_value]
+    assert result.sources == [
+        fake_unsplash_cls.return_value,
+        fake_lastfm_cls.return_value,
+    ]
     assert result.mode == "priority"
 
 
@@ -489,7 +509,10 @@ def test_build_idle_source_orders_by_idle_priority():
         result = build_idle_source(cfg)
 
     assert isinstance(result, CompositeIdleWallpaperSource)
-    assert result.sources == [fake_lastfm_cls.return_value, fake_unsplash_cls.return_value]
+    assert result.sources == [
+        fake_lastfm_cls.return_value,
+        fake_unsplash_cls.return_value,
+    ]
 
 
 def test_build_idle_source_appends_unlisted_enabled_sources_after_priority_list():
@@ -506,12 +529,18 @@ def test_build_idle_source_appends_unlisted_enabled_sources_after_priority_list(
 
     with patch(
         "mediainfo.registries.IDLE_CLASSES",
-        {"unsplash": fake_unsplash_cls, "lastfm": fake_lastfm_cls, "library": fake_library_cls},
+        {
+            "unsplash": fake_unsplash_cls,
+            "lastfm": fake_lastfm_cls,
+            "library": fake_library_cls,
+        },
     ):
         result = build_idle_source(cfg)
 
     assert result.sources == [
-        fake_lastfm_cls.return_value, fake_unsplash_cls.return_value, fake_library_cls.return_value,
+        fake_lastfm_cls.return_value,
+        fake_unsplash_cls.return_value,
+        fake_library_cls.return_value,
     ]
 
 
@@ -521,7 +550,8 @@ def test_build_idle_source_passes_through_idle_mode():
     fake_unsplash_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
     fake_lastfm_cls = MagicMock(return_value=MagicMock(rotation_interval_seconds=300))
     cfg = _minimal_config(
-        idle={"unsplash": unsplash_cfg, "lastfm": lastfm_cfg}, idle_mode="random",
+        idle={"unsplash": unsplash_cfg, "lastfm": lastfm_cfg},
+        idle_mode="random",
     )
 
     with patch(
@@ -554,6 +584,7 @@ def test_build_idle_source_passes_library_to_library_aware_classes():
 # start_orchestrator
 # ---------------------------------------------------------------------------
 
+
 def test_start_orchestrator_starts_and_returns_orchestrator():
     cfg = _minimal_config(
         priority=[],
@@ -577,21 +608,28 @@ def test_start_orchestrator_starts_and_returns_orchestrator():
 
 def test_start_orchestrator_uses_supplied_mediadata_store_instead_of_building_one():
     cfg = _minimal_config(
-        priority=[], sources={}, enrichers={}, idle={},
-        poll_interval_seconds=5, rotation_interval_seconds=30,
+        priority=[],
+        sources={},
+        enrichers={},
+        idle={},
+        poll_interval_seconds=5,
+        rotation_interval_seconds=30,
     )
     store = MagicMock()
 
-    with patch("mediainfo.wiring.Orchestrator", return_value=MagicMock()), \
-            patch("mediainfo.wiring.build_mediadata_store") as build_fn:
+    with (
+        patch("mediainfo.wiring.Orchestrator", return_value=MagicMock()),
+        patch("mediainfo.wiring.build_mediadata_store") as build_fn,
+    ):
         start_orchestrator(cfg, [], MagicMock(), mediadata_store=store)
 
     build_fn.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
-# build_artwork_overrides / wire_artwork_overrides
+# build_artwork_overrides
 # ---------------------------------------------------------------------------
+
 
 def test_build_artwork_overrides_returns_none_when_disabled():
     cfg = MagicMock()
@@ -612,50 +650,27 @@ def test_build_artwork_overrides_returns_store_when_enabled(tmp_path):
     assert store.dir == tmp_path / "overrides"
 
 
-def test_wire_artwork_overrides_wires_config_ui_output_only():
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-
-    config_output = MagicMock(spec=ConfigUiOutput)
-    other_output = MagicMock()
-    store = MagicMock()
-
-    wire_artwork_overrides([config_output, other_output], store)
-
-    config_output.set_artwork_overrides.assert_called_once_with(store)
-    assert not other_output.set_artwork_overrides.called
-
-
-def test_wire_artwork_overrides_passes_through_none():
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-
-    config_output = MagicMock(spec=ConfigUiOutput)
-    wire_artwork_overrides([config_output], None)
-    config_output.set_artwork_overrides.assert_called_once_with(None)
-
-
-# ---------------------------------------------------------------------------
-# wire_health_providers
-# ---------------------------------------------------------------------------
-
-def test_wire_health_providers_wires_web_config_ui_and_mqtt_outputs():
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-    from mediainfo.outputs.mqtt import MqttOutput
-    from mediainfo.outputs.web import WebOutput
-
-    web_output = MagicMock(spec=WebOutput)
-    config_output = MagicMock(spec=ConfigUiOutput)
-    mqtt_output = MagicMock(spec=MqttOutput)
-    other_output = MagicMock()
-
+def test_build_app_services_populates_every_field():
     orch = MagicMock()
     orch.get_health.return_value = {
-        "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
-        "source_backoff_seconds": {}, "uptime_seconds": 0, "poll_interval_seconds": 5,
-        "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0, "hitster_safe": False,
+        "active_source": None,
+        "source_last_polled_ago": {},
+        "output_errors": {},
+        "source_backoff_seconds": {},
+        "uptime_seconds": 0,
+        "poll_interval_seconds": 5,
+        "rotation_interval_seconds": 30,
+        "now_playing": None,
+        "idle_wallpapers_loaded": 0,
+        "hitster_safe": False,
     }
     orch.sources = []
     orch.enrichers = []
     orch.idle_source = None
+    orch.get_hitster_safe = MagicMock()
+    orch.set_hitster_safe = MagicMock()
+    orch.request_artwork_refresh = MagicMock()
+    orch.request_rotation_now = MagicMock()
 
     cfg = MagicMock()
     cfg.sources = {}
@@ -663,108 +678,34 @@ def test_wire_health_providers_wires_web_config_ui_and_mqtt_outputs():
     cfg.enrichers = {}
     cfg.idle = {}
 
-    wire_health_providers([web_output, config_output, mqtt_output, other_output], orch, cfg)
+    history = MagicMock()
+    overrides = MagicMock()
+    mediadata_store = MagicMock()
 
-    web_output.set_health_provider.assert_called_once()
-    config_output.set_health_provider.assert_called_once()
-    mqtt_output.set_health_provider.assert_called_once()
-    assert not other_output.set_health_provider.called
+    services = build_app_services(orch, cfg, [], history, overrides, mediadata_store)
 
-
-# ---------------------------------------------------------------------------
-# wire_media_data_store
-# ---------------------------------------------------------------------------
-
-def test_wire_media_data_store_wires_themes_output_only():
-    from mediainfo.outputs.themes import ThemesOutput
-
-    themes_output = MagicMock(spec=ThemesOutput)
-    other_output = MagicMock()
-    store = MagicMock()
-
-    wire_media_data_store([themes_output, other_output], store)
-
-    themes_output.set_media_data_store.assert_called_once_with(store)
-    assert not other_output.set_media_data_store.called
+    assert services.history is history
+    assert services.overrides is overrides
+    assert services.mediadata_store is mediadata_store
+    assert services.get_hitster_safe is orch.get_hitster_safe
+    assert services.set_hitster_safe is orch.set_hitster_safe
+    assert services.request_artwork_refresh is orch.request_artwork_refresh
+    assert services.request_rotation_now is orch.request_rotation_now
+    # health_provider is built by health.make_health_provider() (its own
+    # payload shape is covered by test_health.py) - just confirm one was
+    # actually built and closes over this orch/config/outputs.
+    assert callable(services.health_provider)
 
 
-def test_wire_media_data_store_passes_through_none():
-    from mediainfo.outputs.themes import ThemesOutput
+def test_attach_services_calls_attach_on_every_output():
+    services = MagicMock()
+    outputs = [MagicMock(), MagicMock(), MagicMock()]
 
-    themes_output = MagicMock(spec=ThemesOutput)
-    wire_media_data_store([themes_output], None)
-    themes_output.set_media_data_store.assert_called_once_with(None)
+    attach_services(outputs, services)
 
-
-# ---------------------------------------------------------------------------
-# wire_hitster_safe
-# ---------------------------------------------------------------------------
-
-def test_wire_hitster_safe_wires_config_ui_and_mqtt_outputs_only():
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-    from mediainfo.outputs.mqtt import MqttOutput
-    from mediainfo.outputs.web import WebOutput
-
-    web_output = MagicMock(spec=WebOutput)
-    config_output = MagicMock(spec=ConfigUiOutput)
-    mqtt_output = MagicMock(spec=MqttOutput)
-    other_output = MagicMock()
-
-    orch = MagicMock()
-    orch.get_hitster_safe = MagicMock()
-    orch.set_hitster_safe = MagicMock()
-
-    wire_hitster_safe([web_output, config_output, mqtt_output, other_output], orch)
-
-    config_output.set_hitster_safe_handlers.assert_called_once_with(
-        orch.get_hitster_safe, orch.set_hitster_safe
-    )
-    mqtt_output.set_hitster_safe_handlers.assert_called_once_with(
-        orch.get_hitster_safe, orch.set_hitster_safe
-    )
-    # WebOutput has no set_hitster_safe_handlers method at all (its spec mock
-    # would raise AttributeError if code tried to call it) - confirming only
-    # ConfigUiOutput/MqttOutput got wired.
-    assert not other_output.set_hitster_safe_handlers.called
+    for output in outputs:
+        output.attach.assert_called_once_with(services)
 
 
-# ---------------------------------------------------------------------------
-# wire_artwork_refresh
-# ---------------------------------------------------------------------------
-
-def test_wire_artwork_refresh_wires_mqtt_output_only():
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-    from mediainfo.outputs.mqtt import MqttOutput
-
-    config_output = MagicMock(spec=ConfigUiOutput)
-    mqtt_output = MagicMock(spec=MqttOutput)
-    other_output = MagicMock()
-
-    orch = MagicMock()
-    orch.request_artwork_refresh = MagicMock()
-
-    wire_artwork_refresh([config_output, mqtt_output, other_output], orch)
-
-    mqtt_output.set_refresh_artwork_handler.assert_called_once_with(orch.request_artwork_refresh)
-    assert not other_output.set_refresh_artwork_handler.called
-
-
-# ---------------------------------------------------------------------------
-# wire_rotate_now
-# ---------------------------------------------------------------------------
-
-def test_wire_rotate_now_wires_mqtt_output_only():
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-    from mediainfo.outputs.mqtt import MqttOutput
-
-    config_output = MagicMock(spec=ConfigUiOutput)
-    mqtt_output = MagicMock(spec=MqttOutput)
-    other_output = MagicMock()
-
-    orch = MagicMock()
-    orch.request_rotation_now = MagicMock()
-
-    wire_rotate_now([config_output, mqtt_output, other_output], orch)
-
-    mqtt_output.set_rotate_now_handler.assert_called_once_with(orch.request_rotation_now)
-    assert not other_output.set_rotate_now_handler.called
+def test_attach_services_handles_no_outputs():
+    attach_services([], MagicMock())  # must not raise

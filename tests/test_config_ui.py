@@ -1149,6 +1149,42 @@ def test_hitster_safe_button_present_on_form_and_dashboard_pages(config_path):
 
 
 # ---------------------------------------------------------------------------
+# attach() - see mediainfo.app_services.AppServices
+# ---------------------------------------------------------------------------
+
+
+def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
+    from mediainfo.app_services import AppServices
+    from mediainfo.artwork_overrides import ArtworkOverrideStore
+
+    out = _output(config_path)
+
+    def get_fn():
+        return True
+
+    set_fn = MagicMock()
+    overrides = ArtworkOverrideStore(str(tmp_path / "overrides"))
+
+    def health_provider():
+        return {"status": "ok"}
+
+    out.attach(
+        AppServices(
+            get_hitster_safe=get_fn,
+            set_hitster_safe=set_fn,
+            overrides=overrides,
+            health_provider=health_provider,
+        )
+    )
+
+    assert out.app.test_client().get("/api/hitster-safe").get_json() == {
+        "enabled": True
+    }
+    assert out._overrides is overrides
+    assert out._health_fn is health_provider
+
+
+# ---------------------------------------------------------------------------
 # Apple TV pairing
 # ---------------------------------------------------------------------------
 
