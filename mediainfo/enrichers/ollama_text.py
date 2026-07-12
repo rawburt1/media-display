@@ -82,7 +82,14 @@ class OllamaTextEnricher(TextEnricher):
         result = self._generate(now_playing)
         if result is None:
             return
-        if self.cache is not None:
+        # Unlike lyrics (where "no lyrics" is a legitimate, cacheable
+        # answer for an instrumental track - see lrclib.py), there's no
+        # such thing as a song with nothing to say about it: a dict with
+        # every field empty just means the model got confused, not a
+        # confirmed negative result. Caching that would lock in "nothing
+        # generated" for this song until the cache entry expires, instead
+        # of retrying the next time it plays.
+        if self.cache is not None and any(result.get(field) for field in _FIELDS):
             self.cache.set(_NAMESPACE, cache_key, result)
         self._apply(now_playing, result)
 

@@ -215,6 +215,28 @@ def test_caches_result_and_reuses_on_second_lookup(mock_post, tmp_path):
 
 
 @patch("mediainfo.enrichers.ollama_text.requests.post")
+def test_all_empty_fields_are_not_cached(mock_post, tmp_path):
+    # A syntactically valid but entirely empty JSON object means the
+    # model got confused, not a confirmed "nothing to say" - unlike lyrics
+    # (where no lyrics is a legitimate, cacheable answer for an
+    # instrumental track), there's no such thing for these fields.
+    # Caching it anyway would lock in "nothing generated" for this song
+    # until the cache entry expires, instead of retrying on the next play.
+    mock_post.return_value = _ollama_response({})
+    cache = TextCache(tmp_path)
+    enricher = OllamaTextEnricher(_config(), cache=cache)
+
+    enricher.enrich(_music())
+    assert mock_post.call_count == 1
+
+    second_np = _music()
+    enricher.enrich(second_np)
+
+    assert mock_post.call_count == 2  # not cached as a "hit", so re-fetched
+    assert second_np.ai_text == {}
+
+
+@patch("mediainfo.enrichers.ollama_text.requests.post")
 def test_different_songs_do_not_share_a_cache_entry(mock_post, tmp_path):
     cache = TextCache(tmp_path)
     enricher = OllamaTextEnricher(_config(), cache=cache)
