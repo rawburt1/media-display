@@ -20,6 +20,7 @@ from mediainfo.cache import ImageCache
 from mediainfo.config import Config, LoggingConfig
 from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
 from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.outputs.http_server import SharedHttpServer
 from mediainfo.validation import validate_config
 from mediainfo.wiring import (
     attach_services,
@@ -78,9 +79,19 @@ def main() -> None:
 
     cache = _build_cache(config)
 
+    # One shared HTTP server for every Flask-based output (H1 in
+    # docs/architecture-usability-review-2026-07.md) - built once here,
+    # same lifetime as `outputs` below (persists across config reloads;
+    # only a full restart picks up outputs/http changes - see
+    # _warn_output_changes). Each enabled HTTP-flavored output registers
+    # its own blueprint during instantiate_outputs(); start() is called
+    # once every blueprint is registered, not per-output.
+    shared_server = SharedHttpServer(config.http, config.auth)
+
     # Outputs are created once and stay alive for the life of the process.
     # Their background servers (Flask, MQTT, etc.) keep running across reloads.
-    outputs = instantiate_outputs(config, config_path, cache)
+    outputs = instantiate_outputs(config, config_path, cache, shared_server)
+    shared_server.start()
 
     stop_event = threading.Event()
     stop_handler = _make_stop_handler(stop_event)
@@ -143,6 +154,7 @@ def main() -> None:
         orch.stop()
         orch.join()
         _shutdown_outputs(outputs)
+        shared_server.stop()
         library.close()
         if history is not None:
             history.close()

@@ -1,7 +1,9 @@
 """Tests for mediainfo.outputs.http_server.SharedHttpServer - one shared
 Flask app/server for every Flask-based output (H1 in
-docs/architecture-usability-review-2026-07.md). Not wired into wiring.py/
-__main__.py yet; this is the standalone infrastructure only.
+docs/architecture-usability-review-2026-07.md). This covers the class in
+isolation with throwaway blueprints; see tests/test_wiring.py for how
+wiring.instantiate_outputs() drives it from real output config, and
+tests/test_smoke.py for the full config.example.yaml wiring proof.
 """
 
 import urllib.error
@@ -85,6 +87,41 @@ def test_stop_actually_terminates_the_server_thread():
 def test_stop_before_start_is_a_safe_no_op():
     server = _server()
     server.stop()  # must not raise
+
+
+def test_name_override_avoids_flask_blueprint_name_collision():
+    # Two instances of the same output type build blueprints with the same
+    # constructor name (e.g. every ConfigUiOutput builds a Blueprint named
+    # "thing" here) - Flask requires unique names across the app, so
+    # wiring.py passes a distinguishing name for every instance past the
+    # first. Regression test for a real bug found while wiring this up:
+    # passing name=None explicitly (instead of omitting it) breaks the
+    # first instance's own endpoint name ("None.index" instead of
+    # "thing.index") - see register_blueprint()'s own comment.
+    server = _server()
+
+    bp1 = Blueprint("thing", __name__)
+
+    @bp1.get("/")
+    def index1():
+        return "one"
+
+    bp2 = Blueprint("thing", __name__)
+
+    @bp2.get("/")
+    def index2():
+        return "two"
+
+    server.register_blueprint(bp1, url_prefix="/thing")
+    server.register_blueprint(bp2, url_prefix="/thing-second", name="thing_1")
+    server.start()
+    try:
+        status1, body1 = _get(server, "/thing/")
+        status2, body2 = _get(server, "/thing-second/")
+        assert (status1, body1) == (200, "one")
+        assert (status2, body2) == (200, "two")
+    finally:
+        server.stop()
 
 
 def test_csrf_header_guard_is_installed_once_for_the_shared_app():

@@ -55,11 +55,33 @@ class SharedHttpServer:
         self._server: Optional[BaseWSGIServer] = None
         self._thread: Optional[threading.Thread] = None
 
-    def register_blueprint(self, blueprint: Blueprint, url_prefix: str) -> None:
+    def register_blueprint(
+        self, blueprint: Blueprint, url_prefix: str, name: Optional[str] = None
+    ) -> None:
         """Mount one output instance's blueprint at its wiring-computed
         path prefix ("" for the root-mounted output - see
-        Output.root_mounted)."""
-        self.app.register_blueprint(blueprint, url_prefix=url_prefix or None)
+        Output.root_mounted).
+
+        `name` overrides the blueprint's own registration name (Flask
+        requires unique names across the app, but every instance of a
+        given output type builds a blueprint with the same constructor
+        name, e.g. every ConfigUiOutput's blueprint is named "config") -
+        wiring.py passes a per-instance-unique name here when more than
+        one instance of a type is configured. Every converted output's
+        templates/JS use Flask's relative url_for('.endpoint') form
+        specifically so this is invisible to them regardless of what name
+        ends up registered.
+        """
+        # name=None must not be passed at all, not even explicitly: Flask's
+        # register_blueprint(**options) does options.get("name", ...)
+        # internally, which does NOT fall back to the blueprint's own name
+        # when the key is present with value None - it registers a
+        # literally broken "None.<endpoint>" name instead. Confirmed via a
+        # standalone repro against Flask 3.1.3.
+        kwargs = {"url_prefix": url_prefix or None}
+        if name is not None:
+            kwargs["name"] = name
+        self.app.register_blueprint(blueprint, **kwargs)
 
     def start(self) -> None:
         """Start serving in a daemon thread. Call once, after every enabled

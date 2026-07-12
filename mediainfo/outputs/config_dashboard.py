@@ -22,11 +22,15 @@ Test-connection implementation notes:
   click can't visibly disrupt a physical display. Unlike sources/
   enrichers, this stays a raw field-based check here rather than a class
   method: it runs against unsaved form fields (not a real config object),
-  several outputs need constructor args this dashboard doesn't have
-  (e.g. an ImageCache), and self-hosted outputs (web/info/feed/video/
-  config) can only be tested by hitting the port of an already-running
-  instance from outside - a freshly-built throwaway instance is never
-  actually bound to a socket.
+  and several outputs need constructor args this dashboard doesn't have
+  (e.g. an ImageCache).
+- Self-hosted outputs (web/info/feed/video/config): since H1 (see
+  docs/architecture-usability-review-2026-07.md), these no longer have
+  their own host/port - every Flask-based output shares one HTTP server
+  (mediainfo/outputs/http_server.py). Testing "is my own server
+  reachable" from inside a page that same server is currently serving is
+  close to tautological, so this is a fixed message rather than a real
+  network check.
 """
 
 from __future__ import annotations
@@ -34,8 +38,6 @@ from __future__ import annotations
 import socket
 from pathlib import Path
 from typing import Any, Tuple
-
-import requests
 
 # Local servers this process itself runs - "testing" them means confirming
 # the embedded Flask app is actually answering, not reaching some other
@@ -107,10 +109,10 @@ def test_output(type_name: str, fields: dict) -> Tuple[bool, str]:
             return True, f"{path} is writable"
 
         if type_name in _SELF_HOSTED_OUTPUT_TYPES:
-            port = fields.get("port")
-            if not port:
-                return False, "No port configured"
-            return _http_check(fields.get("host") or "127.0.0.1", int(port))
+            return (
+                True,
+                "Served by the shared HTTP server - reachable, since this page loaded from it.",
+            )
     except Exception as exc:
         return False, f"Error: {exc}"
 
@@ -123,13 +125,3 @@ def _tcp_check(host: str, port: int, timeout: float = 3.0) -> Tuple[bool, str]:
             return True, f"Reached {host}:{port}"
     except Exception as exc:
         return False, f"Could not reach {host}:{port} ({exc})"
-
-
-def _http_check(host: str, port: int, timeout: float = 3.0) -> Tuple[bool, str]:
-    address = "127.0.0.1" if host in ("0.0.0.0", "") else host
-    url = f"http://{address}:{port}/"
-    try:
-        response = requests.get(url, timeout=timeout)
-        return response.status_code < 500, f"HTTP {response.status_code} from {url}"
-    except Exception as exc:
-        return False, f"Could not reach {url} ({exc})"

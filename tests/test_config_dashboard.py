@@ -153,18 +153,15 @@ def test_output_folder_missing_dir():
     assert ok is False
 
 
-def test_output_self_hosted_uses_http_check():
-    with patch(
-        "mediainfo.outputs.config_dashboard._http_check", return_value=(True, "HTTP 200")
-    ) as m:
-        ok, message = check_output("web", {"type": "web", "port": 8090})
-    assert ok is True
-    m.assert_called_once_with("127.0.0.1", 8090)
-
-
-def test_output_self_hosted_missing_port():
-    ok, message = check_output("web", {"type": "web"})
-    assert ok is False
+def test_output_self_hosted_reports_reachable_without_a_network_check():
+    # web/info/feed/video/config no longer have their own host/port (H1 -
+    # every Flask-based output shares one HTTP server) - reaching this
+    # endpoint at all already proves it's up, so this is a fixed message,
+    # not a real network probe.
+    for type_name in ("web", "info", "feed", "video", "config"):
+        ok, message = check_output(type_name, {"type": type_name})
+        assert ok is True
+        assert "shared HTTP server" in message
 
 
 def test_output_unknown_type():
@@ -181,7 +178,7 @@ def test_output_exception_is_caught():
 
 
 # ---------------------------------------------------------------------------
-# _tcp_check / _http_check (real socket/HTTP behavior, mocked at the lowest level)
+# _tcp_check (real socket behavior, mocked at the lowest level)
 # ---------------------------------------------------------------------------
 
 
@@ -205,25 +202,3 @@ def test_tcp_check_failure():
 
     assert ok is False
     assert "Could not reach" in message
-
-
-def test_http_check_success():
-    from mediainfo.outputs.config_dashboard import _http_check
-
-    with patch("mediainfo.outputs.config_dashboard.requests.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        ok, message = _http_check("0.0.0.0", 8090)
-
-    assert ok is True
-    assert "127.0.0.1:8090" in message  # 0.0.0.0 rewritten to loopback
-
-
-def test_http_check_failure():
-    from mediainfo.outputs.config_dashboard import _http_check
-
-    with patch(
-        "mediainfo.outputs.config_dashboard.requests.get", side_effect=ConnectionError("refused")
-    ):
-        ok, message = _http_check("127.0.0.1", 8090)
-
-    assert ok is False

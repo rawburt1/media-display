@@ -24,8 +24,12 @@ EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 
 @pytest.fixture(autouse=True)
 def no_side_effects(monkeypatch):
-    # Suppress every output's background Flask/server thread (web, info,
-    # video, config, feed, nest_hub) and AppleTvSource's pyatv-loop thread.
+    # Flask-based outputs (web, info, video, config, feed, themes, nest_hub)
+    # no longer own a server thread themselves since H1 - they just build a
+    # Blueprint (see mediainfo/outputs/http_server.py's SharedHttpServer,
+    # never started in this file's tests, so nothing to suppress there).
+    # This still matters for AppleTvSource's pyatv-loop thread and
+    # VideoOutput's one-shot video-refresh thread.
     monkeypatch.setattr("threading.Thread.start", lambda self: None)
     # Avoid real RSA key generation/loading for the ADB-based sources.
     monkeypatch.setattr(
@@ -96,6 +100,40 @@ def test_instantiate_outputs_from_example_config(example_config, tmp_path):
     outputs = wiring.instantiate_outputs(example_config, tmp_path / "config.yaml", cache)
     # Every enabled output type in config.example.yaml (one instance each).
     assert len(outputs) == 10
+
+
+def test_instantiate_outputs_registers_every_http_output_on_one_shared_server(
+    example_config, tmp_path
+):
+    """H1 (docs/architecture-usability-review-2026-07.md): the real example
+    config's HTTP-flavored outputs (web, config, themes, info, feed, video,
+    nest_hub) must all register their blueprint onto one SharedHttpServer
+    with no name/prefix collision - the concrete failure mode a collision
+    would cause is register_blueprint() raising during wiring, not
+    something a narrower unit test would necessarily catch against a
+    config this rich (16 sources, 12 enrichers, 10 outputs).
+    """
+    from mediainfo.config import AuthConfig, HttpServerConfig
+    from mediainfo.outputs.http_server import SharedHttpServer
+
+    cache = ImageCache(example_config.cache.dir)
+    shared_server = SharedHttpServer(HttpServerConfig(host="127.0.0.1", port=0), AuthConfig())
+
+    wiring.instantiate_outputs(
+        example_config, tmp_path / "config.yaml", cache, shared_server
+    )  # must not raise
+
+    # config.example.yaml's own outputs.themes.enabled is false (only its
+    # nested outputs.themes.themes.vinyl.enabled is true) - themes itself
+    # isn't part of this list; see tests/test_themes_output.py for its
+    # own dedicated coverage.
+    endpoints = {rule.endpoint for rule in shared_server.app.url_map.iter_rules()}
+    assert "web.index" in endpoints  # root-mounted
+    assert "config.index" in endpoints
+    assert "info.index" in endpoints
+    assert "feed.index" in endpoints
+    assert "video.index" in endpoints
+    assert "nest_hub.current_image" in endpoints
 
 
 def test_full_wiring_from_example_config(example_config, tmp_path):

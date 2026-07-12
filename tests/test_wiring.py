@@ -6,8 +6,11 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from mediainfo.text_cache import TextCache
 from mediainfo.wiring import (
+    _compute_url_mount,
     attach_services,
     build_app_services,
     build_artwork_overrides,
@@ -78,6 +81,112 @@ def test_instantiate_outputs_skips_disabled():
 
     fake_cls.assert_not_called()
     assert result == []
+
+
+class _FakeOutputCls:
+    """A minimal Output-like class for build_http_blueprint()'s sake -
+    real Output subclasses declare root_mounted as a class attribute."""
+
+    root_mounted = False
+
+
+class _RootMountedOutputCls:
+    root_mounted = True
+
+
+def test_compute_url_mount_single_instance_uses_plain_prefix_and_name():
+    prefix, name = _compute_url_mount("config", 0, 1, _FakeOutputCls, "")
+    assert (prefix, name) == ("/config", "config")
+
+
+def test_compute_url_mount_root_mounted_output_uses_empty_prefix():
+    prefix, name = _compute_url_mount("web", 0, 1, _RootMountedOutputCls, "")
+    assert (prefix, name) == ("", "web")
+
+
+def test_compute_url_mount_second_instance_uses_label_suffix_and_indexed_name():
+    prefix, name = _compute_url_mount("config", 1, 2, _FakeOutputCls, "dashboard")
+    assert (prefix, name) == ("/config-dashboard", "config1")
+
+
+def test_compute_url_mount_second_root_mounted_instance_uses_label_as_prefix():
+    prefix, name = _compute_url_mount("web", 1, 2, _RootMountedOutputCls, "bedroom")
+    assert (prefix, name) == ("/bedroom", "web1")
+
+
+def test_compute_url_mount_first_instance_name_is_indexed_when_multiple_exist():
+    # Even the first instance's blueprint name must be disambiguated once
+    # there's more than one, even though its URL prefix stays plain -
+    # Flask requires unique blueprint names regardless of prefix.
+    prefix, name = _compute_url_mount("config", 0, 2, _FakeOutputCls, "")
+    assert (prefix, name) == ("/config", "config0")
+
+
+def test_compute_url_mount_missing_label_on_second_instance_raises():
+    with pytest.raises(ValueError, match="label"):
+        _compute_url_mount("config", 1, 2, _FakeOutputCls, "")
+
+
+def test_instantiate_outputs_registers_blueprint_on_shared_server():
+    output_cfg = MagicMock()
+    output_cfg.enabled = True
+    output_cfg.label = ""
+    fake_instance = MagicMock()
+    fake_blueprint = MagicMock()
+    fake_instance.build_http_blueprint.return_value = fake_blueprint
+    fake_cls = MagicMock(return_value=fake_instance, root_mounted=False)
+    cfg = _minimal_config(outputs={"pixoo": [output_cfg]})
+    shared_server = MagicMock()
+
+    with (
+        patch("mediainfo.registries.OUTPUT_CLASSES", {"pixoo": fake_cls}),
+        patch("mediainfo.registries.OUTPUT_EXTRA_ARGS", {}),
+    ):
+        instantiate_outputs(cfg, Path("config.yaml"), MagicMock(), shared_server)
+
+    fake_instance.build_http_blueprint.assert_called_once_with("/pixoo", sock=shared_server.sock)
+    shared_server.register_blueprint.assert_called_once_with(
+        fake_blueprint, url_prefix="/pixoo", name="pixoo"
+    )
+
+
+def test_instantiate_outputs_skips_registration_when_blueprint_is_none():
+    # An output that isn't Flask-based (build_http_blueprint()'s default
+    # implementation returns None) must not be registered on the shared
+    # server at all.
+    output_cfg = MagicMock()
+    output_cfg.enabled = True
+    fake_instance = MagicMock()
+    fake_instance.build_http_blueprint.return_value = None
+    fake_cls = MagicMock(return_value=fake_instance, root_mounted=False)
+    cfg = _minimal_config(outputs={"mqtt": [output_cfg]})
+    shared_server = MagicMock()
+
+    with (
+        patch("mediainfo.registries.OUTPUT_CLASSES", {"mqtt": fake_cls}),
+        patch("mediainfo.registries.OUTPUT_EXTRA_ARGS", {}),
+    ):
+        instantiate_outputs(cfg, Path("config.yaml"), MagicMock(), shared_server)
+
+    shared_server.register_blueprint.assert_not_called()
+
+
+def test_instantiate_outputs_without_shared_server_never_builds_blueprints():
+    # Backward-compatible default (shared_server=None): callers that don't
+    # care about HTTP wiring (most existing tests) are unaffected.
+    output_cfg = MagicMock()
+    output_cfg.enabled = True
+    fake_instance = MagicMock()
+    fake_cls = MagicMock(return_value=fake_instance, root_mounted=False)
+    cfg = _minimal_config(outputs={"pixoo": [output_cfg]})
+
+    with (
+        patch("mediainfo.registries.OUTPUT_CLASSES", {"pixoo": fake_cls}),
+        patch("mediainfo.registries.OUTPUT_EXTRA_ARGS", {}),
+    ):
+        instantiate_outputs(cfg, Path("config.yaml"), MagicMock())
+
+    fake_instance.build_http_blueprint.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

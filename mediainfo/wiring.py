@@ -22,13 +22,57 @@ from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.media_data_store import MediaDataStore
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
+from mediainfo.outputs.http_server import SharedHttpServer
 from mediainfo.poster_store import PosterStore
 from mediainfo.text_cache import TextCache
 
 logger = logging.getLogger(__name__)
 
 
-def instantiate_outputs(config: Config, config_path: Path, cache: ImageCache) -> list:
+def _compute_url_mount(name: str, index: int, count: int, output_cls: type, label: str) -> tuple:
+    """Return (url_prefix, blueprint_name) for one output instance -
+    H1 in docs/architecture-usability-review-2026-07.md.
+
+    Base prefix is "/<name>" ("" for the one declared root_mounted, e.g.
+    web - see Output.root_mounted). The first instance of a type uses the
+    base prefix unmounted; every instance after that needs its own
+    `label` (_OutputFilterMixin.label - existing field, previously
+    cosmetic only) to be told apart, since they'd otherwise collide on
+    the same URL - raises a clear error rather than silently colliding or
+    crashing deep inside Flask's own blueprint registration.
+
+    blueprint_name must be unique per instance, since Flask requires
+    unique blueprint names across the app and every instance of a type
+    builds a blueprint with the same constructor name (e.g. every
+    ConfigUiOutput's blueprint is named "config") - but only actually
+    needs disambiguating (name+index) when count > 1; the common single-
+    instance case keeps the plain, readable name. Every converted output's
+    templates/JS use Flask's relative url_for('.endpoint') form
+    specifically so this is invisible to them either way.
+    """
+    base = "" if getattr(output_cls, "root_mounted", False) else f"/{name}"
+    if index == 0:
+        prefix = base
+    else:
+        if not label:
+            raise ValueError(
+                f"outputs.{name} has more than one instance, but instance "
+                f"{index + 1} has no `label` set - every instance after the "
+                f"first needs one so they don't collide on the same URL "
+                f'(e.g. label: "{name}2"). See the `label` field under '
+                f"outputs.{name} in config.yaml."
+            )
+        prefix = f"{base}-{label}" if base else f"/{label}"
+    blueprint_name = name if count == 1 else f"{name}{index}"
+    return prefix, blueprint_name
+
+
+def instantiate_outputs(
+    config: Config,
+    config_path: Path,
+    cache: ImageCache,
+    shared_server: Optional[SharedHttpServer] = None,
+) -> list:
     outputs = []
     for name, output_configs in config.outputs.items():
         output_cls = registries.get_output_class(name)
@@ -38,12 +82,24 @@ def instantiate_outputs(config: Config, config_path: Path, cache: ImageCache) ->
         extra_args = registries.OUTPUT_EXTRA_ARGS.get(name, lambda _config, _path, _cache: ())(
             config, config_path, cache
         )
+        enabled_count = sum(1 for c in output_configs if c.enabled)
+        index = 0
         for output_config in output_configs:
             if not output_config.enabled:
                 continue
             output = output_cls(output_config, *extra_args)
             output.start()
+            if shared_server is not None:
+                url_prefix, blueprint_name = _compute_url_mount(
+                    name, index, enabled_count, output_cls, getattr(output_config, "label", "")
+                )
+                blueprint = output.build_http_blueprint(url_prefix, sock=shared_server.sock)
+                if blueprint is not None:
+                    shared_server.register_blueprint(
+                        blueprint, url_prefix=url_prefix, name=blueprint_name
+                    )
             outputs.append(output)
+            index += 1
     return outputs
 
 
