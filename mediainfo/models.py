@@ -12,6 +12,11 @@ class Artwork:
     # Optional (username, password) needed to fetch this URL, if its host
     # requires the same auth as the source's API (e.g. Kodi).
     auth: Optional[Tuple[str, str]] = None
+    # Optional extra request headers needed to fetch this URL - e.g. a
+    # Referer some image hosts require for hotlink protection (the Art
+    # Institute of Chicago's IIIF server 403s without one). Merged over
+    # ImageCache's default headers, never replacing them (see cache.py).
+    headers: Optional[Dict[str, str]] = None
     # Human-readable description, e.g. "Poster (fanart.tv)" - used for
     # logging and shown in the web UI.
     label: str = ""

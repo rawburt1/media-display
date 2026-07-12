@@ -1206,6 +1206,19 @@ idle:
     rotation_interval_seconds: 300
     batch_size: 15               # Pictures to pick per batch
 
+  # Art — public-domain artworks from the Art Institute of Chicago's open
+  # collection (https://api.artic.edu). No API key required. `transforms`
+  # is this source's own image styling (same syntax as an output's
+  # `transforms` above, e.g. a border/crop suited to art) - applied before
+  # whichever output's own transforms, so it stays consistent no matter
+  # which display shows it.
+  arts:
+    enabled: false
+    rotation_interval_seconds: 300
+    batch_size: 10                # Artworks to fetch per batch
+    # transforms:
+    #   - pad: {width: 1280, height: 800, color: black}
+
   # Unsplash — high-resolution photography.
   # Create a free app at https://unsplash.com/oauth/applications and use the
   # "Demo" access key (no approval required).

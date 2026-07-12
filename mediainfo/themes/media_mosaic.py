@@ -79,7 +79,8 @@ class MediaMosaicTheme(DisplayTheme):
 
         try:
             derived_path = cache.get_derived_path(
-                image_path, self._cache_key(resolved, config),
+                image_path,
+                self._cache_key(resolved, config),
                 lambda _image: self._build_mosaic(resolved, image_path),
             )
         except Exception:
@@ -90,8 +91,7 @@ class MediaMosaicTheme(DisplayTheme):
     @staticmethod
     def _candidate_tiles(now_playing: NowPlaying) -> List[Artwork]:
         return [
-            img for img in now_playing.images
-            if not img.is_artist_photo and not img.is_wordcloud
+            img for img in now_playing.images if not img.is_artist_photo and not img.is_wordcloud
         ]
 
     @staticmethod

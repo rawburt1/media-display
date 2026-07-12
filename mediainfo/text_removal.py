@@ -140,11 +140,19 @@ def detect_text_regions(
         if ox2 <= ox1 or oy2 <= oy1:
             continue
         area_fraction = ((ox2 - ox1) * (oy2 - oy1)) / total_area
-        regions.append(TextRegion(box=(ox1, oy1, ox2, oy2), confidence=float(confidences[i]), area_fraction=area_fraction))
+        regions.append(
+            TextRegion(
+                box=(ox1, oy1, ox2, oy2),
+                confidence=float(confidences[i]),
+                area_fraction=area_fraction,
+            )
+        )
     return regions
 
 
-def _decode_predictions(scores: Any, geometry: Any, confidence_threshold: float, np: Any) -> Tuple[list, list]:
+def _decode_predictions(
+    scores: Any, geometry: Any, confidence_threshold: float, np: Any
+) -> Tuple[list, list]:
     """Standard EAST geometry decode: for each grid cell above the
     confidence threshold, reconstruct its (unrotated) bounding box from the
     4 distance-to-edge maps and the rotation-angle map. Rotation is decoded
@@ -182,14 +190,14 @@ def _decode_predictions(scores: Any, geometry: Any, confidence_threshold: float,
 
 def classify_regions(regions: List[TextRegion], max_logo_area_percent: float) -> List[TextRegion]:
     """Classify by area fraction alone:
-      - "small": under 2% of the image - typical credits/subtitle text.
-      - "large_logo": between 2% and max_logo_area_percent% - a plausible
-        title/logo candidate (still subject to the legibility check in
-        maybe_remove_text before it's actually retained).
-      - "uncertain": above max_logo_area_percent% - too large to be a
-        normal logo (more likely a misdetection over a big background
-        area); left alone rather than edited, since removing something
-        covering that much of the frame risks damaging the composition.
+    - "small": under 2% of the image - typical credits/subtitle text.
+    - "large_logo": between 2% and max_logo_area_percent% - a plausible
+      title/logo candidate (still subject to the legibility check in
+      maybe_remove_text before it's actually retained).
+    - "uncertain": above max_logo_area_percent% - too large to be a
+      normal logo (more likely a misdetection over a big background
+      area); left alone rather than edited, since removing something
+      covering that much of the frame risks damaging the composition.
     """
     max_fraction = max_logo_area_percent / 100.0
     classified = []
@@ -204,7 +212,9 @@ def classify_regions(regions: List[TextRegion], max_logo_area_percent: float) ->
     return classified
 
 
-def _legible_at_target_size(image: Image.Image, box: Tuple[int, int, int, int], target_size: int) -> bool:
+def _legible_at_target_size(
+    image: Image.Image, box: Tuple[int, int, int, int], target_size: int
+) -> bool:
     """Conservative proxy for "would this logo/title still read as
     something at the final LED resolution": scales the cropped region down
     by the same ratio the whole image will eventually be downscaled by,
@@ -222,7 +232,9 @@ def _legible_at_target_size(image: Image.Image, box: Tuple[int, int, int, int], 
     return ImageStat.Stat(region).stddev[0] >= _MIN_LEGIBLE_STDDEV
 
 
-def _expand_box(box: Tuple[int, int, int, int], margin_ratio: float, w: int, h: int) -> Tuple[int, int, int, int]:
+def _expand_box(
+    box: Tuple[int, int, int, int], margin_ratio: float, w: int, h: int
+) -> Tuple[int, int, int, int]:
     x1, y1, x2, y2 = box
     mx = max(2, int((x2 - x1) * margin_ratio))
     my = max(2, int((y2 - y1) * margin_ratio))
@@ -238,7 +250,9 @@ def _build_mask(image: Image.Image, regions: List[TextRegion], margin_ratio: flo
     return mask
 
 
-def _inpaint_remove(image: Image.Image, regions: List[TextRegion], margin_ratio: float) -> Optional[Image.Image]:
+def _inpaint_remove(
+    image: Image.Image, regions: List[TextRegion], margin_ratio: float
+) -> Optional[Image.Image]:
     cv2 = _import_cv2()
     if cv2 is None:
         return None
@@ -250,7 +264,9 @@ def _inpaint_remove(image: Image.Image, regions: List[TextRegion], margin_ratio:
     return Image.fromarray(result_bgr[:, :, ::-1])
 
 
-def _soft_fill_remove(image: Image.Image, regions: List[TextRegion], margin_ratio: float) -> Image.Image:
+def _soft_fill_remove(
+    image: Image.Image, regions: List[TextRegion], margin_ratio: float
+) -> Image.Image:
     w, h = image.size
     mask = _build_mask(image, regions, margin_ratio)
     blur_radius = max(4, min(w, h) // 8)
@@ -260,7 +276,10 @@ def _soft_fill_remove(image: Image.Image, regions: List[TextRegion], margin_rati
 
 
 def remove_text(
-    image: Image.Image, regions: List[TextRegion], method: str = "inpaint", margin_ratio: float = 0.15
+    image: Image.Image,
+    regions: List[TextRegion],
+    method: str = "inpaint",
+    margin_ratio: float = 0.15,
 ) -> Image.Image:
     """Erase `regions` from `image` (mask expanded by `margin_ratio` to
     also cover outlines/shadows/glow around the text itself). Falls back
@@ -276,7 +295,9 @@ def remove_text(
     return _soft_fill_remove(image, regions, margin_ratio)
 
 
-def _overlap_area(box: Tuple[int, int, int, int], avoid_boxes: List[Tuple[int, int, int, int]]) -> int:
+def _overlap_area(
+    box: Tuple[int, int, int, int], avoid_boxes: List[Tuple[int, int, int, int]]
+) -> int:
     x1, y1, x2, y2 = box
     total = 0
     for ax1, ay1, ax2, ay2 in avoid_boxes:

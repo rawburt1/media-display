@@ -3,8 +3,11 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from mediainfo.config import KodiConfig
 from mediainfo.sources.kodi import KodiSource, resolve_kodi_image_url
+from mediainfo.status import AvailabilityReason
 
 
 def test_resolve_kodi_image_url():
@@ -19,7 +22,9 @@ def test_resolve_kodi_image_url():
 
 
 def _source(**kwargs) -> KodiSource:
-    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.21", port=8080, username="kodi", password="kodi")
+    defaults: dict[str, Any] = dict(
+        enabled=True, host="192.168.1.21", port=8080, username="kodi", password="kodi"
+    )
     defaults.update(kwargs)
     return KodiSource(KodiConfig(**defaults))
 
@@ -59,6 +64,7 @@ def test_no_active_players_returns_none(mock_post):
     source = _source()
     assert source.get_now_playing() is None
     assert source.last_poll_failed is False  # connected fine, just idle
+    assert source.availability_reason == AvailabilityReason.IDLE
 
 
 @patch("mediainfo.sources.kodi.requests.post")
@@ -77,19 +83,25 @@ def test_movie_item(mock_post):
         },
     )
 
-    now_playing = _source().get_now_playing()
+    source = _source()
+    now_playing = source.get_now_playing()
 
     assert now_playing.source == "kodi"
     assert now_playing.media_type == "movie"
+    assert source.availability_reason == AvailabilityReason.PLAYING
     assert now_playing.title == "Inception"
     assert now_playing.subtitle == ""
     assert now_playing.year == 2010
     assert now_playing.ids == {"tmdb": "27205"}
     assert len(now_playing.images) == 2
     assert now_playing.images[0].label == "Poster (Kodi)"
-    assert now_playing.images[0].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://poster.jpg/")
+    assert now_playing.images[0].url == resolve_kodi_image_url(
+        "192.168.1.21", 8080, "image://poster.jpg/"
+    )
     assert now_playing.images[1].label == "Fanart (Kodi)"
-    assert now_playing.images[1].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://fanart.jpg/")
+    assert now_playing.images[1].url == resolve_kodi_image_url(
+        "192.168.1.21", 8080, "image://fanart.jpg/"
+    )
 
 
 @patch("mediainfo.sources.kodi.requests.post")
@@ -122,8 +134,12 @@ def test_episode_item_prefers_series_art(mock_post):
     assert now_playing.season == 1
     assert len(now_playing.images) == 2
     # Prefers the series poster/fanart over the episode's own thumb/fanart.
-    assert now_playing.images[0].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://show-poster.jpg/")
-    assert now_playing.images[1].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://show-fanart.jpg/")
+    assert now_playing.images[0].url == resolve_kodi_image_url(
+        "192.168.1.21", 8080, "image://show-poster.jpg/"
+    )
+    assert now_playing.images[1].url == resolve_kodi_image_url(
+        "192.168.1.21", 8080, "image://show-fanart.jpg/"
+    )
     # Uses the series-level ids (from VideoLibrary.GetTVShowDetails) for
     # enrichers, not the episode's own uniqueid.
     assert now_playing.ids == {"tvdb": "405535", "tmdb": "128098", "imdb": "tt3960394"}
@@ -203,6 +219,7 @@ def test_music_item_with_musicbrainz_ids(mock_post):
 # Playback position (Player.GetProperties)
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.sources.kodi.requests.post")
 def test_position_and_duration_are_converted_to_seconds(mock_post):
     mock_post.side_effect = _rpc_responses(
@@ -245,12 +262,57 @@ def test_request_error_returns_none(mock_post):
     source = _source()
     assert source.get_now_playing() is None
     assert source.last_poll_failed is True
+    # A generic exception isn't recognizably a network issue - falls back
+    # to a plain integration error rather than claiming "unreachable".
+    assert source.availability_reason == AvailabilityReason.API_ERROR
+
+
+@patch("mediainfo.sources.kodi.requests.post")
+def test_connection_error_sets_network_unreachable(mock_post):
+    # The characteristic shape of "the Kodi box is powered off": nothing
+    # answers on the LAN at all.
+    mock_post.side_effect = requests.exceptions.ConnectionError("no route to host")
+
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is True
+    assert source.availability_reason == AvailabilityReason.NETWORK_UNREACHABLE
+
+
+@patch("mediainfo.sources.kodi.requests.post")
+def test_http_401_sets_auth_failed(mock_post):
+    response = MagicMock()
+    response.status_code = 401
+    response.raise_for_status.side_effect = requests.exceptions.HTTPError(response=response)
+    mock_post.return_value = response
+
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.last_poll_failed is True
+    assert source.availability_reason == AvailabilityReason.AUTH_FAILED
+
+
+@patch("mediainfo.sources.kodi.requests.post")
+def test_http_500_sets_api_error_not_network_unreachable(mock_post):
+    # A reachable server that responded with an error is not the same as
+    # an unreachable one - regression guard for requests.exceptions.HTTPError
+    # (a requests.exceptions.RequestException, itself an OSError subclass)
+    # being misclassified as NETWORK_UNREACHABLE.
+    response = MagicMock()
+    response.status_code = 500
+    response.raise_for_status.side_effect = requests.exceptions.HTTPError(response=response)
+    mock_post.return_value = response
+
+    source = _source()
+    assert source.get_now_playing() is None
+    assert source.availability_reason == AvailabilityReason.API_ERROR
 
 
 # ---------------------------------------------------------------------------
 # KodiConfig validation (pydantic dataclass rollout - see
 # mediainfo/config/sources.py)
 # ---------------------------------------------------------------------------
+
 
 def test_config_unknown_field_raises_validation_error():
     import pytest

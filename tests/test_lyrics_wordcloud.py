@@ -124,8 +124,12 @@ _REAL_ALBUM_ART_PATH = _REAL_FIXTURES_DIR / "watch_albumart.jpg"
 def test_generate_real_example_without_mask_writes_valid_image(tmp_path):
     out_path = tmp_path / "wordcloud.png"
     generate(
-        _REAL_LRC_PATH.read_text(encoding="utf-8"), _REAL_ALBUM_ART_PATH, out_path,
-        use_mask=False, width=400, height=400,
+        _REAL_LRC_PATH.read_text(encoding="utf-8"),
+        _REAL_ALBUM_ART_PATH,
+        out_path,
+        use_mask=False,
+        width=400,
+        height=400,
     )
 
     assert out_path.exists()
@@ -137,8 +141,12 @@ def test_generate_real_example_without_mask_writes_valid_image(tmp_path):
 def test_generate_real_example_with_mask_writes_valid_image(tmp_path):
     out_path = tmp_path / "wordcloud.png"
     generate(
-        _REAL_LRC_PATH.read_text(encoding="utf-8"), _REAL_ALBUM_ART_PATH, out_path,
-        use_mask=True, width=400, height=400,
+        _REAL_LRC_PATH.read_text(encoding="utf-8"),
+        _REAL_ALBUM_ART_PATH,
+        out_path,
+        use_mask=True,
+        width=400,
+        height=400,
     )
 
     assert out_path.exists()
@@ -155,8 +163,12 @@ def test_generate_real_example_uses_album_art_palette(tmp_path):
     qualitative colormap sneaking in."""
     out_path = tmp_path / "wordcloud.png"
     generate(
-        _REAL_LRC_PATH.read_text(encoding="utf-8"), _REAL_ALBUM_ART_PATH, out_path,
-        use_mask=False, width=400, height=400,
+        _REAL_LRC_PATH.read_text(encoding="utf-8"),
+        _REAL_ALBUM_ART_PATH,
+        out_path,
+        use_mask=False,
+        width=400,
+        height=400,
     )
 
     album_colors = set(dominant_colors(Image.open(_REAL_ALBUM_ART_PATH), count=8))

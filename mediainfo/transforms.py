@@ -167,7 +167,7 @@ def parse_pipeline(raw: list) -> List[Transform]:
       {brightness: 1.2}                    → Brightness(1.2)
     """
     result: List[Transform] = []
-    for entry in (raw or []):
+    for entry in raw or []:
         if isinstance(entry, str):
             name, params = entry, None
         elif isinstance(entry, dict):

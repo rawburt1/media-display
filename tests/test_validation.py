@@ -83,9 +83,7 @@ def test_validate_config_warns_with_multiple_missing_fields(caplog):
     with caplog.at_level(logging.WARNING, logger="mediainfo.validation"):
         validate_config(cfg)
 
-    assert any(
-        "client_id" in r.message and "client_secret" in r.message for r in caplog.records
-    )
+    assert any("client_id" in r.message and "client_secret" in r.message for r in caplog.records)
 
 
 def test_validate_config_silent_when_credential_is_set(caplog):
@@ -119,6 +117,7 @@ def test_validate_config_does_not_warn_about_appletv_credentials():
     # mistake - this dict simply has no entry for it (see comment above
     # _REQUIRED_CREDENTIAL_FIELDS), so it's never flagged.
     from mediainfo.validation import _REQUIRED_CREDENTIAL_FIELDS
+
     assert ("sources", "appletv") not in _REQUIRED_CREDENTIAL_FIELDS
 
 
@@ -160,6 +159,7 @@ def test_validate_config_silent_when_auth_disabled_with_blank_credentials(caplog
 # ---------------------------------------------------------------------------
 # Unexpanded env var references
 # ---------------------------------------------------------------------------
+
 
 def test_validate_config_warns_on_unexpanded_env_var_in_credential(caplog):
     from mediainfo.config import TheTvDbConfig

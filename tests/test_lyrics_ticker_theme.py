@@ -19,8 +19,11 @@ def _artwork():
 
 def _music(synced_lyrics="", position=None, duration=None):
     np = NowPlaying(
-        source="kodi", media_type="music", title="Davy's on the Road Again",
-        subtitle="Manfred Mann's Earth Band", synced_lyrics=synced_lyrics,
+        source="kodi",
+        media_type="music",
+        title="Davy's on the Road Again",
+        subtitle="Manfred Mann's Earth Band",
+        synced_lyrics=synced_lyrics,
     )
     np.position_seconds = position
     np.duration_seconds = duration
@@ -34,6 +37,7 @@ def _movie():
 # ---------------------------------------------------------------------------
 # _parse_lrc
 # ---------------------------------------------------------------------------
+
 
 def test_parse_lrc_extracts_timed_cues_in_order():
     cues = _parse_lrc(_SAMPLE_LRC)
@@ -72,6 +76,7 @@ def test_parse_lrc_empty_text():
 # prepare() / health_detail()
 # ---------------------------------------------------------------------------
 
+
 def test_music_with_synced_lyrics_returns_cues():
     theme = LyricsTickerTheme()
     now_playing = _music(synced_lyrics=_SAMPLE_LRC, position=15.0, duration=200.0)
@@ -87,7 +92,9 @@ def test_music_with_synced_lyrics_returns_cues():
 
 def test_music_without_synced_lyrics_degrades():
     theme = LyricsTickerTheme()
-    result = theme.prepare(_music(synced_lyrics=""), _artwork(), None, None, None, LyricsTickerConfig())
+    result = theme.prepare(
+        _music(synced_lyrics=""), _artwork(), None, None, None, LyricsTickerConfig()
+    )
 
     assert result is None
     detail = theme.health_detail(LyricsTickerConfig())
@@ -99,7 +106,11 @@ def test_music_with_unparseable_lyrics_degrades():
     theme = LyricsTickerTheme()
     result = theme.prepare(
         _music(synced_lyrics="just plain unsynced lyrics\nno timestamps here"),
-        _artwork(), None, None, None, LyricsTickerConfig(),
+        _artwork(),
+        None,
+        None,
+        None,
+        LyricsTickerConfig(),
     )
     assert result is None
     assert theme.health_detail(LyricsTickerConfig())["degraded"] is True
@@ -131,6 +142,7 @@ def test_health_detail_none_before_any_prepare_call():
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = LyricsTickerTheme()

@@ -27,7 +27,12 @@ def test_configured_player_id_playing(mock_post):
             "time": 12.5,
             "player_name": "Kitchen",
             "playlist_loop": [
-                {"artist": "Queen", "album": "A Night at the Opera", "title": "Bohemian Rhapsody", "duration": 355}
+                {
+                    "artist": "Queen",
+                    "album": "A Night at the Opera",
+                    "title": "Bohemian Rhapsody",
+                    "duration": 355,
+                }
             ],
         }
     )
@@ -85,7 +90,12 @@ def test_artwork_from_absolute_artwork_url(mock_post):
         {
             "mode": "play",
             "playlist_loop": [
-                {"title": "T", "artist": "A", "album": "Al", "artwork_url": "https://example.com/cover.jpg"}
+                {
+                    "title": "T",
+                    "artist": "A",
+                    "album": "Al",
+                    "artwork_url": "https://example.com/cover.jpg",
+                }
             ],
         }
     )
@@ -100,7 +110,14 @@ def test_artwork_from_relative_artwork_url(mock_post):
     mock_post.return_value = _response(
         {
             "mode": "play",
-            "playlist_loop": [{"title": "T", "artist": "A", "album": "Al", "artwork_url": "/imageproxy/x/cover.jpg"}],
+            "playlist_loop": [
+                {
+                    "title": "T",
+                    "artist": "A",
+                    "album": "Al",
+                    "artwork_url": "/imageproxy/x/cover.jpg",
+                }
+            ],
         }
     )
 
@@ -111,7 +128,9 @@ def test_artwork_from_relative_artwork_url(mock_post):
 
 @patch("mediainfo.sources.jsonrpc.requests.post")
 def test_no_artwork_available(mock_post):
-    mock_post.return_value = _response({"mode": "play", "playlist_loop": [{"title": "T", "artist": "A"}]})
+    mock_post.return_value = _response(
+        {"mode": "play", "playlist_loop": [{"title": "T", "artist": "A"}]}
+    )
 
     result = _source(player_id="p1").get_now_playing()
 
@@ -132,10 +151,17 @@ def test_no_playlist_entry_returns_empty_title(mock_post):
 @patch("mediainfo.sources.jsonrpc.requests.post")
 def test_auto_select_prefers_playing_player(mock_post):
     players_response = _response(
-        {"players_loop": [{"playerid": "p1", "name": "Living Room"}, {"playerid": "p2", "name": "Kitchen"}]}
+        {
+            "players_loop": [
+                {"playerid": "p1", "name": "Living Room"},
+                {"playerid": "p2", "name": "Kitchen"},
+            ]
+        }
     )
     p1_status = _response({"mode": "pause"})
-    p2_status = _response({"mode": "play", "player_name": "Kitchen", "playlist_loop": [{"title": "Song"}]})
+    p2_status = _response(
+        {"mode": "play", "player_name": "Kitchen", "playlist_loop": [{"title": "Song"}]}
+    )
     mock_post.side_effect = [players_response, p1_status, p2_status]
 
     result = _source().get_now_playing()
@@ -164,8 +190,12 @@ def test_auto_select_no_players_returns_none(mock_post):
 
 @patch("mediainfo.sources.jsonrpc.requests.post")
 def test_player_status_query_failure_is_skipped_not_fatal(mock_post):
-    players_response = _response({"players_loop": [{"playerid": "p1", "name": "A"}, {"playerid": "p2", "name": "B"}]})
-    p2_status = _response({"mode": "play", "player_name": "B", "playlist_loop": [{"title": "Song"}]})
+    players_response = _response(
+        {"players_loop": [{"playerid": "p1", "name": "A"}, {"playerid": "p2", "name": "B"}]}
+    )
+    p2_status = _response(
+        {"mode": "play", "player_name": "B", "playlist_loop": [{"title": "Song"}]}
+    )
     mock_post.side_effect = [players_response, Exception("boom"), p2_status]
 
     source = _source()

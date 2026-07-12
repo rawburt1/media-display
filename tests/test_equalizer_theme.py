@@ -25,6 +25,7 @@ def _artwork():
 # prepare() - music-only gating, no real data needed
 # ---------------------------------------------------------------------------
 
+
 def test_music_reports_active():
     theme = EqualizerTheme()
     result = theme.prepare(_music(), _artwork(), Path("/x/abc.jpg"), None, None, EqualizerConfig())
@@ -33,27 +34,34 @@ def test_music_reports_active():
 
 def test_movie_returns_none():
     theme = EqualizerTheme()
-    result = theme.prepare(_movie(), _artwork(), Path("/x/poster.jpg"), None, None, EqualizerConfig())
+    result = theme.prepare(
+        _movie(), _artwork(), Path("/x/poster.jpg"), None, None, EqualizerConfig()
+    )
     assert result is None
 
 
 def test_episode_returns_none():
     theme = EqualizerTheme()
     now_playing = NowPlaying(source="kodi", media_type="episode", title="Breaking Bad")
-    result = theme.prepare(now_playing, _artwork(), Path("/x/poster.jpg"), None, None, EqualizerConfig())
+    result = theme.prepare(
+        now_playing, _artwork(), Path("/x/poster.jpg"), None, None, EqualizerConfig()
+    )
     assert result is None
 
 
 def test_idle_wallpaper_returns_none():
     theme = EqualizerTheme()
     now_playing = NowPlaying(source="idle", media_type="wallpaper", title="")
-    result = theme.prepare(now_playing, _artwork(), Path("/x/art.jpg"), None, None, EqualizerConfig())
+    result = theme.prepare(
+        now_playing, _artwork(), Path("/x/art.jpg"), None, None, EqualizerConfig()
+    )
     assert result is None
 
 
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = EqualizerTheme()

@@ -58,6 +58,7 @@ from typing import Callable, Optional
 
 import paho.mqtt.client as mqtt
 
+from mediainfo.app_services import AppServices
 from mediainfo.cache import ImageCache
 from mediainfo.config import MqttConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -86,9 +87,7 @@ class MqttOutput(Output):
             # Last-will: the broker marks us unavailable if this process
             # dies without a clean disconnect, so HA entities go
             # "unavailable" instead of freezing on the last state.
-            self._client.will_set(
-                self._availability_topic, "offline", qos=config.qos, retain=True
-            )
+            self._client.will_set(self._availability_topic, "offline", qos=config.qos, retain=True)
         self._health_fn: Optional[Callable[[], dict]] = None
         self._hitster_safe_get: Optional[Callable[[], bool]] = None
         self._hitster_safe_set: Optional[Callable[[bool], None]] = None
@@ -103,27 +102,37 @@ class MqttOutput(Output):
 
     # -- cross-cutting wiring (see wiring.py) ------------------------------
 
-    def set_health_provider(self, fn: Callable[[], dict]) -> None:
+    def set_health_provider(self, fn: Optional[Callable[[], dict]]) -> None:
         """Register a callable returning the health JSON dict - published
         as a "problem" binary_sensor when ha_discovery is enabled (see
         on_schedule_tick/_publish_health_state)."""
         self._health_fn = fn
 
-    def set_hitster_safe_handlers(self, get_fn: Callable[[], bool], set_fn: Callable[[bool], None]) -> None:
+    def set_hitster_safe_handlers(
+        self,
+        get_fn: Optional[Callable[[], bool]],
+        set_fn: Optional[Callable[[bool], None]],
+    ) -> None:
         """Register the orchestrator's Hitster-safe get/set, so an HA
         "switch" entity can read and toggle it (see _on_message)."""
         self._hitster_safe_get = get_fn
         self._hitster_safe_set = set_fn
 
-    def set_refresh_artwork_handler(self, fn: Callable[[], None]) -> None:
+    def set_refresh_artwork_handler(self, fn: Optional[Callable[[], None]]) -> None:
         """Register a callable (Orchestrator.request_artwork_refresh) an
         HA "button" entity triggers (see _on_message)."""
         self._refresh_artwork_fn = fn
 
-    def set_rotate_now_handler(self, fn: Callable[[], None]) -> None:
+    def set_rotate_now_handler(self, fn: Optional[Callable[[], None]]) -> None:
         """Register a callable (Orchestrator.request_rotation_now) an HA
         "button" entity triggers (see _on_message)."""
         self._rotate_now_fn = fn
+
+    def attach(self, services: AppServices) -> None:
+        self.set_health_provider(services.health_provider)
+        self.set_hitster_safe_handlers(services.get_hitster_safe, services.set_hitster_safe)
+        self.set_refresh_artwork_handler(services.request_artwork_refresh)
+        self.set_rotate_now_handler(services.request_rotation_now)
 
     @property
     def _availability_topic(self) -> str:
@@ -157,14 +166,16 @@ class MqttOutput(Output):
         pass
 
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
-        self._publish({
-            "state": "playing",
-            "source": now_playing.source,
-            "media_type": now_playing.media_type,
-            "title": now_playing.title,
-            "subtitle": now_playing.subtitle,
-            "album": now_playing.album,
-        })
+        self._publish(
+            {
+                "state": "playing",
+                "source": now_playing.source,
+                "media_type": now_playing.media_type,
+                "title": now_playing.title,
+                "subtitle": now_playing.subtitle,
+                "album": now_playing.album,
+            }
+        )
 
     def on_idle(self) -> None:
         self._publish({"state": "idle"})

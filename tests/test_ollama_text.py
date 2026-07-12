@@ -14,12 +14,24 @@ def _config(**kwargs):
 
 
 def _music(
-    artist="Queen", title="Bohemian Rhapsody", album="A Night at the Opera",
-    genres=None, year=None, lyrics="", synced_lyrics="",
+    artist="Queen",
+    title="Bohemian Rhapsody",
+    album="A Night at the Opera",
+    genres=None,
+    year=None,
+    lyrics="",
+    synced_lyrics="",
 ):
     return NowPlaying(
-        source="kodi", media_type="music", title=title, subtitle=artist, album=album,
-        genres=genres or [], year=year, lyrics=lyrics, synced_lyrics=synced_lyrics,
+        source="kodi",
+        media_type="music",
+        title=title,
+        subtitle=artist,
+        album=album,
+        genres=genres or [],
+        year=year,
+        lyrics=lyrics,
+        synced_lyrics=synced_lyrics,
     )
 
 
@@ -222,6 +234,7 @@ def test_different_songs_do_not_share_a_cache_entry(mock_post, tmp_path):
 # OllamaTextConfig validation (pydantic dataclass rollout - see
 # mediainfo/config/text_enrichers.py)
 # ---------------------------------------------------------------------------
+
 
 def test_config_unknown_field_raises_validation_error():
     import pytest

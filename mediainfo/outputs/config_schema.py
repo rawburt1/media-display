@@ -35,6 +35,7 @@ from mediainfo.config import (
     HistoryConfig,
     LibraryConfig,
     LoggingConfig,
+    MediaDataConfig,
     OverridesConfig,
     PostersConfig,
 )
@@ -44,11 +45,16 @@ _SECRET_HINTS = ("password", "token", "secret", "api_key", "key", "credentials",
 # Filter fields live on _OutputFilterMixin (inherited by every output config).
 # They are handled by a dedicated UI section instead of the auto-generated
 # scalar fields, so we exclude them from _scalar_fields() to avoid duplication.
-_FILTER_FIELD_NAMES = frozenset({
-    "allow_media_types", "deny_media_types",
-    "allow_sources", "deny_sources",
-    "idle_when_filtered", "active_hours",
-})
+_FILTER_FIELD_NAMES = frozenset(
+    {
+        "allow_media_types",
+        "deny_media_types",
+        "allow_sources",
+        "deny_sources",
+        "idle_when_filtered",
+        "active_hours",
+    }
+)
 
 _FILTER_DEFAULTS: Dict[str, Any] = {
     "allow_media_types": [],
@@ -105,6 +111,10 @@ _FLAT_SECTIONS: Dict[str, type] = {
     "alerts": AlertConfig,
     "auth": AuthConfig,
     "logging": LoggingConfig,
+    # MediaDataConfig.refresh is a nested dataclass, excluded by
+    # _scalar_fields like `transforms`/`themes` elsewhere - only `path` and
+    # `cache_first` are exposed here.
+    "mediadata": MediaDataConfig,
 }
 
 # Form display titles for _FLAT_SECTIONS, in page order - sent to the page
@@ -119,6 +129,7 @@ _FLAT_SECTION_TITLES = [
     ("alerts", "Alerts"),
     ("auth", "Authentication"),
     ("logging", "Logging"),
+    ("mediadata", "Unified Media Data Cache"),
 ]
 
 # List-typed fields simple enough (a flat list of strings) to edit as a
@@ -127,8 +138,12 @@ _FLAT_SECTION_TITLES = [
 # differently-shaped objects (see config.example.yaml), not a flat list of
 # strings, so a generic form field can't represent it usefully.
 _SIMPLE_LIST_FIELDS = {
-    "speaker_ips", "blacklist", "device_ips", "ignore_apps",
-    "transition_exclude", "brightness_schedule",
+    "speaker_ips",
+    "blacklist",
+    "device_ips",
+    "ignore_apps",
+    "transition_exclude",
+    "brightness_schedule",
 }
 
 # Fields given a small structured "start-end" time-range widget client-side
@@ -179,79 +194,257 @@ _CATEGORY_INFO: Dict[str, Dict[str, str]] = {
 
 _TYPE_INFO: Dict[str, Dict[str, Dict[str, str]]] = {
     "sources": {
-        "appletv": {"label": "Apple TV", "description": "Detects what's playing on an Apple TV via tvOS's now-playing API. Needs a one-time pairing (below)."},
-        "browser": {"label": "Browser extension", "description": "Receives now-playing info pushed by the companion browser extension (YouTube, Spotify Web, Netflix, Disney+, SVT Play, Plex Web) over a WebSocket connection."},
-        "chromecast": {"label": "Chromecast / Google Cast", "description": "Polls Cast-compatible devices (Chromecasts, Google/Android TVs, smart speakers) directly by IP address."},
-        "emby": {"label": "Emby", "description": "Reads now-playing sessions from an Emby media server."},
-        "foobar2000": {"label": "foobar2000", "description": "Reads now-playing info from foobar2000 via the Beefweb Remote Control plugin."},
-        "homeassistant": {"label": "Home Assistant", "description": "Tracks media_player entity state from Home Assistant over its WebSocket API - useful for a device HA already tracks that mediainfo can't read directly."},
-        "jellyfin": {"label": "Jellyfin", "description": "Reads now-playing sessions from a Jellyfin media server."},
-        "kodi": {"label": "Kodi", "description": "Reads now-playing info from a Kodi media center over its JSON-RPC API."},
-        "lms": {"label": "Logitech Media Server", "description": "Reads now-playing info from a Logitech Media Server (Squeezebox) via its JSON-RPC API. Set player_id if you have more than one player."},
-        "mopidy": {"label": "Mopidy", "description": "Reads now-playing info from a Mopidy music server over its JSON-RPC API - works regardless of which Mopidy backend (Spotify, local files, ...) is actually playing."},
-        "mpd": {"label": "MPD (Music Player Daemon)", "description": "Reads now-playing info from an MPD server, and its embedded/folder cover art when available."},
-        "plex": {"label": "Plex", "description": "Reads now-playing sessions from a Plex Media Server."},
-        "shield": {"label": "Nvidia Shield (Android TV)", "description": "Reads the foreground app on an Android TV device (e.g. Nvidia Shield) over ADB."},
-        "sonos": {"label": "Sonos", "description": "Reads what's playing on Sonos speakers on your network."},
-        "spotify": {"label": "Spotify", "description": "Reads your current Spotify playback via the Spotify Web API."},
-        "vinyl": {"label": "Vinyl recognition", "description": "Identifies vinyl records played through a connected turntable, via the vinyl_recognizer service."},
-        "vlc": {"label": "VLC", "description": "Reads now-playing info from VLC media player via its built-in web/HTTP interface."},
-        "youtube": {"label": "YouTube (Android TV)", "description": "Reads the YouTube app's now-playing state on an Android TV device over ADB."},
+        "appletv": {
+            "label": "Apple TV",
+            "description": "Detects what's playing on an Apple TV via tvOS's now-playing API. Needs a one-time pairing (below).",
+        },
+        "browser": {
+            "label": "Browser extension",
+            "description": "Receives now-playing info pushed by the companion browser extension (YouTube, Spotify Web, Netflix, Disney+, SVT Play, Plex Web) over a WebSocket connection.",
+        },
+        "chromecast": {
+            "label": "Chromecast / Google Cast",
+            "description": "Polls Cast-compatible devices (Chromecasts, Google/Android TVs, smart speakers) directly by IP address.",
+        },
+        "emby": {
+            "label": "Emby",
+            "description": "Reads now-playing sessions from an Emby media server.",
+        },
+        "foobar2000": {
+            "label": "foobar2000",
+            "description": "Reads now-playing info from foobar2000 via the Beefweb Remote Control plugin.",
+        },
+        "homeassistant": {
+            "label": "Home Assistant",
+            "description": "Tracks media_player entity state from Home Assistant over its WebSocket API - useful for a device HA already tracks that mediainfo can't read directly.",
+        },
+        "jellyfin": {
+            "label": "Jellyfin",
+            "description": "Reads now-playing sessions from a Jellyfin media server.",
+        },
+        "kodi": {
+            "label": "Kodi",
+            "description": "Reads now-playing info from a Kodi media center over its JSON-RPC API.",
+        },
+        "lms": {
+            "label": "Logitech Media Server",
+            "description": "Reads now-playing info from a Logitech Media Server (Squeezebox) via its JSON-RPC API. Set player_id if you have more than one player.",
+        },
+        "mopidy": {
+            "label": "Mopidy",
+            "description": "Reads now-playing info from a Mopidy music server over its JSON-RPC API - works regardless of which Mopidy backend (Spotify, local files, ...) is actually playing.",
+        },
+        "mpd": {
+            "label": "MPD (Music Player Daemon)",
+            "description": "Reads now-playing info from an MPD server, and its embedded/folder cover art when available.",
+        },
+        "plex": {
+            "label": "Plex",
+            "description": "Reads now-playing sessions from a Plex Media Server.",
+        },
+        "shield": {
+            "label": "Nvidia Shield (Android TV)",
+            "description": "Reads the foreground app on an Android TV device (e.g. Nvidia Shield) over ADB.",
+        },
+        "sonos": {
+            "label": "Sonos",
+            "description": "Reads what's playing on Sonos speakers on your network.",
+        },
+        "spotify": {
+            "label": "Spotify",
+            "description": "Reads your current Spotify playback via the Spotify Web API.",
+        },
+        "vinyl": {
+            "label": "Vinyl recognition",
+            "description": "Identifies vinyl records played through a connected turntable, via the vinyl_recognizer service.",
+        },
+        "vlc": {
+            "label": "VLC",
+            "description": "Reads now-playing info from VLC media player via its built-in web/HTTP interface.",
+        },
+        "youtube": {
+            "label": "YouTube (Android TV)",
+            "description": "Reads the YouTube app's now-playing state on an Android TV device over ADB.",
+        },
     },
     "outputs": {
-        "config": {"label": "Configuration UI", "description": "This web page - lets you edit configuration and check status from a browser."},
-        "feed": {"label": "RSS/Atom feed", "description": "Publishes now-playing info as an RSS/Atom feed for podcast/feed readers."},
-        "folder": {"label": "Folder export", "description": "Mirrors the current artwork/poster into a local folder, for other tools to pick up."},
-        "info": {"label": "Info page", "description": "A simple full-screen now-playing info page in a browser."},
-        "mqtt": {"label": "MQTT", "description": "Publishes now-playing events to an MQTT broker - handy for a Home Assistant integration."},
-        "nest_hub": {"label": "Google Nest Hub", "description": "Casts the current artwork to a Google Nest Hub or other Cast-compatible display."},
-        "pixoo": {"label": "Divoom Pixoo", "description": "Sends the current artwork to a Divoom Pixoo LED matrix display."},
-        "themes": {"label": "Display Themes", "description": "A separate full-screen display (its own port) that layers selectable visual effects - color palette, blurred background, glow, and more - on top of the current artwork. Pick which themes to enable below."},
-        "ulanzi": {"label": "Ulanzi TC001 / AWTRIX3", "description": "Sends now-playing text and graphics to a Ulanzi TC001 or other AWTRIX3 device."},
-        "video": {"label": "Video display", "description": "Shows looping idle background video (Pexels/Pixabay) plus now-playing artwork in a browser."},
-        "web": {"label": "Web display", "description": "A full-screen now-playing display in any browser, with image transitions."},
+        "config": {
+            "label": "Configuration UI",
+            "description": "This web page - lets you edit configuration and check status from a browser.",
+        },
+        "feed": {
+            "label": "RSS/Atom feed",
+            "description": "Publishes now-playing info as an RSS/Atom feed for podcast/feed readers.",
+        },
+        "folder": {
+            "label": "Folder export",
+            "description": "Mirrors the current artwork/poster into a local folder, for other tools to pick up.",
+        },
+        "info": {
+            "label": "Info page",
+            "description": "A simple full-screen now-playing info page in a browser.",
+        },
+        "mqtt": {
+            "label": "MQTT",
+            "description": "Publishes now-playing events to an MQTT broker - handy for a Home Assistant integration.",
+        },
+        "nest_hub": {
+            "label": "Google Nest Hub",
+            "description": "Casts the current artwork to a Google Nest Hub or other Cast-compatible display.",
+        },
+        "pixoo": {
+            "label": "Divoom Pixoo",
+            "description": "Sends the current artwork to a Divoom Pixoo LED matrix display.",
+        },
+        "themes": {
+            "label": "Display Themes",
+            "description": "A separate full-screen display (its own port) that layers selectable visual effects - color palette, blurred background, glow, and more - on top of the current artwork. Pick which themes to enable below.",
+        },
+        "ulanzi": {
+            "label": "Ulanzi TC001 / AWTRIX3",
+            "description": "Sends now-playing text and graphics to a Ulanzi TC001 or other AWTRIX3 device.",
+        },
+        "video": {
+            "label": "Video display",
+            "description": "Shows looping idle background video (Pexels/Pixabay) plus now-playing artwork in a browser.",
+        },
+        "web": {
+            "label": "Web display",
+            "description": "A full-screen now-playing display in any browser, with image transitions.",
+        },
     },
     # Individual Display Theme plugins (see mediainfo/themes/), each
     # nested inside a "themes" output instance's own `themes:` config -
     # not a top-level category like the four above (no _SINGLE_INSTANCE_
     # CATEGORIES/OUTPUT_CONFIG_TYPES entry of its own).
     "themes": {
-        "artist_spotlight": {"label": "Artist Spotlight", "description": "A portrait card with the current artist's photo and a short bio blurb."},
-        "blurred_background": {"label": "Blurred Background", "description": "Fills the screen behind the artwork with a heavily blurred, darkened copy of it."},
-        "cast_mosaic": {"label": "Cast/Crew Mosaic", "description": "A grid of top-billed cast headshots for the current movie/TV item. Needs enrichers.tmdb.fetch_cast enabled."},
-        "color_palette": {"label": "Color Palette", "description": "Shows the current artwork's dominant colors as a strip of swatches."},
-        "equalizer": {"label": "Equalizer", "description": "A decorative bar/wave animation suggesting audio activity. Music only - not a real audio visualizer, since no source exposes an actual audio signal."},
-        "glow": {"label": "Glow", "description": "A soft, slowly pulsing ambient glow behind the artwork, colored from it."},
-        "ken_burns": {"label": "Ken Burns", "description": "A slow, continuous pan/zoom on the artwork - the classic documentary-style effect."},
-        "lyrics_ticker": {"label": "Lyrics Ticker", "description": "A karaoke-style ticker highlighting the current line of time-synced lyrics. Music only - needs synced lyrics available (e.g. via text_enrichers.lrclib)."},
-        "media_mosaic": {"label": "Media Mosaic", "description": "A grid of related artwork (other albums, other posters/fanart) alongside the current pick."},
-        "progress_bar": {"label": "Now Playing Progress", "description": "A real-data full-width playback progress border along one screen edge. Works for music, movies, and TV whenever position/duration are known."},
-        "timeline": {"label": "Timeline", "description": "A list of the artist's other albums alongside the current one. Music only - needs Lidarr configured, or just shows the current album."},
-        "vinyl": {"label": "Vinyl", "description": "Shows the album art as a spinning vinyl record. Music only."},
-        "word_cloud": {"label": "Word Cloud", "description": "Shows a word cloud built from the lyrics (music) or plot summary (movies/TV), colored from the artwork."},
+        "artist_spotlight": {
+            "label": "Artist Spotlight",
+            "description": "A portrait card with the current artist's photo and a short bio blurb.",
+        },
+        "blurred_background": {
+            "label": "Blurred Background",
+            "description": "Fills the screen behind the artwork with a heavily blurred, darkened copy of it.",
+        },
+        "cast_mosaic": {
+            "label": "Cast/Crew Mosaic",
+            "description": "A grid of top-billed cast headshots for the current movie/TV item. Needs enrichers.tmdb.fetch_cast enabled.",
+        },
+        "color_palette": {
+            "label": "Color Palette",
+            "description": "Shows the current artwork's dominant colors as a strip of swatches.",
+        },
+        "equalizer": {
+            "label": "Equalizer",
+            "description": "A decorative bar/wave animation suggesting audio activity. Music only - not a real audio visualizer, since no source exposes an actual audio signal.",
+        },
+        "glow": {
+            "label": "Glow",
+            "description": "A soft, slowly pulsing ambient glow behind the artwork, colored from it.",
+        },
+        "ken_burns": {
+            "label": "Ken Burns",
+            "description": "A slow, continuous pan/zoom on the artwork - the classic documentary-style effect.",
+        },
+        "lyrics_ticker": {
+            "label": "Lyrics Ticker",
+            "description": "A karaoke-style ticker highlighting the current line of time-synced lyrics. Music only - needs synced lyrics available (e.g. via text_enrichers.lrclib).",
+        },
+        "media_mosaic": {
+            "label": "Media Mosaic",
+            "description": "A grid of related artwork (other albums, other posters/fanart) alongside the current pick.",
+        },
+        "progress_bar": {
+            "label": "Now Playing Progress",
+            "description": "A real-data full-width playback progress border along one screen edge. Works for music, movies, and TV whenever position/duration are known.",
+        },
+        "timeline": {
+            "label": "Timeline",
+            "description": "A list of the artist's other albums alongside the current one. Music only - needs Lidarr configured, or just shows the current album.",
+        },
+        "vinyl": {
+            "label": "Vinyl",
+            "description": "Shows the album art as a spinning vinyl record. Music only.",
+        },
+        "word_cloud": {
+            "label": "Word Cloud",
+            "description": "Shows a word cloud built from the lyrics (music) or plot summary (movies/TV), colored from the artwork.",
+        },
     },
     "enrichers": {
         "discogs": {"label": "Discogs", "description": "Looks up album cover art on Discogs."},
-        "fanarttv": {"label": "Fanart.tv", "description": "Fetches high-quality movie/TV backdrops and posters."},
-        "fingerprint": {"label": "Audio fingerprinting", "description": "Identifies vinyl audio via the vinyl_recognizer service's fingerprint matching."},
+        "fanarttv": {
+            "label": "Fanart.tv",
+            "description": "Fetches high-quality movie/TV backdrops and posters.",
+        },
+        "fingerprint": {
+            "label": "Audio fingerprinting",
+            "description": "Identifies vinyl audio via the vinyl_recognizer service's fingerprint matching.",
+        },
         "lastfm": {"label": "Last.fm", "description": "Fetches artist photos from Last.fm."},
-        "library": {"label": "Local music library", "description": "Looks up cached metadata from mediainfo's own local music library, avoiding repeat external lookups."},
-        "lidarr": {"label": "Lidarr", "description": "Adds a discography list from your Lidarr library."},
-        "musicbrainz": {"label": "MusicBrainz", "description": "Looks up album cover art via the free Cover Art Archive - no API key needed."},
+        "library": {
+            "label": "Local music library",
+            "description": "Looks up cached metadata from mediainfo's own local music library, avoiding repeat external lookups.",
+        },
+        "lidarr": {
+            "label": "Lidarr",
+            "description": "Adds a discography list from your Lidarr library.",
+        },
+        "musicbrainz": {
+            "label": "MusicBrainz",
+            "description": "Looks up album cover art via the free Cover Art Archive - no API key needed.",
+        },
         "omdb": {"label": "OMDb", "description": "Adds movie/show ratings from OMDb."},
-        "radarr": {"label": "Radarr", "description": "Confirms movie details against your Radarr library."},
-        "sonarr": {"label": "Sonarr", "description": "Confirms TV show/episode details against your Sonarr library."},
-        "svt": {"label": "SVT Play", "description": "Resolves Swedish SVT Play titles, so other enrichers can find matching artwork."},
-        "thetvdb": {"label": "TheTVDB", "description": "Fetches TV show/episode artwork and details."},
-        "tmdb": {"label": "TMDB", "description": "Fetches movie/TV artwork and ratings from The Movie Database."},
-        "wikipedia": {"label": "Wikipedia", "description": "Adds a short plot or artist summary from Wikipedia - no API key needed."},
+        "radarr": {
+            "label": "Radarr",
+            "description": "Confirms movie details against your Radarr library.",
+        },
+        "sonarr": {
+            "label": "Sonarr",
+            "description": "Confirms TV show/episode details against your Sonarr library.",
+        },
+        "svt": {
+            "label": "SVT Play",
+            "description": "Resolves Swedish SVT Play titles, so other enrichers can find matching artwork.",
+        },
+        "thetvdb": {
+            "label": "TheTVDB",
+            "description": "Fetches TV show/episode artwork and details.",
+        },
+        "tmdb": {
+            "label": "TMDB",
+            "description": "Fetches movie/TV artwork and ratings from The Movie Database.",
+        },
+        "wikipedia": {
+            "label": "Wikipedia",
+            "description": "Adds a short plot or artist summary from Wikipedia - no API key needed.",
+        },
     },
     "idle": {
-        "lastfm": {"label": "Last.fm scrobble history", "description": "Shows album art from your recent Last.fm listening history while idle."},
-        "library": {"label": "Local music library", "description": "Shows album art for random albums from your local music library while idle."},
-        "local": {"label": "Local folder", "description": "Shows pictures from a local folder (e.g. your own photos) while idle."},
-        "pexels": {"label": "Pexels photos", "description": "Shows photos from Pexels matching your search queries while idle."},
-        "unsplash": {"label": "Unsplash photos", "description": "Shows photos from Unsplash matching your search queries while idle."},
+        "arts": {
+            "label": "Art pictures",
+            "description": "Shows public-domain artworks from the Art Institute of Chicago's open collection while idle - no API key needed.",
+        },
+        "lastfm": {
+            "label": "Last.fm scrobble history",
+            "description": "Shows album art from your recent Last.fm listening history while idle.",
+        },
+        "library": {
+            "label": "Local music library",
+            "description": "Shows album art for random albums from your local music library while idle.",
+        },
+        "local": {
+            "label": "Local folder",
+            "description": "Shows pictures from a local folder (e.g. your own photos) while idle.",
+        },
+        "pexels": {
+            "label": "Pexels photos",
+            "description": "Shows photos from Pexels matching your search queries while idle.",
+        },
+        "unsplash": {
+            "label": "Unsplash photos",
+            "description": "Shows photos from Unsplash matching your search queries while idle.",
+        },
     },
 }
 
@@ -270,16 +463,38 @@ _ENRICHER_GROUPS: Dict[str, List[str]] = {
 # "Advanced" toggle by default. A generic name-based allowlist rather than a
 # per-type list - it covers the common "identity" fields for every plugin
 # without needing to hand-curate 40+ types individually.
-_ESSENTIAL_FIELD_NAMES = frozenset({
-    "enabled", "host", "ip", "device_ip", "device_ips", "server_host", "port",
-    "server_port", "api_key", "token", "client_id", "client_secret", "username",
-    "password", "dir", "speaker_ips", "topic", "entity_id", "queries",
-    "size", "adb_key_path", "webhook_url",
-    # The Automation & schedules page's core timing knobs - kept visible
-    # up front there rather than collapsed, since they're the whole point
-    # of that page (backoff_* stays advanced - rarely tuned).
-    "poll_interval_seconds", "rotation_interval_seconds", "nothing_playing_grace_seconds",
-})
+_ESSENTIAL_FIELD_NAMES = frozenset(
+    {
+        "enabled",
+        "host",
+        "ip",
+        "device_ip",
+        "device_ips",
+        "server_host",
+        "port",
+        "server_port",
+        "api_key",
+        "token",
+        "client_id",
+        "client_secret",
+        "username",
+        "password",
+        "dir",
+        "speaker_ips",
+        "topic",
+        "entity_id",
+        "queries",
+        "size",
+        "adb_key_path",
+        "webhook_url",
+        # The Automation & schedules page's core timing knobs - kept visible
+        # up front there rather than collapsed, since they're the whole point
+        # of that page (backoff_* stays advanced - rarely tuned).
+        "poll_interval_seconds",
+        "rotation_interval_seconds",
+        "nothing_playing_grace_seconds",
+    }
+)
 
 # Fields that must be non-empty for the plugin to actually work, beyond just
 # being enabled - drives the Overview page's "missing required settings"
@@ -352,7 +567,7 @@ _FIELD_HELP: Dict[str, str] = {
     "device_ip": "The device's IP address on your network.",
     "device_ips": "One IP address per line.",
     "speaker_ips": "One IP address per line - any single speaker can reveal your whole Sonos household.",
-    "queries": "Comma-separated search terms, e.g. \"nature,ocean,mountains\".",
+    "queries": 'Comma-separated search terms, e.g. "nature,ocean,mountains".',
     "topic": "The MQTT topic to publish now-playing events to.",
     "dir": "A folder path on this machine (inside the container, if running under Docker).",
 }
@@ -362,14 +577,14 @@ _FIELD_HELP: Dict[str, str] = {
 _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "sources.spotify.redirect_uri": "Must exactly match the redirect URI registered in your Spotify developer dashboard app.",
     "sources.homeassistant.entity_id": "The media_player entity to track, e.g. media_player.apple_tv_4k - find it under Settings → Devices & Services → Entities in Home Assistant. Leave blank to track every media_player entity and report whichever one is playing.",
-    "sources.chromecast.ignore_apps": "Cast app names to ignore (e.g. screensaver apps). Also list any Nest Hub used as an output here, to avoid it detecting its own cast image as \"now playing\".",
+    "sources.chromecast.ignore_apps": 'Cast app names to ignore (e.g. screensaver apps). Also list any Nest Hub used as an output here, to avoid it detecting its own cast image as "now playing".',
     "sources.shield.adb_key_path": "Generated automatically on first run if missing - accept the authorization prompt on the device's screen.",
     "sources.youtube.adb_key_path": "Generated automatically on first run if missing. Use a different key file than sources.shield if pointed at the same device.",
     "outputs.pixoo.size": "64 for the Pixoo64 (most common), 16 for the 16×16 Pixel Art LED Frame.",
     "outputs.pixoo.screen_off_hours": "Turn the panel off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
-    "outputs.pixoo.crop_strategy": "How to pick the square crop before downscaling. \"automatic\" biases toward the top third for portrait sources (posters/covers) and centers otherwise.",
+    "outputs.pixoo.crop_strategy": 'How to pick the square crop before downscaling. "automatic" biases toward the top third for portrait sources (posters/covers) and centers otherwise.',
     "outputs.pixoo.palette_size": "Number of colours in the final image's palette. Lower (8-16) gives bolder pixel-art blocks; higher (24-32) allows subtler gradients.",
-    "outputs.pixoo.dithering": "\"none\" gives bold, clean colour blocks (recommended for small displays). \"ordered\" is subtler; \"floyd_steinberg\" is heavier and can look noisy at 16×16.",
+    "outputs.pixoo.dithering": '"none" gives bold, clean colour blocks (recommended for small displays). "ordered" is subtler; "floyd_steinberg" is heavier and can look noisy at 16×16.',
     "outputs.pixoo.contrast_boost": "Contrast applied before downscaling, so colours stay punchy at low resolution.",
     "outputs.pixoo.saturation_boost": "Saturation applied before downscaling.",
     "outputs.pixoo.dark_image_boost": "Lift brightness on naturally dark artwork so it isn't mostly black on the LEDs.",
@@ -378,7 +593,7 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "outputs.pixoo.text_detection_model_path": "Path to a frozen_east_text_detection.pb file (OpenCV's EAST text detector) - not bundled, you'll need to provide your own.",
     "outputs.pixoo.remove_small_text": "Remove small, non-essential detected text (credits, subtitles, track listings).",
     "outputs.pixoo.preserve_large_logos": "Keep large titles/logos that remain legible at the final LED size instead of removing them.",
-    "outputs.pixoo.text_removal_method": "\"inpaint\" gives the best reconstruction; \"soft_fill\" needs no extra dependency; \"crop_preference\" nudges the crop to avoid text instead of editing pixels.",
+    "outputs.pixoo.text_removal_method": '"inpaint" gives the best reconstruction; "soft_fill" needs no extra dependency; "crop_preference" nudges the crop to avoid text instead of editing pixels.',
     "outputs.pixoo.max_logo_area_percent": "A detected text region larger than this is treated as too big to be a normal logo and left alone.",
     "outputs.ulanzi.screen_off_hours": "Turn the display off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
     "outputs.mqtt.ha_discovery": "Automatically add a mediainfo device with now-playing sensors to Home Assistant.",
@@ -392,8 +607,8 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "themes.word_cloud.corner": "Where the word cloud appears on screen.",
     "themes.word_cloud.size_vw": "Width as a percentage of screen width (it's square, so this sets its height too, capped to screen height).",
     "themes.glow.intensity": "How visible the glow is at its peak, from 0 (invisible) to 1 (fully visible).",
-    "themes.glow.color_source": "\"album_art\" colors the glow from the artwork's own dominant color; \"fixed\" always uses fixed_color below.",
-    "themes.glow.fixed_color": "A CSS color (e.g. #ff8800) used when color_source is \"fixed\".",
+    "themes.glow.color_source": '"album_art" colors the glow from the artwork\'s own dominant color; "fixed" always uses fixed_color below.',
+    "themes.glow.fixed_color": 'A CSS color (e.g. #ff8800) used when color_source is "fixed".',
     "themes.glow.pulse": "Slowly grow and shrink the glow on a loop, instead of staying a fixed size.",
     "themes.ken_burns.duration_seconds": "Seconds for one full pan/zoom cycle - lower is more noticeable motion.",
     "themes.ken_burns.opacity": "How visible the animated layer is, from 0 (invisible) to 1 (fully visible).",
@@ -416,11 +631,11 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "themes.cast_mosaic.max_cast": "Cap on how many cast members to show - further capped by enrichers.tmdb.cast_size.",
     "themes.timeline.corner": "Where the album list appears on screen.",
     "themes.timeline.max_albums": "Cap on how many albums to list. Needs enrichers.lidarr configured with the playing artist in your Lidarr library - otherwise this just shows the current album.",
-    "themes.equalizer.style": "\"bars\" shows a row of animated bars; \"wave\" shows a scrolling waveform ribbon. Purely decorative - not driven by real audio.",
+    "themes.equalizer.style": '"bars" shows a row of animated bars; "wave" shows a scrolling waveform ribbon. Purely decorative - not driven by real audio.',
     "themes.equalizer.position": "Which screen edge the strip runs along - all four corners are already used by other themes' defaults.",
-    "themes.equalizer.bar_count": "Number of bars, style=\"bars\" only.",
+    "themes.equalizer.bar_count": 'Number of bars, style="bars" only.',
     "themes.equalizer.opacity": "How visible the effect is, from 0 (invisible) to 1 (fully visible).",
-    "enrichers.thetvdb.pin": "Only needed for \"user-supported\" TheTVDB API keys.",
+    "enrichers.thetvdb.pin": 'Only needed for "user-supported" TheTVDB API keys.',
     "enrichers.lidarr.max_discography_items": "Cap on how many tracks to list for a prolific artist.",
     "enrichers.tmdb.fetch_cast": "Fetch top-billed cast (name, character, headshot) for the Cast/Crew Mosaic Display Theme. Off by default - one extra TMDb API call per new movie/TV item.",
     "enrichers.tmdb.cast_size": "Cap on how many top-billed cast members to store.",
@@ -431,9 +646,20 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
 # Small set of abbreviations that shouldn't be capitalized like a normal
 # word when turning a field name into a friendly label.
 _ACRONYMS = {
-    "ip": "IP", "ips": "IPs", "id": "ID", "url": "URL", "mqtt": "MQTT",
-    "qos": "QoS", "ha": "HA", "tv": "TV", "adb": "ADB",
-    "rss": "RSS", "ssl": "SSL", "db": "DB", "mbid": "MBID", "api": "API",
+    "ip": "IP",
+    "ips": "IPs",
+    "id": "ID",
+    "url": "URL",
+    "mqtt": "MQTT",
+    "qos": "QoS",
+    "ha": "HA",
+    "tv": "TV",
+    "adb": "ADB",
+    "rss": "RSS",
+    "ssl": "SSL",
+    "db": "DB",
+    "mbid": "MBID",
+    "api": "API",
 }
 
 
@@ -507,17 +733,19 @@ def _scalar_fields(
         if f.name in _FILTER_FIELD_NAMES or f.name == _LABEL_FIELD_NAME:
             continue
         if f.type == "list" and f.name in _SIMPLE_LIST_FIELDS:
-            fields.append({
-                "name": f.name,
-                "type": "list",
-                "default": [],
-                "secret": False,
-                "label": _humanize(f.name),
-                "help": _field_help(category, type_name, f.name),
-                "essential": f.name in _ESSENTIAL_FIELD_NAMES,
-                "required": False,
-                "widget": _field_widget(f.name),
-            })
+            fields.append(
+                {
+                    "name": f.name,
+                    "type": "list",
+                    "default": [],
+                    "secret": False,
+                    "label": _humanize(f.name),
+                    "help": _field_help(category, type_name, f.name),
+                    "essential": f.name in _ESSENTIAL_FIELD_NAMES,
+                    "required": False,
+                    "widget": _field_widget(f.name),
+                }
+            )
             continue
         if f.type not in ("bool", "int", "float", "str"):
             continue
@@ -572,20 +800,24 @@ def _build_schema() -> Dict[str, Any]:
     for section, cls in _FLAT_SECTIONS.items():
         schema[section] = _scalar_fields(cls, "flat", section)
     for category, registry in _SINGLE_INSTANCE_CATEGORIES.items():
-        schema[category] = {name: _scalar_fields(cls, category, name) for name, cls in registry.items()}
-    schema["outputs"] = {name: _scalar_fields(cls, "outputs", name) for name, cls in OUTPUT_CONFIG_TYPES.items()}
+        schema[category] = {
+            name: _scalar_fields(cls, category, name) for name, cls in registry.items()
+        }
+    schema["outputs"] = {
+        name: _scalar_fields(cls, "outputs", name) for name, cls in OUTPUT_CONFIG_TYPES.items()
+    }
     # Individual theme plugins (see _TYPE_INFO's "themes" category above) -
     # a themes output instance's own picker UI iterates this, not
     # schema["outputs"] (which only describes the "themes" output type
     # itself: host/port/enabled/etc.).
-    schema["themes"] = {name: _scalar_fields(cls, "themes", name) for name, cls in THEMES_CONFIG_TYPES.items()}
+    schema["themes"] = {
+        name: _scalar_fields(cls, "themes", name) for name, cls in THEMES_CONFIG_TYPES.items()
+    }
     schema["filter_meta"] = {
         "media_types": _KNOWN_MEDIA_TYPES,
         "known_sources": sorted(SOURCE_CONFIG_TYPES.keys()),
     }
-    schema["flat_sections"] = [
-        {"key": key, "title": title} for key, title in _FLAT_SECTION_TITLES
-    ]
+    schema["flat_sections"] = [{"key": key, "title": title} for key, title in _FLAT_SECTION_TITLES]
     schema["type_info"] = _TYPE_INFO
     schema["category_info"] = _CATEGORY_INFO
     schema["enricher_groups"] = _ENRICHER_GROUPS

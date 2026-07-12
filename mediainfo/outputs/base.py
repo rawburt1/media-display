@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
+from mediainfo.app_services import AppServices
 from mediainfo.cache import ImageCache
 from mediainfo.models import Artwork, NowPlaying
 
@@ -93,6 +94,18 @@ class Output(ABC):
     def stop(self) -> None:
         """Called once during graceful shutdown, before on_idle() (see
         __main__._shutdown_outputs()). Default: do nothing.
+        """
+
+    def attach(self, services: AppServices) -> None:
+        """Called once, after the orchestrator (and therefore every
+        AppServices field) exists - see wiring.attach_services(). Pull
+        whatever fields this output cares about (health_provider, history,
+        mediadata_store, overrides, get_hitster_safe/set_hitster_safe,
+        request_artwork_refresh/request_rotation_now) and ignore the rest.
+        Called again, with a fresh AppServices, on every config hot-reload -
+        implementations should simply overwrite their own state each time,
+        the same as a plain setter would. Default: do nothing, for outputs
+        that need none of this.
         """
 
     def reload(self, config: Any) -> None:

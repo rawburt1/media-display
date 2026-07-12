@@ -24,12 +24,18 @@ def _artwork():
 # prepare()
 # ---------------------------------------------------------------------------
 
+
 def test_album_art_source_extracts_dominant_color(tmp_path):
     img_path = _solid_image(tmp_path / "art.png", (200, 50, 50))
     theme = GlowTheme()
 
     result = theme.prepare(
-        _now_playing(), _artwork(), img_path, None, None, GlowConfig(color_source="album_art"),
+        _now_playing(),
+        _artwork(),
+        img_path,
+        None,
+        None,
+        GlowConfig(color_source="album_art"),
     )
 
     assert result.extra_payload["color"] == "#c83232"
@@ -38,7 +44,11 @@ def test_album_art_source_extracts_dominant_color(tmp_path):
 def test_fixed_source_uses_fixed_color_without_reading_image(tmp_path):
     theme = GlowTheme()
     result = theme.prepare(
-        _now_playing(), _artwork(), tmp_path / "missing.jpg", None, None,
+        _now_playing(),
+        _artwork(),
+        tmp_path / "missing.jpg",
+        None,
+        None,
         GlowConfig(color_source="fixed", fixed_color="#112233"),
     )
     assert result.extra_payload["color"] == "#112233"
@@ -47,7 +57,11 @@ def test_fixed_source_uses_fixed_color_without_reading_image(tmp_path):
 def test_album_art_source_returns_none_for_unreadable_image(tmp_path):
     theme = GlowTheme()
     result = theme.prepare(
-        _now_playing(), _artwork(), tmp_path / "missing.jpg", None, None,
+        _now_playing(),
+        _artwork(),
+        tmp_path / "missing.jpg",
+        None,
+        None,
         GlowConfig(color_source="album_art"),
     )
     assert result is None
@@ -56,6 +70,7 @@ def test_album_art_source_returns_none_for_unreadable_image(tmp_path):
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = GlowTheme()

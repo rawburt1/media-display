@@ -304,7 +304,12 @@ class MediaDataStore:
                 result = fetch_fn()
                 now = self._now_iso()
                 if entry is None:
-                    entry = {"path": filename, "source": "", "last_checked": now, "last_updated": now}
+                    entry = {
+                        "path": filename,
+                        "source": "",
+                        "last_checked": now,
+                        "last_updated": now,
+                    }
                 entry["last_checked"] = now
                 if result is not None:
                     content, source = result
@@ -386,7 +391,13 @@ class MediaDataStore:
             metadata.setdefault("artwork", {})[metadata_key] = entry
 
         return self._resolve_content(
-            item_dir, filename, get_entry, set_entry, max_age_days, fetch_fn, force,
+            item_dir,
+            filename,
+            get_entry,
+            set_entry,
+            max_age_days,
+            fetch_fn,
+            force,
         )
 
     def _resolve_track_lyrics(
@@ -409,7 +420,13 @@ class MediaDataStore:
             metadata.setdefault("tracks", {}).setdefault(title, {})["lyrics"] = entry
 
         return self._resolve_content(
-            item_dir, filename, get_entry, set_entry, None, fetch_fn, force,
+            item_dir,
+            filename,
+            get_entry,
+            set_entry,
+            None,
+            fetch_fn,
+            force,
         )
 
     def _resolve_track_wordcloud(
@@ -433,7 +450,13 @@ class MediaDataStore:
             metadata.setdefault("tracks", {}).setdefault(title, {})["wordcloud"] = entry
 
         return self._resolve_content(
-            item_dir, filename, get_entry, set_entry, None, fetch_fn, force,
+            item_dir,
+            filename,
+            get_entry,
+            set_entry,
+            None,
+            fetch_fn,
+            force,
         )
 
     def _was_updated_by(self, item_dir: Path, metadata_key: str, action: Callable[[], Any]) -> bool:
@@ -472,14 +495,20 @@ class MediaDataStore:
     def get_movie_poster(self, title: str, year: Optional[int]) -> Optional[Path]:
         item_dir = self.movie_dir(title, year)
         return self._resolve_artwork(
-            item_dir, "poster.jpg", "poster", self.config.refresh.movies_days,
+            item_dir,
+            "poster.jpg",
+            "poster",
+            self.config.refresh.movies_days,
             lambda: self._fetch_movie_artwork(title, year, "poster"),
         )
 
     def get_movie_fanart(self, title: str, year: Optional[int]) -> Optional[Path]:
         item_dir = self.movie_dir(title, year)
         return self._resolve_artwork(
-            item_dir, "fanart.jpg", "fanart", self.config.refresh.movies_days,
+            item_dir,
+            "fanart.jpg",
+            "fanart",
+            self.config.refresh.movies_days,
             lambda: self._fetch_movie_artwork(title, year, "fanart"),
         )
 
@@ -492,9 +521,13 @@ class MediaDataStore:
         updated = False
         for filename, key in (("poster.jpg", "poster"), ("fanart.jpg", "fanart")):
             changed = self._was_updated_by(
-                item_dir, key,
+                item_dir,
+                key,
                 lambda: self._resolve_artwork(
-                    item_dir, filename, key, self.config.refresh.movies_days,
+                    item_dir,
+                    filename,
+                    key,
+                    self.config.refresh.movies_days,
                     lambda: self._fetch_movie_artwork(title, year, key),
                     force=True,
                 ),
@@ -557,14 +590,20 @@ class MediaDataStore:
     def get_series_poster(self, title: str, year: Optional[int]) -> Optional[Path]:
         item_dir = self.series_dir(title, year)
         return self._resolve_artwork(
-            item_dir, "poster.jpg", "poster", self.config.refresh.series_days,
+            item_dir,
+            "poster.jpg",
+            "poster",
+            self.config.refresh.series_days,
             lambda: self._fetch_series_artwork(title, year, "poster"),
         )
 
     def get_series_fanart(self, title: str, year: Optional[int]) -> Optional[Path]:
         item_dir = self.series_dir(title, year)
         return self._resolve_artwork(
-            item_dir, "fanart.jpg", "fanart", self.config.refresh.series_days,
+            item_dir,
+            "fanart.jpg",
+            "fanart",
+            self.config.refresh.series_days,
             lambda: self._fetch_series_artwork(title, year, "fanart"),
         )
 
@@ -575,9 +614,13 @@ class MediaDataStore:
         updated = False
         for filename, key in (("poster.jpg", "poster"), ("fanart.jpg", "fanart")):
             changed = self._was_updated_by(
-                item_dir, key,
+                item_dir,
+                key,
                 lambda: self._resolve_artwork(
-                    item_dir, filename, key, self.config.refresh.series_days,
+                    item_dir,
+                    filename,
+                    key,
+                    self.config.refresh.series_days,
                     lambda: self._fetch_series_artwork(title, year, key),
                     force=True,
                 ),
@@ -620,14 +663,20 @@ class MediaDataStore:
     def get_album_art(self, artist: str, album: str, year: Optional[int]) -> Optional[Path]:
         item_dir = self.album_dir(artist, album, year)
         return self._resolve_artwork(
-            item_dir, "albumart.jpg", "albumart", self.config.refresh.music_days,
+            item_dir,
+            "albumart.jpg",
+            "albumart",
+            self.config.refresh.music_days,
             lambda: self._fetch_album_artwork(artist, album, year, "albumart"),
         )
 
     def get_album_fanart(self, artist: str, album: str, year: Optional[int]) -> Optional[Path]:
         item_dir = self.album_dir(artist, album, year)
         return self._resolve_artwork(
-            item_dir, "fanart.jpg", "fanart", self.config.refresh.music_days,
+            item_dir,
+            "fanart.jpg",
+            "fanart",
+            self.config.refresh.music_days,
             lambda: self._fetch_album_artwork(artist, album, year, "fanart"),
         )
 
@@ -639,9 +688,13 @@ class MediaDataStore:
         updated = False
         for filename, key in (("albumart.jpg", "albumart"), ("fanart.jpg", "fanart")):
             changed = self._was_updated_by(
-                item_dir, key,
+                item_dir,
+                key,
                 lambda: self._resolve_artwork(
-                    item_dir, filename, key, self.config.refresh.music_days,
+                    item_dir,
+                    filename,
+                    key,
+                    self.config.refresh.music_days,
                     lambda: self._fetch_album_artwork(artist, album, year, key),
                     force=True,
                 ),
@@ -661,17 +714,25 @@ class MediaDataStore:
         rarely as an album's cover art)."""
         item_dir = self.artist_dir(artist)
         return self._resolve_artwork(
-            item_dir, "artist.jpg", "artist_photo", self.config.refresh.music_days,
+            item_dir,
+            "artist.jpg",
+            "artist_photo",
+            self.config.refresh.music_days,
             lambda: self._fetch_artist_photo(artist),
         )
 
     def refresh_artist_photo(self, artist: str) -> bool:
         item_dir = self.artist_dir(artist)
         return self._was_updated_by(
-            item_dir, "artist_photo",
+            item_dir,
+            "artist_photo",
             lambda: self._resolve_artwork(
-                item_dir, "artist.jpg", "artist_photo", self.config.refresh.music_days,
-                lambda: self._fetch_artist_photo(artist), force=True,
+                item_dir,
+                "artist.jpg",
+                "artist_photo",
+                self.config.refresh.music_days,
+                lambda: self._fetch_artist_photo(artist),
+                force=True,
             ),
         )
 
@@ -747,9 +808,7 @@ class MediaDataStore:
 
     def _download_bytes(self, url: str, source: str) -> FetchResult:
         if self._cache is None:
-            logger.warning(
-                "MediaDataStore: no ImageCache configured - cannot download %s", url
-            )
+            logger.warning("MediaDataStore: no ImageCache configured - cannot download %s", url)
             return None
         temp_path = self._cache.download_temp(Artwork(url=url))
         if temp_path is None:
@@ -780,7 +839,10 @@ class MediaDataStore:
         item_dir = self.album_dir(artist, album, year)
         filename = f"{_sanitize(title)}.lrc"
         path = self._resolve_track_lyrics(
-            item_dir, filename, title, lambda: self._fetch_lyrics(artist, album, title),
+            item_dir,
+            filename,
+            title,
+            lambda: self._fetch_lyrics(artist, album, title),
         )
         return path.read_text(encoding="utf-8") if path is not None else None
 
@@ -797,7 +859,11 @@ class MediaDataStore:
 
         before = (_entry() or {}).get("last_updated")
         self._resolve_track_lyrics(
-            item_dir, filename, title, lambda: self._fetch_lyrics(artist, album, title), force=True,
+            item_dir,
+            filename,
+            title,
+            lambda: self._fetch_lyrics(artist, album, title),
+            force=True,
         )
         after = (_entry() or {}).get("last_updated")
         return after != before
@@ -853,7 +919,9 @@ class MediaDataStore:
         item_dir = self.album_dir(artist, album, year)
         filename = f"{_sanitize(title)}.wordcloud_nomask.png"
         return self._resolve_track_wordcloud(
-            item_dir, filename, title,
+            item_dir,
+            filename,
+            title,
             lambda: self._render_wordcloud(lyrics, album_art_path),
         )
 
@@ -880,8 +948,11 @@ class MediaDataStore:
 
         before = (_entry() or {}).get("last_updated")
         self._resolve_track_wordcloud(
-            item_dir, filename, title,
-            lambda: self._render_wordcloud(lyrics, album_art_path), force=True,
+            item_dir,
+            filename,
+            title,
+            lambda: self._render_wordcloud(lyrics, album_art_path),
+            force=True,
         )
         after = (_entry() or {}).get("last_updated")
         return after != before

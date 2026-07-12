@@ -89,10 +89,12 @@ def test_skips_artist_without_mbid_but_still_creates_entity(mock_get, tmp_path):
 def test_continues_after_one_artist_fails(mock_get, tmp_path):
     library = _library(tmp_path)
     mock_get.side_effect = [
-        _response([_artist(id=1, name="Pink Floyd"), _artist(id=2, name="Queen", mbid="queen-mbid")]),
+        _response(
+            [_artist(id=1, name="Pink Floyd"), _artist(id=2, name="Queen", mbid="queen-mbid")]
+        ),
         Exception("network error"),  # album fetch for artist 1 fails
-        _response([_album()]),       # album fetch for artist 2
-        _response([_track()]),       # track fetch for artist 2
+        _response([_album()]),  # album fetch for artist 2
+        _response([_track()]),  # track fetch for artist 2
     ]
 
     stats = import_from_lidarr(library, "http://lidarr.local:6003", "test-key")
@@ -108,12 +110,18 @@ def test_continues_after_one_artist_fails(mock_get, tmp_path):
 def test_multiple_artists_albums_and_tracks(mock_get, tmp_path):
     library = _library(tmp_path)
     mock_get.side_effect = [
-        _response([_artist(id=1, name="Pink Floyd"), _artist(id=2, name="Queen", mbid="queen-mbid")]),
-        _response([_album(id=1, title="The Wall"), _album(id=2, title="Animals", mbid="animals-mbid")]),
-        _response([
-            _track(title="Comfortably Numb", album_id=1),
-            _track(title="Money", mbid="money-mbid", album_id=2),
-        ]),
+        _response(
+            [_artist(id=1, name="Pink Floyd"), _artist(id=2, name="Queen", mbid="queen-mbid")]
+        ),
+        _response(
+            [_album(id=1, title="The Wall"), _album(id=2, title="Animals", mbid="animals-mbid")]
+        ),
+        _response(
+            [
+                _track(title="Comfortably Numb", album_id=1),
+                _track(title="Money", mbid="money-mbid", album_id=2),
+            ]
+        ),
         _response([_album(id=3, title="A Night at the Opera", mbid="anato-mbid")]),
         _response([_track(title="Bohemian Rhapsody", mbid="br-mbid", album_id=3)]),
     ]
@@ -135,14 +143,18 @@ def test_links_track_to_multiple_albums(mock_get, tmp_path):
     library = _library(tmp_path)
     mock_get.side_effect = [
         _response([_artist(id=1, name="Pink Floyd")]),
-        _response([
-            _album(id=1, title="The Wall", mbid="wall-mbid"),
-            _album(id=2, title="Is There Anybody Out There?", mbid="live-mbid"),
-        ]),
-        _response([
-            _track(title="Comfortably Numb", album_id=1),
-            _track(title="Comfortably Numb", album_id=2),
-        ]),
+        _response(
+            [
+                _album(id=1, title="The Wall", mbid="wall-mbid"),
+                _album(id=2, title="Is There Anybody Out There?", mbid="live-mbid"),
+            ]
+        ),
+        _response(
+            [
+                _track(title="Comfortably Numb", album_id=1),
+                _track(title="Comfortably Numb", album_id=2),
+            ]
+        ),
     ]
 
     import_from_lidarr(library, "http://lidarr.local:6003", "test-key")

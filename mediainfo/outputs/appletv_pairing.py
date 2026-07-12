@@ -65,9 +65,7 @@ class AppleTvPairingManager:
     def start(self, host: str, protocol_name: str) -> dict:
         with self._appletv_lock:
             if self._session is not None:
-                raise RuntimeError(
-                    "A pairing attempt is already in progress - cancel it first."
-                )
+                raise RuntimeError("A pairing attempt is already in progress - cancel it first.")
             loop = asyncio.new_event_loop()
             thread = threading.Thread(target=loop.run_forever, daemon=True)
             thread.start()

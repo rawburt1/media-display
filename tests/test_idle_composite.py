@@ -111,7 +111,9 @@ def test_refetches_a_source_once_its_own_interval_elapses(monkeypatch):
     times = iter([1000.0, 2001.0])
     monkeypatch.setattr("mediainfo.idle.composite.time.monotonic", lambda: next(times))
 
-    a = _fake_source([Artwork(url="https://example.com/a1.jpg", label="A1")], rotation_interval_seconds=1000)
+    a = _fake_source(
+        [Artwork(url="https://example.com/a1.jpg", label="A1")], rotation_interval_seconds=1000
+    )
     composite = CompositeIdleWallpaperSource([a])
 
     composite.get_wallpapers()
@@ -120,6 +122,35 @@ def test_refetches_a_source_once_its_own_interval_elapses(monkeypatch):
 
     assert result == [Artwork(url="https://example.com/a2.jpg", label="A2")]
     assert a.get_wallpapers.call_count == 2
+
+
+def test_last_used_is_the_winning_source_in_priority_mode():
+    b_images = [Artwork(url="https://example.com/b.jpg", label="B")]
+    a = _fake_source([])  # unavailable
+    b = _fake_source(b_images)
+    composite = CompositeIdleWallpaperSource([a, b], mode="priority")
+
+    composite.get_wallpapers()
+
+    assert composite.last_used is b
+
+
+def test_last_used_is_none_before_any_successful_fetch():
+    composite = CompositeIdleWallpaperSource([_fake_source([])])
+    assert composite.last_used is None
+
+
+def test_last_used_tracks_whichever_source_wins_in_random_mode():
+    a_images = [Artwork(url="https://example.com/a.jpg", label="A")]
+    b_images = [Artwork(url="https://example.com/b.jpg", label="B")]
+    a = _fake_source(a_images)
+    b = _fake_source(b_images)
+    composite = CompositeIdleWallpaperSource([a, b], mode="random")
+
+    with patch("mediainfo.idle.composite.random.shuffle", side_effect=lambda lst: lst.reverse()):
+        composite.get_wallpapers()
+
+    assert composite.last_used is b
 
 
 def test_keeps_stale_cache_when_a_source_returns_empty():

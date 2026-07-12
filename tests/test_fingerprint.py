@@ -18,7 +18,9 @@ def _music(title="", artist="", images=None):
     )
 
 
-def _response(title="Yesterday", artist="The Beatles", album="Help!", artwork_url="", recognized_at=None):
+def _response(
+    title="Yesterday", artist="The Beatles", album="Help!", artwork_url="", recognized_at=None
+):
     data = {"title": title, "artist": artist, "album": album, "artwork_url": artwork_url}
     if recognized_at is not None:
         data["recognized_at"] = recognized_at

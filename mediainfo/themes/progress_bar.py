@@ -55,11 +55,13 @@ class ProgressBarTheme(DisplayTheme):
     ) -> Optional[ThemeRenderResult]:
         if not now_playing.duration_seconds or now_playing.position_seconds is None:
             return None
-        return ThemeRenderResult(extra_payload={
-            "position_seconds": now_playing.position_seconds,
-            "duration_seconds": now_playing.duration_seconds,
-            "color": config.color,
-        })
+        return ThemeRenderResult(
+            extra_payload={
+                "position_seconds": now_playing.position_seconds,
+                "duration_seconds": now_playing.duration_seconds,
+                "color": config.color,
+            }
+        )
 
     def client_assets(self, config: ProgressBarConfig) -> ThemeClientAssets:
         position = config.position if config.position in _VALID_POSITIONS else "bottom"

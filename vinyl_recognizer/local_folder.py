@@ -94,7 +94,9 @@ def _fingerprint_file(path: Path) -> Optional[List[int]]:
     try:
         completed = subprocess.run(
             ["fpcalc", "-raw", "-json", str(path)],
-            capture_output=True, timeout=30, check=True,
+            capture_output=True,
+            timeout=30,
+            check=True,
         )
         result = json.loads(completed.stdout)
         fingerprint = result["fingerprint"]

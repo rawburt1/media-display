@@ -25,6 +25,7 @@ def _artwork():
 # prepare() - music-only gating
 # ---------------------------------------------------------------------------
 
+
 def test_music_echoes_back_image_url():
     theme = VinylTheme()
     image_path = Path("/some/dir/abc123.jpg")
@@ -37,7 +38,12 @@ def test_music_echoes_back_image_url():
 def test_movie_returns_none():
     theme = VinylTheme()
     result = theme.prepare(
-        _movie(), _artwork(), Path("/some/poster.jpg"), None, None, VinylThemeConfig(),
+        _movie(),
+        _artwork(),
+        Path("/some/poster.jpg"),
+        None,
+        None,
+        VinylThemeConfig(),
     )
     assert result is None
 
@@ -46,7 +52,12 @@ def test_episode_returns_none():
     theme = VinylTheme()
     now_playing = NowPlaying(source="kodi", media_type="episode", title="Breaking Bad")
     result = theme.prepare(
-        now_playing, _artwork(), Path("/some/poster.jpg"), None, None, VinylThemeConfig(),
+        now_playing,
+        _artwork(),
+        Path("/some/poster.jpg"),
+        None,
+        None,
+        VinylThemeConfig(),
     )
     assert result is None
 
@@ -55,7 +66,12 @@ def test_idle_wallpaper_returns_none():
     theme = VinylTheme()
     now_playing = NowPlaying(source="idle", media_type="wallpaper", title="")
     result = theme.prepare(
-        now_playing, _artwork(), Path("/some/art.jpg"), None, None, VinylThemeConfig(),
+        now_playing,
+        _artwork(),
+        Path("/some/art.jpg"),
+        None,
+        None,
+        VinylThemeConfig(),
     )
     assert result is None
 
@@ -64,6 +80,7 @@ def test_idle_wallpaper_returns_none():
 # client_assets()
 # ---------------------------------------------------------------------------
 
+
 def test_client_assets_registers_theme_handler():
     theme = VinylTheme()
     assets = theme.client_assets(VinylThemeConfig())
@@ -71,7 +88,9 @@ def test_client_assets_registers_theme_handler():
     assert "theme-vinyl" in assets.css
 
 
-@pytest.mark.parametrize("corner", ["bottom-right", "bottom-left", "top-right", "top-left", "center"])
+@pytest.mark.parametrize(
+    "corner", ["bottom-right", "bottom-left", "top-right", "top-left", "center"]
+)
 def test_client_assets_includes_configured_corner(corner):
     theme = VinylTheme()
     assets = theme.client_assets(VinylThemeConfig(corner=corner))

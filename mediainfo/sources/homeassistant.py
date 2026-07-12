@@ -130,7 +130,11 @@ class HomeAssistantSource(MediaSource):
             self._handle_result(data)
 
     def _subscribe(self, ws: Any) -> None:
-        ws.send(json.dumps({"id": self._next_id(), "type": "subscribe_events", "event_type": "state_changed"}))
+        ws.send(
+            json.dumps(
+                {"id": self._next_id(), "type": "subscribe_events", "event_type": "state_changed"}
+            )
+        )
         # A one-time full snapshot, so already-playing media shows up
         # immediately rather than waiting for its next state change.
         ws.send(json.dumps({"id": self._next_id(), "type": "get_states"}))

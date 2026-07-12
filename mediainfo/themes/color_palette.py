@@ -59,7 +59,9 @@ class ColorPaletteTheme(DisplayTheme):
         # Falls back to "bottom" for an unrecognised value (e.g. a config
         # typo) rather than injecting an arbitrary string straight into
         # the generated CSS/JS.
-        position = config.swatch_position if config.swatch_position in _VALID_POSITIONS else "bottom"
+        position = (
+            config.swatch_position if config.swatch_position in _VALID_POSITIONS else "bottom"
+        )
         position_class = f"position-{position}"
         css = """
     #theme-color-palette {

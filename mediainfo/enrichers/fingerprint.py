@@ -72,7 +72,8 @@ class FingerprintEnricher(ArtworkEnricher):
             if age > self.config.max_age_seconds:
                 logger.debug(
                     "Fingerprint: ignoring stale result (%ds old, max %ds)",
-                    int(age), self.config.max_age_seconds,
+                    int(age),
+                    self.config.max_age_seconds,
                 )
                 return None
 

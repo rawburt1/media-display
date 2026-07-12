@@ -23,6 +23,8 @@ aggregation plumbing here needs no changes as each one ships.
 from __future__ import annotations
 
 import logging
+import shutil
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -32,6 +34,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from flask_sock import Sock
 from markupsafe import Markup
 
+from mediainfo.app_services import AppServices
 from mediainfo.cache import ImageCache
 from mediainfo.config import AuthConfig, ThemesConfig
 from mediainfo.config.themes import parse_themes
@@ -39,7 +42,11 @@ from mediainfo.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
-from mediainfo.outputs.websocket_push import add_playback_position, broadcast, register_websocket_route
+from mediainfo.outputs.websocket_push import (
+    add_playback_position,
+    broadcast,
+    register_websocket_route,
+)
 from mediainfo.registries import get_theme_class
 from mediainfo.themes.base import DisplayTheme
 from mediainfo.transforms import parse_pipeline
@@ -66,17 +73,30 @@ class ThemesOutput(Output):
 
         self._theme_configs: Dict[str, Any] = parse_themes(config.themes)
         self._themes: List[DisplayTheme] = self._build_themes(self._theme_configs)
-        self._theme_css = Markup("\n".join(
-            assets.css for assets in self._client_assets() if assets.css
-        ))
-        self._theme_js = Markup("\n".join(
-            assets.js for assets in self._client_assets() if assets.js
-        ))
+        self._theme_css = Markup(
+            "\n".join(assets.css for assets in self._client_assets() if assets.css)
+        )
+        self._theme_js = Markup(
+            "\n".join(assets.js for assets in self._client_assets() if assets.js)
+        )
 
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         self._artwork: Optional[Artwork] = None
         self._image_path: Optional[Path] = None
+        # update() copies image_path into this directory (keeping its
+        # original filename/stem, so the public /image/current?v=<stem> URL
+        # and _known_images keys are unaffected) so _get_payload() (and thus
+        # _prepare_themes()/theme.prepare()) can still read it whenever it's
+        # next called - a WebSocket client connecting, or /api/now-playing
+        # being polled, both call it fully decoupled in time from the
+        # original update(). For idle wallpapers, the caller
+        # (orchestrator_idle) deletes the original image_path immediately
+        # after update() returns - see update() below, same reasoning/
+        # pattern as NestHubOutput.update()'s own copy-before-the-caller-
+        # deletes-it.
+        self._owned_image_dir = Path(tempfile.mkdtemp(prefix="mediainfo-themes-"))
+        self._owned_image_path: Optional[Path] = None
         self._cache: Optional[ImageCache] = None
         # stem -> Path, covering both the main resolved image and any
         # derived per-theme composite (see _prepare_themes) - /image/current
@@ -111,19 +131,24 @@ class ThemesOutput(Output):
                 logger.warning(
                     "Themes output: auto_rotate preset %r names theme(s) %s that "
                     "aren't enabled - they'll never appear while this preset is active",
-                    preset_name, unknown,
+                    preset_name,
+                    unknown,
                 )
 
     def set_media_data_store(self, store: Optional[MediaDataStore]) -> None:
-        """Wired in post-construction by wiring.wire_media_data_store() -
-        MediaDataStore is built inside start_orchestrator(), after outputs
-        are already instantiated, so it can't be a constructor arg the way
-        `config`/`auth_config` are (same reason WebOutput.set_history()/
-        set_health_provider() exist as setters rather than constructor
-        params). None means no theme needing it (e.g. Word Cloud for
-        music) can produce anything until this is called with a real
-        store, or config leaves mediadata unconfigured entirely."""
+        """Wired in post-construction by attach() (see AppServices.
+        mediadata_store) - MediaDataStore is built inside
+        start_orchestrator(), after outputs are already instantiated, so
+        it can't be a constructor arg the way `config`/`auth_config` are
+        (same reason WebOutput.set_history()/set_health_provider() exist
+        as setters rather than constructor params). None means no theme
+        needing it (e.g. Word Cloud for music) can produce anything until
+        this is called with a real store, or config leaves mediadata
+        unconfigured entirely."""
         self.media_data = store
+
+    def attach(self, services: AppServices) -> None:
+        self.set_media_data_store(services.mediadata_store)
 
     @staticmethod
     def _build_themes(theme_configs: Dict[str, Any]) -> List[DisplayTheme]:
@@ -186,12 +211,31 @@ class ThemesOutput(Output):
         return self._theme_configs.get(theme.name)
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
+        # Copy to a file we manage ourselves - see _owned_image_dir above
+        # for why. Keeps image_path's own filename (rather than a fresh
+        # random one) so the public /image/current?v=<stem> URL stays the
+        # same as before this copy existed - stable/content-addressable for
+        # regular playback (image_path.stem is already a content hash - see
+        # ImageCache.get_path()), and simply whatever name download_temp()
+        # gave it for idle wallpapers.
+        stable_path: Optional[Path] = None
+        if image_path is not None:
+            stable_path = self._owned_image_dir / image_path.name
+            shutil.copy2(image_path, stable_path)
+
         with self._lock:
+            old_owned_path = self._owned_image_path
             self._now_playing = now_playing
             self._artwork = artwork
-            self._image_path = image_path
-            if image_path is not None:
-                self._known_images[image_path.stem] = image_path
+            self._image_path = stable_path
+            self._owned_image_path = stable_path
+            if stable_path is not None:
+                self._known_images[stable_path.stem] = stable_path
+        # Same image re-pushed (e.g. a rotation re-push of an unchanged
+        # item) copies over itself - only unlink a *different*, superseded
+        # file, never the one we just wrote.
+        if old_owned_path is not None and old_owned_path != stable_path:
+            old_owned_path.unlink(missing_ok=True)
         self._push(self._get_payload())
 
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
@@ -260,7 +304,11 @@ class ThemesOutput(Output):
         for theme in self._themes:
             try:
                 rendered = theme.prepare(
-                    now_playing, artwork, image_path, cache, self.media_data,
+                    now_playing,
+                    artwork,
+                    image_path,
+                    cache,
+                    self.media_data,
                     self._theme_config_for(theme),
                 )
             except Exception:
@@ -271,7 +319,9 @@ class ThemesOutput(Output):
             entry = dict(rendered.extra_payload)
             if rendered.derived_image_path is not None:
                 with self._lock:
-                    self._known_images[rendered.derived_image_path.stem] = rendered.derived_image_path
+                    self._known_images[rendered.derived_image_path.stem] = (
+                        rendered.derived_image_path
+                    )
                 entry["image"] = f"/image/current?v={rendered.derived_image_path.stem}"
             if rendered.derived_image_paths:
                 with self._lock:
@@ -312,7 +362,10 @@ class ThemesOutput(Output):
         sock = Sock(app)
 
         register_websocket_route(
-            sock, "/ws", self._clients_lock, self._clients,
+            sock,
+            "/ws",
+            self._clients_lock,
+            self._clients,
             get_initial_payload=lambda conn: self._get_payload(),
         )
 

@@ -10,6 +10,7 @@ from soco import SoCo
 from mediainfo.config import SonosConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.sources.base import MediaSource
+from mediainfo.status import AvailabilityReason, classify_connection_exception
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,10 @@ class SonosSource(MediaSource):
         groups = self._discover_groups()
         if groups is None:
             self.last_poll_failed = True
+            # soco can't tell "speakers powered off" from a real network
+            # blip either way - NETWORK_UNREACHABLE (Warning, not Error)
+            # is the honest read for "none of speaker_ips answered".
+            self.availability_reason = AvailabilityReason.NETWORK_UNREACHABLE
             return None
         try:
             seen: set[str] = set()
@@ -41,11 +46,14 @@ class SonosSource(MediaSource):
                     logger.debug("Skipping %s: unsupported", coordinator.ip_address)
                     continue
                 if result is not None:
+                    self.availability_reason = AvailabilityReason.PLAYING
                     return result
+            self.availability_reason = AvailabilityReason.IDLE
             return None
-        except Exception:
+        except Exception as exc:
             logger.exception("Sonos source error")
             self.last_poll_failed = True
+            self.availability_reason = classify_connection_exception(exc)
             return None
 
     def _discover_groups(self):

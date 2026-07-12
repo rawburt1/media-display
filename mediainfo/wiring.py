@@ -1,6 +1,7 @@
-"""Builds sources/enrichers/idle sources/outputs from config, and wires
-cross-cutting state (the /health provider, the Hitster-safe toggle) onto
-the outputs that expose it.
+"""Builds sources/enrichers/idle sources/outputs from config, and attaches
+cross-cutting state (the /health provider, the Hitster-safe toggle, ...) onto
+the outputs that expose it - see AppServices (build_app_services()/
+attach_services() at the bottom of this module).
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from mediainfo import registries
+from mediainfo.app_services import AppServices
 from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config
@@ -77,7 +79,9 @@ def build_mediadata_store(config: Config, cache: ImageCache) -> Optional[MediaDa
     for this feature."""
     artwork_config = config.enrichers.get("mediadata")
     lyrics_config = config.text_enrichers.get("mediadata")
-    if not ((artwork_config and artwork_config.enabled) or (lyrics_config and lyrics_config.enabled)):
+    if not (
+        (artwork_config and artwork_config.enabled) or (lyrics_config and lyrics_config.enabled)
+    ):
         return None
     return MediaDataStore(
         config.mediadata,
@@ -113,9 +117,7 @@ def build_enrichers(
     return enrichers
 
 
-def build_text_enrichers(
-    config: Config, mediadata_store: Optional[MediaDataStore] = None
-) -> list:
+def build_text_enrichers(config: Config, mediadata_store: Optional[MediaDataStore] = None) -> list:
     """Build the configured text enrichers (lyrics, AI-generated text -
     see mediainfo/enrichers/text_base.py), each sharing one TextCache
     instance under cache.dir/text (same retention as artwork, mirroring
@@ -207,10 +209,11 @@ def start_orchestrator(
     mediadata_store: Optional[MediaDataStore] = None,
 ) -> Orchestrator:
     # Callers that already need the store themselves (e.g. _start_and_wire,
-    # to also pass it to wire_media_data_store()) build it once and pass it
-    # in here instead of leaving this to build a second, separate instance
-    # of it - build_mediadata_store() is called only if one wasn't already
-    # supplied, so existing callers that don't care about this are unaffected.
+    # to also put it in the AppServices built for attach_services()) build
+    # it once and pass it in here instead of leaving this to build a
+    # second, separate instance of it - build_mediadata_store() is called
+    # only if one wasn't already supplied, so existing callers that don't
+    # care about this are unaffected.
     if mediadata_store is None:
         mediadata_store = build_mediadata_store(config, cache)
     orch = Orchestrator(
@@ -234,90 +237,41 @@ def start_orchestrator(
     return orch
 
 
-def wire_history(outputs: list, history: Optional[PlaybackHistory]) -> None:
-    """Register the playback history store on every WebOutput instance,
-    so its /history page can list entries and serve their artwork. None
-    (history.enabled: false) makes the page report the feature disabled."""
-    from mediainfo.outputs.web import WebOutput
+def build_app_services(
+    orch: Orchestrator,
+    config: Config,
+    outputs: list,
+    history: Optional[PlaybackHistory],
+    overrides: Optional[ArtworkOverrideStore],
+    mediadata_store: Optional[MediaDataStore],
+) -> AppServices:
+    """Gather every cross-cutting capability an output might want (health
+    reporting, playback history, hitster-safe, artwork refresh/rotate-now,
+    the shared MediaDataStore, artwork overrides) into one AppServices,
+    handed to every output via attach_services() below.
 
+    Replaces the old one-wire_*()-function-per-capability approach: each
+    of those imported the concrete output classes it applied to and
+    dispatched with isinstance(), so every new capability meant another
+    function, another isinstance check, and another import here. Now
+    adding a capability only means adding a field to AppServices plus the
+    one output that consumes it in its own attach() override - this
+    module no longer needs to know any concrete output type at all.
+    """
+    return AppServices(
+        health_provider=make_health_provider(orch, config, outputs),
+        history=history,
+        mediadata_store=mediadata_store,
+        overrides=overrides,
+        get_hitster_safe=orch.get_hitster_safe,
+        set_hitster_safe=orch.set_hitster_safe,
+        request_artwork_refresh=orch.request_artwork_refresh,
+        request_rotation_now=orch.request_rotation_now,
+    )
+
+
+def attach_services(outputs: list, services: AppServices) -> None:
+    """Hand every output the current AppServices - each pulls whatever it
+    needs via its own Output.attach() override (default: does nothing)."""
     for output in outputs:
-        if isinstance(output, WebOutput):
-            output.set_history(history)
-
-
-def wire_health_providers(outputs: list, orch: Orchestrator, config: Config) -> None:
-    """Register the health provider on every WebOutput, ConfigUiOutput, and
-    MqttOutput instance (the latter publishes it as an HA "problem"
-    binary_sensor when ha_discovery is enabled - see config_ui uses it for
-    the dashboard UI's status overview, see config_dashboard.py)."""
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-    from mediainfo.outputs.mqtt import MqttOutput
-    from mediainfo.outputs.web import WebOutput
-
-    provider = make_health_provider(orch, config, outputs)
-    for output in outputs:
-        if isinstance(output, (WebOutput, ConfigUiOutput, MqttOutput)):
-            output.set_health_provider(provider)
-
-
-def wire_media_data_store(outputs: list, mediadata_store: Optional[MediaDataStore]) -> None:
-    """Give the themes output direct MediaDataStore access, so its Word
-    Cloud theme can reuse MediaDataStore.get_track_wordcloud (lyrics
-    fetch/cache included) instead of duplicating that logic - same post-
-    construction wiring shape as wire_history/wire_health_providers,
-    needed because MediaDataStore is built inside start_orchestrator(),
-    after outputs are already instantiated. None (mediadata unconfigured
-    entirely) is passed through as-is; the theme itself already handles
-    a None store by producing nothing for music."""
-    from mediainfo.outputs.themes import ThemesOutput
-
-    for output in outputs:
-        if isinstance(output, ThemesOutput):
-            output.set_media_data_store(mediadata_store)
-
-
-def wire_hitster_safe(outputs: list, orch: Orchestrator) -> None:
-    """Register the orchestrator's Hitster-safe get/set on every
-    ConfigUiOutput instance (its own button) and MqttOutput instance (an
-    HA "switch" entity, when ha_discovery is enabled)."""
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-    from mediainfo.outputs.mqtt import MqttOutput
-
-    for output in outputs:
-        if isinstance(output, (ConfigUiOutput, MqttOutput)):
-            output.set_hitster_safe_handlers(orch.get_hitster_safe, orch.set_hitster_safe)
-
-
-def wire_artwork_refresh(outputs: list, orch: Orchestrator) -> None:
-    """Register Orchestrator.request_artwork_refresh on every MqttOutput
-    instance, so an HA "button" entity (when ha_discovery is enabled) can
-    trigger it."""
-    from mediainfo.outputs.mqtt import MqttOutput
-
-    for output in outputs:
-        if isinstance(output, MqttOutput):
-            output.set_refresh_artwork_handler(orch.request_artwork_refresh)
-
-
-def wire_rotate_now(outputs: list, orch: Orchestrator) -> None:
-    """Register Orchestrator.request_rotation_now on every MqttOutput
-    instance, so an HA "button" entity (when ha_discovery is enabled) can
-    trigger it - see wire_artwork_refresh above for the identical pattern
-    this mirrors."""
-    from mediainfo.outputs.mqtt import MqttOutput
-
-    for output in outputs:
-        if isinstance(output, MqttOutput):
-            output.set_rotate_now_handler(orch.request_rotation_now)
-
-
-def wire_artwork_overrides(outputs: list, overrides: Optional[ArtworkOverrideStore]) -> None:
-    """Register the artwork override store on every ConfigUiOutput
-    instance, so its "Overrides" page can list/add/remove pins. A no-op
-    (the page just reports the feature as disabled) when `overrides` is
-    None - see OverridesConfig.enabled."""
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-
-    for output in outputs:
-        if isinstance(output, ConfigUiOutput):
-            output.set_artwork_overrides(overrides)
+        output.attach(services)

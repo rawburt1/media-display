@@ -125,7 +125,10 @@ def test_searches_using_show_title_for_episode(mock_get):
 
 @patch("mediainfo.enrichers.wikipedia.requests.get")
 def test_searches_artist_for_episode_with_artist_field(mock_get):
-    mock_get.side_effect = [_search_response("Melody Gardot"), _summary_response("A jazz vocalist.")]
+    mock_get.side_effect = [
+        _search_response("Melody Gardot"),
+        _summary_response("A jazz vocalist."),
+    ]
     enricher = WikipediaEnricher(_config())
     np = _episode(show="Melody Gardot live på Olympia")
     np.artist = "Melody Gardot"
@@ -265,7 +268,9 @@ def test_falls_back_when_first_result_is_disambiguation(mock_get):
     enricher.enrich(np)
 
     assert np.summary == "A British rock band formed in 1970."
-    srsearch_calls = [c.kwargs["params"]["srsearch"] for c in mock_get.call_args_list if "params" in c.kwargs]
+    srsearch_calls = [
+        c.kwargs["params"]["srsearch"] for c in mock_get.call_args_list if "params" in c.kwargs
+    ]
     assert srsearch_calls == ["Queen", "Queen (band)"]
 
 
@@ -282,6 +287,7 @@ def test_skips_unsupported_media_type(mock_get):
 # ---------------------------------------------------------------------------
 # Caching
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.wikipedia.requests.get")
 def test_second_lookup_for_same_artist_does_not_hit_network(mock_get):
@@ -314,8 +320,10 @@ def test_cache_is_keyed_per_enricher_instance_not_global(mock_get):
 @patch("mediainfo.enrichers.wikipedia.requests.get")
 def test_cache_different_artists_both_hit_network(mock_get):
     mock_get.side_effect = [
-        _search_response("Queen (band)"), _summary_response("Queen bio."),
-        _search_response("Beatles"), _summary_response("Beatles bio."),
+        _search_response("Queen (band)"),
+        _summary_response("Queen bio."),
+        _search_response("Beatles"),
+        _summary_response("Beatles bio."),
     ]
     enricher = WikipediaEnricher(_config())
 
@@ -348,6 +356,7 @@ def test_negative_result_is_cached_too(mock_get):
 # ---------------------------------------------------------------------------
 # test_connection
 # ---------------------------------------------------------------------------
+
 
 def test_test_connection_success():
     with patch.object(WikipediaEnricher, "_lookup", return_value=("summary text", None)):

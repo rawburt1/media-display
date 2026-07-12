@@ -44,6 +44,7 @@ def _master(cover="https://i.discogs.com/cover.jpg", **kwargs):
 # _is_real_image
 # ---------------------------------------------------------------------------
 
+
 def test_is_real_image_accepts_cdn_url():
     assert _is_real_image("https://i.discogs.com/abc123/image.jpg")
 
@@ -68,6 +69,7 @@ def test_is_real_image_rejects_empty():
 # Skips non-music
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.discogs.requests.get")
 def test_skips_movie(mock_get):
     np = NowPlaying(source="kodi", media_type="movie", title="Inception")
@@ -86,6 +88,7 @@ def test_skips_episode(mock_get):
 # Skips when artist or album is missing
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.discogs.requests.get")
 def test_skips_when_artist_missing(mock_get):
     np = _song(subtitle="", album="The Wall")
@@ -103,6 +106,7 @@ def test_skips_when_album_missing(mock_get):
 # ---------------------------------------------------------------------------
 # Happy path: master found first try
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.discogs.requests.get")
 def test_appends_cover_from_master(mock_get):
@@ -137,12 +141,13 @@ def test_searches_with_correct_params(mock_get):
 # Falls back to release search when no master found
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.discogs.requests.get")
 def test_falls_back_to_release_when_no_master(mock_get):
     release = {"type": "release", "cover_image": "https://i.discogs.com/rel.jpg", "thumb": ""}
     mock_get.side_effect = [
-        _search_response([]),                   # master → empty
-        _search_response([release]),            # release → found
+        _search_response([]),  # master → empty
+        _search_response([release]),  # release → found
     ]
     np = _song()
     _enricher().enrich(np)
@@ -166,6 +171,7 @@ def test_no_images_added_when_both_searches_empty(mock_get):
 # ---------------------------------------------------------------------------
 # Placeholder filtering
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.discogs.requests.get")
 def test_skips_placeholder_cover_image_and_uses_next(mock_get):
@@ -194,6 +200,7 @@ def test_falls_back_to_thumb_when_cover_image_empty(mock_get):
 # Deduplication
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.discogs.requests.get")
 def test_does_not_add_duplicate_url(mock_get):
     existing_url = "https://i.discogs.com/cover.jpg"
@@ -207,6 +214,7 @@ def test_does_not_add_duplicate_url(mock_get):
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.discogs.requests.get")
 def test_request_error_leaves_images_unchanged(mock_get):
@@ -235,6 +243,7 @@ def test_http_error_on_master_falls_through_to_release(mock_get):
 # ---------------------------------------------------------------------------
 # MusicLibrary caching
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.discogs.requests.get")
 def test_caches_result_in_library_and_skips_lookup_on_repeat(mock_get, tmp_path):
@@ -267,6 +276,7 @@ def test_caches_negative_result_in_library(mock_get, tmp_path):
 # ---------------------------------------------------------------------------
 # test_connection
 # ---------------------------------------------------------------------------
+
 
 def test_test_connection_found():
     with patch("mediainfo.enrichers.discogs.find_cover", return_value="https://example.com/x.jpg"):

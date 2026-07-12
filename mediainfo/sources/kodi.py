@@ -11,6 +11,7 @@ import requests
 from mediainfo.config import KodiConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.sources.base import MediaSource
+from mediainfo.status import AvailabilityReason, classify_connection_exception
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +75,10 @@ class KodiSource(MediaSource):
         try:
             players = self._rpc("Player.GetActivePlayers")
             if not players:
+                self.availability_reason = AvailabilityReason.IDLE
                 return None
 
+            self.availability_reason = AvailabilityReason.PLAYING
             player_id = players[0]["playerid"]
             result = self._rpc(
                 "Player.GetItem",
@@ -111,7 +114,9 @@ class KodiSource(MediaSource):
                     or art.get("thumb")
                     or item.get("thumbnail")
                 )
-                fanart_path = art.get("tvshow.fanart") or art.get("season.fanart") or art.get("fanart")
+                fanart_path = (
+                    art.get("tvshow.fanart") or art.get("season.fanart") or art.get("fanart")
+                )
             else:
                 media_type = "music"
                 title = item.get("title", "")
@@ -135,7 +140,9 @@ class KodiSource(MediaSource):
             if kodi_type == "episode":
                 ids = self._get_tvshow_ids(item.get("tvshowid")) or ids
             elif media_type == "music":
-                artist_ids = item.get("musicbrainzalbumartistid") or item.get("musicbrainzartistid") or []
+                artist_ids = (
+                    item.get("musicbrainzalbumartistid") or item.get("musicbrainzartistid") or []
+                )
                 album_id = item.get("musicbrainzalbumid")
                 if artist_ids and album_id:
                     ids = {"musicbrainzartist": artist_ids[0], "musicbrainzalbum": album_id}
@@ -153,9 +160,20 @@ class KodiSource(MediaSource):
                 position_seconds=position_seconds,
                 duration_seconds=duration_seconds,
             )
-        except Exception:
+        except requests.exceptions.HTTPError as exc:
             logger.exception("Kodi source error")
             self.last_poll_failed = True
+            status = exc.response.status_code if exc.response is not None else None
+            self.availability_reason = (
+                AvailabilityReason.AUTH_FAILED
+                if status in (401, 403)
+                else AvailabilityReason.API_ERROR
+            )
+            return None
+        except Exception as exc:
+            logger.exception("Kodi source error")
+            self.last_poll_failed = True
+            self.availability_reason = classify_connection_exception(exc)
             return None
 
     def _get_position(self, player_id: int) -> Tuple[Optional[float], Optional[float]]:

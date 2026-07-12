@@ -62,7 +62,9 @@ class WordCloudConfig:
     # per-item lyrics-shaped cache for that) - see
     # mediainfo/themes/word_cloud.py.
     enabled: bool = False
-    corner: str = "bottom-right"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    corner: str = (
+        "bottom-right"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    )
     # Width as a percentage of viewport width (the image is square, so
     # this also sets its height, capped to viewport height).
     size_vw: int = 35
@@ -130,7 +132,9 @@ class VinylThemeConfig:
     # detection, since no source reports that state today (see the
     # roadmap plan).
     enabled: bool = False
-    corner: str = "bottom-left"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    corner: str = (
+        "bottom-left"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    )
     # Diameter as a percentage of the shorter viewport dimension.
     size_vmin: int = 40
     # Seconds for one full rotation - lower spins faster.
@@ -146,7 +150,9 @@ class MediaMosaicConfig:
     # Degrades to a single tile when only one candidate image is
     # available, rather than hiding.
     enabled: bool = False
-    corner: str = "top-right"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    corner: str = (
+        "top-right"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    )
     # Max width as a percentage of viewport width.
     size_vw: int = 30
     # Cap on how many tiles to include, most-relevant-first (the order
@@ -162,7 +168,9 @@ class CastMosaicConfig:
     # health_detail()) when no cast data is available. Movie/TV only -
     # there's no cast concept for music.
     enabled: bool = False
-    corner: str = "top-right"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    corner: str = (
+        "top-right"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    )
     # Max width as a percentage of viewport width.
     size_vw: int = 30
     # Cap on how many cast members to show - further capped by however
@@ -200,7 +208,9 @@ class ArtistSpotlightConfig:
     # source needed. Degrades to nothing (reported via health_detail())
     # when no artist photo is found.
     enabled: bool = False
-    corner: str = "bottom-left"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    corner: str = (
+        "bottom-left"  # "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center"
+    )
     # Max width as a percentage of viewport width.
     size_vw: int = 25
     # Show a short bio snippet (NowPlaying.summary) below the artist name.

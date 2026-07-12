@@ -5,15 +5,18 @@ import concurrent.futures
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pyatv.exceptions
 import pytest
 
 from mediainfo.config import AppleTvConfig
 from mediainfo.sources.appletv import AppleTvSource, _enum_name, _map_media_type
+from mediainfo.status import AvailabilityReason
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _config(**kwargs):
     defaults = dict(enabled=True, host="192.168.1.90")
@@ -25,8 +28,13 @@ def _state(name="Playing"):
     return SimpleNamespace(name=name)
 
 
-def _playing(state="Playing", media_type="Music", title="Bohemian Rhapsody",
-             artist="Queen", album="A Night at the Opera"):
+def _playing(
+    state="Playing",
+    media_type="Music",
+    title="Bohemian Rhapsody",
+    artist="Queen",
+    album="A Night at the Opera",
+):
     return SimpleNamespace(
         device_state=_state(state),
         media_type=_state(media_type),
@@ -53,6 +61,7 @@ def run(coro):
 # _enum_name / _map_media_type utilities
 # ---------------------------------------------------------------------------
 
+
 def test_enum_name_uses_name_attribute():
     assert _enum_name(SimpleNamespace(name="Playing")) == "playing"
 
@@ -61,13 +70,16 @@ def test_enum_name_falls_back_to_str():
     assert _enum_name("Playing") == "playing"
 
 
-@pytest.mark.parametrize("raw,expected", [
-    ("Music", "music"),
-    ("Video", "movie"),
-    ("Unknown", "movie"),
-    ("TV", "episode"),
-    ("tvshow", "episode"),
-])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("Music", "music"),
+        ("Video", "movie"),
+        ("Unknown", "movie"),
+        ("TV", "episode"),
+        ("tvshow", "episode"),
+    ],
+)
 def test_map_media_type(raw, expected):
     assert _map_media_type(SimpleNamespace(name=raw)) == expected
 
@@ -75,6 +87,7 @@ def test_map_media_type(raw, expected):
 # ---------------------------------------------------------------------------
 # _fetch — normal playback
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_returns_now_playing_for_music():
     src = _source()
@@ -90,6 +103,7 @@ def test_fetch_returns_now_playing_for_music():
     assert result.album == "A Night at the Opera"
     assert result.media_type == "music"
     assert result.source == "appletv"
+    assert src.availability_reason == AvailabilityReason.PLAYING
 
 
 def test_fetch_maps_video_to_movie():
@@ -133,14 +147,23 @@ def test_fetch_returns_none_images_when_no_artwork():
 # _fetch — not playing
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("state", ["Paused", "Idle", "Stopped"])
-def test_fetch_returns_none_when_not_playing(state):
+
+@pytest.mark.parametrize(
+    "state,expected_reason",
+    [
+        ("Paused", AvailabilityReason.PAUSED),
+        ("Idle", AvailabilityReason.IDLE),
+        ("Stopped", AvailabilityReason.IDLE),
+    ],
+)
+def test_fetch_returns_none_when_not_playing(state, expected_reason):
     src = _source()
     src._atv = MagicMock()
     src._atv.metadata.playing = AsyncMock(return_value=_playing(state=state))
     assert run(src._fetch()) is None
     # Connected fine, legitimately nothing playing - not a connection failure.
     assert src.last_poll_failed is False
+    assert src.availability_reason == expected_reason
 
 
 def test_fetch_returns_none_when_title_empty():
@@ -161,11 +184,15 @@ def test_fetch_returns_none_when_title_none():
 # _fetch — connection handling
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_returns_none_when_not_connected_and_scan_finds_nothing():
     src = _source()
     with patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[])):
         assert run(src._fetch()) is None
     assert src.last_poll_failed is True
+    # A scan finding nothing is this protocol's reliable "device is off"
+    # signal - not the same as a real connect/auth failure.
+    assert src.availability_reason == AvailabilityReason.POWERED_OFF
 
 
 def test_fetch_disconnects_on_playing_exception():
@@ -178,6 +205,39 @@ def test_fetch_disconnects_on_playing_exception():
     assert result is None
     assert src._atv is None  # disconnected
     assert src.last_poll_failed is True
+    # It was reachable a moment ago - reads as the device going to sleep,
+    # not a fresh failure.
+    assert src.availability_reason == AvailabilityReason.SLEEPING
+
+
+def test_connect_sets_auth_failed_on_pyatv_authentication_error():
+    src = _source()
+    mock_conf = MagicMock()
+    with (
+        patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[mock_conf])),
+        patch(
+            "mediainfo.sources.appletv.pyatv.connect",
+            new=AsyncMock(side_effect=pyatv.exceptions.AuthenticationError("bad credentials")),
+        ),
+    ):
+        run(src._connect())
+    assert src._atv is None
+    assert src.availability_reason == AvailabilityReason.AUTH_FAILED
+
+
+def test_connect_sets_network_unreachable_on_connect_os_error():
+    src = _source()
+    mock_conf = MagicMock()
+    with (
+        patch("mediainfo.sources.appletv.pyatv.scan", new=AsyncMock(return_value=[mock_conf])),
+        patch(
+            "mediainfo.sources.appletv.pyatv.connect",
+            new=AsyncMock(side_effect=OSError("no route to host")),
+        ),
+    ):
+        run(src._connect())
+    assert src._atv is None
+    assert src.availability_reason == AvailabilityReason.NETWORK_UNREACHABLE
 
 
 def test_fetch_connects_and_returns_result_on_fresh_start():
@@ -197,6 +257,7 @@ def test_fetch_connects_and_returns_result_on_fresh_start():
 
     assert result is not None
     assert result.title == "Bohemian Rhapsody"
+    assert src.availability_reason == AvailabilityReason.PLAYING
 
 
 def test_connect_passes_loop_to_pyatv_scan_and_connect():
@@ -225,6 +286,7 @@ def test_connect_passes_loop_to_pyatv_scan_and_connect():
 # _fetch_artwork
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_artwork_writes_bytes_and_returns_path(tmp_path):
     src = _source()
     with patch("mediainfo.sources.appletv._ART_DIR", tmp_path):
@@ -244,6 +306,7 @@ def test_fetch_artwork_reuses_existing_file(tmp_path):
     src = _source()
     art_bytes = b"\xff\xd8\xff" * 50
     import hashlib
+
     digest = hashlib.sha256(art_bytes).hexdigest()[:16]
     existing = tmp_path / f"appletv_{digest}.jpg"
     existing.write_bytes(art_bytes)
@@ -278,12 +341,14 @@ def test_fetch_artwork_returns_none_on_exception():
 # get_now_playing (synchronous wrapper)
 # ---------------------------------------------------------------------------
 
+
 def test_get_now_playing_returns_none_on_future_error():
     src = _source()
     future = MagicMock()
     future.result.side_effect = concurrent.futures.TimeoutError()
 
     captured = []
+
     def _fake_threadsafe(coro, loop):
         captured.append(coro)
         return future
@@ -300,6 +365,7 @@ def test_get_now_playing_returns_none_on_future_error():
 # ---------------------------------------------------------------------------
 # ImageCache file:// support (integration with artwork path)
 # ---------------------------------------------------------------------------
+
 
 def test_cache_get_path_handles_file_url(tmp_path):
     from mediainfo.cache import ImageCache
@@ -325,6 +391,7 @@ def test_cache_get_path_returns_none_for_missing_file_url(tmp_path):
 # health_check
 # ---------------------------------------------------------------------------
 
+
 def test_health_check_reports_disconnected_before_first_connect():
     src = _source()
     assert src.health_check() == {"connected": False}
@@ -340,10 +407,13 @@ def test_health_check_reports_connected_once_atv_is_set():
 # test_connection
 # ---------------------------------------------------------------------------
 
+
 def test_test_connection_stops_background_loop():
     src = _source()
-    with patch.object(AppleTvSource, "get_now_playing", return_value=None), \
-         patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe:
+    with (
+        patch.object(AppleTvSource, "get_now_playing", return_value=None),
+        patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe,
+    ):
         ok, message = src.test_connection()
 
     assert ok is True
@@ -353,8 +423,10 @@ def test_test_connection_stops_background_loop():
 
 def test_test_connection_stops_background_loop_even_on_error():
     src = _source()
-    with patch.object(AppleTvSource, "get_now_playing", side_effect=RuntimeError("boom")), \
-         patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe:
+    with (
+        patch.object(AppleTvSource, "get_now_playing", side_effect=RuntimeError("boom")),
+        patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe,
+    ):
         ok, message = src.test_connection()
 
     assert ok is False

@@ -48,9 +48,7 @@ class PosterStore:
                 continue
             path = self._dir / entry["file"]
             if not path.exists():
-                logger.warning(
-                    "Poster file not found for %r: %s", now_playing.title, path
-                )
+                logger.warning("Poster file not found for %r: %s", now_playing.title, path)
                 return None
             return Artwork(url=f"file://{path}", label="Poster")
         return None

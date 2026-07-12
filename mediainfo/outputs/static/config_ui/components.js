@@ -1,0 +1,908 @@
+'use strict';
+
+// Media/Metadata/Appearance/Displays category lists + the per-component
+// detail page (Fas 4 of the GUI redesign). Loaded after dashboard.js and
+// reuses its esc()/STATUS_LABELS/CATEGORY_TO_SECTION/SECTION_TITLES/
+// componentsData/componentsById/hasUnsavedComponentEdits - no module
+// system, just script-tag order (same pattern as the rest of this shell).
+//
+// Category lists are read-only browsing (built from the already-fetched
+// /api/ui/components, same data Pipeline uses). The detail page is the one
+// place in the new shell that writes config - it always goes through the
+// exact same endpoints the classic shell (app.html) already uses:
+// /api/config/form (save), /api/test/{source,enricher}/<name> and
+// /api/test/output (test connection). No new backend endpoint exists or
+// is needed for this.
+
+// ---------------------------------------------------------------------
+// Category lists
+// ---------------------------------------------------------------------
+var CATEGORY_FOR_SECTION = { media: 'media', metadata: 'metadata', appearance: 'appearance', displays: 'display' };
+var CATEGORY_GROUPS = {
+  media: [
+    { type: 'source', label: 'Sources' },
+    { type: 'idle_source', label: 'Idle screen' },
+  ],
+  metadata: [
+    { type: 'enricher', label: 'Enrichers' },
+    { type: 'text_enricher', label: 'Lyrics & text' },
+  ],
+  appearance: [
+    { type: 'theme', label: 'Themes' },
+  ],
+  displays: [
+    { type: 'output', label: 'Displays' },
+  ],
+};
+
+// Deterministic hue from a component id, used only for the Appearance
+// (theme) cards' decorative accent strip below - not a real preview of
+// what the theme looks like (that would require actually rendering it,
+// out of scope here), just a way to tell theme cards apart at a glance.
+function hueForId(id) {
+  var h = 0;
+  for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360;
+  return h;
+}
+
+function componentCard(c) {
+  var readOnly = c.component_type === 'text_enricher';
+  var badge = readOnly
+    ? '<span class="badge b-unknown">View only</span>'
+    : '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>';
+  var warning = c.warnings && c.warnings.length ? '<div class="warning">' + esc(c.warnings[0]) + '</div>' : '';
+  var accent = '';
+  var cardClass = 'component-card';
+  if (c.component_type === 'theme') {
+    var hue = hueForId(c.id);
+    cardClass += ' component-card--theme';
+    accent = '<div class="component-card-accent" style="background:linear-gradient(135deg, hsl(' + hue + ',70%,55%), hsl(' + ((hue + 45) % 360) + ',70%,55%));"></div>';
+  }
+  return '<a class="' + cardClass + '" href="#component/' + esc(c.id) + '">' + accent
+    + '<div class="body"><div class="name">' + esc(c.name) + '</div>' + badge
+    + (c.description ? '<div class="desc">' + esc(c.description) + '</div>' : '')
+    + warning
+    + '</div></a>';
+}
+
+function renderCategorySection(name) {
+  var el = document.getElementById('section-' + name);
+  if (!componentsData) {
+    el.innerHTML = '<h1>' + esc(SECTION_TITLES[name]) + '</h1><p class="lede">Loading…</p>';
+    return;
+  }
+  var category = CATEGORY_FOR_SECTION[name];
+  var groups = CATEGORY_GROUPS[name];
+  var sectionItems = componentsData.filter(function(c) { return c.category === category; });
+  var html = '<h1>' + esc(SECTION_TITLES[name]) + '</h1><p class="lede">Click a component to view or edit its settings.</p>';
+  html += filterBarHtml(name, sectionItems);
+  var any = false;
+  groups.forEach(function(group) {
+    var items = sectionItems.filter(function(c) { return c.component_type === group.type; });
+    if (!items.length) return;
+    any = true;
+    html += '<div class="card-group">';
+    if (groups.length > 1) html += '<h2 class="group-title">' + esc(group.label) + '</h2>';
+    html += '<div class="card-grid">' + items.map(function(c) { return cardTile(c, componentCard(c)); }).join('') + '</div>';
+    html += '</div>';
+  });
+  if (!any) html += '<div class="card"><span class="field-help">Nothing here yet.</span></div>';
+  el.innerHTML = html;
+  applyCardFilters(name);
+}
+
+// ---------------------------------------------------------------------
+// Component detail page - local edit state
+// ---------------------------------------------------------------------
+var detailComponent = null;          // last-fetched UiComponent for the current detail page
+var detailEdits = {};                // non-output/theme: fieldName -> new value
+var detailReplacingSecret = {};      // fieldName -> true while its "Replace" input is open
+var detailOutputsWorking = null;     // output/theme: full instance array (deep copy) for the owning output type
+var detailOutputType = null;         // output type name detailOutputsWorking belongs to
+var detailThemeName = null;          // set only for component_type "theme"
+var detailAdvancedOpen = false;
+// A save's confirmation ("Saved - changes take effect...") is set on the
+// *current* #detail-save-status element, but the save handler immediately
+// triggers a refetch to show fresh server state (flips secret badges
+// etc.) - that refetch's own render replaces the whole section, including
+// a brand new (empty) #detail-save-status, wiping the message out before
+// anyone can read it. Stashing it here and having
+// renderComponentDetailBody() apply it once after that fresh render lands
+// avoids the race instead of racing the DOM directly.
+var detailPendingStatus = null;
+
+function classicHrefFor(c) {
+  if (c.component_type === 'text_enricher') return '/form#advanced';
+  if (c.component_type === 'idle_source') return '/form#idle';
+  if (c.component_type === 'source') return '/form#sources';
+  if (c.component_type === 'enricher') return '/form#artwork';
+  if (c.component_type === 'theme' || c.component_type === 'output') return '/form#outputs';
+  return '/form';
+}
+
+function findDetailField(name) {
+  var all = (detailComponent.essential_fields || []).concat(detailComponent.advanced_fields || []);
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].name === name) return all[i];
+  }
+  return { name: name };
+}
+
+function getFieldValue(field) {
+  if (detailComponent.component_type === 'output') {
+    return detailOutputsWorking[0] ? detailOutputsWorking[0][field.name] : field.value;
+  }
+  if (detailComponent.component_type === 'theme') {
+    return detailOutputsWorking[0].themes[detailThemeName][field.name];
+  }
+  return Object.prototype.hasOwnProperty.call(detailEdits, field.name) ? detailEdits[field.name] : field.value;
+}
+
+function setFieldValue(field, value) {
+  hasUnsavedComponentEdits = true;
+  if (detailComponent.component_type === 'output') {
+    detailOutputsWorking[0][field.name] = value;
+  } else if (detailComponent.component_type === 'theme') {
+    detailOutputsWorking[0].themes[detailThemeName][field.name] = value;
+  } else {
+    detailEdits[field.name] = value;
+  }
+}
+
+function onDetailFieldChange(name, value) {
+  setFieldValue(findDetailField(name), value);
+  renderComponentDetailBody();
+}
+function onDetailSecretInput(name, value) {
+  // Deliberately no re-render here (mirrors app.html's rawInput) - a full
+  // re-render on every keystroke would rebuild this very input out from
+  // under the user's cursor after the first character.
+  setFieldValue(findDetailField(name), value);
+}
+function onDetailSecretReplace(name) {
+  detailReplacingSecret[name] = true;
+  renderComponentDetailBody();
+}
+function onDetailSecretCancel(name) {
+  delete detailReplacingSecret[name];
+  renderComponentDetailBody();
+}
+
+function renderSecretField(field, value) {
+  var isSet = !!field.secret_set;
+  if (detailReplacingSecret[field.name]) {
+    return '<div class="secret-box">'
+      + '<input type="password" autocomplete="new-password" placeholder="Enter new value" value="' + esc(value || '') + '" '
+      + 'oninput="onDetailSecretInput(\'' + esc(field.name) + '\', this.value)">'
+      + '<button type="button" class="btn secondary small" onclick="onDetailSecretCancel(\'' + esc(field.name) + '\')">Cancel</button>'
+      + '</div>';
+  }
+  return '<div class="secret-box">'
+    + '<span class="secret-badge ' + (isSet ? 'set' : 'unset') + '">' + (isSet ? 'Configured' : 'Not set') + '</span>'
+    + '<button type="button" class="btn secondary small" onclick="onDetailSecretReplace(\'' + esc(field.name) + '\')">Replace' + (isSet ? '…' : '') + '</button>'
+    + (isSet ? '<button type="button" class="btn secondary small" onclick="onDetailFieldChange(\'' + esc(field.name) + '\', \'\')">Clear</button>' : '')
+    + '</div>';
+}
+
+function fieldValueDisplay(field, value) {
+  if (field.secret) return field.secret_set ? '••••••••' : '(not set)';
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '(none)';
+  return value == null || value === '' ? '(not set)' : String(value);
+}
+
+function renderStaticField(field, value) {
+  return '<div class="field"><div class="field-row">'
+    + '<label class="field-label">' + esc(field.label) + '</label>'
+    + '<div class="field-control"><div class="readonly-field">' + esc(fieldValueDisplay(field, value)) + '</div>'
+    + (field.help ? '<div class="field-help">' + esc(field.help) + '</div>' : '')
+    + '</div></div></div>';
+}
+
+function renderUnsupportedWidgetField(field, value) {
+  return '<div class="field"><div class="field-row">'
+    + '<label class="field-label">' + esc(field.label) + '</label>'
+    + '<div class="field-control"><div class="readonly-field">' + esc(fieldValueDisplay(field, value)) + '</div>'
+    + '<div class="field-help">This field type isn’t editable here yet - '
+    + '<a href="' + esc(classicHrefFor(detailComponent)) + '">edit in Advanced settings</a>.</div>'
+    + '</div></div></div>';
+}
+
+function renderDetailField(field) {
+  var value = getFieldValue(field);
+
+  if (detailComponent.component_type === 'text_enricher') {
+    return renderStaticField(field, value);
+  }
+
+  var control;
+  if (field.secret) {
+    control = renderSecretField(field, value);
+  } else if (field.type === 'bool') {
+    control = '<input type="checkbox" ' + (value ? 'checked' : '')
+      + ' onchange="onDetailFieldChange(\'' + esc(field.name) + '\', this.checked)">';
+  } else if (field.choices) {
+    control = '<select onchange="onDetailFieldChange(\'' + esc(field.name) + '\', this.value)">'
+      + field.choices.map(function(ch) {
+        return '<option value="' + esc(ch) + '"' + (ch === value ? ' selected' : '') + '>' + esc(ch) + '</option>';
+      }).join('') + '</select>';
+  } else if (field.widget === 'time_range' || field.widget === 'brightness_schedule' || field.type === 'list') {
+    return renderUnsupportedWidgetField(field, value);
+  } else {
+    var inputType = (field.type === 'int' || field.type === 'float') ? 'number' : 'text';
+    var onchange = inputType === 'number'
+      ? "onDetailFieldChange('" + esc(field.name) + "', Number(this.value || 0))"
+      : "onDetailFieldChange('" + esc(field.name) + "', this.value)";
+    control = '<input type="' + inputType + '" value="' + esc(value == null ? '' : value) + '" onchange="' + onchange + '">';
+  }
+
+  var reqMark = field.required ? '<span class="req">*</span>' : '';
+  return '<div class="field"><div class="field-row">'
+    + '<label class="field-label">' + esc(field.label) + reqMark + '</label>'
+    + '<div class="field-control">' + control
+    + (field.help ? '<div class="field-help">' + esc(field.help) + '</div>' : '')
+    + '</div></div></div>';
+}
+
+function renderComponentDetailBody() {
+  var el = document.getElementById('section-component');
+  var c = detailComponent;
+  var sectionName = CATEGORY_TO_SECTION[c.category] || 'dashboard';
+  var readOnly = c.component_type === 'text_enricher';
+
+  var html = wizardBannerHtml();
+  html += '<a class="back-link" href="#' + esc(sectionName) + '">← Back to ' + esc(SECTION_TITLES[sectionName] || 'list') + '</a>';
+  html += '<h1>' + esc(c.name) + '</h1>';
+  if (c.description) html += '<p class="lede">' + esc(c.description) + '</p>';
+  html += '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>';
+
+  if (c.warnings && c.warnings.length) {
+    html += '<ul class="warning-list" style="margin-top:12px;">'
+      + c.warnings.map(function(w) { return '<li class="warning-item">' + esc(w) + '</li>'; }).join('')
+      + '</ul>';
+  }
+
+  if (readOnly) {
+    html += '<div class="card" style="margin-top:14px;"><span class="field-help">'
+      + 'This component is view-only in the new dashboard for now - '
+      + '<a href="' + esc(classicHrefFor(c)) + '">edit it via Advanced → raw YAML</a>.</span></div>';
+  }
+
+  html += '<div class="card" style="margin-top:14px;">';
+  html += (c.essential_fields || []).map(renderDetailField).join('');
+  if (c.advanced_fields && c.advanced_fields.length) {
+    html += '<details class="advanced-toggle"' + (detailAdvancedOpen ? ' open' : '') + ' ontoggle="detailAdvancedOpen = this.open">'
+      + '<summary>Advanced settings</summary>'
+      + c.advanced_fields.map(renderDetailField).join('')
+      + '</details>';
+  }
+  html += '</div>';
+
+  if (!readOnly) {
+    html += '<div class="action-row">';
+    if (c.supports_test) {
+      html += '<button type="button" class="btn secondary" id="detail-test-btn" onclick="runDetailTest()">Test connection</button>';
+    }
+    html += '<button type="button" class="btn secondary" onclick="discardDetailEdits()">Discard</button>';
+    html += '<button type="button" class="btn" onclick="saveDetailComponent()">Save</button>';
+    html += '</div>';
+    html += '<div class="test-result" id="detail-test-result"></div>';
+    html += '<div id="detail-save-status" style="margin-top:8px;font-size:12.5px;"></div>';
+  }
+
+  el.innerHTML = html;
+
+  if (detailPendingStatus) {
+    var statusEl = document.getElementById('detail-save-status');
+    if (statusEl) {
+      statusEl.textContent = detailPendingStatus.text;
+      statusEl.className = detailPendingStatus.className;
+    }
+    detailPendingStatus = null;
+  }
+}
+
+function loadOutputInstances(c) {
+  var typeName = c.config_path.split('.')[1];
+  return fetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+    var instances = (cfg.outputs && cfg.outputs[typeName]) || [];
+    detailOutputType = typeName;
+    detailOutputsWorking = JSON.parse(JSON.stringify(instances));
+    if (!detailOutputsWorking.length) detailOutputsWorking.push({});
+  });
+}
+
+function loadThemeInstances(c) {
+  var themeName = c.config_path.split('.')[1];
+  return fetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+    var instances = (cfg.outputs && cfg.outputs.themes) || [];
+    detailOutputType = 'themes';
+    detailThemeName = themeName;
+    detailOutputsWorking = JSON.parse(JSON.stringify(instances));
+    if (!detailOutputsWorking.length) detailOutputsWorking.push({});
+    if (!detailOutputsWorking[0].themes) detailOutputsWorking[0].themes = {};
+    if (!detailOutputsWorking[0].themes[themeName]) detailOutputsWorking[0].themes[themeName] = {};
+  });
+}
+
+function fetchComponentDetail(id) {
+  var el = document.getElementById('section-component');
+  fetch('/api/ui/component/' + encodeURIComponent(id)).then(function(r) { return r.json(); }).then(function(c) {
+    if (c.error) {
+      el.innerHTML = '<h1>Not found</h1><p class="lede">' + esc(c.error) + '</p>';
+      return;
+    }
+    detailComponent = c;
+    setActiveNav(CATEGORY_TO_SECTION[c.category] || '');
+    if (c.component_type === 'output') {
+      loadOutputInstances(c).then(renderComponentDetailBody);
+    } else if (c.component_type === 'theme') {
+      loadThemeInstances(c).then(renderComponentDetailBody);
+    } else {
+      renderComponentDetailBody();
+    }
+  }).catch(function() {
+    el.innerHTML = '<h1>Error</h1><p class="lede">Could not load this component.</p>';
+  });
+}
+
+function renderComponentDetail(id) {
+  var el = document.getElementById('section-component');
+  if (!id) {
+    el.innerHTML = '<h1>Component</h1><p class="lede">Not found.</p>';
+    return;
+  }
+  if (!detailComponent || detailComponent.id !== id) {
+    detailEdits = {};
+    detailReplacingSecret = {};
+    detailOutputsWorking = null;
+    detailOutputType = null;
+    detailThemeName = null;
+    detailAdvancedOpen = false;
+    hasUnsavedComponentEdits = false;
+    el.innerHTML = '<h1>Loading…</h1>';
+    fetchComponentDetail(id);
+    return;
+  }
+  renderComponentDetailBody();
+}
+
+function saveDetailComponent() {
+  var c = detailComponent;
+  var statusEl = document.getElementById('detail-save-status');
+  statusEl.textContent = 'Saving…';
+  statusEl.className = '';
+
+  var body;
+  if (c.component_type === 'output' || c.component_type === 'theme') {
+    var outputsPayload = {};
+    outputsPayload[detailOutputType] = detailOutputsWorking;
+    body = { outputs: outputsPayload };
+  } else {
+    var values = {};
+    Object.keys(detailEdits).forEach(function(name) {
+      values[c.config_path + '.' + name] = detailEdits[name];
+    });
+    body = { values: values };
+  }
+
+  fetch('/api/config/form', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) {
+      statusEl.textContent = d.error || 'Save failed.';
+      statusEl.className = 'err';
+      return;
+    }
+    detailPendingStatus = {
+      text: d.restart_required
+        ? 'Saved. A restart is needed for outputs/authentication changes to take effect.'
+        : 'Saved - changes take effect within a few seconds.',
+      className: 'ok',
+    };
+    hasUnsavedComponentEdits = false;
+    detailEdits = {};
+    detailReplacingSecret = {};
+    fetchComponentDetail(c.id);
+    fetchDashboard();
+  }).catch(function() {
+    statusEl.textContent = 'Request failed.';
+    statusEl.className = 'err';
+  });
+}
+
+function discardDetailEdits() {
+  if (!confirm('Discard unsaved changes?')) return;
+  detailEdits = {};
+  detailReplacingSecret = {};
+  hasUnsavedComponentEdits = false;
+  fetchComponentDetail(detailComponent.id);
+}
+
+function runDetailTest() {
+  var c = detailComponent;
+  var btn = document.getElementById('detail-test-btn');
+  var resultEl = document.getElementById('detail-test-result');
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  resultEl.className = 'test-result show';
+  resultEl.textContent = 'Running…';
+
+  var typeName = c.config_path.split('.')[1];
+  var req;
+  if (c.component_type === 'source') {
+    req = fetch('/api/test/source/' + encodeURIComponent(typeName), { method: 'POST' });
+  } else if (c.component_type === 'enricher') {
+    req = fetch('/api/test/enricher/' + encodeURIComponent(typeName), { method: 'POST' });
+  } else if (c.component_type === 'output') {
+    var body = Object.assign({ type: typeName }, detailOutputsWorking[0]);
+    req = fetch('/api/test/output', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+  } else {
+    return;
+  }
+
+  req.then(function(r) { return r.json(); }).then(function(d) {
+    resultEl.classList.add(d.ok ? 'ok' : 'fail');
+    resultEl.textContent = d.message;
+  }).catch(function() {
+    resultEl.classList.add('fail');
+    resultEl.textContent = 'Request failed.';
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Test connection';
+  });
+}
+
+// ---------------------------------------------------------------------
+// Card grid: filtering + per-card hide (Fas 8), shared by Media/Metadata/
+// Appearance/Displays/Health. A component can appear on more than one of
+// these pages (e.g. a source shows on both Media and Health), so "hide"
+// is one global id set, not five independent ones - hide it from either
+// page and it disappears from both. Kept in localStorage: this is a
+// personal display preference, not config, so it doesn't touch
+// config.yaml or need a new API endpoint.
+//
+// Filtering (status chips + name search) reuses the exact in-place
+// DOM class-toggling approach Health's filter bar introduced in Fas 6
+// (toggle a "hidden" class rather than re-render), generalized to any
+// section: the search input never loses focus mid-keystroke, including
+// under the 15s poll tick (see dashboard.js's fetchComponents()).
+// ---------------------------------------------------------------------
+var HEALTH_TYPE_GROUPS = [
+  { type: 'source', label: 'Sources' },
+  { type: 'idle_source', label: 'Idle screen' },
+  { type: 'enricher', label: 'Enrichers' },
+  { type: 'output', label: 'Displays' },
+];
+var CARD_STATUS_FILTERS = ['all', 'connected', 'needs_configuration', 'warning', 'error', 'disabled'];
+var sectionFilterState = {};
+
+function getSectionFilterState(sectionName) {
+  if (!sectionFilterState[sectionName]) sectionFilterState[sectionName] = { status: 'all', query: '' };
+  return sectionFilterState[sectionName];
+}
+
+function loadHiddenCardIds() {
+  try {
+    var raw = localStorage.getItem('mediainfo-hidden-card-ids');
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) {
+    return new Set();
+  }
+}
+var hiddenCardIds = loadHiddenCardIds();
+function saveHiddenCardIds() {
+  try { localStorage.setItem('mediainfo-hidden-card-ids', JSON.stringify(Array.from(hiddenCardIds))); } catch (e) {}
+}
+
+// Wraps any card's HTML (componentCard()/healthCard()) with a hide/unhide
+// overlay button - deliberately NOT baked into componentCard() itself,
+// since Library's settings cards call componentCard() directly and must
+// stay exactly as they were (no grid, no hide button, no filter bar).
+function cardTile(c, innerHtml) {
+  var isHidden = hiddenCardIds.has(c.id);
+  return '<div class="card-tile" data-id="' + esc(c.id) + '">'
+    + '<button type="button" class="card-hide-btn" title="' + (isHidden ? 'Unhide' : 'Hide') + '" '
+    + 'aria-label="' + esc((isHidden ? 'Unhide ' : 'Hide ') + c.name) + '" '
+    + 'onclick="toggleCardHidden(event, \'' + esc(c.id) + '\')">' + (isHidden ? '↺' : '×') + '</button>'
+    + innerHtml
+    + '</div>';
+}
+
+// Hiding/unhiding isn't a text field mid-keystroke, so a full re-render
+// (rather than an in-place DOM tweak) is simplest and safe here.
+function toggleCardHidden(event, id) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (hiddenCardIds.has(id)) hiddenCardIds.delete(id); else hiddenCardIds.add(id);
+  saveHiddenCardIds();
+  if (currentSection === 'health') renderHealthSection();
+  else if (FILTERABLE_SECTIONS.indexOf(currentSection) !== -1) renderCategorySection(currentSection);
+}
+
+function filterBarHtml(sectionName, items) {
+  var state = getSectionFilterState(sectionName);
+  var hiddenCount = items.filter(function(c) { return hiddenCardIds.has(c.id); }).length;
+  var chips = CARD_STATUS_FILTERS.map(function(f) {
+    return '<button type="button" class="chip' + (state.status === f ? ' active' : '') + '" '
+      + 'data-filter="' + f + '" onclick="onCardFilterClick(\'' + sectionName + '\', \'' + f + '\')">'
+      + esc(f === 'all' ? 'All' : (STATUS_LABELS[f] || f)) + '</button>';
+  }).join('');
+  chips += '<button type="button" class="chip chip-hidden' + (state.status === 'hidden' ? ' active' : '') + '" '
+    + 'data-filter="hidden" onclick="onCardFilterClick(\'' + sectionName + '\', \'hidden\')">'
+    + 'Hidden (' + hiddenCount + ')</button>';
+  return '<div class="filters">' + chips
+    + '<input type="text" id="' + sectionName + '-search" class="filter-search-input" placeholder="Search…" '
+    + 'aria-label="Search by name" value="' + esc(state.query) + '" '
+    + 'oninput="onCardSearchInput(\'' + sectionName + '\', this.value)">'
+    + '</div>';
+}
+
+function cardMatchesFilters(c, sectionName) {
+  var state = getSectionFilterState(sectionName);
+  var isHidden = hiddenCardIds.has(c.id);
+  if (state.status === 'hidden') return isHidden;
+  if (isHidden) return false;
+  var statusOk = state.status === 'all' || c.status === state.status;
+  var searchOk = !state.query || c.name.toLowerCase().indexOf(state.query.toLowerCase()) !== -1;
+  return statusOk && searchOk;
+}
+
+function applyCardFilters(sectionName) {
+  var sectionEl = document.getElementById('section-' + sectionName);
+  if (!sectionEl) return;
+  var hiddenCount = 0;
+  sectionEl.querySelectorAll('.card-tile[data-id]').forEach(function(tile) {
+    var c = componentsById[tile.dataset.id];
+    if (c && hiddenCardIds.has(c.id)) hiddenCount++;
+    tile.classList.toggle('hidden', !(c && cardMatchesFilters(c, sectionName)));
+  });
+  sectionEl.querySelectorAll('.card-group').forEach(function(group) {
+    var anyVisible = false;
+    group.querySelectorAll('.card-tile').forEach(function(tile) {
+      if (!tile.classList.contains('hidden')) anyVisible = true;
+    });
+    group.classList.toggle('hidden', !anyVisible);
+  });
+  var state = getSectionFilterState(sectionName);
+  sectionEl.querySelectorAll('.chip[data-filter]').forEach(function(chip) {
+    chip.classList.toggle('active', chip.dataset.filter === state.status);
+  });
+  var hiddenChip = sectionEl.querySelector('.chip-hidden');
+  if (hiddenChip) hiddenChip.textContent = 'Hidden (' + hiddenCount + ')';
+}
+
+function onCardFilterClick(sectionName, filter) {
+  getSectionFilterState(sectionName).status = filter;
+  applyCardFilters(sectionName);
+}
+function onCardSearchInput(sectionName, value) {
+  getSectionFilterState(sectionName).query = value;
+  applyCardFilters(sectionName);
+}
+
+// Sources/enrichers test the last *saved* config (no body - matches
+// components.js's own runDetailTest() and the classic shell's source/
+// enricher test, both of which read from disk server-side). Outputs
+// deliberately get a link to their detail page instead of an inline
+// test button here - see the module-level plan notes: /api/test/output
+// needs the instance's actual current field values in the request body,
+// which this list view doesn't hold (only the detail page does).
+function runHealthTest(btn) {
+  var kind = btn.dataset.componentType;
+  var typeName = btn.dataset.typeName;
+  var resultEl = btn.nextElementSibling;
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  resultEl.className = 'test-result show';
+  resultEl.textContent = 'Running…';
+
+  var url = kind === 'source'
+    ? '/api/test/source/' + encodeURIComponent(typeName)
+    : '/api/test/enricher/' + encodeURIComponent(typeName);
+
+  fetch(url, { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
+    resultEl.classList.add(d.ok ? 'ok' : 'fail');
+    resultEl.textContent = d.message;
+  }).catch(function() {
+    resultEl.classList.add('fail');
+    resultEl.textContent = 'Request failed.';
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Test connection';
+  });
+}
+
+function healthTestControl(c) {
+  if (c.component_type === 'output') {
+    return '<a class="btn secondary small" href="#component/' + esc(c.id) + '">Test connection →</a>';
+  }
+  if (!c.supports_test) return '';
+  var typeName = c.config_path.split('.')[1];
+  return '<button type="button" class="btn secondary small" onclick="runHealthTest(this)" '
+    + 'data-component-type="' + esc(c.component_type) + '" data-type-name="' + esc(typeName) + '">Test connection</button>';
+}
+
+function healthCard(c) {
+  var warningText = (c.warnings && c.warnings.length) ? c.warnings[0] : '';
+  // Health (status badge) and Activity (Fas 10) are shown as two
+  // independent badges - a device can be Healthy and Sleeping at the
+  // same time, that's the whole point of separating the two concepts.
+  var activityBadge = c.activity
+    ? '<span class="badge ' + esc(ACTIVITY_LABEL_CLASS[c.activity] || '') + '">' + esc(c.activity_label || c.activity) + '</span>'
+    : '';
+  return '<div class="component-card health-card">'
+    + '<a class="body" href="#component/' + esc(c.id) + '">'
+    + '<div class="name">' + esc(c.name) + '</div>'
+    + '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>'
+    + activityBadge
+    + (warningText ? '<div class="warning">' + esc(warningText) + '</div>' : '')
+    + '</a>'
+    + '<div class="test-row">' + healthTestControl(c) + '<div class="test-result" id="test-result-' + esc(c.id) + '"></div></div>'
+    + '</div>';
+}
+
+function renderHealthSection() {
+  var el = document.getElementById('section-health');
+  if (!componentsData) {
+    el.innerHTML = '<h1>Health</h1><p class="lede">Loading…</p>';
+    return;
+  }
+
+  var healthItems = componentsData.filter(function(c) {
+    return HEALTH_TYPE_GROUPS.some(function(g) { return g.type === c.component_type; });
+  });
+
+  var html = '<h1>Health</h1><p class="lede">Live status for everything that reports one, with quick actions where they help.</p>';
+
+  html += '<a class="component-card" href="#component/alerts" style="display:block;max-width:360px;margin-bottom:14px;">'
+    + '<div class="body"><div class="name">Configure alerting →</div>'
+    + '<div class="desc">Get notified when a source or output has been failing for a while.</div></div></a>';
+
+  if (dashboardData && dashboardData.restart_required) {
+    html += '<div class="card" style="border-color:var(--warn);margin-bottom:14px;">'
+      + '<div class="row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+      + '<span>A restart is needed for recent display/authentication changes to take effect.</span>'
+      + '<button type="button" class="btn danger small" onclick="runRestartAction(\'/api/restart\')">Restart mediainfo</button>'
+      + '</div></div>';
+  }
+
+  html += filterBarHtml('health', healthItems);
+
+  HEALTH_TYPE_GROUPS.forEach(function(group) {
+    var items = healthItems.filter(function(c) { return c.component_type === group.type; });
+    if (!items.length) return;
+    html += '<div class="card-group">'
+      + '<h2 class="group-title">' + esc(group.label) + '</h2>'
+      + '<div class="card-grid">' + items.map(function(c) { return cardTile(c, healthCard(c)); }).join('') + '</div>'
+      + '</div>';
+  });
+
+  el.innerHTML = html;
+  applyCardFilters('health');
+}
+
+// ---------------------------------------------------------------------
+// Library (Fas 7) - two things bundled under one nav entry, matching the
+// spec's information architecture: browsing (search artists, drill into
+// an artist's albums/tracks; artwork overrides CRUD) ported from the
+// classic library.html/overrides.html pages onto this shell's own
+// endpoints (/api/library/*, /api/overrides*, unchanged), plus the six
+// library-category flat-section settings components (cache/history/
+// library/overrides/posters/mediadata) via the same componentCard() used
+// by every other category section - those were already fully editable
+// via #component/<id> since Fas 4, they just weren't reachable from an
+// in-shell Library page yet.
+//
+// Search results and the overrides list/settings cards each live in
+// their own sub-panel (own element id) so adding an override, removing
+// one, or a 15s poll tick can refresh just that panel without wiping
+// out whatever's mid-typing in the search box - same reasoning as
+// Health/Media/Metadata/Appearance/Displays' applyCardFilters() split
+// (Fas 6/8), just three panels instead of one.
+// ---------------------------------------------------------------------
+var libraryQuery = '';
+var librarySearchResults = null; // null = no search yet, [] = no matches
+var librarySearchTimer = null;
+var libraryStats = null;
+var overridesData = null; // { enabled, items: [{title, subtitle, filename}] }
+
+function libraryPageHtml() {
+  return '<h1>Library</h1><p class="lede">Browse your music library, manage artwork overrides, and tune library-related settings.</p>'
+    + '<div class="card">'
+    + '<h2 class="group-title">Browse</h2>'
+    + '<div id="library-stats" class="field-help">Loading…</div>'
+    + '<input type="text" id="library-search" class="filter-search-input" placeholder="Search artists…" aria-label="Search library artists" '
+    + 'value="' + esc(libraryQuery) + '" oninput="onLibrarySearchInput(this.value)" style="margin-top:8px;">'
+    + '<div id="library-search-results" class="component-list" style="margin-top:12px;"></div>'
+    + '</div>'
+    + '<div class="card">'
+    + '<h2 class="group-title">Artwork overrides</h2>'
+    + '<p class="field-help">Pin a specific image for a title/subtitle that never gets a good poster from any '
+    + 'enricher - matched by exact title + subtitle (e.g. movie title, or song title + artist), case-insensitive.</p>'
+    + '<div id="library-overrides-panel">Loading…</div>'
+    + '</div>'
+    + '<div id="library-settings-cards"></div>'
+    + '<p class="field-help">Prefer the classic pages? <a href="/library">Library</a> &middot; <a href="/overrides">Overrides</a></p>';
+}
+
+function renderLibrarySection(param) {
+  var el = document.getElementById('section-library');
+  if (param && param.indexOf('artist/') === 0) {
+    renderLibraryArtistDetail(param.slice('artist/'.length));
+    return;
+  }
+  if (document.getElementById('library-search')) {
+    // The list view is already showing (e.g. renderFromHash() landing a
+    // second time shortly after navigation, once the page's own initial
+    // Promise.all(...).then(renderFromHash) resolves - or simply
+    // navigating back here from another section without ever visiting the
+    // artist-detail view in between). Rebuilding the whole section here
+    // would tear down and recreate the search <input>, silently discarding
+    // whatever the user is mid-typing. Nothing here can have gone stale
+    // except the settings cards, so just refresh those - same idea as the
+    // poll-tick path below.
+    renderLibrarySettingsCards();
+    return;
+  }
+  el.innerHTML = libraryPageHtml();
+  renderLibrarySearchResults();
+  renderLibrarySettingsCards();
+  if (libraryStats) renderLibraryStats(); else fetchLibraryStats();
+  if (overridesData) renderOverridesPanel(); else fetchOverrides();
+}
+
+function renderLibrarySettingsCards() {
+  var el = document.getElementById('library-settings-cards');
+  if (!el) return; // artist-detail sub-view is open right now, not the list
+  if (!componentsData) { el.innerHTML = ''; return; }
+  var items = componentsData.filter(function(c) { return c.category === 'library'; });
+  if (!items.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<h2 class="group-title">Settings</h2><div class="component-list">' + items.map(componentCard).join('') + '</div>';
+}
+
+// ---------------------------------------------------------------------
+// Browse: search + artist detail
+// ---------------------------------------------------------------------
+function libraryArtistCard(a) {
+  return '<a class="component-card" href="#library/artist/' + esc(a.id) + '"><div class="body"><div class="name">' + esc(a.name) + '</div></div></a>';
+}
+
+function renderLibrarySearchResults() {
+  var el = document.getElementById('library-search-results');
+  if (!el) return;
+  if (librarySearchResults === null) el.innerHTML = '';
+  else if (librarySearchResults.length === 0) el.innerHTML = '<span class="field-help">No matching artists.</span>';
+  else el.innerHTML = librarySearchResults.map(libraryArtistCard).join('');
+}
+
+function onLibrarySearchInput(value) {
+  libraryQuery = value;
+  clearTimeout(librarySearchTimer);
+  var q = value.trim();
+  if (!q) {
+    librarySearchResults = null;
+    renderLibrarySearchResults();
+    return;
+  }
+  librarySearchTimer = setTimeout(function() {
+    fetch('/api/library/search?q=' + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(data) {
+      librarySearchResults = data;
+      renderLibrarySearchResults();
+    }).catch(function() {});
+  }, 200);
+}
+
+function renderLibraryStats() {
+  var el = document.getElementById('library-stats');
+  if (!el || !libraryStats) return;
+  el.textContent = libraryStats.artists + ' artist(s), ' + libraryStats.albums + ' album(s), ' + libraryStats.tracks + ' track(s)';
+}
+
+function fetchLibraryStats() {
+  fetch('/api/library/stats').then(function(r) { return r.json(); }).then(function(data) {
+    libraryStats = data;
+    renderLibraryStats();
+  }).catch(function() {});
+}
+
+function renderMbid(mbid) {
+  return mbid ? '<span class="mbid">' + esc(mbid) + '</span>' : '<span class="no-mbid">no mbid</span>';
+}
+
+function libraryDetailListItems(rows) {
+  if (!rows.length) return '<li>None</li>';
+  return rows.map(function(row) { return '<li>' + esc(row.title) + ' &mdash; ' + renderMbid(row.mbid) + '</li>'; }).join('');
+}
+
+function renderLibraryArtistDetail(id) {
+  var el = document.getElementById('section-library');
+  var backLink = '<a class="back-link" href="#library">← Back to Library</a>';
+  el.innerHTML = backLink + '<h1>Artist</h1><p class="lede">Loading…</p>';
+  fetch('/api/library/artist/' + encodeURIComponent(id)).then(function(r) { return r.json(); }).then(function(a) {
+    if (a.error) {
+      el.innerHTML = backLink + '<h1>Artist</h1><p class="lede">' + esc(a.error) + '</p>';
+      return;
+    }
+    el.innerHTML = backLink
+      + '<h1>' + esc(a.name) + '</h1><p class="lede">' + renderMbid(a.mbid) + '</p>'
+      + '<h2 class="group-title">Albums (' + a.albums.length + ')</h2>'
+      + '<div class="card"><ul class="detail-list">' + libraryDetailListItems(a.albums) + '</ul></div>'
+      + '<h2 class="group-title">Tracks (' + a.tracks.length + ')</h2>'
+      + '<div class="card"><ul class="detail-list">' + libraryDetailListItems(a.tracks) + '</ul></div>';
+  }).catch(function() {
+    el.innerHTML = backLink + '<h1>Artist</h1><p class="lede">Failed to load.</p>';
+  });
+}
+
+// ---------------------------------------------------------------------
+// Artwork overrides: list + add/remove, same wire contract as the
+// classic overrides.html (multipart POST, JSON-body DELETE).
+// ---------------------------------------------------------------------
+function fetchOverrides() {
+  fetch('/api/overrides').then(function(r) { return r.json(); }).then(function(data) {
+    overridesData = data;
+    renderOverridesPanel();
+  }).catch(function() {});
+}
+
+function overrideCard(item) {
+  return '<div class="override-card">'
+    + '<img src="/api/overrides/image/' + encodeURIComponent(item.filename) + '" alt="">'
+    + '<div class="info"><div class="title">' + esc(item.title) + '</div>'
+    + '<div class="subtitle">' + esc(item.subtitle || '(no subtitle)') + '</div></div>'
+    + '<button type="button" class="btn danger small" data-title="' + esc(item.title) + '" data-subtitle="' + esc(item.subtitle || '') + '" '
+    + 'onclick="removeOverride(this)">Remove</button>'
+    + '</div>';
+}
+
+function renderOverridesPanel() {
+  var el = document.getElementById('library-overrides-panel');
+  if (!el || !overridesData) return;
+  var html = '';
+  if (overridesData.enabled === false) {
+    html += '<div class="warning-item">Overrides are disabled - enable it in the Settings cards below to turn this on.</div>';
+  } else {
+    html += '<form id="override-add-form" onsubmit="submitOverrideForm(event)">'
+      + '<div class="field"><div class="field-row"><div class="field-label">Title</div>'
+      + '<div class="field-control"><input type="text" name="title" required></div></div></div>'
+      + '<div class="field"><div class="field-row"><div class="field-label">Subtitle</div>'
+      + '<div class="field-control"><input type="text" name="subtitle">'
+      + '<div class="field-help">Artist, episode label, etc. - leave blank if not applicable.</div></div></div></div>'
+      + '<div class="field"><div class="field-row"><div class="field-label">Image file</div>'
+      + '<div class="field-control"><input type="file" name="file" accept="image/*" required></div></div></div>'
+      + '<div style="margin-top:10px;"><button type="submit" class="btn small">Save override</button> '
+      + '<span id="override-form-status" class="field-help"></span></div>'
+      + '</form>';
+  }
+  var items = overridesData.items || [];
+  html += '<div class="override-list" style="margin-top:14px;">'
+    + (items.length ? items.map(overrideCard).join('') : '<span class="field-help">No overrides yet.</span>')
+    + '</div>';
+  el.innerHTML = html;
+}
+
+function submitOverrideForm(e) {
+  e.preventDefault();
+  var form = e.target;
+  var statusEl = document.getElementById('override-form-status');
+  statusEl.textContent = 'Saving…';
+  fetch('/api/overrides', { method: 'POST', body: new FormData(form) })
+    .then(function(r) { return r.json().then(function(data) { return [r.ok, data]; }); })
+    .then(function(result) {
+      if (result[0]) { form.reset(); fetchOverrides(); }
+      else statusEl.textContent = result[1].error || 'Failed to save override.';
+    })
+    .catch(function() { statusEl.textContent = 'Request failed.'; });
+}
+
+function removeOverride(btn) {
+  btn.disabled = true;
+  fetch('/api/overrides', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: btn.dataset.title, subtitle: btn.dataset.subtitle }),
+  }).then(function() { fetchOverrides(); }).catch(function() { btn.disabled = false; });
+}

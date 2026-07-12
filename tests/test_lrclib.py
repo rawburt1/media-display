@@ -14,7 +14,11 @@ def _config(**kwargs):
 
 def _music(artist="Queen", title="Bohemian Rhapsody", album="A Night at the Opera", duration=None):
     return NowPlaying(
-        source="kodi", media_type="music", title=title, subtitle=artist, album=album,
+        source="kodi",
+        media_type="music",
+        title=title,
+        subtitle=artist,
+        album=album,
         duration_seconds=duration,
     )
 
@@ -64,9 +68,12 @@ def test_skips_when_title_missing(mock_get):
 
 @patch("mediainfo.enrichers.lrclib.requests.get")
 def test_exact_match_lookup_when_duration_known(mock_get):
-    mock_get.return_value = _mock_response({
-        "plainLyrics": "Is this the real life", "syncedLyrics": "[00:01.00]Is this the real life",
-    })
+    mock_get.return_value = _mock_response(
+        {
+            "plainLyrics": "Is this the real life",
+            "syncedLyrics": "[00:01.00]Is this the real life",
+        }
+    )
     enricher = LrclibEnricher(_config())
     np = _music(duration=354)
 
@@ -99,7 +106,9 @@ def test_falls_back_to_search_when_exact_match_not_found(mock_get):
 
 @patch("mediainfo.enrichers.lrclib.requests.get")
 def test_uses_search_directly_when_duration_unknown(mock_get):
-    mock_get.return_value = _mock_response([{"plainLyrics": "no duration needed", "syncedLyrics": ""}])
+    mock_get.return_value = _mock_response(
+        [{"plainLyrics": "no duration needed", "syncedLyrics": ""}]
+    )
     enricher = LrclibEnricher(_config())
     np = _music(duration=None)
 
@@ -124,9 +133,13 @@ def test_search_returns_no_results(mock_get):
 
 @patch("mediainfo.enrichers.lrclib.requests.get")
 def test_instrumental_track_leaves_lyrics_empty(mock_get):
-    mock_get.return_value = _mock_response({
-        "instrumental": True, "plainLyrics": None, "syncedLyrics": None,
-    })
+    mock_get.return_value = _mock_response(
+        {
+            "instrumental": True,
+            "plainLyrics": None,
+            "syncedLyrics": None,
+        }
+    )
     enricher = LrclibEnricher(_config())
     np = _music(duration=200)
 

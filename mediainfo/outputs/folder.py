@@ -44,7 +44,9 @@ class FolderOutput(Output):
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
         self._clear()
         idle = now_playing.source == "idle"
-        tier: CacheTier = "idle" if idle else "music" if now_playing.media_type == "music" else "default"
+        tier: CacheTier = (
+            "idle" if idle else "music" if now_playing.media_type == "music" else "default"
+        )
 
         for artwork in now_playing.images:
             try:

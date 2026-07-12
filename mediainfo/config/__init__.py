@@ -38,6 +38,7 @@ from mediainfo.config.enrichers import (
     WikipediaConfig,
 )
 from mediainfo.config.idle import (
+    ArtsWallpaperConfig,
     IDLE_CONFIG_TYPES,
     LastFmHistoryConfig,
     LibraryIdleConfig,
@@ -121,6 +122,7 @@ __all__ = [
     "AlertConfig",
     "AppleTvConfig",
     "ArtistSpotlightConfig",
+    "ArtsWallpaperConfig",
     "AuthConfig",
     "AutoRotateConfig",
     "BlurredBackgroundConfig",
@@ -224,12 +226,14 @@ def _expand_env_vars(value: Any) -> Any:
           client_secret: ${SPOTIFY_CLIENT_SECRET}
     """
     if isinstance(value, str):
+
         def _replace(m: re.Match) -> str:
             var_name, fallback = m.group(1), m.group(2)
             env_val = os.environ.get(var_name)
             if env_val is not None:
                 return env_val
             return fallback if fallback is not None else m.group(0)
+
         return _ENV_VAR_RE.sub(_replace, value)
     if isinstance(value, dict):
         return {k: _expand_env_vars(v) for k, v in value.items()}

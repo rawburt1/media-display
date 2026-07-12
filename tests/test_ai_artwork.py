@@ -15,12 +15,20 @@ def _config(**kwargs):
 
 
 def _music(
-    artist="Queen", title="Bohemian Rhapsody", album="A Night at the Opera",
-    genres=None, ai_text=None,
+    artist="Queen",
+    title="Bohemian Rhapsody",
+    album="A Night at the Opera",
+    genres=None,
+    ai_text=None,
 ):
     return NowPlaying(
-        source="kodi", media_type="music", title=title, subtitle=artist, album=album,
-        genres=genres or [], ai_text=ai_text or {},
+        source="kodi",
+        media_type="music",
+        title=title,
+        subtitle=artist,
+        album=album,
+        genres=genres or [],
+        ai_text=ai_text or {},
     )
 
 
@@ -77,7 +85,9 @@ def test_generates_and_appends_artwork(mock_post, tmp_path):
 def test_uses_configured_host_port_and_params(mock_post, tmp_path):
     mock_post.return_value = _sd_response()
     enricher = AiArtworkEnricher(
-        _config(host="192.168.1.60", port=7861, steps=30, width=768, height=768, timeout_seconds=60),
+        _config(
+            host="192.168.1.60", port=7861, steps=30, width=768, height=768, timeout_seconds=60
+        ),
         tmp_path,
     )
 

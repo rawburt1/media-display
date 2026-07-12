@@ -13,7 +13,9 @@ def _artwork():
 
 
 def _music(artist="Manfred Mann's Earth Band"):
-    return NowPlaying(source="kodi", media_type="music", title="Davy's on the Road Again", subtitle=artist)
+    return NowPlaying(
+        source="kodi", media_type="music", title="Davy's on the Road Again", subtitle=artist
+    )
 
 
 def _svt_concert(artist="Some Band"):
@@ -27,6 +29,7 @@ def _movie_no_artist():
 # ---------------------------------------------------------------------------
 # _resolve_artist
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_artist_music_uses_subtitle():
     assert _resolve_artist(_music(artist="Queen")) == "Queen"
@@ -43,6 +46,7 @@ def test_resolve_artist_movie_with_no_artist_field_is_empty():
 # ---------------------------------------------------------------------------
 # prepare() / health_detail()
 # ---------------------------------------------------------------------------
+
 
 def test_music_with_photo_and_bio():
     theme = ArtistSpotlightTheme()
@@ -67,7 +71,9 @@ def test_show_bio_false_omits_bio_text():
     now_playing = _music(artist="Queen")
     now_playing.summary = "A British rock band."
 
-    result = theme.prepare(now_playing, _artwork(), None, None, media_data, ArtistSpotlightConfig(show_bio=False))
+    result = theme.prepare(
+        now_playing, _artwork(), None, None, media_data, ArtistSpotlightConfig(show_bio=False)
+    )
 
     assert result.extra_payload["bio"] == ""
 
@@ -76,7 +82,9 @@ def test_no_artist_name_returns_none_no_degraded_report():
     theme = ArtistSpotlightTheme()
     media_data = MagicMock()
 
-    result = theme.prepare(_movie_no_artist(), _artwork(), None, None, media_data, ArtistSpotlightConfig())
+    result = theme.prepare(
+        _movie_no_artist(), _artwork(), None, None, media_data, ArtistSpotlightConfig()
+    )
 
     assert result is None
     media_data.get_artist_photo.assert_not_called()
@@ -99,7 +107,9 @@ def test_no_photo_found_degrades():
     media_data = MagicMock()
     media_data.get_artist_photo.return_value = None
 
-    result = theme.prepare(_music(artist="Obscure Artist"), _artwork(), None, None, media_data, ArtistSpotlightConfig())
+    result = theme.prepare(
+        _music(artist="Obscure Artist"), _artwork(), None, None, media_data, ArtistSpotlightConfig()
+    )
 
     assert result is None
     detail = theme.health_detail(ArtistSpotlightConfig())
@@ -112,7 +122,9 @@ def test_svt_concert_broadcast_resolves_photo():
     media_data = MagicMock()
     media_data.get_artist_photo.return_value = Path("/cache/music/abba/artist.jpg")
 
-    result = theme.prepare(_svt_concert(artist="ABBA"), _artwork(), None, None, media_data, ArtistSpotlightConfig())
+    result = theme.prepare(
+        _svt_concert(artist="ABBA"), _artwork(), None, None, media_data, ArtistSpotlightConfig()
+    )
 
     assert result.extra_payload["name"] == "ABBA"
     media_data.get_artist_photo.assert_called_once_with("ABBA")
@@ -123,7 +135,9 @@ def test_movie_after_degraded_music_clears_state():
     theme.prepare(_music(), _artwork(), None, None, None, ArtistSpotlightConfig())
     assert theme.health_detail(ArtistSpotlightConfig()) is not None
 
-    result = theme.prepare(_movie_no_artist(), _artwork(), None, None, None, ArtistSpotlightConfig())
+    result = theme.prepare(
+        _movie_no_artist(), _artwork(), None, None, None, ArtistSpotlightConfig()
+    )
 
     assert result is None
     assert theme.health_detail(ArtistSpotlightConfig()) is None
@@ -132,6 +146,7 @@ def test_movie_after_degraded_music_clears_state():
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = ArtistSpotlightTheme()

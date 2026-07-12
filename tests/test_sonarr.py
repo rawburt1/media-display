@@ -9,7 +9,9 @@ from mediainfo.models import Artwork, NowPlaying
 
 
 def _enricher() -> SonarrEnricher:
-    return SonarrEnricher(SonarrConfig(enabled=True, host="192.168.1.50", port=8989, api_key="key123"))
+    return SonarrEnricher(
+        SonarrConfig(enabled=True, host="192.168.1.50", port=8989, api_key="key123")
+    )
 
 
 def _episode(**kwargs) -> NowPlaying:
@@ -129,6 +131,7 @@ def test_api_error_does_not_propagate(mock_get):
 # test_radarr.py/test_lidarr.py for the same coverage on the other two)
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.arr_base.requests.get")
 def test_test_connection_success(mock_get):
     mock_get.return_value.raise_for_status = MagicMock()
@@ -151,6 +154,7 @@ def test_test_connection_handles_exception(mock_get):
 # SonarrConfig validation (pydantic dataclass rollout - see
 # mediainfo/config/enrichers.py)
 # ---------------------------------------------------------------------------
+
 
 def test_config_unknown_field_raises_validation_error():
     import pytest

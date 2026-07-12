@@ -1,7 +1,7 @@
 """Entry point: python -m mediainfo [--config config.yaml]
-              python -m mediainfo auth {appletv,spotify} [--config config.yaml]
-              python -m mediainfo set-password [--config config.yaml]
-              python -m mediainfo restore-backup [--config config.yaml]
+python -m mediainfo auth {appletv,spotify} [--config config.yaml]
+python -m mediainfo set-password [--config config.yaml]
+python -m mediainfo restore-backup [--config config.yaml]
 """
 
 from __future__ import annotations
@@ -22,19 +22,14 @@ from mediainfo.config_backup import backup_config_file, list_backups, restore_ba
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.validation import validate_config
 from mediainfo.wiring import (
+    attach_services,
+    build_app_services,
     build_artwork_overrides,
     build_history,
     build_mediadata_store,
     build_poster_store,
     instantiate_outputs,
     start_orchestrator,
-    wire_artwork_overrides,
-    wire_artwork_refresh,
-    wire_health_providers,
-    wire_history,
-    wire_hitster_safe,
-    wire_media_data_store,
-    wire_rotate_now,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,8 +93,6 @@ def main() -> None:
     poster_store = build_poster_store(config)
     history = build_history(config)
     orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store, history)
-    wire_artwork_overrides(outputs, overrides)
-    wire_history(outputs, history)
 
     try:
         # Main loop: sleep until a stop signal or a config-file change.
@@ -135,15 +128,15 @@ def main() -> None:
                 )
             if overrides_config_changed:
                 overrides = build_artwork_overrides(config)
-                wire_artwork_overrides(outputs, overrides)
             if posters_config_changed:
                 poster_store = build_poster_store(config)
             if history_config_changed:
                 if history is not None:
                     history.close()
                 history = build_history(config)
-                wire_history(outputs, history)
-            orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store, history)
+            orch = _start_and_wire(
+                config, outputs, cache, library, overrides, poster_store, history
+            )
             logger.info("Config reloaded successfully")
     finally:
         logger.info("Shutting down ...")
@@ -160,17 +153,21 @@ def main() -> None:
 # Signal handling
 # ---------------------------------------------------------------------------
 
+
 def _make_stop_handler(stop_event: threading.Event):
     """Return a SIGTERM/SIGINT handler that sets *stop_event*."""
+
     def _handler(sig, frame):
         logger.info("Received %s; shutting down gracefully", signal.Signals(sig).name)
         stop_event.set()
+
     return _handler
 
 
 # ---------------------------------------------------------------------------
 # Lifecycle utilities
 # ---------------------------------------------------------------------------
+
 
 def _build_cache(config: Config) -> ImageCache:
     return ImageCache(
@@ -182,20 +179,32 @@ def _build_cache(config: Config) -> ImageCache:
     )
 
 
-def _start_and_wire(config: Config, outputs: list, cache: ImageCache, library: MusicLibrary, overrides, poster_store=None, history=None):
+def _start_and_wire(
+    config: Config,
+    outputs: list,
+    cache: ImageCache,
+    library: MusicLibrary,
+    overrides,
+    poster_store=None,
+    history=None,
+):
     # Built once here (rather than left to start_orchestrator's own
-    # internal default) so the same instance can also be wired directly
-    # into the themes output below, instead of each ending up with its
-    # own separate MediaDataStore.
+    # internal default) so the same instance can also go into the
+    # AppServices built below, instead of each ending up with its own
+    # separate MediaDataStore.
     mediadata_store = build_mediadata_store(config, cache)
     orch = start_orchestrator(
-        config, outputs, cache, library, overrides, poster_store, history, mediadata_store,
+        config,
+        outputs,
+        cache,
+        library,
+        overrides,
+        poster_store,
+        history,
+        mediadata_store,
     )
-    wire_health_providers(outputs, orch, config)
-    wire_hitster_safe(outputs, orch)
-    wire_artwork_refresh(outputs, orch)
-    wire_rotate_now(outputs, orch)
-    wire_media_data_store(outputs, mediadata_store)
+    services = build_app_services(orch, config, outputs, history, overrides, mediadata_store)
+    attach_services(outputs, services)
     return orch
 
 
@@ -260,6 +269,7 @@ def _setup_logging(log_config: LoggingConfig) -> None:
 # validate-config subcommand
 # ---------------------------------------------------------------------------
 
+
 def _validate_config_main(argv: list) -> None:
     """Load and validate config.yaml, printing all warnings as errors.
 
@@ -303,6 +313,7 @@ def _validate_config_main(argv: list) -> None:
 # set-password subcommand
 # ---------------------------------------------------------------------------
 
+
 def _set_password_main(argv: list) -> None:
     """Set or reset auth.username/auth.password directly in config.yaml,
     without needing to hand-edit YAML or reach a UI you may be locked out
@@ -339,7 +350,8 @@ def _set_password_main(argv: list) -> None:
         "command-line argument can end up in your shell history)",
     )
     parser.add_argument(
-        "--enable", action="store_true",
+        "--enable",
+        action="store_true",
         help="Also set auth.enabled: true (by default this command only changes the credentials)",
     )
     args = parser.parse_args(argv)
@@ -409,6 +421,7 @@ def _set_password_main(argv: list) -> None:
 # restore-backup subcommand
 # ---------------------------------------------------------------------------
 
+
 def _restore_backup_main(argv: list) -> None:
     """Restore config.yaml from one of the automatic backups taken before
     every save (config UI, `set-password`, or Apple TV pairing) - see
@@ -431,7 +444,9 @@ def _restore_backup_main(argv: list) -> None:
         "for the most recent one - omit to be prompted interactively",
     )
     parser.add_argument(
-        "--yes", action="store_true", help="Skip the confirmation prompt (for scripting)"
+        "--yes",
+        action="store_true",
+        help="Skip the confirmation prompt (for scripting)",
     )
     args = parser.parse_args(argv)
 
@@ -480,7 +495,9 @@ def _restore_backup_main(argv: list) -> None:
             return
 
     restore_backup(config_path, chosen)
-    print(f"Restored {config_path} from {chosen.name} (the previous contents were themselves backed up first).")
+    print(
+        f"Restored {config_path} from {chosen.name} (the previous contents were themselves backed up first)."
+    )
 
     try:
         Config.load(config_path)
@@ -503,13 +520,16 @@ def _restore_backup_main(argv: list) -> None:
 # import-lidarr subcommand
 # ---------------------------------------------------------------------------
 
+
 def _import_lidarr_main(argv: list) -> None:
     parser = argparse.ArgumentParser(
         prog="python -m mediainfo import-lidarr",
         description="Populate the local music library from a Lidarr instance",
     )
     parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
-    parser.add_argument("--url", required=True, help="Lidarr base URL, e.g. http://192.168.1.122:6003")
+    parser.add_argument(
+        "--url", required=True, help="Lidarr base URL, e.g. http://192.168.1.122:6003"
+    )
     parser.add_argument("--api-key", required=True, help="Lidarr API key")
     args = parser.parse_args(argv)
 
@@ -535,6 +555,7 @@ def _import_lidarr_main(argv: list) -> None:
 # ---------------------------------------------------------------------------
 # Auth subcommand
 # ---------------------------------------------------------------------------
+
 
 def _auth_main(argv: list) -> None:
     parser = argparse.ArgumentParser(

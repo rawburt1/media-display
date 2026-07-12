@@ -65,7 +65,9 @@ class PixooOutput(Output):
         # them here used to mean a Pixoo that dropped off the network was
         # silently reported as healthy.
         size = self.config.size
-        led_path = self.cache.get_derived_path(image_path, self._led_cache_key(), self._build_led_image)
+        led_path = self.cache.get_derived_path(
+            image_path, self._led_cache_key(), self._build_led_image
+        )
         image = Image.open(led_path).convert("RGB")
         pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
 
@@ -84,6 +86,27 @@ class PixooOutput(Output):
                 "PicID": 1,
                 "PicSpeed": 1000,
                 "PicData": pixel_data,
+            }
+        )
+
+    def on_idle(self) -> None:
+        # Same protocol as update(), sent with an all-zero (black) buffer -
+        # there's no dedicated "clear" command in the Pixoo HTTP API. This
+        # is what keeps the display from getting stuck on stale artwork
+        # when e.g. every candidate image gets filtered out for this
+        # output (see orchestrator_artwork.py's show_image_for_output).
+        size = self.config.size
+        blank = base64.b64encode(bytes(size * size * 3)).decode("ascii")
+        self._post({"Command": "Draw/ResetHttpGifId"})
+        self._post(
+            {
+                "Command": "Draw/SendHttpGif",
+                "PicNum": 1,
+                "PicWidth": size,
+                "PicOffset": 0,
+                "PicID": 1,
+                "PicSpeed": 1000,
+                "PicData": blank,
             }
         )
 

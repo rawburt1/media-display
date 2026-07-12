@@ -79,14 +79,18 @@ class PlexSource(MediaSource):
                 else:
                     subtitle = ep_title
                 # Prefer the series poster/fanart over the episode's own still/art.
-                poster_path = item.get("grandparentThumb") or item.get("parentThumb") or item.get("thumb")
+                poster_path = (
+                    item.get("grandparentThumb") or item.get("parentThumb") or item.get("thumb")
+                )
                 fanart_path = item.get("grandparentArt") or item.get("art")
             else:
                 media_type = "music"
                 title = item.get("title", "")
                 subtitle = item.get("grandparentTitle", "")
                 # Prefer the album cover over the artist image or track thumbnail.
-                poster_path = item.get("parentThumb") or item.get("grandparentThumb") or item.get("thumb")
+                poster_path = (
+                    item.get("parentThumb") or item.get("grandparentThumb") or item.get("thumb")
+                )
                 fanart_path = item.get("art")
 
             images = []

@@ -1,6 +1,5 @@
 """Tests for the image transform pipeline."""
 
-
 from PIL import Image
 
 from mediainfo.transforms import (
@@ -25,6 +24,7 @@ def _rgb(w=200, h=300, color=(100, 150, 200)):
 # ---------------------------------------------------------------------------
 # Individual transforms
 # ---------------------------------------------------------------------------
+
 
 def test_fit_crops_to_exact_size():
     out = Fit(64, 64).apply(_rgb(200, 300))
@@ -81,6 +81,7 @@ def test_rotate_without_expand_keeps_size():
 # parse_pipeline
 # ---------------------------------------------------------------------------
 
+
 def test_parse_string_entry():
     pipeline = parse_pipeline(["grayscale"])
     assert len(pipeline) == 1
@@ -109,11 +110,13 @@ def test_parse_scalar_param():
 
 
 def test_parse_multi_step_pipeline():
-    pipeline = parse_pipeline([
-        {"fit": [64, 64]},
-        "grayscale",
-        {"brightness": {"factor": 1.2}},
-    ])
+    pipeline = parse_pipeline(
+        [
+            {"fit": [64, 64]},
+            "grayscale",
+            {"brightness": {"factor": 1.2}},
+        ]
+    )
     assert len(pipeline) == 3
     assert isinstance(pipeline[0], Fit)
     assert isinstance(pipeline[1], Grayscale)
@@ -139,6 +142,7 @@ def test_parse_bad_params_skips_with_warning():
 # pipeline_cache_key
 # ---------------------------------------------------------------------------
 
+
 def test_same_pipeline_same_key():
     a = parse_pipeline([{"fit": [64, 64]}, "grayscale"])
     b = parse_pipeline([{"fit": [64, 64]}, "grayscale"])
@@ -158,6 +162,7 @@ def test_empty_pipeline_key_is_stable():
 # ---------------------------------------------------------------------------
 # ImageCache.get_transformed_path
 # ---------------------------------------------------------------------------
+
 
 def test_get_transformed_path_noop_for_empty_pipeline(tmp_path):
     from mediainfo.cache import ImageCache

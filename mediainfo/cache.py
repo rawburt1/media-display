@@ -100,9 +100,7 @@ class ImageCache:
             "music": self.music_dir,
         }
 
-    def get_path(
-        self, artwork: Optional[Artwork], tier: CacheTier = "default"
-    ) -> Optional[Path]:
+    def get_path(self, artwork: Optional[Artwork], tier: CacheTier = "default") -> Optional[Path]:
         """Return a local file path for the artwork, downloading it if needed.
 
         Returns None if there is no artwork (or its URL is empty). `tier`
@@ -124,13 +122,16 @@ class ImageCache:
         if existing is not None:
             return existing
 
-        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=_HEADERS)
+        headers = {**_HEADERS, **artwork.headers} if artwork.headers else _HEADERS
+        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=headers)
         response.raise_for_status()
 
         if not self._meets_minimum_size(response.content):
             logger.info(
                 "Skipped artwork %r - smaller than %dx%d",
-                artwork.label or artwork.url, self.min_width, self.min_height,
+                artwork.label or artwork.url,
+                self.min_width,
+                self.min_height,
             )
             return None
 
@@ -205,13 +206,16 @@ class ImageCache:
             path = Path(urlparse(artwork.url).path)
             return path if path.exists() else None
 
-        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=_HEADERS)
+        headers = {**_HEADERS, **artwork.headers} if artwork.headers else _HEADERS
+        response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=headers)
         response.raise_for_status()
 
         if not self._meets_minimum_size(response.content):
             logger.info(
                 "Skipped artwork %r - smaller than %dx%d",
-                artwork.label or artwork.url, self.min_width, self.min_height,
+                artwork.label or artwork.url,
+                self.min_width,
+                self.min_height,
             )
             return None
 

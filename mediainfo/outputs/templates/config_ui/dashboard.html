@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mediainfo &middot; dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='config_ui/dashboard.css') }}">
+</head>
+<body>
+<div id="shell">
+  <aside id="sidebar" aria-label="Configuration sections">
+    <div class="brand">mediainfo</div>
+    <nav id="nav" aria-label="Primary">
+      <button type="button" data-section="dashboard">Dashboard</button>
+      <button type="button" data-section="pipeline">Pipeline</button>
+      <button type="button" data-section="media">Media</button>
+      <button type="button" data-section="metadata">Metadata</button>
+      <button type="button" data-section="appearance">Appearance</button>
+      <button type="button" data-section="displays">Displays</button>
+      <button type="button" data-section="library">Library</button>
+      <button type="button" data-section="health">Health</button>
+      <a class="nav-link" href="/form">Advanced</a>
+    </nav>
+    <div class="nav-hint">Advanced opens the classic settings editor (raw YAML, backups, and anything not covered here yet).</div>
+    <div class="sidebar-footer">
+      <button type="button" id="theme-toggle" onclick="toggleTheme()">Light / dark</button>
+    </div>
+  </aside>
+
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+    <div id="topbar">
+      <button type="button" id="hamburger" aria-label="Open navigation" aria-expanded="false" onclick="toggleNav()">&#9776;</button>
+      <span class="topbar-title" id="topbar-title">Dashboard</span>
+    </div>
+
+    <main id="main">
+      {% if show_auth_warning %}
+      <div class="auth-warning"><strong>No authentication.</strong> This page and all credentials in it are accessible to anyone on your network. Turn on authentication and/or restrict this page to this machine only under <a href="/form">Advanced configuration</a>. See <a href="https://github.com/rawburt1/media-display/blob/master/SECURITY.md">SECURITY.md</a>.</div>
+      {% endif %}
+
+      <div class="section" id="section-dashboard" tabindex="-1"><h1>Dashboard</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-pipeline" tabindex="-1"><h1>Pipeline</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-media" tabindex="-1"><h1>Media</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-metadata" tabindex="-1"><h1>Metadata</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-appearance" tabindex="-1"><h1>Appearance</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-displays" tabindex="-1"><h1>Displays</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-library" tabindex="-1"><h1>Library</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-health" tabindex="-1"><h1>Health</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-component" tabindex="-1"><h1>Component</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-wizard" tabindex="-1"><h1>Setup</h1><p class="lede">Loading…</p></div>
+    </main>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='config_ui/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='config_ui/components.js') }}"></script>
+<script src="{{ url_for('static', filename='config_ui/wizard.js') }}"></script>
+</body></html>

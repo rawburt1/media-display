@@ -20,6 +20,7 @@ from mediainfo.outputs.pixoo import PixooOutput, _save_preview
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _config(**kwargs):
     defaults = dict(enabled=True, ip="192.168.1.32")
     defaults.update(kwargs)
@@ -55,6 +56,7 @@ def _save_image(path: Path, width=600, height=600, color=(200, 100, 50)) -> Path
 # ---------------------------------------------------------------------------
 # _save_preview
 # ---------------------------------------------------------------------------
+
 
 def test_save_preview_writes_512x512_png(tmp_path):
     img = _solid_image(64, 64)
@@ -94,6 +96,7 @@ def test_save_preview_does_not_raise_on_bad_path(tmp_path):
 # PixooOutput.update — integration
 # ---------------------------------------------------------------------------
 
+
 def test_update_sends_correct_commands(tmp_path):
     img_path = _save_image(tmp_path / "art.jpg")
     output = PixooOutput(_config(), _cache(tmp_path))
@@ -131,6 +134,49 @@ def test_update_sends_16x16_pixels_when_size_16(tmp_path):
     gif_payload = next(p for p in sent_payloads if p.get("Command") == "Draw/SendHttpGif")
     raw = base64.b64decode(gif_payload["PicData"])
     assert len(raw) == 16 * 16 * 3  # RGB bytes
+    assert gif_payload["PicWidth"] == 16
+
+
+# ---------------------------------------------------------------------------
+# on_idle
+# ---------------------------------------------------------------------------
+
+
+def test_on_idle_sends_correct_commands(tmp_path):
+    output = PixooOutput(_config(), _cache(tmp_path))
+
+    with patch.object(output, "_post") as mock_post:
+        output.on_idle()
+
+    assert mock_post.call_count == 2
+    commands = [c.args[0]["Command"] for c in mock_post.call_args_list]
+    assert commands == ["Draw/ResetHttpGifId", "Draw/SendHttpGif"]
+
+
+def test_on_idle_sends_an_all_black_frame(tmp_path):
+    output = PixooOutput(_config(), _cache(tmp_path))
+
+    sent_payloads = []
+    with patch.object(output, "_post", side_effect=lambda p: sent_payloads.append(p)):
+        output.on_idle()
+
+    gif_payload = next(p for p in sent_payloads if p.get("Command") == "Draw/SendHttpGif")
+    raw = base64.b64decode(gif_payload["PicData"])
+    assert len(raw) == 64 * 64 * 3
+    assert raw == bytes(64 * 64 * 3)
+    assert gif_payload["PicWidth"] == 64
+
+
+def test_on_idle_sends_correctly_sized_frame_for_size_16(tmp_path):
+    output = PixooOutput(_config(size=16), _cache(tmp_path))
+
+    sent_payloads = []
+    with patch.object(output, "_post", side_effect=lambda p: sent_payloads.append(p)):
+        output.on_idle()
+
+    gif_payload = next(p for p in sent_payloads if p.get("Command") == "Draw/SendHttpGif")
+    raw = base64.b64decode(gif_payload["PicData"])
+    assert len(raw) == 16 * 16 * 3
     assert gif_payload["PicWidth"] == 16
 
 
@@ -181,13 +227,17 @@ def test_update_raises_on_bad_image(tmp_path):
 # Disk caching of the LED-prepared derivative
 # ---------------------------------------------------------------------------
 
+
 def test_update_only_prepares_image_once_for_repeated_calls(tmp_path):
     img_path = _save_image(tmp_path / "art.jpg")
     output = PixooOutput(_config(), _cache(tmp_path))
 
-    with patch.object(output, "_post"), patch(
-        "mediainfo.outputs.pixoo.prepare_led_image", side_effect=_passthrough_prepare
-    ) as mock_prepare:
+    with (
+        patch.object(output, "_post"),
+        patch(
+            "mediainfo.outputs.pixoo.prepare_led_image", side_effect=_passthrough_prepare
+        ) as mock_prepare,
+    ):
         output.update(_now_playing(), _artwork(), img_path)
         output.update(_now_playing(), _artwork(), img_path)
 
@@ -199,9 +249,13 @@ def test_update_reprocesses_when_settings_change(tmp_path):
     output_a = PixooOutput(_config(palette_size=24), _cache(tmp_path))
     output_b = PixooOutput(_config(palette_size=8), _cache(tmp_path))
 
-    with patch.object(output_a, "_post"), patch.object(output_b, "_post"), patch(
-        "mediainfo.outputs.pixoo.prepare_led_image", side_effect=_passthrough_prepare
-    ) as mock_prepare:
+    with (
+        patch.object(output_a, "_post"),
+        patch.object(output_b, "_post"),
+        patch(
+            "mediainfo.outputs.pixoo.prepare_led_image", side_effect=_passthrough_prepare
+        ) as mock_prepare,
+    ):
         output_a.update(_now_playing(), _artwork(), img_path)
         output_b.update(_now_playing(), _artwork(), img_path)
 
@@ -261,7 +315,10 @@ def test_text_detection_disabled_by_default_does_not_call_detector(tmp_path):
     img_path = _save_image(tmp_path / "art.jpg")
     output = PixooOutput(_config(), _cache(tmp_path))
 
-    with patch.object(output, "_post"), patch("mediainfo.text_removal.detect_text_regions") as mock_detect:
+    with (
+        patch.object(output, "_post"),
+        patch("mediainfo.text_removal.detect_text_regions") as mock_detect,
+    ):
         output.update(_now_playing(), _artwork(), img_path)
 
     mock_detect.assert_not_called()
@@ -269,7 +326,9 @@ def test_text_detection_disabled_by_default_does_not_call_detector(tmp_path):
 
 def test_text_detection_settings_change_the_led_cache_key(tmp_path):
     output_a = PixooOutput(_config(text_detection_enabled=False), _cache(tmp_path))
-    output_b = PixooOutput(_config(text_detection_enabled=True, text_detection_model_path="/x.pb"), _cache(tmp_path))
+    output_b = PixooOutput(
+        _config(text_detection_enabled=True, text_detection_model_path="/x.pb"), _cache(tmp_path)
+    )
 
     assert output_a._led_cache_key() != output_b._led_cache_key()
 
@@ -281,6 +340,7 @@ def test_only_shows_album_art_for_music():
 # ---------------------------------------------------------------------------
 # Power/brightness scheduling (see display_schedule.py)
 # ---------------------------------------------------------------------------
+
 
 def test_schedule_tick_without_schedule_sends_nothing(tmp_path):
     output = PixooOutput(_config(), _cache(tmp_path))
@@ -306,7 +366,8 @@ def test_schedule_tick_sends_power_and_brightness_commands(tmp_path):
     with patch("mediainfo.outputs.pixoo.requests.post") as mock_post:
         output._scheduler.tick(datetime.time(23, 30))
     assert mock_post.call_args.kwargs["json"] == {
-        "Command": "Channel/OnOffScreen", "OnOff": 0,
+        "Command": "Channel/OnOffScreen",
+        "OnOff": 0,
     }
 
 
@@ -314,6 +375,7 @@ def test_schedule_tick_sends_power_and_brightness_commands(tmp_path):
 # PixooConfig validation (pydantic dataclass rollout - see
 # mediainfo/config/outputs.py)
 # ---------------------------------------------------------------------------
+
 
 def test_config_unknown_field_raises_validation_error():
     import pytest

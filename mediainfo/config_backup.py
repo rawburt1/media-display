@@ -50,14 +50,18 @@ def backup_config_file(config_path: Path, keep: int = DEFAULT_KEEP) -> Optional[
     if backup_path.exists():
         # Two backups within the same second - keep both by disambiguating.
         i = 2
-        while (backup_dir / f"{config_path.name}.{time.strftime('%Y%m%dT%H%M%S')}-{i}.bak").exists():
+        while (
+            backup_dir / f"{config_path.name}.{time.strftime('%Y%m%dT%H%M%S')}-{i}.bak"
+        ).exists():
             i += 1
         backup_path = backup_dir / f"{config_path.name}.{time.strftime('%Y%m%dT%H%M%S')}-{i}.bak"
 
     try:
         shutil.copy2(config_path, backup_path)
     except OSError:
-        logger.exception("Failed to back up %s before writing - proceeding without a backup", config_path)
+        logger.exception(
+            "Failed to back up %s before writing - proceeding without a backup", config_path
+        )
         return None
 
     for stale in list_backups(config_path)[keep:]:

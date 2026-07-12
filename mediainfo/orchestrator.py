@@ -4,18 +4,20 @@ collaborators that do the actual work - source polling
 per-tick routing (orchestrator_routing), idle-wallpaper batching
 (orchestrator_idle), and output health tracking (orchestrator_health).
 
-Also keeps a handful of thin wrapper methods (_tick, _poll_sources,
-_classify, the _groups property) purely so existing tests that reach into
-Orchestrator internals by name keep working unchanged.
+_tick, _poll_sources, and the _groups property are thin wrappers around
+those collaborators, kept because _run() and Orchestrator's own methods
+(_refresh_artwork, _force_rotation, get_health) call them directly - not
+merely for tests. Tests exercise the collaborators themselves
+(_SourcePoller.poll, _RoutingEngine.tick, orchestrator_state.classify)
+rather than reaching into Orchestrator's private single-group state.
 """
 
 from __future__ import annotations
 
 import logging
-import random  # noqa: F401 - unused directly; kept so tests' patch("mediainfo.orchestrator.random...") still resolves
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from mediainfo.alerting import AlertManager
 from mediainfo.artwork_overrides import ArtworkOverrideStore
@@ -31,8 +33,7 @@ from mediainfo.orchestrator_health import _HealthTracker
 from mediainfo.orchestrator_idle import _IdleBatchManager
 from mediainfo.orchestrator_polling import _SourcePoller
 from mediainfo.orchestrator_routing import _RoutingEngine
-from mediainfo.orchestrator_state import _RotationState, _RouteGroup, _strip_parenthetical, _Transition
-from mediainfo.orchestrator_state import classify as _classify_group
+from mediainfo.orchestrator_state import _RouteGroup, _strip_parenthetical
 from mediainfo.outputs.base import Output
 from mediainfo.poster_store import PosterStore
 from mediainfo.sources.base import MediaSource
@@ -163,31 +164,6 @@ class Orchestrator:
     def _groups(self) -> List[_RouteGroup]:
         return self._router.groups
 
-    # -- single-group state aliases -----------------------------------------
-    # The orchestrator's original single-item attributes, aliased to the
-    # first route group's state - kept for tests and get_health(), which
-    # predate route groups. Internal code passes an explicit group instead.
-
-    @property
-    def _current(self) -> Optional[NowPlaying]:
-        return self._groups[0].current
-
-    @_current.setter
-    def _current(self, value: Optional[NowPlaying]) -> None:
-        self._groups[0].current = value
-
-    @property
-    def _rotation_state(self) -> Dict[int, _RotationState]:
-        return self._groups[0].rotation_state
-
-    @property
-    def _filtered_outputs(self) -> set:
-        return self._groups[0].filtered_outputs
-
-    @property
-    def _nothing_playing_since(self) -> Optional[float]:
-        return self._groups[0].nothing_playing_since
-
     def get_hitster_safe(self) -> bool:
         with self._hitster_safe_lock:
             return self._hitster_safe
@@ -267,15 +243,6 @@ class Orchestrator:
 
         self._router.tick(results, self._history)
 
-    def _resolve_now_playing(self) -> Optional[NowPlaying]:
-        """The highest-priority routed result, or None - the single-item
-        view of _poll_sources(), kept for tests that predate routing."""
-        results = self._poll_sources()
-        return results[0] if results else None
-
-    def _classify(self, group: _RouteGroup, now_playing: NowPlaying) -> _Transition:
-        return _classify_group(group, now_playing)
-
     def _refresh_artwork(self) -> None:
         """Re-enrich and re-push each group's current item, if any - see
         request_artwork_refresh(). Deliberately doesn't call
@@ -305,7 +272,14 @@ class Orchestrator:
         """
         for group in self._groups:
             for state in group.rotation_state.values():
-                state.last_rotation = 0.0
+                # -inf, not 0.0: last_rotation is compared against
+                # time.monotonic(), which counts from an arbitrary epoch
+                # (often boot time) rather than the Unix epoch - on a
+                # freshly booted machine it can be smaller than
+                # rotation_interval_seconds, making `now - 0.0` read as
+                # "not due yet" and silently swallowing the forced
+                # rotation.
+                state.last_rotation = float("-inf")
 
     def _maybe_purge_cache(self) -> None:
         now = time.monotonic()
@@ -328,7 +302,12 @@ class Orchestrator:
 
         self._last_alert_check = now
         labels = {i: type(output).__name__ for i, output in enumerate(self.outputs)}
-        self._alerts.check(labels, self._health.output_error_since, now, self._health.source_error_since)
+        self._alerts.check(
+            labels,
+            self._health.output_error_since,
+            now,
+            self._health.source_error_since,
+        )
 
     def _poll_sources(self) -> List[NowPlaying]:
         """The route groups' view of this tick's active sources - a thin
@@ -362,13 +341,17 @@ class Orchestrator:
         data = self._health.as_dict(now)
         data["poll_interval_seconds"] = self.poll_interval_seconds
         data["rotation_interval_seconds"] = self.rotation_interval_seconds
-        data["now_playing"] = {
-            "source": np.source,
-            "media_type": np.media_type,
-            "title": np.title,
-            "subtitle": np.subtitle,
-            "images": [a.label or a.url for a in np.images],
-        } if np else None
+        data["now_playing"] = (
+            {
+                "source": np.source,
+                "media_type": np.media_type,
+                "title": np.title,
+                "subtitle": np.subtitle,
+                "images": [a.label or a.url for a in np.images],
+            }
+            if np
+            else None
+        )
         # What each output is currently bound to (per-output source
         # routing) - None while its group is idle or the output itself is
         # filtered (active_hours / idle_when_filtered).

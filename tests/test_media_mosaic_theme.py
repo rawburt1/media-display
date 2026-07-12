@@ -18,12 +18,15 @@ def _file_artwork(path, **kwargs):
 
 
 def _now_playing(images):
-    return NowPlaying(source="kodi", media_type="music", title="Song", subtitle="Artist", images=images)
+    return NowPlaying(
+        source="kodi", media_type="music", title="Song", subtitle="Artist", images=images
+    )
 
 
 # ---------------------------------------------------------------------------
 # _grid_dims
 # ---------------------------------------------------------------------------
+
 
 def test_grid_dims_known_counts_have_no_empty_cells():
     for count in range(1, 7):
@@ -42,6 +45,7 @@ def test_grid_dims_falls_back_for_large_counts():
 # prepare()
 # ---------------------------------------------------------------------------
 
+
 def test_single_image_degrades_to_one_tile(tmp_path):
     art_path = _make_image(tmp_path / "album.jpg", (200, 50, 50))
     cache = ImageCache(tmp_path / "cache")
@@ -57,10 +61,7 @@ def test_single_image_degrades_to_one_tile(tmp_path):
 
 
 def test_multiple_images_builds_grid(tmp_path):
-    paths = [
-        _make_image(tmp_path / f"art{i}.jpg", (i * 40, 50, 50))
-        for i in range(4)
-    ]
+    paths = [_make_image(tmp_path / f"art{i}.jpg", (i * 40, 50, 50)) for i in range(4)]
     cache = ImageCache(tmp_path / "cache")
     now_playing = _now_playing([_file_artwork(p, label=f"Art {i}") for i, p in enumerate(paths)])
     theme = MediaMosaicTheme()
@@ -77,11 +78,13 @@ def test_excludes_artist_photo_and_wordcloud(tmp_path):
     artist_photo = _make_image(tmp_path / "artist.jpg", (50, 200, 50))
     wordcloud = _make_image(tmp_path / "wc.png", (50, 50, 200))
     cache = ImageCache(tmp_path / "cache")
-    now_playing = _now_playing([
-        _file_artwork(album, label="Album art"),
-        _file_artwork(artist_photo, label="Artist photo", is_artist_photo=True),
-        _file_artwork(wordcloud, label="Word cloud", is_wordcloud=True),
-    ])
+    now_playing = _now_playing(
+        [
+            _file_artwork(album, label="Album art"),
+            _file_artwork(artist_photo, label="Artist photo", is_artist_photo=True),
+            _file_artwork(wordcloud, label="Word cloud", is_wordcloud=True),
+        ]
+    )
     theme = MediaMosaicTheme()
 
     result = theme.prepare(now_playing, None, album, cache, None, MediaMosaicConfig())
@@ -106,7 +109,9 @@ def test_returns_none_without_any_candidates(tmp_path):
     cache = ImageCache(tmp_path / "cache")
     now_playing = _now_playing([])
     theme = MediaMosaicTheme()
-    result = theme.prepare(now_playing, None, tmp_path / "art.jpg", cache, None, MediaMosaicConfig())
+    result = theme.prepare(
+        now_playing, None, tmp_path / "art.jpg", cache, None, MediaMosaicConfig()
+    )
     assert result is None
 
 
@@ -122,10 +127,12 @@ def test_returns_none_when_only_excluded_images_present(tmp_path):
 def test_skips_unresolvable_image_but_keeps_others(tmp_path):
     good = _make_image(tmp_path / "good.jpg", (200, 50, 50))
     cache = ImageCache(tmp_path / "cache")
-    now_playing = _now_playing([
-        _file_artwork(tmp_path / "missing.jpg", label="Missing"),
-        _file_artwork(good, label="Good"),
-    ])
+    now_playing = _now_playing(
+        [
+            _file_artwork(tmp_path / "missing.jpg", label="Missing"),
+            _file_artwork(good, label="Good"),
+        ]
+    )
     theme = MediaMosaicTheme()
 
     result = theme.prepare(now_playing, None, good, cache, None, MediaMosaicConfig())
@@ -155,7 +162,9 @@ def test_highlights_the_current_tile(tmp_path):
     current = _make_image(tmp_path / "current.jpg", (10, 10, 10))
     other = _make_image(tmp_path / "other.jpg", (10, 10, 10))
     cache = ImageCache(tmp_path / "cache")
-    now_playing = _now_playing([_file_artwork(current, label="Current"), _file_artwork(other, label="Other")])
+    now_playing = _now_playing(
+        [_file_artwork(current, label="Current"), _file_artwork(other, label="Other")]
+    )
     theme = MediaMosaicTheme()
 
     result = theme.prepare(now_playing, None, current, cache, None, MediaMosaicConfig())
@@ -173,6 +182,7 @@ def test_highlights_the_current_tile(tmp_path):
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = MediaMosaicTheme()

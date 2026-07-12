@@ -22,6 +22,7 @@ def _now_playing(media_type="music", position=None, duration=None):
 # prepare() - media-type-agnostic, gated only on position/duration
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("media_type", ["music", "movie", "episode"])
 def test_reports_position_and_duration_for_any_media_type(media_type):
     theme = ProgressBarTheme()
@@ -37,7 +38,9 @@ def test_reports_position_and_duration_for_any_media_type(media_type):
 def test_uses_configured_color():
     theme = ProgressBarTheme()
     now_playing = _now_playing(position=1.0, duration=10.0)
-    result = theme.prepare(now_playing, _artwork(), None, None, None, ProgressBarConfig(color="#ff8800"))
+    result = theme.prepare(
+        now_playing, _artwork(), None, None, None, ProgressBarConfig(color="#ff8800")
+    )
     assert result.extra_payload["color"] == "#ff8800"
 
 
@@ -69,6 +72,7 @@ def test_position_zero_is_valid_not_falsy():
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = ProgressBarTheme()

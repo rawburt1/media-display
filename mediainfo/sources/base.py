@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
 from mediainfo.models import NowPlaying
+from mediainfo.status import AvailabilityReason
 
 
 class MediaSource(ABC):
@@ -25,6 +26,17 @@ class MediaSource(ABC):
     # whose device is unreachable, without delaying detection for sources
     # that are just legitimately idle.
     last_poll_failed: bool = False
+
+    # Optional, finer-grained companion to last_poll_failed - lets a
+    # source distinguish *why* it can't currently report state (device
+    # off vs. a real integration error) instead of the flat boolean, so
+    # the config UI's Health/Activity model (see mediainfo/status.py) can
+    # show a powered-off device as healthy-but-sleeping rather than
+    # broken. None (the default) means "this source hasn't been migrated
+    # to the richer model yet" - callers fall back to deriving a reason
+    # from last_poll_failed alone, so an unmigrated source's behavior is
+    # unchanged.
+    availability_reason: Optional[AvailabilityReason] = None
 
     # Optional: the config dataclass (from mediainfo.config) that
     # configures this source, for a plugin that wants to declare the

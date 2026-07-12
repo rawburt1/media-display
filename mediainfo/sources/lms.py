@@ -35,7 +35,9 @@ class LmsSource(MediaSource):
 
     def __init__(self, config: LmsConfig):
         self.config = config
-        self._rpc = JsonRpcClient(f"http://{config.host}:{config.port}/jsonrpc.js", timeout=config.timeout)
+        self._rpc = JsonRpcClient(
+            f"http://{config.host}:{config.port}/jsonrpc.js", timeout=config.timeout
+        )
 
     def get_now_playing(self) -> Optional[NowPlaying]:
         self.last_poll_failed = False
@@ -109,7 +111,9 @@ class LmsSource(MediaSource):
         except Exception:
             logger.exception("LMS player list query failed")
             return []
-        return [p["playerid"] for p in (result or {}).get("players_loop") or [] if p.get("playerid")]
+        return [
+            p["playerid"] for p in (result or {}).get("players_loop") or [] if p.get("playerid")
+        ]
 
     def _query_status(self, playerid: str) -> Optional[dict]:
         try:

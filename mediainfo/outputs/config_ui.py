@@ -10,13 +10,22 @@ schema generation and per-output filter helpers), config_store.py (reading
 and saving config.yaml), and appletv_pairing.py (the Apple TV pairing
 wizard) - plus the tiny config_yaml_io.py shared by the latter two.
 
-The page is a single-page app (templates/config_ui/app.html): one Flask-
-rendered shell with a sidebar nav and vanilla-JS client-side routing across
-nine sections (Overview, Media sources, Displays & outputs, Artwork &
-metadata, Idle screen, Automation & schedules, Library & overrides, System
-status, Advanced configuration). library.html and overrides.html remain
-their own full pages, linked from the shell's "Library & overrides"
-section. There is no build step - just the templates as shipped.
+"/" serves the new Dashboard shell (templates/config_ui/dashboard.html,
+static/config_ui/dashboard.{js,css} - see _dashboard_shell() below): a
+lighter SPA that renders Dashboard/Pipeline itself and otherwise links
+straight into the classic shell for Media/Metadata/Appearance/Displays/
+Library/Health/Advanced (those in-shell pages don't exist yet - see
+docs/gui-redesign-phase0-inventory.md for the phased plan). The classic
+shell (templates/config_ui/app.html) still exists unchanged, reachable via
+/form (or "Advanced" in the new nav): one Flask-rendered shell with a
+sidebar nav and vanilla-JS client-side routing across nine sections
+(Overview, Media sources, Displays & outputs, Artwork & metadata, Idle
+screen, Automation & schedules, Library & overrides, System status,
+Advanced configuration). library.html and overrides.html remain their own
+full pages, linked from the classic shell's "Library & overrides" section.
+Neither shell has a build step - just the templates/static files as
+shipped. `ui: dashboard` keeps "/" on the classic health-grid unchanged,
+for anyone who already set that preference (see index() below).
 
 The form is generated from the registered source/output/enricher/idle
 config dataclasses (mediainfo.config.SOURCE_CONFIG_TYPES etc.), so any
@@ -111,6 +120,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import dataclasses
 import io
 import json
 import logging
@@ -123,6 +133,7 @@ from typing import Any, Dict, Optional
 from flask import Flask, jsonify, render_template, request, send_file
 from PIL import Image, UnidentifiedImageError
 
+from mediainfo.app_services import AppServices
 from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache, flatten_transparency
 from mediainfo.config import (
@@ -142,9 +153,18 @@ from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.outputs.appletv_pairing import AppleTvPairingManager
 from mediainfo.outputs.base import Output
 from mediainfo.outputs.config_dashboard import test_enricher, test_output, test_source
-from mediainfo.outputs.config_schema import _HIDDEN_TYPE_CATEGORIES, _as_instance_list, _build_schema
+from mediainfo.outputs.config_schema import (
+    _HIDDEN_TYPE_CATEGORIES,
+    _as_instance_list,
+    _build_schema,
+)
 from mediainfo.outputs.config_store import ConfigStore
 from mediainfo.outputs.config_yaml_io import _read_config
+from mediainfo.outputs.ui_builder import (
+    build_components,
+    build_dashboard,
+    build_pipeline,
+)
 from mediainfo.web_auth import install_auth, is_loopback_address
 
 logger = logging.getLogger(__name__)
@@ -203,8 +223,8 @@ class ConfigUiOutput(Output):
 
     def set_artwork_overrides(self, store: Optional[ArtworkOverrideStore]) -> None:
         """Register the artwork override store, so the "Overrides" page
-        can list/add/remove pins - see wiring.wire_artwork_overrides.
-        None means the feature is disabled (overrides.enabled: false)."""
+        can list/add/remove pins - see AppServices.overrides. None means
+        the feature is disabled (overrides.enabled: false)."""
         self._overrides = store
 
     def set_health_provider(self, fn) -> None:
@@ -212,6 +232,11 @@ class ConfigUiOutput(Output):
         the System status section and the Overview page's now-playing/
         active-source summary."""
         self._health_fn = fn
+
+    def attach(self, services: AppServices) -> None:
+        self.set_hitster_safe_handlers(services.get_hitster_safe, services.set_hitster_safe)
+        self.set_artwork_overrides(services.overrides)
+        self.set_health_provider(services.health_provider)
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         pass
@@ -262,7 +287,8 @@ class ConfigUiOutput(Output):
         def _count_enabled(category: str, registry: Dict[str, type]) -> int:
             section = data.get(category) or {}
             return sum(
-                1 for name in registry
+                1
+                for name in registry
                 if isinstance(section.get(name), dict) and section[name].get("enabled")
             )
 
@@ -306,7 +332,43 @@ class ConfigUiOutput(Output):
         of any single request's own address (unlike _show_auth_warning,
         which is about whether *this visitor* should see the banner)."""
         auth_on = bool(self.auth_config and self.auth_config.enabled)
-        return not is_loopback_address(self.config.host) and self.config.host != "localhost" and not auth_on
+        return (
+            not is_loopback_address(self.config.host)
+            and self.config.host != "localhost"
+            and not auth_on
+        )
+
+    def _build_ui_components(self):
+        """Backend for /api/ui/* - translates the same schema/config/health
+        data _build_schema()/ConfigStore/self._health_fn already expose into
+        the ui_model.UiComponent list (see ui_builder.py). Read-only, adds
+        no new config reading/writing path."""
+        with self._lock:
+            data = _read_config(self.config_path)
+        schema = _build_schema()
+        values, secrets_set = self._store.get_values()
+        output_instances, output_secrets_set = self._store.get_output_instances()
+        text_enrichers_raw = data.get("text_enrichers") or {}
+        health = self._health_fn() if self._health_fn is not None else None
+        return build_components(
+            schema,
+            values,
+            secrets_set,
+            output_instances,
+            output_secrets_set,
+            text_enrichers_raw,
+            health,
+        )
+
+    def _build_ui_dashboard(self):
+        components = self._build_ui_components()
+        pipeline = build_pipeline(components)
+        health = self._health_fn() if self._health_fn is not None else None
+        return (
+            components,
+            pipeline,
+            build_dashboard(components, pipeline, self._compute_overview(), health),
+        )
 
     # -- Apple TV pairing ---------------------------------------------
     #
@@ -351,9 +413,24 @@ class ConfigUiOutput(Output):
                 initial_section=initial_section,
             )
 
+        def _dashboard_shell():
+            return render_template(
+                "config_ui/dashboard.html",
+                show_auth_warning=self._show_auth_warning(),
+            )
+
         @app.get("/")
         def index():
-            return _shell("status" if self.config.ui == "dashboard" else "overview")
+            # `ui: dashboard` keeps landing on the classic health-grid,
+            # unchanged - anyone who already opted into that view keeps
+            # seeing exactly what they see today. Everyone else (the
+            # default) now lands on the new Dashboard shell - see
+            # docs/gui-redesign-phase0-inventory.md §3 for the naming
+            # history and mediainfo/outputs/templates/config_ui/
+            # dashboard.html for the new shell itself.
+            if self.config.ui == "dashboard":
+                return _shell("status")
+            return _dashboard_shell()
 
         # Both entry points are always reachable on every instance,
         # regardless of `ui` - only the *default* section shown at "/"
@@ -377,21 +454,54 @@ class ConfigUiOutput(Output):
         def get_config():
             with self._lock:
                 raw_yaml = (
-                    self.config_path.read_text(encoding="utf-8") if self.config_path.exists() else ""
+                    self.config_path.read_text(encoding="utf-8")
+                    if self.config_path.exists()
+                    else ""
                 )
             values, values_secrets = self._store.get_values()
             outputs, output_secrets = self._store.get_output_instances()
-            return jsonify({
-                "values": values,
-                "outputs": outputs,
-                "raw_yaml": raw_yaml,
-                "secrets_set": {**values_secrets, **output_secrets},
-                "hidden_types": self._store.get_hidden_types(),
-            })
+            return jsonify(
+                {
+                    "values": values,
+                    "outputs": outputs,
+                    "raw_yaml": raw_yaml,
+                    "secrets_set": {**values_secrets, **output_secrets},
+                    "hidden_types": self._store.get_hidden_types(),
+                }
+            )
 
         @app.get("/api/overview")
         def overview():
             return jsonify(self._compute_overview())
+
+        # -- New UI model endpoints (Fas 1 of the GUI redesign) -----------
+        # Read-only translations of the same schema/config/health data the
+        # routes above already expose - see ui_builder.py. Additive: none
+        # of the routes above change.
+
+        @app.get("/api/ui/components")
+        def ui_components():
+            components = self._build_ui_components()
+            return jsonify([dataclasses.asdict(c) for c in components])
+
+        @app.get("/api/ui/component/<id>")
+        def ui_component(id: str):
+            components = self._build_ui_components()
+            for c in components:
+                if c.id == id:
+                    return jsonify(dataclasses.asdict(c))
+            return jsonify({"error": f"Unknown component id: {id}"}), 404
+
+        @app.get("/api/ui/pipelines")
+        def ui_pipelines():
+            components = self._build_ui_components()
+            pipeline = build_pipeline(components)
+            return jsonify([dataclasses.asdict(pipeline)])
+
+        @app.get("/api/ui/dashboard")
+        def ui_dashboard():
+            _components, _pipeline, dashboard = self._build_ui_dashboard()
+            return jsonify(dataclasses.asdict(dashboard))
 
         @app.post("/api/config/form")
         def save_form():
@@ -431,9 +541,9 @@ class ConfigUiOutput(Output):
         @app.get("/api/config/backups")
         def list_config_backups():
             backups = list_backups(self.config_path)
-            return jsonify({
-                "backups": [{"filename": b.name, "mtime": b.stat().st_mtime} for b in backups]
-            })
+            return jsonify(
+                {"backups": [{"filename": b.name, "mtime": b.stat().st_mtime} for b in backups]}
+            )
 
         @app.post("/api/config/backups/restore")
         def restore_config_backup():
@@ -446,7 +556,10 @@ class ConfigUiOutput(Output):
                 return jsonify({"ok": False, "error": error}), 400
             if restart_required:
                 self._restart_required = True
-            response: Dict[str, Any] = {"ok": True, "restart_required": self._restart_required}
+            response: Dict[str, Any] = {
+                "ok": True,
+                "restart_required": self._restart_required,
+            }
             try:
                 Config.load(self.config_path)
             except Exception as exc:
@@ -532,13 +645,15 @@ class ConfigUiOutput(Output):
                 return jsonify({"error": "Artist not found"}), 404
             albums = library.albums_for_artist(artist_id)
             tracks = library.tracks_for_artist(artist_id)
-            return jsonify({
-                "id": artist_id,
-                "name": name,
-                "mbid": library.get_mbid("artist", artist_id),
-                "albums": [{"id": i, "title": t, "mbid": m} for i, t, m in albums],
-                "tracks": [{"id": i, "title": t, "mbid": m} for i, t, m in tracks],
-            })
+            return jsonify(
+                {
+                    "id": artist_id,
+                    "name": name,
+                    "mbid": library.get_mbid("artist", artist_id),
+                    "albums": [{"id": i, "title": t, "mbid": m} for i, t, m in albums],
+                    "tracks": [{"id": i, "title": t, "mbid": m} for i, t, m in tracks],
+                }
+            )
 
         @app.get("/overrides")
         def overrides_page():
@@ -594,12 +709,14 @@ class ConfigUiOutput(Output):
             if self._health_fn is None:
                 return jsonify({"sources": [], "outputs": [], "enrichers": [], "idle_sources": []})
             data = self._health_fn()
-            return jsonify({
-                "sources": data.get("sources", []),
-                "outputs": data.get("outputs", []),
-                "enrichers": data.get("enrichers", []),
-                "idle_sources": data.get("idle_sources", []),
-            })
+            return jsonify(
+                {
+                    "sources": data.get("sources", []),
+                    "outputs": data.get("outputs", []),
+                    "enrichers": data.get("enrichers", []),
+                    "idle_sources": data.get("idle_sources", []),
+                }
+            )
 
         @app.post("/api/test/source/<name>")
         def test_source_route(name: str):
@@ -683,13 +800,15 @@ class ConfigUiOutput(Output):
                 image.save(buf, format="PNG")
                 return base64.b64encode(buf.getvalue()).decode("ascii")
 
-            return jsonify({
-                "ok": True,
-                "original": _png_b64(original),
-                "cropped": _png_b64(cropped),
-                "final": _png_b64(final),
-                "final_upscaled": _png_b64(upscaled),
-            })
+            return jsonify(
+                {
+                    "ok": True,
+                    "original": _png_b64(original),
+                    "cropped": _png_b64(cropped),
+                    "final": _png_b64(final),
+                    "final_upscaled": _png_b64(upscaled),
+                }
+            )
 
         install_auth(app, self.auth_config)
         return app

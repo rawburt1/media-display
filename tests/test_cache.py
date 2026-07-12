@@ -56,6 +56,45 @@ def test_get_path_sends_a_descriptive_user_agent(mock_get, tmp_path):
     assert kwargs["headers"]["User-Agent"]
 
 
+@patch("mediainfo.cache.requests.get")
+def test_get_path_merges_artwork_headers_over_defaults(mock_get, tmp_path):
+    # Some hosts (e.g. the Art Institute of Chicago's IIIF server) require
+    # extra headers like Referer - merged over, not replacing, the default
+    # User-Agent (see mediainfo.models.Artwork.headers).
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"fake-image-bytes"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    cache.get_path(
+        Artwork(url="http://example.com/art.jpg", headers={"Referer": "https://example.com/"})
+    )
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["headers"]["Referer"] == "https://example.com/"
+    assert kwargs["headers"]["User-Agent"]  # default header still present
+
+
+@patch("mediainfo.cache.requests.get")
+def test_download_temp_merges_artwork_headers_over_defaults(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"fake-image-bytes"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    cache.download_temp(
+        Artwork(url="http://example.com/art.jpg", headers={"Referer": "https://example.com/"})
+    )
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["headers"]["Referer"] == "https://example.com/"
+    assert kwargs["headers"]["User-Agent"]
+
+
 def test_purge_expired_removes_old_files_only(tmp_path):
     cache = ImageCache(tmp_path, max_age_days=30)
 
@@ -76,6 +115,7 @@ def test_purge_expired_removes_old_files_only(tmp_path):
 # ---------------------------------------------------------------------------
 # Idle wallpapers: separate subdirectory, separate (shorter) retention
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.cache.requests.get")
 def test_idle_artwork_is_stored_in_idle_subdir(mock_get, tmp_path):
@@ -176,6 +216,7 @@ def test_get_transformed_path_for_idle_image_stays_in_idle_dir(mock_get, tmp_pat
     original_path = cache.get_path(Artwork(url="http://example.com/wallpaper.jpg"), tier="idle")
 
     from mediainfo.transforms import Resize
+
     transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])
 
     assert transformed_path.parent == cache.idle_dir
@@ -184,6 +225,7 @@ def test_get_transformed_path_for_idle_image_stays_in_idle_dir(mock_get, tmp_pat
 # ---------------------------------------------------------------------------
 # Music artwork: separate subdirectory, never purged
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.cache.requests.get")
 def test_permanent_artwork_is_stored_in_music_subdir(mock_get, tmp_path):
@@ -254,6 +296,7 @@ def test_get_transformed_path_for_music_image_stays_in_music_dir(mock_get, tmp_p
     original_path = cache.get_path(Artwork(url="http://example.com/album.jpg"), tier="music")
 
     from mediainfo.transforms import Resize
+
     transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])
 
     assert transformed_path.parent == cache.music_dir
@@ -262,6 +305,7 @@ def test_get_transformed_path_for_music_image_stays_in_music_dir(mock_get, tmp_p
 # ---------------------------------------------------------------------------
 # Minimum image size (reject low-res downloads)
 # ---------------------------------------------------------------------------
+
 
 def _jpeg_bytes(width, height):
     import io as _io
@@ -409,6 +453,7 @@ def test_minimum_size_check_disabled_when_zero(mock_get, tmp_path):
 # download_temp: download without caching to disk
 # ---------------------------------------------------------------------------
 
+
 def test_download_temp_returns_none_without_artwork(tmp_path):
     cache = ImageCache(tmp_path)
     assert cache.download_temp(None) is None
@@ -477,6 +522,7 @@ def test_download_temp_returns_none_for_undersized_image(mock_get, tmp_path):
 # JPEG normalization: non-JPEG downloads are converted, JPEGs kept as-is
 # ---------------------------------------------------------------------------
 
+
 def _image_bytes(fmt, size=(640, 480), mode="RGB"):
     import io as _io
     from PIL import Image as _Image
@@ -528,9 +574,7 @@ def test_rgba_png_converts_without_error(mock_get, tmp_path):
     # JPEG has no alpha channel - conversion must not raise on RGBA input.
     from PIL import Image
 
-    mock_get.return_value = _mock_response(
-        _image_bytes("PNG", mode="RGBA"), "image/png"
-    )
+    mock_get.return_value = _mock_response(_image_bytes("PNG", mode="RGBA"), "image/png")
 
     cache = ImageCache(tmp_path)
     path = cache.get_path(Artwork(url="http://example.com/logo.png"))
@@ -684,6 +728,7 @@ def test_existing_cached_file_with_other_extension_is_still_found(mock_get, tmp_
 # get_derived_path (generic disk-cached derivative, e.g. Pixoo's LED prep)
 # ---------------------------------------------------------------------------
 
+
 def _save_source_image(path, size=(64, 64), color=(1, 2, 3)):
     from PIL import Image
 
@@ -767,6 +812,7 @@ def test_get_derived_path_no_sidecar_when_build_returns_plain_image(tmp_path):
 # CacheConfig validation (pydantic dataclass rollout - see
 # mediainfo/config/shared.py)
 # ---------------------------------------------------------------------------
+
 
 def test_cache_config_unknown_field_raises_validation_error():
     import pytest

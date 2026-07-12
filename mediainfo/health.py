@@ -12,6 +12,7 @@ from mediainfo.config import Config
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.orchestrator import Orchestrator
 from mediainfo.outputs.config_schema import _is_secret
+from mediainfo.status import AvailabilityReason, Health, translate_availability
 
 
 def config_detail_fields(cfg: Any) -> dict:
@@ -60,6 +61,21 @@ def _inactive_outputs(active_types: set, registry: dict, config_outputs: dict) -
     return entries
 
 
+def _reason_for_source(source, backed_off: bool, is_active: bool) -> AvailabilityReason:
+    """The AvailabilityReason behind a source's entry - see
+    mediainfo/status.py for the Health/Activity model this feeds. A
+    migrated source's own reported reason is trusted outright; an
+    unmigrated one (availability_reason still None - see
+    MediaSource.availability_reason) falls back to the same binary
+    backoff-based read health.py has always used, so its raw status
+    below comes out byte-identical to before Fas 10."""
+    if source.availability_reason is not None:
+        return source.availability_reason
+    if backed_off:
+        return AvailabilityReason.API_ERROR
+    return AvailabilityReason.PLAYING if is_active else AvailabilityReason.IDLE
+
+
 def _inactive_idle_sources(active_names: set, registry: dict, config_idle: dict) -> list:
     """Entries for every idle wallpaper source not already part of the
     active pool - "ok"/"disabled" if configured (matching the config's own
@@ -88,23 +104,45 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
         output_errors = data["output_errors"]
 
         # Sources — active/idle for those in the orchestrator; disabled /
-        # not_configured for everything else in the registry.
+        # not_configured for everything else in the registry. Health/
+        # Activity (see mediainfo/status.py): a migrated source's own
+        # availability_reason is trusted outright, so a healthy-but-off
+        # device reads as "idle"/Healthy, not "error" - an unmigrated
+        # source falls back to the same binary backoff read as before
+        # Fas 10, so its raw status here is unchanged.
         backoff_seconds = data["source_backoff_seconds"]
         failing_for_seconds = data["source_failing_for_seconds"]
         active_source_names = {s.name for s in orch.sources}
         sources = []
         for source in orch.sources:
-            status = "active" if source.name == active_source else "idle"
-            if source.name in backoff_seconds:
+            backed_off = source.name in backoff_seconds
+            is_active = source.name == active_source
+            device_status = translate_availability(
+                _reason_for_source(source, backed_off, is_active)
+            )
+            if device_status.health == Health.ERROR:
                 status = "error"
-            entry: dict = {"name": source.name, "status": status}
+            elif device_status.health == Health.WARNING:
+                status = "warning"
+            else:
+                status = "active" if is_active else "idle"
+            entry: dict = {
+                "name": source.name,
+                "status": status,
+                "activity": device_status.activity.value,
+                "activity_label": device_status.label,
+            }
             if source.name in polled_ago:
                 entry["last_polled_ago_seconds"] = polled_ago[source.name]
-            if source.name in backoff_seconds:
+            if backed_off:
                 retry = backoff_seconds[source.name]
                 entry["retry_in_seconds"] = retry
-                entry["last_error"] = f"Could not connect - retrying in {retry}s"
                 entry["failing_for_seconds"] = failing_for_seconds.get(source.name, 0)
+            if device_status.health != Health.HEALTHY:
+                # Healthy (including a sleeping/powered-off device) never
+                # gets a warning message - Health should only indicate
+                # actual problems.
+                entry["last_error"] = device_status.label
             entry.update(config_detail_fields(config.sources.get(source.name)))
             entry.update(source.health_check() or {})
             sources.append(entry)
@@ -160,7 +198,9 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
             entry.update(enricher.health_check() or {})
             enrichers.append(entry)
         enrichers.extend(
-            _registered_but_inactive(active_enricher_names, registries.ENRICHER_CLASSES, config.enrichers)
+            _registered_but_inactive(
+                active_enricher_names, registries.ENRICHER_CLASSES, config.enrichers
+            )
         )
 
         # Idle sources — list of all known idle sources with their status.
@@ -197,6 +237,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
 
         # Video outputs expose their own idle video source (pexels/pixabay).
         from mediainfo.outputs.video import VideoOutput
+
         for output in outputs:
             if isinstance(output, VideoOutput):
                 idle_sources.append(output.idle_health_entry())

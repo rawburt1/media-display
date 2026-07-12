@@ -114,6 +114,7 @@ def test_request_error_returns_empty_list(mock_get):
 # mediainfo/config/idle.py)
 # ---------------------------------------------------------------------------
 
+
 def test_config_unknown_field_raises_validation_error():
     import pytest
 

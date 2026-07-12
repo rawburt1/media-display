@@ -248,7 +248,9 @@ def test_no_match_leaves_current_unset(mock_record, mock_recognize):
 @patch("vinyl_recognizer.service.audd.recognize")
 @patch("vinyl_recognizer.service.recorder.record_clip")
 @patch("vinyl_recognizer.service.time.monotonic")
-def test_silence_after_grace_period_clears_current_track(mock_monotonic, mock_record, mock_recognize):
+def test_silence_after_grace_period_clears_current_track(
+    mock_monotonic, mock_record, mock_recognize
+):
     mock_recognize.return_value = {
         "title": "Comfortably Numb",
         "artist": "Pink Floyd",

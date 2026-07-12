@@ -8,7 +8,9 @@ from mediainfo.sources.plex import PlexSource, resolve_plex_image_url
 
 
 def _source(**kwargs) -> PlexSource:
-    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.22", port=32400, token="test-token")
+    defaults: dict[str, Any] = dict(
+        enabled=True, host="192.168.1.22", port=32400, token="test-token"
+    )
     defaults.update(kwargs)
     return PlexSource(PlexConfig(**defaults))
 
@@ -101,7 +103,7 @@ def test_episode_session(mock_get):
 
     assert now_playing.media_type == "episode"
     assert now_playing.title == "Breaking Bad"
-    assert now_playing.subtitle == 'S01E01 - Pilot'
+    assert now_playing.subtitle == "S01E01 - Pilot"
     assert now_playing.season == 1
     assert now_playing.ids == {"tvdb": "81189"}
     assert len(now_playing.images) == 2

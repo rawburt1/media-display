@@ -93,7 +93,8 @@ def fetch_cast(api_key: str, endpoint: str, tmdb_id: str, limit: int) -> List[Di
             "character": member.get("character", ""),
             "photo_url": image_url(member.get("profile_path"), "h632") or "",
         }
-        for member in cast if member.get("name")
+        for member in cast
+        if member.get("name")
     ]
 
 
@@ -208,7 +209,9 @@ class TmdbEnricher(ArtworkEnricher):
 
     def _fetch_cast(self, endpoint: str, now_playing: NowPlaying) -> List[Dict[str, str]]:
         try:
-            tmdb_id = now_playing.ids.get("tmdb") or self._resolve_id_via_search(endpoint, now_playing)
+            tmdb_id = now_playing.ids.get("tmdb") or self._resolve_id_via_search(
+                endpoint, now_playing
+            )
             if not tmdb_id:
                 return []
             return fetch_cast(self.config.api_key, endpoint, tmdb_id, self.config.cast_size)

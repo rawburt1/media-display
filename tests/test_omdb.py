@@ -12,9 +12,7 @@ def _enricher() -> OmdbEnricher:
 
 
 def _movie(title="The Matrix", year=1999, ids=None):
-    return NowPlaying(
-        source="kodi", media_type="movie", title=title, year=year, ids=ids or {}
-    )
+    return NowPlaying(source="kodi", media_type="movie", title=title, year=year, ids=ids or {})
 
 
 def _episode(title="Breaking Bad", ids=None):
@@ -141,6 +139,7 @@ def test_api_key_sent_as_query_param(mock_get):
 # ---------------------------------------------------------------------------
 # test_connection
 # ---------------------------------------------------------------------------
+
 
 def test_test_connection_success():
     with patch.object(OmdbEnricher, "_fetch", return_value=8.7):

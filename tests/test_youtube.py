@@ -94,9 +94,10 @@ def _make_source(tmp_path, shell_return=None, shell_side_effect=None):
     key_path = tmp_path / "youtube"
     key_path.write_text("fake-key")
 
-    with patch("mediainfo.sources.adb_base.PythonRSASigner") as mock_signer_cls, patch(
-        "mediainfo.sources.adb_base.AdbDeviceTcp"
-    ) as mock_device_cls:
+    with (
+        patch("mediainfo.sources.adb_base.PythonRSASigner") as mock_signer_cls,
+        patch("mediainfo.sources.adb_base.AdbDeviceTcp") as mock_device_cls,
+    ):
         mock_signer_cls.FromRSAKeyPath.return_value = MagicMock()
         mock_device = MagicMock()
         mock_device.available = True
@@ -116,6 +117,7 @@ def _make_source(tmp_path, shell_return=None, shell_side_effect=None):
 # ---------------------------------------------------------------------------
 # _find_youtube_description
 # ---------------------------------------------------------------------------
+
 
 def test_finds_description_for_active_youtube_session():
     description = YoutubeSource._find_youtube_description(_YOUTUBE_MUSIC_DUMP)
@@ -138,12 +140,17 @@ def test_no_sessions_returns_none():
 # _strip_decoration
 # ---------------------------------------------------------------------------
 
+
 def test_strip_decoration_removes_official_video_suffix():
-    assert YoutubeSource._strip_decoration("Bohemian Rhapsody (Official Video)") == "Bohemian Rhapsody"
+    assert (
+        YoutubeSource._strip_decoration("Bohemian Rhapsody (Official Video)") == "Bohemian Rhapsody"
+    )
 
 
 def test_strip_decoration_removes_official_music_video_suffix():
-    assert YoutubeSource._strip_decoration("One More Time [Official Music Video]") == "One More Time"
+    assert (
+        YoutubeSource._strip_decoration("One More Time [Official Music Video]") == "One More Time"
+    )
 
 
 def test_strip_decoration_removes_lyrics_suffix():
@@ -203,8 +210,11 @@ def test_strip_decoration_removes_multiple_stray_dashes():
 # _detect_song_artist
 # ---------------------------------------------------------------------------
 
+
 def test_detect_song_artist_splits_song_dash_artist():
-    title, artist = YoutubeSource._detect_song_artist("In the Air Tonight - Phil Collins", "SomeUploader")
+    title, artist = YoutubeSource._detect_song_artist(
+        "In the Air Tonight - Phil Collins", "SomeUploader"
+    )
     assert title == "In the Air Tonight"
     assert artist == "Phil Collins"
 
@@ -240,6 +250,7 @@ def test_detect_song_artist_handles_qualifier_after_artist():
 # ---------------------------------------------------------------------------
 # get_now_playing
 # ---------------------------------------------------------------------------
+
 
 def test_get_now_playing_reports_channel_as_subtitle(tmp_path):
     source, _ = _make_source(tmp_path, shell_return=_YOUTUBE_MUSIC_DUMP)
@@ -277,9 +288,9 @@ def test_get_now_playing_splits_song_dash_artist_title(tmp_path):
 def test_get_now_playing_reports_any_active_video_not_just_music(tmp_path):
     # YouTube TV doesn't expose a reliable "is this a song" signal (see
     # module docstring), so anything actively playing is reported.
-    dump = _SPOTIFY_PLAYING_DUMP.replace("com.spotify.music", "com.google.android.youtube.tv").replace(
-        "Comfortably Numb, Pink Floyd, The Wall", "My Morning Routine, SomeVlogger, null"
-    )
+    dump = _SPOTIFY_PLAYING_DUMP.replace(
+        "com.spotify.music", "com.google.android.youtube.tv"
+    ).replace("Comfortably Numb, Pink Floyd, The Wall", "My Morning Routine, SomeVlogger, null")
     source, _ = _make_source(tmp_path, shell_return=dump)
 
     now_playing = source.get_now_playing()

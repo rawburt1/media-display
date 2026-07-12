@@ -143,7 +143,10 @@ class SvtEnricher(ArtworkEnricher):
 
     def _fetch_sonarr_series(self) -> Optional[list]:
         now = time.monotonic()
-        if self._sonarr_series_cache is not None and (now - self._sonarr_cache_fetched_at) < _SONARR_CACHE_TTL:
+        if (
+            self._sonarr_series_cache is not None
+            and (now - self._sonarr_cache_fetched_at) < _SONARR_CACHE_TTL
+        ):
             return self._sonarr_series_cache
         url = f"http://{self.config.sonarr_host}:{self.config.sonarr_port}/api/v3/series"
         response = requests.get(
@@ -179,9 +182,9 @@ class SvtEnricher(ArtworkEnricher):
         # Single also exposes originalProgramTitle which thetvdb can search.
         query = (
             '{ contentBySlug(slugs: ["%s"]) {'
-            ' ... on TvSeries { %s }'
-            ' ... on Single { originalProgramTitle %s }'
-            '} }' % (slug, _IMAGES_QUERY, _IMAGES_QUERY)
+            " ... on TvSeries { %s }"
+            " ... on Single { originalProgramTitle %s }"
+            "} }" % (slug, _IMAGES_QUERY, _IMAGES_QUERY)
         )
         response = requests.post(_GRAPHQL_URL, json={"query": query}, timeout=10)
         response.raise_for_status()

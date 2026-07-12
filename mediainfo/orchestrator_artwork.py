@@ -202,6 +202,8 @@ class _ArtworkPipeline:
             return
 
         logger.warning(
-            "No fetchable artwork for %s (%d candidate(s) all failed)",
-            group.current.title, len(images),
+            "No fetchable artwork for %s (%d candidate(s) all failed) - clearing output to idle",
+            group.current.title,
+            len(images),
         )
+        self._call_output(index, output.on_idle)

@@ -154,6 +154,7 @@ def test_connect_failure_does_not_prevent_loop_start(MockClient):
 # Home Assistant MQTT discovery (ha_discovery: true)
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_discovery_off_by_default(MockClient):
     mock_client = MockClient.return_value
@@ -194,9 +195,7 @@ def test_discovery_publishes_retained_sensor_configs_on_connect(MockClient):
     assert payload["unique_id"] == "test-client_now_playing"
     assert payload["device"]["identifiers"] == ["test-client"]
 
-    title_payload = json.loads(
-        published["homeassistant/sensor/test-client/title/config"].args[1]
-    )
+    title_payload = json.loads(published["homeassistant/sensor/test-client/title/config"].args[1])
     assert title_payload["unique_id"] == "test-client_title"
     assert "value_json.title" in title_payload["value_template"]
 
@@ -346,6 +345,7 @@ def test_connect_does_not_subscribe_when_discovery_disabled(MockClient):
 # Command topics: hitster-safe switch and refresh-artwork button
 # ---------------------------------------------------------------------------
 
+
 def _message(topic, payload):
     msg = MagicMock()
     msg.topic = topic
@@ -366,7 +366,8 @@ def test_hitster_safe_command_toggles_via_handler(MockClient):
     set_fn.assert_called_once_with(True)
     # State is republished immediately after a command, not just on a timer.
     state_calls = [
-        c for c in mock_client.publish.call_args_list
+        c
+        for c in mock_client.publish.call_args_list
         if c.args[0] == output._hitster_safe_state_topic
     ]
     assert len(state_calls) == 1
@@ -460,14 +461,53 @@ def test_message_on_unrecognized_topic_is_ignored(MockClient):
 
 
 # ---------------------------------------------------------------------------
+# attach() - see mediainfo.app_services.AppServices
+# ---------------------------------------------------------------------------
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_attach_wires_health_hitster_safe_and_command_handlers(MockClient):
+    from mediainfo.app_services import AppServices
+
+    output = MqttOutput(_config(ha_discovery=True))
+
+    def health_provider():
+        return {"status": "ok"}
+
+    set_fn = MagicMock()
+    refresh_fn = MagicMock()
+    rotate_fn = MagicMock()
+
+    output.attach(
+        AppServices(
+            health_provider=health_provider,
+            get_hitster_safe=lambda: True,
+            set_hitster_safe=set_fn,
+            request_artwork_refresh=refresh_fn,
+            request_rotation_now=rotate_fn,
+        )
+    )
+
+    assert output._health_fn is health_provider
+    assert output._hitster_safe_get() is True
+    output._hitster_safe_set(False)
+    set_fn.assert_called_once_with(False)
+    assert output._refresh_artwork_fn is refresh_fn
+    assert output._rotate_now_fn is rotate_fn
+
+
+# ---------------------------------------------------------------------------
 # on_schedule_tick: periodic health/hitster-safe state republish
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_schedule_tick_noop_when_discovery_disabled(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config())
-    output.set_health_provider(MagicMock(return_value={"sources": [], "outputs": [], "enrichers": []}))
+    output.set_health_provider(
+        MagicMock(return_value={"sources": [], "outputs": [], "enrichers": []})
+    )
     mock_client.publish.reset_mock()
 
     output.on_schedule_tick()
@@ -480,9 +520,13 @@ def test_schedule_tick_publishes_health_ok_when_no_errors(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config(ha_discovery=True))
     output.set_health_provider(
-        MagicMock(return_value={
-            "sources": [{"status": "idle"}], "outputs": [{"status": "ok"}], "enrichers": [],
-        })
+        MagicMock(
+            return_value={
+                "sources": [{"status": "idle"}],
+                "outputs": [{"status": "ok"}],
+                "enrichers": [],
+            }
+        )
     )
     mock_client.publish.reset_mock()
 
@@ -500,9 +544,13 @@ def test_schedule_tick_publishes_health_problem_when_an_entry_errors(MockClient)
     mock_client = MockClient.return_value
     output = MqttOutput(_config(ha_discovery=True))
     output.set_health_provider(
-        MagicMock(return_value={
-            "sources": [{"status": "error"}], "outputs": [], "enrichers": [],
-        })
+        MagicMock(
+            return_value={
+                "sources": [{"status": "error"}],
+                "outputs": [],
+                "enrichers": [],
+            }
+        )
     )
     mock_client.publish.reset_mock()
 
@@ -519,7 +567,9 @@ def test_schedule_tick_publishes_health_problem_when_an_entry_errors(MockClient)
 def test_schedule_tick_throttled_to_interval(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(_config(ha_discovery=True))
-    output.set_health_provider(MagicMock(return_value={"sources": [], "outputs": [], "enrichers": []}))
+    output.set_health_provider(
+        MagicMock(return_value={"sources": [], "outputs": [], "enrichers": []})
+    )
 
     clock = iter([100.0, 100.5, 100.9])  # construction not clocked; two quick ticks
     with patch("mediainfo.outputs.mqtt.time.monotonic", lambda: next(clock)):
@@ -537,6 +587,7 @@ def test_schedule_tick_throttled_to_interval(MockClient):
 # health_check
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_health_check_reports_broker_connection_state(MockClient):
     mock_client = MockClient.return_value
@@ -553,6 +604,7 @@ def test_health_check_reports_broker_connection_state(MockClient):
 # MqttConfig validation (pydantic dataclass spike - see mediainfo/config/
 # outputs.py's MqttConfig docstring)
 # ---------------------------------------------------------------------------
+
 
 def test_port_out_of_range_raises_validation_error():
     with pytest.raises(ValueError, match="port"):

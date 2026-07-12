@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 from mediainfo.config import SonosConfig
 from mediainfo.sources.sonos import SonosSource
+from mediainfo.status import AvailabilityReason
 
 
 def _make_group(coordinator):
@@ -12,8 +13,14 @@ def _make_group(coordinator):
     return group
 
 
-def _make_device(ip, state="PLAYING", title="Comfortably Numb", artist="Pink Floyd",
-                 album="The Wall", album_art="http://192.168.1.80:1400/cover.jpg"):
+def _make_device(
+    ip,
+    state="PLAYING",
+    title="Comfortably Numb",
+    artist="Pink Floyd",
+    album="The Wall",
+    album_art="http://192.168.1.80:1400/cover.jpg",
+):
     device = MagicMock()
     device.ip_address = ip
     device.get_current_transport_info.return_value = {"current_transport_state": state}
@@ -31,13 +38,15 @@ def test_returns_playing_track(MockSoCo):
     device = _make_device("192.168.1.80")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
+    source = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"]))
+    now_playing = source.get_now_playing()
 
     assert now_playing.title == "Comfortably Numb"
     assert now_playing.subtitle == "Pink Floyd"
     assert now_playing.album == "The Wall"
     assert now_playing.images[0].url == "http://192.168.1.80:1400/cover.jpg"
     assert now_playing.images[0].label == "Album art (Sonos)"
+    assert source.availability_reason == AvailabilityReason.PLAYING
 
 
 @patch("mediainfo.sources.sonos.SoCo")
@@ -45,9 +54,11 @@ def test_returns_none_when_not_playing(MockSoCo):
     device = _make_device("192.168.1.80", state="STOPPED")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    result = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
+    source = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"]))
+    result = source.get_now_playing()
 
     assert result is None
+    assert source.availability_reason == AvailabilityReason.IDLE
 
 
 @patch("mediainfo.sources.sonos.SoCo")
@@ -77,7 +88,9 @@ def test_checks_all_zones_and_returns_playing_one(MockSoCo):
     playing = _make_device("192.168.1.81", title="Money", artist="Pink Floyd")
     MockSoCo.return_value.all_groups = [_make_group(idle), _make_group(playing)]
 
-    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
+    now_playing = SonosSource(
+        SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])
+    ).get_now_playing()
 
     assert now_playing.title == "Money"
 
@@ -99,7 +112,9 @@ def test_relative_album_art_url_uses_device_ip(MockSoCo):
     device = _make_device("192.168.1.81", album_art="/getaa?s=1&u=x%3a1")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
+    now_playing = SonosSource(
+        SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])
+    ).get_now_playing()
 
     assert now_playing.images[0].url == "http://192.168.1.81:1400/getaa?s=1&u=x%3a1"
 
@@ -146,6 +161,9 @@ def test_blacklist_returns_none_when_only_blacklisted_playing(MockSoCo):
 
 @patch("mediainfo.sources.sonos.SoCo")
 def test_returns_none_on_exception(MockSoCo):
+    # Raises while just discovering groups (SoCo(ip).all_groups itself) -
+    # every configured seed effectively didn't answer, same shape as
+    # test_returns_none_when_all_seeds_unreachable below.
     type(MockSoCo.return_value).all_groups = PropertyMock(side_effect=RuntimeError("network error"))
 
     source = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"]))
@@ -153,6 +171,23 @@ def test_returns_none_on_exception(MockSoCo):
 
     assert result is None
     assert source.last_poll_failed is True
+    assert source.availability_reason == AvailabilityReason.NETWORK_UNREACHABLE
+
+
+@patch("mediainfo.sources.sonos.SoCo")
+def test_generic_exception_during_group_processing_sets_api_error(MockSoCo):
+    # Unlike discovery failing, this raises *after* groups were
+    # successfully discovered - a real integration bug, not "unreachable".
+    broken_group = MagicMock()
+    type(broken_group).coordinator = PropertyMock(side_effect=RuntimeError("unexpected"))
+    MockSoCo.return_value.all_groups = [broken_group]
+
+    source = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"]))
+    result = source.get_now_playing()
+
+    assert result is None
+    assert source.last_poll_failed is True
+    assert source.availability_reason == AvailabilityReason.API_ERROR
 
 
 @patch("mediainfo.sources.sonos.SoCo")
@@ -185,6 +220,9 @@ def test_returns_none_when_all_seeds_unreachable(MockSoCo):
 
     assert result is None
     assert source.last_poll_failed is True
+    # soco can't tell "speakers off" from a real network blip either - the
+    # honest, appropriately-humble read is Warning, not a hard error.
+    assert source.availability_reason == AvailabilityReason.NETWORK_UNREACHABLE
 
 
 @patch("mediainfo.sources.sonos.SoCo")

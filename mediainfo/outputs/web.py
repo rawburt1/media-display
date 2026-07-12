@@ -40,6 +40,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from flask_sock import Sock
 from markupsafe import Markup
 
+from mediainfo.app_services import AppServices
 from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.config import AuthConfig, WebConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -127,8 +128,12 @@ class WebOutput(Output):
 
     def set_history(self, history) -> None:
         """Register the PlaybackHistory store backing the /history page -
-        see wiring.wire_history. None means the feature is disabled."""
+        see AppServices.history. None means the feature is disabled."""
         self._history = history
+
+    def attach(self, services: AppServices) -> None:
+        self.set_health_provider(services.health_provider)
+        self.set_history(services.history)
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         with self._lock:
@@ -223,7 +228,9 @@ class WebOutput(Output):
         self._next_offset += 1
         jitter = random.uniform(0, self.rotation_interval_seconds)
         self._client_rotation[conn] = _ClientRotation(
-            order=self._shared_order, position=position, next_due=time.monotonic() - jitter
+            order=self._shared_order,
+            position=position,
+            next_due=time.monotonic() - jitter,
         )
 
     def _personalized_payload(self, conn: Any) -> dict:
@@ -322,13 +329,18 @@ class WebOutput(Output):
 
     def _send_to_one(self, conn: Any, payload: dict) -> None:
         send_to_one(
-            self._clients_lock, self._clients, conn, payload,
+            self._clients_lock,
+            self._clients,
+            conn,
+            payload,
             on_drop=lambda c: self._client_rotation.pop(c, None),
         )
 
     def _push(self, payload: dict) -> None:
         broadcast(
-            self._clients_lock, self._clients, payload,
+            self._clients_lock,
+            self._clients,
+            payload,
             on_drop=lambda c: self._client_rotation.pop(c, None),
         )
 
@@ -341,7 +353,10 @@ class WebOutput(Output):
         sock = Sock(app)
 
         register_websocket_route(
-            sock, "/ws", self._clients_lock, self._clients,
+            sock,
+            "/ws",
+            self._clients_lock,
+            self._clients,
             get_initial_payload=self._personalized_payload,
             on_connect=self._assign_client_rotation,
             on_disconnect=lambda conn: self._client_rotation.pop(conn, None),
@@ -362,9 +377,7 @@ class WebOutput(Output):
         @app.get("/health/ready")
         @app.get("/health")
         def health():
-            best = request.accept_mimetypes.best_match(
-                ["application/json", "text/html"]
-            )
+            best = request.accept_mimetypes.best_match(["application/json", "text/html"])
             if best == "text/html":
                 return render_template("web/health.html")
             if self._health_fn is None:

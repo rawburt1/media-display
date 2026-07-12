@@ -14,9 +14,7 @@ def test_get_returns_none_for_missing_entry(tmp_path):
 def test_set_then_get_round_trips_json_value(tmp_path):
     cache = TextCache(tmp_path)
     cache.set("lrclib", "queen - bohemian rhapsody", {"lyrics": "Is this the real life"})
-    assert cache.get("lrclib", "queen - bohemian rhapsody") == {
-        "lyrics": "Is this the real life"
-    }
+    assert cache.get("lrclib", "queen - bohemian rhapsody") == {"lyrics": "Is this the real life"}
 
 
 def test_different_namespaces_do_not_collide(tmp_path):

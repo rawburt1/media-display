@@ -50,6 +50,7 @@ def no_server(monkeypatch):
 
 def _output(config=None, rotation_interval_seconds=30):
     from mediainfo.outputs.web import WebOutput
+
     return WebOutput(config or _config(), rotation_interval_seconds)
 
 
@@ -66,6 +67,7 @@ def _connect(out) -> "_FakeConn":
 # ---------------------------------------------------------------------------
 # _get_payload
 # ---------------------------------------------------------------------------
+
 
 def test_payload_when_idle():
     out = _output()
@@ -136,6 +138,7 @@ def test_index_page_has_progress_bar():
 # _push
 # ---------------------------------------------------------------------------
 
+
 def test_push_sends_json_to_all_clients():
     out = _output()
     conn_a = _FakeConn()
@@ -170,6 +173,7 @@ def test_push_with_no_clients_is_noop():
 # ---------------------------------------------------------------------------
 # update / on_new_item / on_idle trigger _push
 # ---------------------------------------------------------------------------
+
 
 def test_update_pushes_payload(tmp_path):
     out = _output()
@@ -222,6 +226,7 @@ def test_on_idle_clears_state():
 # Sequence: on_new_item followed by update
 # ---------------------------------------------------------------------------
 
+
 def test_update_after_on_new_item_adds_image(tmp_path):
     out = _output()
     conn = _connect(out)
@@ -230,7 +235,7 @@ def test_update_after_on_new_item_adds_image(tmp_path):
     art = _artwork()
     cache = MagicMock(get_path=lambda *a, **k: img, get_transformed_path=lambda p, _: p)
 
-    out.on_new_item(_music(), cache)         # push 1: no image (pool still empty)
+    out.on_new_item(_music(), cache)  # push 1: no image (pool still empty)
     out.update(_music(images=[art]), art, img)  # push 2: pool now has an image
 
     assert len(conn.sent) == 2
@@ -243,6 +248,7 @@ def test_update_after_on_new_item_adds_image(tmp_path):
 # ---------------------------------------------------------------------------
 # Per-client rotation (multiple screens sharing one port)
 # ---------------------------------------------------------------------------
+
 
 def _art(label):
     return Artwork(url=f"https://example.com/{label}.jpg", label=label)
@@ -458,6 +464,7 @@ def test_disconnect_removes_client_rotation_state(tmp_path):
 # /image/current ?v= lookup
 # ---------------------------------------------------------------------------
 
+
 def test_image_current_serves_file_for_known_v(tmp_path):
     out = _output()
     img = tmp_path / "abc.jpg"
@@ -491,6 +498,7 @@ def test_image_current_404_when_nothing_available():
 # ---------------------------------------------------------------------------
 # /health endpoint
 # ---------------------------------------------------------------------------
+
 
 def test_health_returns_starting_when_no_provider():
     out = _output()
@@ -530,8 +538,39 @@ def test_health_content_type_is_json():
 
 
 # ---------------------------------------------------------------------------
+# attach() - see mediainfo.app_services.AppServices
+# ---------------------------------------------------------------------------
+
+
+def test_attach_wires_health_provider_and_history():
+    from mediainfo.app_services import AppServices
+
+    out = _output()
+
+    def provider():
+        return {"status": "ok"}
+
+    history = MagicMock()
+
+    out.attach(AppServices(health_provider=provider, history=history))
+
+    client = out.app.test_client()
+    assert client.get("/health").get_json()["status"] == "ok"
+    assert out._history is history
+
+
+def test_attach_passes_through_none_history():
+    from mediainfo.app_services import AppServices
+
+    out = _output()
+    out.attach(AppServices(health_provider=lambda: {"status": "ok"}, history=None))
+    assert out._history is None
+
+
+# ---------------------------------------------------------------------------
 # Image transitions
 # ---------------------------------------------------------------------------
+
 
 def test_index_page_includes_all_transitions_by_default():
     out = _output()
@@ -552,8 +591,10 @@ def test_index_page_excludes_configured_transitions():
 # Optional auth
 # ---------------------------------------------------------------------------
 
+
 def test_auth_disabled_by_default():
     from mediainfo.outputs.web import WebOutput
+
     out = WebOutput(_config())
     resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
     assert resp.status_code == 200
@@ -562,6 +603,7 @@ def test_auth_disabled_by_default():
 def test_auth_required_for_public_address_when_enabled():
     from mediainfo.config import AuthConfig
     from mediainfo.outputs.web import WebOutput
+
     auth = AuthConfig(enabled=True, username="admin", password="secret")
     out = WebOutput(_config(), auth_config=auth)
     resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
@@ -571,6 +613,7 @@ def test_auth_required_for_public_address_when_enabled():
 def test_auth_not_required_for_private_address_when_enabled():
     from mediainfo.config import AuthConfig
     from mediainfo.outputs.web import WebOutput
+
     auth = AuthConfig(enabled=True, username="admin", password="secret")
     out = WebOutput(_config(), auth_config=auth)
     resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
@@ -581,8 +624,10 @@ def test_auth_not_required_for_private_address_when_enabled():
 # Playback history page (/history, /api/history, /history/image/<id>)
 # ---------------------------------------------------------------------------
 
+
 def _history_store(tmp_path):
     from mediainfo.history import PlaybackHistory
+
     return PlaybackHistory(str(tmp_path / "history.db"))
 
 
@@ -620,6 +665,7 @@ def test_history_image_resolved_through_cache(tmp_path):
     cache.get_path.return_value = img
 
     from mediainfo.outputs.web import WebOutput
+
     out = WebOutput(_config(), 30, cache)
     out.set_history(store)
 
