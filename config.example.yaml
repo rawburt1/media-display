@@ -47,6 +47,14 @@ backoff_max_seconds: 300
 # every output to idle and back.
 nothing_playing_grace_seconds: 2
 
+# How long (in seconds) to wait for a single enricher (artwork or text) to
+# finish before giving up on it and moving on to the next one, instead of
+# blocking every display on it. Enrichers still run one at a time in their
+# configured order - this only bounds the worst case of a single hung/slow
+# one. An enricher with its own `timeout_seconds` setting (e.g. ai_artwork,
+# ollama_text) uses that value instead of this default.
+enrichment_deadline_seconds: 30
+
 
 # ---------------------------------------------------------------------------
 # Source priority

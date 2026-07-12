@@ -228,6 +228,7 @@ def start_orchestrator(
         backoff_initial_seconds=config.backoff_initial_seconds,
         backoff_max_seconds=config.backoff_max_seconds,
         nothing_playing_grace_seconds=config.nothing_playing_grace_seconds,
+        enrichment_deadline_seconds=config.enrichment_deadline_seconds,
         alert_config=config.alerts,
         overrides=overrides,
         poster_store=poster_store,

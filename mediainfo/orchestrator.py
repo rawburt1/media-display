@@ -28,7 +28,7 @@ from mediainfo.enrichers.text_base import TextEnricher
 from mediainfo.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
-from mediainfo.orchestrator_artwork import _ArtworkPipeline
+from mediainfo.orchestrator_artwork import _DEFAULT_ENRICHMENT_DEADLINE_SECONDS, _ArtworkPipeline
 from mediainfo.orchestrator_health import _HealthTracker
 from mediainfo.orchestrator_idle import _IdleBatchManager
 from mediainfo.orchestrator_polling import _SourcePoller
@@ -80,6 +80,7 @@ class Orchestrator:
         poster_store: Optional[PosterStore] = None,
         history: Optional[PlaybackHistory] = None,
         text_enrichers: Optional[List[TextEnricher]] = None,
+        enrichment_deadline_seconds: float = _DEFAULT_ENRICHMENT_DEADLINE_SECONDS,
     ):
         self.sources = sources
         self.enrichers = enrichers
@@ -136,6 +137,7 @@ class Orchestrator:
             poster_store=poster_store,
             overrides=overrides,
             text_enrichers=text_enrichers,
+            enrichment_deadline_seconds=enrichment_deadline_seconds,
         )
         self._idle = _IdleBatchManager(
             outputs=self.outputs,

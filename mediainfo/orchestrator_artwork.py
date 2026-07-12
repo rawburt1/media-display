@@ -10,10 +10,11 @@ and the very next call must see the change immediately.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import random
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import CacheTier, ImageCache
@@ -27,6 +28,32 @@ from mediainfo.poster_store import PosterStore
 
 logger = logging.getLogger(__name__)
 
+# Default per-enricher wall-clock deadline (C2 in
+# docs/architecture-usability-review-2026-07.md): enrichers still run
+# strictly one at a time, in their configured order - several of them read
+# NowPlaying.images/ids left by an earlier one (svt.py's TVDB-id check,
+# fanarttv.py's insert(0, ...) priority), so genuine concurrency would
+# change behavior, not just speed it up. This only bounds the worst case: a
+# single hung/slow enricher no longer blocks every display indefinitely: the
+# tick gives up waiting after this many seconds and moves on to the next
+# enricher. The abandoned call keeps running in the background and may still
+# mutate the item shortly after - a rare, deliberately accepted tradeoff for
+# the common case of a network call that simply never returns.
+_DEFAULT_ENRICHMENT_DEADLINE_SECONDS = 30.0
+
+
+def _enricher_deadline(enricher: Any, default: float) -> float:
+    """An enricher's own `config.timeout_seconds`, if it has one, takes
+    priority over the shared default - e.g. ai_artwork/ollama_text already
+    expose a deliberately generous timeout for slow-but-bounded local
+    inference, and shouldn't be cut off by a default tuned for ordinary
+    HTTP lookups.
+    """
+    configured = getattr(getattr(enricher, "config", None), "timeout_seconds", None)
+    if isinstance(configured, (int, float)) and not isinstance(configured, bool):
+        return float(configured)
+    return default
+
 
 class _ArtworkPipeline:
     def __init__(
@@ -39,6 +66,7 @@ class _ArtworkPipeline:
         poster_store: Optional[PosterStore] = None,
         overrides: Optional[ArtworkOverrideStore] = None,
         text_enrichers: Optional[List[TextEnricher]] = None,
+        enrichment_deadline_seconds: float = _DEFAULT_ENRICHMENT_DEADLINE_SECONDS,
     ):
         self.enrichers = enrichers
         self.text_enrichers = text_enrichers or []
@@ -48,6 +76,7 @@ class _ArtworkPipeline:
         self._safe_call = safe_call
         self._poster_store = poster_store
         self._overrides = overrides
+        self.enrichment_deadline_seconds = enrichment_deadline_seconds
 
     def prepare_item(
         self,
@@ -103,11 +132,35 @@ class _ArtworkPipeline:
 
     def enrich_item(self, now_playing: NowPlaying) -> None:
         for enricher in self.enrichers:
-            self._safe_call(enricher.enrich, now_playing)
+            self._run_enricher_with_deadline(enricher, enricher.enrich, now_playing)
         self.apply_poster_store(now_playing)
         self.apply_artwork_override(now_playing)
         for text_enricher in self.text_enrichers:
-            self._safe_call(text_enricher.enrich, now_playing)
+            self._run_enricher_with_deadline(text_enricher, text_enricher.enrich, now_playing)
+
+    def _run_enricher_with_deadline(
+        self, enricher: Any, func: Callable[[NowPlaying], None], now_playing: NowPlaying
+    ) -> None:
+        """Run one enricher (already wrapped in the caller's usual
+        exception isolation via self._safe_call) but give up waiting past
+        its deadline instead of blocking the rest of this tick - and every
+        display - on it. See _DEFAULT_ENRICHMENT_DEADLINE_SECONDS above for
+        why enrichers still run strictly in order rather than concurrently.
+        """
+        deadline = _enricher_deadline(enricher, self.enrichment_deadline_seconds)
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = pool.submit(self._safe_call, func, now_playing)
+        try:
+            future.result(timeout=deadline)
+        except concurrent.futures.TimeoutError:
+            logger.warning(
+                "%s exceeded its %.0fs enrichment deadline - moving on without "
+                "waiting for it; it may still finish and update this item shortly after",
+                type(enricher).__name__,
+                deadline,
+            )
+        finally:
+            pool.shutdown(wait=False)
 
     def apply_poster_store(self, now_playing: NowPlaying) -> None:
         """If a static poster is configured for this title (and optionally

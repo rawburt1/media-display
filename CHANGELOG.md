@@ -32,6 +32,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   dict. Now round-trips correctly.
 
 ### Added
+- **Per-enricher enrichment deadline**: a new top-level
+  `enrichment_deadline_seconds` (default 30) bounds how long the poll tick
+  waits for a single artwork/text enricher before moving on to the next
+  one, instead of blocking every display indefinitely on one hung or slow
+  lookup. Enrichers still run one at a time, in their configured order -
+  several rely on state an earlier one left on the item - so this is a
+  latency backstop, not parallelism (C2 in
+  `docs/architecture-usability-review-2026-07.md`). An enricher whose own
+  config already exposes `timeout_seconds` (`ai_artwork`, `ollama_text`)
+  keeps using that value instead, since those are deliberately tuned for
+  slower local inference.
 - **Config schema versioning**: `config.yaml` may now declare a top-level
   `config_version` (defaults to `1`, same as a config predating this
   setting). Infrastructure only for now - no field has ever been

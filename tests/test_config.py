@@ -17,6 +17,7 @@ def test_load_example_config():
     assert config.backoff_initial_seconds == 30
     assert config.backoff_max_seconds == 300
     assert config.nothing_playing_grace_seconds == 2
+    assert config.enrichment_deadline_seconds == 30
     assert config.priority == [
         "kodi",
         "appletv",
@@ -131,9 +132,15 @@ def test_from_dict_empty_dict_uses_defaults():
     assert config.backoff_initial_seconds == 30
     assert config.backoff_max_seconds == 300
     assert config.nothing_playing_grace_seconds == 2
+    assert config.enrichment_deadline_seconds == 30
     assert config.priority == []
     assert config.sources == {}
     assert config.outputs == {}
+
+
+def test_from_dict_overrides_enrichment_deadline_seconds():
+    config = Config.from_dict({"enrichment_deadline_seconds": 5})
+    assert config.enrichment_deadline_seconds == 5
 
 
 def test_from_dict_raises_on_unknown_field():

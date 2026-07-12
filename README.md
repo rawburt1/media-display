@@ -866,6 +866,15 @@ both configurable at the top level of `config.yaml`) for sources whose
 device is unreachable, without delaying detection for sources that are
 just legitimately idle.
 
+Enrichers still run one at a time, in the order they're listed, since
+several rely on state an earlier one left on the item (e.g. checking
+`now_playing.images` before deciding whether to add their own). Each one
+gets `enrichment_deadline_seconds` (top-level, default 30s) to finish before
+the tick gives up waiting and moves on to the next enricher, so one
+hung/slow lookup can't block every display indefinitely - an enricher whose
+own config exposes `timeout_seconds` (e.g. `ai_artwork`, `ollama_text`) uses
+that instead, since those are already tuned for slower local inference.
+
 ## Running tests
 
 ```bash

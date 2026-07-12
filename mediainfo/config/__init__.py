@@ -282,6 +282,13 @@ class Config:
     # Kodi's active-player list momentarily empty around a scene
     # transition) without flashing every output to idle and back.
     nothing_playing_grace_seconds: float = 2
+    # Per-enricher wall-clock deadline (in seconds): if a single enricher
+    # call hasn't returned by this long, the tick moves on to the next
+    # enricher instead of blocking every display on it (C2 in
+    # docs/architecture-usability-review-2026-07.md). An enricher whose own
+    # config exposes `timeout_seconds` (e.g. ai_artwork, ollama_text) uses
+    # that value instead - see mediainfo/orchestrator_artwork.py.
+    enrichment_deadline_seconds: float = 30
     alerts: AlertConfig = dataclasses.field(default_factory=AlertConfig)
     overrides: OverridesConfig = dataclasses.field(default_factory=OverridesConfig)
     history: HistoryConfig = dataclasses.field(default_factory=HistoryConfig)
@@ -399,6 +406,7 @@ class Config:
             backoff_initial_seconds=raw.get("backoff_initial_seconds", 30),
             backoff_max_seconds=raw.get("backoff_max_seconds", 300),
             nothing_playing_grace_seconds=raw.get("nothing_playing_grace_seconds", 2),
+            enrichment_deadline_seconds=raw.get("enrichment_deadline_seconds", 30),
             alerts=AlertConfig(**(raw.get("alerts") or {})),
             overrides=OverridesConfig(**(raw.get("overrides") or {})),
             history=HistoryConfig(**(raw.get("history") or {})),
