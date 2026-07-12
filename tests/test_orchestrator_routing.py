@@ -233,6 +233,34 @@ def test_distinct_items_are_each_enriched():
     assert enricher.enrich.call_count == 2
 
 
+def test_outputs_receive_a_copy_not_the_shared_mutable_now_playing():
+    """Outputs must never hold a reference to the object the orchestrator
+    thread keeps mutating in place on later ticks (_refresh_position) - see
+    C2 in docs/architecture-usability-review-2026-07.md."""
+    movie = _movie(source="kodi")
+    movie.position_seconds = 10
+    movie.duration_seconds = 100
+    output = _output()
+    orch = _orchestrator([_Source("kodi", movie)], [output])
+
+    orch._tick()
+
+    pushed_on_new_item = output.on_new_item.call_args.args[0]
+    pushed_update = output.update.call_args.args[0]
+    current = orch._groups[0].current
+
+    assert pushed_on_new_item is not current
+    assert pushed_update is not current
+    assert pushed_on_new_item.position_seconds == 10
+    assert pushed_update.position_seconds == 10
+
+    # Simulate a later tick's _refresh_position mutating the shared
+    # group.current in place - the already-pushed copies must be unaffected.
+    current.position_seconds = 999
+    assert pushed_on_new_item.position_seconds == 10
+    assert pushed_update.position_seconds == 10
+
+
 # ---------------------------------------------------------------------------
 # Grace period is per group
 # ---------------------------------------------------------------------------

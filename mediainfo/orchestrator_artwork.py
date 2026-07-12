@@ -11,6 +11,7 @@ and the very next call must see the change immediately.
 from __future__ import annotations
 
 import concurrent.futures
+import copy
 import logging
 import random
 import time
@@ -251,7 +252,17 @@ class _ArtworkPipeline:
                 logger.exception("Failed to fetch artwork %s", artwork.url)
                 continue
 
-            self._call_output(index, output.update, group.current, artwork, image_path)
+            # A copy, not group.current itself: outputs (several of them
+            # Flask apps serving requests on their own threads) hold onto
+            # whatever they're handed here indefinitely, while group.current
+            # keeps being mutated in place by the orchestrator thread on
+            # every later tick (_refresh_position's position/duration
+            # updates, a future _refresh_artwork() re-enrichment) - handing
+            # out the live object would be a data race by construction. A
+            # shallow copy is enough: the fields that get mutated in place
+            # after the fact (position_seconds, duration_seconds) are plain
+            # scalars on the copy, decoupled from the original.
+            self._call_output(index, output.update, copy.copy(group.current), artwork, image_path)
             return
 
         logger.warning(

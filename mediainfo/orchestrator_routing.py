@@ -13,6 +13,7 @@ construction (see tests) and the very next tick must see the change.
 
 from __future__ import annotations
 
+import copy
 import logging
 import time
 from typing import Callable, Dict, List, Optional
@@ -145,7 +146,11 @@ class _RoutingEngine:
                 if getattr(getattr(output, "config", None), "idle_when_filtered", False):
                     self._call_output(index, output.on_idle)
             else:
-                self._call_output(index, output.on_new_item, now_playing, self.cache)
+                # A copy, not now_playing/group.current itself - see the
+                # matching comment on _ArtworkPipeline.show_image_for_output
+                # for why outputs must never hold a reference to the object
+                # the orchestrator thread keeps mutating in place.
+                self._call_output(index, output.on_new_item, copy.copy(now_playing), self.cache)
 
         if not now_playing.images:
             logger.warning("No artwork available for %s", now_playing.title)
@@ -212,7 +217,7 @@ class _RoutingEngine:
                     index,
                     type(output).__name__,
                 )
-                self._call_output(index, output.on_new_item, group.current, self.cache)
+                self._call_output(index, output.on_new_item, copy.copy(group.current), self.cache)
                 if group.current.images:
                     self._artwork.show_image_for_output(group, index, output)
 
