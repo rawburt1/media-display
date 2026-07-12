@@ -49,6 +49,7 @@ from mediainfo.config.idle import (
 from mediainfo.config.outputs import (
     OUTPUT_CONFIG_TYPES,
     AutoRotateConfig,
+    AutoRotatePresetConfig,
     ConfigUiConfig,
     FeedConfig,
     FolderConfig,
@@ -125,6 +126,7 @@ __all__ = [
     "ArtsWallpaperConfig",
     "AuthConfig",
     "AutoRotateConfig",
+    "AutoRotatePresetConfig",
     "BlurredBackgroundConfig",
     "BrowserConfig",
     "CacheConfig",

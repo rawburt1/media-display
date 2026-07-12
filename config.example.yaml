@@ -885,8 +885,14 @@ outputs:
       enabled: false
       # Seconds between rotating to the next preset.
       interval_seconds: 60
-      # preset name -> list of theme names active while it's showing.
-      # A name not listed under `themes:` above simply never appears.
+      # preset name -> either a plain list of theme names (unconditioned -
+      # takes part in the timer-based rotation above), or a {themes:,
+      # when:} mapping - a preset with `when` auto-activates and stays
+      # pinned (the timer never rotates away from it) whenever the
+      # current media type is in that list, instead of waiting its turn.
+      # `when` accepts "music", "movie", "episode", "idle" (nothing
+      # playing / idle wallpaper), and a preset can list more than one. A
+      # theme name not listed under `themes:` above simply never appears.
       presets:
         minimal:
         - color_palette
@@ -895,6 +901,13 @@ outputs:
         - blurred_background
         - glow
         - vinyl
+        music:
+          themes:
+          - vinyl
+          - progress_bar
+          - equalizer
+          when:
+          - music
 
 
 # ---------------------------------------------------------------------------

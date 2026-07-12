@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pydantic
 
@@ -156,12 +156,47 @@ class AutoRotateConfig:
     enabled: bool = False
     # Seconds between rotating to the next preset.
     interval_seconds: int = 60
-    # preset name -> list of theme names active while that preset is
-    # showing, e.g. {"minimal": ["color_palette"], "full": ["glow",
-    # "vinyl", "timeline"]}. A preset naming an unknown or disabled theme
-    # is accepted (just never produces a payload entry, same as any
-    # unrequested theme) - see ThemesOutput._active_theme_names().
-    presets: Dict[str, List[str]] = dataclasses.field(default_factory=dict)
+    # preset name -> either a plain list of theme names (e.g. {"minimal":
+    # ["color_palette"]} - unconditioned, participates in timer rotation),
+    # or {"themes": [...], "when": [...]} (conditioned - pinned active
+    # whenever the current media type is in `when`, never rotated away
+    # from - see ThemesOutput._current_preset_name()). Deliberately a raw
+    # dict here, not validated (mirrors ThemesConfig.themes above) -
+    # mediainfo.config.outputs.parse_presets() validates the actual
+    # shape, called once from ThemesOutput.__init__. A preset naming an
+    # unknown or disabled theme is accepted (just never produces a
+    # payload entry, same as any unrequested theme).
+    presets: Dict[str, Any] = dataclasses.field(default_factory=dict)
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class AutoRotatePresetConfig:
+    """One named theme group - see AutoRotateConfig.presets."""
+
+    themes: List[str] = dataclasses.field(default_factory=list)
+    # User-facing media types that auto-activate and pin this preset:
+    # "music", "movie", "episode", "idle" (nothing playing / idle
+    # wallpaper - see ThemesOutput's _IDLE_MEDIA_TYPE_ALIAS for how this
+    # maps onto NowPlaying's actual internal "wallpaper" media_type).
+    # Empty (the default) means an ordinary timer-rotation-pool preset,
+    # exactly like every preset before this field existed.
+    when: List[str] = dataclasses.field(default_factory=list)
+
+
+def parse_presets(raw: Dict[str, Any]) -> Dict[str, AutoRotatePresetConfig]:
+    """Parse AutoRotateConfig.presets' raw dict into real
+    AutoRotatePresetConfig instances. Each value is either a plain list of
+    theme names (today's shape, always unconditioned) or a
+    {"themes": [...], "when": [...]} mapping. Preserves the input's
+    declaration order - relied on by ThemesOutput for rotation order and
+    for "first preset wins" when two presets' `when` overlap."""
+    result: Dict[str, AutoRotatePresetConfig] = {}
+    for name, value in (raw or {}).items():
+        if isinstance(value, list):
+            result[name] = AutoRotatePresetConfig(themes=value)
+        else:
+            result[name] = AutoRotatePresetConfig(**(value or {}))
+    return result
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
