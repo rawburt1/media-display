@@ -54,6 +54,13 @@ var componentsById = {};
 // real page unload/close (beforeunload, below).
 var hasUnsavedComponentEdits = false;
 
+// Every state-changing fetch() (POST/PUT/PATCH/DELETE) in this file and
+// components.js must send this - see mediainfo/web_auth.py's
+// _require_csrf_header for why: a cross-origin page can't set this header
+// without triggering a CORS preflight this app never grants, and a plain
+// <form> POST can't set custom headers at all. Not needed on GETs.
+var CSRF_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' };
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 }
@@ -196,7 +203,7 @@ function actionButton(action) {
 
 function runRestartAction(href) {
   if (!confirm('Restart mediainfo now? Every display goes offline until it comes back up.')) return;
-  fetch(href, { method: 'POST' }).catch(function() {});
+  fetch(href, { method: 'POST', headers: CSRF_HEADERS }).catch(function() {});
   alert('Restarting… this page will keep working once the process is back up (if something supervises it, e.g. Docker’s restart: unless-stopped).');
   fetchDashboard();
 }

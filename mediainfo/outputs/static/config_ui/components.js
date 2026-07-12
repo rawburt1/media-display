@@ -514,7 +514,7 @@ function saveDetailComponent() {
   }
 
   fetch('/api/config/form', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify(body),
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (!d.ok) {
@@ -559,13 +559,15 @@ function runDetailTest() {
   var typeName = c.config_path.split('.')[1];
   var req;
   if (c.component_type === 'source') {
-    req = fetch('/api/test/source/' + encodeURIComponent(typeName), { method: 'POST' });
+    req = fetch('/api/test/source/' + encodeURIComponent(typeName), { method: 'POST', headers: CSRF_HEADERS });
   } else if (c.component_type === 'enricher') {
-    req = fetch('/api/test/enricher/' + encodeURIComponent(typeName), { method: 'POST' });
+    req = fetch('/api/test/enricher/' + encodeURIComponent(typeName), { method: 'POST', headers: CSRF_HEADERS });
   } else if (c.component_type === 'output') {
     var body = Object.assign({ type: typeName }, detailOutputsWorking[0]);
     req = fetch('/api/test/output', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
+      body: JSON.stringify(body),
     });
   } else {
     return;
@@ -731,7 +733,7 @@ function runHealthTest(btn) {
     ? '/api/test/source/' + encodeURIComponent(typeName)
     : '/api/test/enricher/' + encodeURIComponent(typeName);
 
-  fetch(url, { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
+  fetch(url, { method: 'POST', headers: CSRF_HEADERS }).then(function(r) { return r.json(); }).then(function(d) {
     resultEl.classList.add(d.ok ? 'ok' : 'fail');
     resultEl.textContent = d.message;
   }).catch(function() {
@@ -1017,7 +1019,7 @@ function submitOverrideForm(e) {
   var form = e.target;
   var statusEl = document.getElementById('override-form-status');
   statusEl.textContent = 'Saving…';
-  fetch('/api/overrides', { method: 'POST', body: new FormData(form) })
+  fetch('/api/overrides', { method: 'POST', headers: CSRF_HEADERS, body: new FormData(form) })
     .then(function(r) { return r.json().then(function(data) { return [r.ok, data]; }); })
     .then(function(result) {
       if (result[0]) { form.reset(); fetchOverrides(); }
@@ -1030,7 +1032,7 @@ function removeOverride(btn) {
   btn.disabled = true;
   fetch('/api/overrides', {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
+    headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify({ title: btn.dataset.title, subtitle: btn.dataset.subtitle }),
   }).then(function() { fetchOverrides(); }).catch(function() { btn.disabled = false; });
 }

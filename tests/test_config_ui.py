@@ -8,6 +8,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from flask import Flask
+from flask.testing import FlaskClient
 
 from mediainfo.config import AutoRotatePresetConfig, Config, ConfigUiConfig
 from mediainfo.config.outputs import parse_presets
@@ -15,6 +17,27 @@ from mediainfo.config_backup import backup_config_file, list_backups
 from mediainfo.outputs.config_ui import ConfigUiOutput, _restart_process
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
+
+
+class _CsrfExemptClient(FlaskClient):
+    """Every mutating route now requires the same header the real UI's own
+    JS always sends (see mediainfo/web_auth.py's _require_csrf_header) -
+    inject it automatically here rather than touching every .post()/
+    .delete() call site in this file."""
+
+    def open(self, *args, **kwargs):
+        headers = kwargs.setdefault("headers", {})
+        if isinstance(headers, dict):
+            headers.setdefault("X-Requested-With", "XMLHttpRequest")
+        return super().open(*args, **kwargs)
+
+
+@pytest.fixture(autouse=True)
+def csrf_exempt_test_client(monkeypatch):
+    # Patched on the Flask class itself (not just one instance) so every
+    # ConfigUiOutput built in this file - however it's constructed - picks
+    # this up, not just the ones going through the _output() helper below.
+    monkeypatch.setattr(Flask, "test_client_class", _CsrfExemptClient)
 
 
 @pytest.fixture(autouse=True)
