@@ -13,6 +13,13 @@
 # Compose environment / .env files or system environment variables instead.
 
 
+# Schema version of this file. Absent entirely (as in a config.yaml
+# predating this setting) is treated the same as 1 - every config in the
+# wild today is implicitly version 1. Only ever bump this yourself if a
+# future changelog entry tells you to; mediainfo migrates old versions
+# forward automatically.
+config_version: 1
+
 # ---------------------------------------------------------------------------
 # Polling
 # ---------------------------------------------------------------------------

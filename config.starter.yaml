@@ -10,6 +10,8 @@
 # option, each with its own comments on what it needs and where to get any
 # API key - copy whatever sections you need from it into this file.
 
+config_version: 1
+
 outputs:
   # Guided config UI - see the comment at the top of this file.
   # SECURITY: read+write access to config.yaml, including any credentials

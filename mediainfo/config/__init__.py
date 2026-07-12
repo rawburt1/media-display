@@ -46,6 +46,7 @@ from mediainfo.config.idle import (
     PexelsWallpaperConfig,
     UnsplashWallpaperConfig,
 )
+from mediainfo.config.migrations import CURRENT_CONFIG_VERSION, migrate_config
 from mediainfo.config.outputs import (
     OUTPUT_CONFIG_TYPES,
     AutoRotateConfig,
@@ -135,6 +136,7 @@ __all__ = [
     "ColorPaletteConfig",
     "Config",
     "ConfigUiConfig",
+    "CURRENT_CONFIG_VERSION",
     "DiscogsConfig",
     "EmbyConfig",
     "ENRICHER_CONFIG_TYPES",
@@ -322,6 +324,8 @@ class Config:
         (e.g. the `config` output's validate-before-save logic) can build
         and validate a Config without writing it to a file first.
         """
+        raw = migrate_config(raw)
+
         sources = {}
         for name, values in (raw.get("sources") or {}).items():
             if name not in SOURCE_CONFIG_TYPES:

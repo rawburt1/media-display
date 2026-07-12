@@ -320,6 +320,11 @@ itself starts out as a copy of `config.starter.yaml` (just the config UI and
 a few harmless local outputs, no sources), not the full example file. Key
 things to fill in:
 
+- **`config_version`**: schema version of the file, currently always `1`.
+  Safe to leave out entirely (treated the same as `1`) - it exists so a
+  future field rename can transparently upgrade old config.yaml files
+  instead of rejecting them at startup. You should never need to set this
+  by hand; just don't remove it if a future upgrade adds/bumps it.
 - **`priority`**: ordered list of source names. When more than one source
   is active at once, the first one in this list wins. A source that's
   `enabled: true` but missing from this list is never actually polled -

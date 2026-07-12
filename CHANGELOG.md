@@ -32,6 +32,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   dict. Now round-trips correctly.
 
 ### Added
+- **Config schema versioning**: `config.yaml` may now declare a top-level
+  `config_version` (defaults to `1`, same as a config predating this
+  setting). Infrastructure only for now - no field has ever been
+  renamed - but the next time one is, mediainfo will migrate an old
+  config.yaml forward automatically instead of a pydantic
+  `extra="forbid"` error turning a working install into a broken one on
+  upgrade. See `mediainfo/config/migrations.py`.
 - **Display Themes (foundation)**: a new `outputs.themes` display (port
   8097 by default), completely separate from `web` (8090) - lays the
   groundwork for a modular system of selectable, combinable visual
