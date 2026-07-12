@@ -42,9 +42,7 @@ class AdbNowPlayingSource(MediaSource):
     def __init__(self, config):
         self.config = config
         self._signer = self._load_or_create_signer(Path(config.adb_key_path))
-        self._device = AdbDeviceTcp(
-            config.host, config.port, default_transport_timeout_s=9.0
-        )
+        self._device = AdbDeviceTcp(config.host, config.port, default_transport_timeout_s=9.0)
 
     @staticmethod
     def _load_or_create_signer(key_path: Path) -> PythonRSASigner:

@@ -25,6 +25,7 @@ from mediainfo.config import LoggingConfig
 # _file_mtime
 # ---------------------------------------------------------------------------
 
+
 def test_file_mtime_returns_none_for_missing_file(tmp_path):
     assert _file_mtime(tmp_path / "missing.yaml") is None
 
@@ -49,6 +50,7 @@ def test_file_mtime_changes_after_write(tmp_path):
 # ---------------------------------------------------------------------------
 # _make_stop_handler
 # ---------------------------------------------------------------------------
+
 
 def test_make_stop_handler_sets_event():
     ev = threading.Event()
@@ -85,6 +87,7 @@ def test_make_stop_handler_independent_events():
 # ---------------------------------------------------------------------------
 # _shutdown_outputs
 # ---------------------------------------------------------------------------
+
 
 def test_shutdown_outputs_calls_on_idle_on_all():
     outputs = [MagicMock(), MagicMock(), MagicMock()]
@@ -126,6 +129,7 @@ def test_shutdown_outputs_empty_list():
 # _warn_output_changes
 # ---------------------------------------------------------------------------
 
+
 def test_warn_output_changes_warns_when_outputs_differ(caplog):
     import logging
 
@@ -158,6 +162,7 @@ def test_warn_output_changes_silent_when_same(caplog):
 # _setup_logging
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _reset_root_logger():
     root = logging.getLogger()
@@ -186,5 +191,3 @@ def test_setup_logging_is_case_insensitive():
 def test_setup_logging_falls_back_to_info_for_invalid_level():
     _setup_logging(LoggingConfig(level="NOT_A_LEVEL"))
     assert logging.getLogger().level == logging.INFO
-
-

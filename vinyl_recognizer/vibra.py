@@ -40,7 +40,9 @@ def recognize(wav_bytes: bytes) -> Optional[dict]:
         try:
             completed = subprocess.run(
                 ["vibra", "--recognize", "--file", f.name],
-                capture_output=True, timeout=30, check=True,
+                capture_output=True,
+                timeout=30,
+                check=True,
             )
         except Exception:
             logger.exception("vibra failed")

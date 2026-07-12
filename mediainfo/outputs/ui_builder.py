@@ -195,9 +195,7 @@ def _build_fields(
             secret=f["secret"],
             essential=f["essential"],
             value="" if f["secret"] else local_values.get(f["name"]),
-            secret_set=bool(local_secrets_set.get(f["name"], False))
-            if f["secret"]
-            else False,
+            secret_set=bool(local_secrets_set.get(f["name"], False)) if f["secret"] else False,
             default=f["default"],
             widget=f.get("widget"),
             choices=f.get("choices"),
@@ -206,9 +204,7 @@ def _build_fields(
     return essential, advanced
 
 
-def _status_for(
-    enabled: bool, missing_required: List[str], health_entry: Optional[dict]
-) -> str:
+def _status_for(enabled: bool, missing_required: List[str], health_entry: Optional[dict]) -> str:
     if not enabled:
         return "disabled"
     if missing_required:
@@ -236,9 +232,7 @@ def _warnings_for(
 def _default_actions(supports_test: bool, test_href: Optional[str]) -> List[UiAction]:
     actions = [UiAction(id="configure", label="Configure", kind="link", href="/form")]
     if supports_test:
-        actions.append(
-            UiAction(id="test", label="Test connection", kind="test", href=test_href)
-        )
+        actions.append(UiAction(id="test", label="Test connection", kind="test", href=test_href))
     return actions
 
 
@@ -580,13 +574,9 @@ def build_dashboard(
         for w in c.warnings:
             warnings.append(f"{c.name}: {w}")
     if overview.get("exposed_without_auth"):
-        warnings.append(
-            "The config UI is reachable beyond this machine with no login required."
-        )
+        warnings.append("The config UI is reachable beyond this machine with no login required.")
 
-    overall_status = (
-        "error" if counts_by_status.get("error") else health.get("status", "ok")
-    )
+    overall_status = "error" if counts_by_status.get("error") else health.get("status", "ok")
 
     restart_required = bool(overview.get("restart_required"))
     quick_actions: List[UiAction] = []
@@ -602,9 +592,7 @@ def build_dashboard(
             )
         )
     quick_actions += [
-        UiAction(
-            id="configure_media", label="Configure Media", kind="link", href="/form"
-        ),
+        UiAction(id="configure_media", label="Configure Media", kind="link", href="/form"),
         UiAction(
             id="configure_metadata",
             label="Configure Metadata",

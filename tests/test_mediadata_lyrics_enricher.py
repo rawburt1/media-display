@@ -9,8 +9,11 @@ from mediainfo.models import NowPlaying
 
 def _song(**kwargs):
     defaults = dict(
-        source="youtube", media_type="music",
-        title="Comfortably Numb", subtitle="Pink Floyd", album="The Wall",
+        source="youtube",
+        media_type="music",
+        title="Comfortably Numb",
+        subtitle="Pink Floyd",
+        album="The Wall",
     )
     defaults.update(kwargs)
     return NowPlaying(**defaults)

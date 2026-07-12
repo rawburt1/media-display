@@ -253,7 +253,6 @@ class HomeAssistantConfig:
     entity_id: str = ""
 
 
-
 # Registry mapping config section names to their dataclass types. Adding a
 # new source starts here.
 SOURCE_CONFIG_TYPES: dict[str, type] = {

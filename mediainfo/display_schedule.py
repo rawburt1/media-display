@@ -63,9 +63,7 @@ class DisplaySchedule:
         try:
             in_time_window(window, now=datetime.time(0, 0))
         except (ValueError, AttributeError):
-            logger.warning(
-                "Ignoring malformed screen_off_hours %r - expected HH:MM-HH:MM", window
-            )
+            logger.warning("Ignoring malformed screen_off_hours %r - expected HH:MM-HH:MM", window)
             return ""
         return window
 
@@ -91,9 +89,7 @@ class DisplaySchedule:
     def desired(self, now: Optional[datetime.time] = None) -> Tuple[bool, Optional[int]]:
         """(screen_on, brightness) that should apply at `now` (default:
         current local time). brightness None means "leave it alone"."""
-        screen_on = not (
-            self.screen_off_hours and in_time_window(self.screen_off_hours, now)
-        )
+        screen_on = not (self.screen_off_hours and in_time_window(self.screen_off_hours, now))
         brightness = next(
             (level for window, level in self.brightness_windows if in_time_window(window, now)),
             None,
@@ -143,9 +139,7 @@ class ScheduledDisplay:
             if not self._apply(self._set_power, screen_on, "power", monotonic):
                 return
             self._applied_power = screen_on
-            logger.info(
-                "%s: screen %s (scheduled)", self._label, "on" if screen_on else "off"
-            )
+            logger.info("%s: screen %s (scheduled)", self._label, "on" if screen_on else "off")
 
     def _apply(self, func, value, what: str, monotonic: float) -> bool:
         try:
@@ -154,7 +148,10 @@ class ScheduledDisplay:
         except Exception:
             logger.warning(
                 "%s: failed to set %s to %s - retrying in %ds",
-                self._label, what, value, _RETRY_INTERVAL_SECONDS,
+                self._label,
+                what,
+                value,
+                _RETRY_INTERVAL_SECONDS,
                 exc_info=True,
             )
             self._next_retry = monotonic + _RETRY_INTERVAL_SECONDS

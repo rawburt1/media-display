@@ -13,8 +13,14 @@ def _make_group(coordinator):
     return group
 
 
-def _make_device(ip, state="PLAYING", title="Comfortably Numb", artist="Pink Floyd",
-                 album="The Wall", album_art="http://192.168.1.80:1400/cover.jpg"):
+def _make_device(
+    ip,
+    state="PLAYING",
+    title="Comfortably Numb",
+    artist="Pink Floyd",
+    album="The Wall",
+    album_art="http://192.168.1.80:1400/cover.jpg",
+):
     device = MagicMock()
     device.ip_address = ip
     device.get_current_transport_info.return_value = {"current_transport_state": state}
@@ -82,7 +88,9 @@ def test_checks_all_zones_and_returns_playing_one(MockSoCo):
     playing = _make_device("192.168.1.81", title="Money", artist="Pink Floyd")
     MockSoCo.return_value.all_groups = [_make_group(idle), _make_group(playing)]
 
-    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
+    now_playing = SonosSource(
+        SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])
+    ).get_now_playing()
 
     assert now_playing.title == "Money"
 
@@ -104,7 +112,9 @@ def test_relative_album_art_url_uses_device_ip(MockSoCo):
     device = _make_device("192.168.1.81", album_art="/getaa?s=1&u=x%3a1")
     MockSoCo.return_value.all_groups = [_make_group(device)]
 
-    now_playing = SonosSource(SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])).get_now_playing()
+    now_playing = SonosSource(
+        SonosConfig(enabled=True, speaker_ips=["192.168.1.80"])
+    ).get_now_playing()
 
     assert now_playing.images[0].url == "http://192.168.1.81:1400/getaa?s=1&u=x%3a1"
 

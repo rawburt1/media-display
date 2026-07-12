@@ -114,7 +114,9 @@ class KodiSource(MediaSource):
                     or art.get("thumb")
                     or item.get("thumbnail")
                 )
-                fanart_path = art.get("tvshow.fanart") or art.get("season.fanart") or art.get("fanart")
+                fanart_path = (
+                    art.get("tvshow.fanart") or art.get("season.fanart") or art.get("fanart")
+                )
             else:
                 media_type = "music"
                 title = item.get("title", "")
@@ -138,7 +140,9 @@ class KodiSource(MediaSource):
             if kodi_type == "episode":
                 ids = self._get_tvshow_ids(item.get("tvshowid")) or ids
             elif media_type == "music":
-                artist_ids = item.get("musicbrainzalbumartistid") or item.get("musicbrainzartistid") or []
+                artist_ids = (
+                    item.get("musicbrainzalbumartistid") or item.get("musicbrainzartistid") or []
+                )
                 album_id = item.get("musicbrainzalbumid")
                 if artist_ids and album_id:
                     ids = {"musicbrainzartist": artist_ids[0], "musicbrainzalbum": album_id}
@@ -161,7 +165,9 @@ class KodiSource(MediaSource):
             self.last_poll_failed = True
             status = exc.response.status_code if exc.response is not None else None
             self.availability_reason = (
-                AvailabilityReason.AUTH_FAILED if status in (401, 403) else AvailabilityReason.API_ERROR
+                AvailabilityReason.AUTH_FAILED
+                if status in (401, 403)
+                else AvailabilityReason.API_ERROR
             )
             return None
         except Exception as exc:

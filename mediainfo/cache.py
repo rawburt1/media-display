@@ -100,9 +100,7 @@ class ImageCache:
             "music": self.music_dir,
         }
 
-    def get_path(
-        self, artwork: Optional[Artwork], tier: CacheTier = "default"
-    ) -> Optional[Path]:
+    def get_path(self, artwork: Optional[Artwork], tier: CacheTier = "default") -> Optional[Path]:
         """Return a local file path for the artwork, downloading it if needed.
 
         Returns None if there is no artwork (or its URL is empty). `tier`
@@ -131,7 +129,9 @@ class ImageCache:
         if not self._meets_minimum_size(response.content):
             logger.info(
                 "Skipped artwork %r - smaller than %dx%d",
-                artwork.label or artwork.url, self.min_width, self.min_height,
+                artwork.label or artwork.url,
+                self.min_width,
+                self.min_height,
             )
             return None
 
@@ -213,7 +213,9 @@ class ImageCache:
         if not self._meets_minimum_size(response.content):
             logger.info(
                 "Skipped artwork %r - smaller than %dx%d",
-                artwork.label or artwork.url, self.min_width, self.min_height,
+                artwork.label or artwork.url,
+                self.min_width,
+                self.min_height,
             )
             return None
 

@@ -24,9 +24,7 @@ def no_server(monkeypatch):
 
 
 def _output(config_path):
-    return ConfigUiOutput(
-        ConfigUiConfig(enabled=True, host="127.0.0.1", port=8094), config_path
-    )
+    return ConfigUiOutput(ConfigUiConfig(enabled=True, host="127.0.0.1", port=8094), config_path)
 
 
 @pytest.fixture
@@ -199,9 +197,7 @@ def test_health_error_status_maps_to_component_error(config_path):
     values, secrets_set = out._store.get_values()
     output_instances, output_secrets_set = out._store.get_output_instances()
     health = {
-        "sources": [
-            {"name": "kodi", "status": "error", "last_error": "Could not connect"}
-        ],
+        "sources": [{"name": "kodi", "status": "error", "last_error": "Could not connect"}],
         "outputs": [],
         "enrichers": [],
         "idle_sources": [],
@@ -312,9 +308,7 @@ def test_api_ui_components_returns_a_list(config_path):
     data = out.app.test_client().get("/api/ui/components").get_json()
     assert isinstance(data, list)
     assert len(data) > 0
-    assert {"id", "category", "component_type", "status", "essential_fields"} <= data[
-        0
-    ].keys()
+    assert {"id", "category", "component_type", "status", "essential_fields"} <= data[0].keys()
 
 
 def test_api_ui_component_returns_the_matching_one(config_path):
@@ -491,8 +485,10 @@ def test_needs_setup_true_when_only_an_output_is_enabled():
 
 def test_needs_setup_false_when_source_and_output_are_both_enabled():
     pipeline = UiPipeline(
-        id="default", name="Default",
-        media_component_ids=["sources.kodi"], display_component_ids=["outputs.web"],
+        id="default",
+        name="Default",
+        media_component_ids=["sources.kodi"],
+        display_component_ids=["outputs.web"],
     )
     dashboard = build_dashboard([], pipeline, {}, None)
     assert dashboard.needs_setup is False

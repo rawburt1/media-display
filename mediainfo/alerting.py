@@ -47,10 +47,14 @@ class AlertManager:
         if not self.config.enabled or not self.config.webhook_url:
             return
 
-        self._check_category(self._last_alerted_outputs, output_error_since, output_labels, now, "output")
+        self._check_category(
+            self._last_alerted_outputs, output_error_since, output_labels, now, "output"
+        )
         source_error_since = source_error_since or {}
         source_labels = {name: name for name in source_error_since}
-        self._check_category(self._last_alerted_sources, source_error_since, source_labels, now, "source")
+        self._check_category(
+            self._last_alerted_sources, source_error_since, source_labels, now, "source"
+        )
 
     def _check_category(
         self,

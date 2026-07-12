@@ -41,6 +41,7 @@ def test_recognize_returns_match_above_threshold(tmp_path):
 
     with patch("vinyl_recognizer.local_folder.shutil.which", return_value="/usr/bin/fpcalc"):
         with patch("vinyl_recognizer.local_folder.subprocess.run") as mock_run:
+
             def fake_run(args, **kwargs):
                 path = args[-1]
                 if "Pink Floyd" in path:
@@ -66,6 +67,7 @@ def test_recognize_returns_none_when_below_threshold(tmp_path):
 
     with patch("vinyl_recognizer.local_folder.shutil.which", return_value="/usr/bin/fpcalc"):
         with patch("vinyl_recognizer.local_folder.subprocess.run") as mock_run:
+
             def fake_run(args, **kwargs):
                 path = args[-1]
                 if "Some Artist" in path:

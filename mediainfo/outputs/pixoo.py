@@ -65,7 +65,9 @@ class PixooOutput(Output):
         # them here used to mean a Pixoo that dropped off the network was
         # silently reported as healthy.
         size = self.config.size
-        led_path = self.cache.get_derived_path(image_path, self._led_cache_key(), self._build_led_image)
+        led_path = self.cache.get_derived_path(
+            image_path, self._led_cache_key(), self._build_led_image
+        )
         image = Image.open(led_path).convert("RGB")
         pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
 

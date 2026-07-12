@@ -329,7 +329,9 @@ class MusicLibrary:
             return None
         return value
 
-    def set_claim(self, entity_type: str, entity_id: int, field: str, source: str, value: str) -> None:
+    def set_claim(
+        self, entity_type: str, entity_id: int, field: str, source: str, value: str
+    ) -> None:
         with self._lock:
             self._conn.execute(
                 "INSERT INTO source_claims (entity_type, entity_id, field, source, value, fetched_at) "

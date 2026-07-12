@@ -39,8 +39,10 @@ class OmdbEnricher(ArtworkEnricher):
             return
 
         imdb_id = now_playing.ids.get("imdb")
-        cache_key = ("id", imdb_id) if imdb_id else (
-            "title", now_playing.media_type, now_playing.title, now_playing.year
+        cache_key = (
+            ("id", imdb_id)
+            if imdb_id
+            else ("title", now_playing.media_type, now_playing.title, now_playing.year)
         )
 
         if cache_key in self._cache:
@@ -90,9 +92,7 @@ class OmdbEnricher(ArtworkEnricher):
             return False, f"Error: {exc}"
 
     def _get(self, params: dict):
-        return requests.get(
-            _BASE_URL, params={**params, "apikey": self.config.api_key}, timeout=8
-        )
+        return requests.get(_BASE_URL, params={**params, "apikey": self.config.api_key}, timeout=8)
 
     @staticmethod
     def _parse_rating(value) -> Optional[float]:

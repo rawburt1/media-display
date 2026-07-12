@@ -47,7 +47,11 @@ def test_playing_track(mock_get):
             "length": 213,
             "information": {
                 "category": {
-                    "meta": {"title": "Bohemian Rhapsody", "artist": "Queen", "album": "A Night at the Opera"}
+                    "meta": {
+                        "title": "Bohemian Rhapsody",
+                        "artist": "Queen",
+                        "album": "A Night at the Opera",
+                    }
                 }
             },
         }
@@ -115,7 +119,9 @@ def test_now_playing_field_without_dash_is_used_as_title(mock_get):
 
 @patch("mediainfo.sources.vlc.requests.get")
 def test_no_title_at_all_returns_none(mock_get):
-    mock_get.return_value = _response(json_data={"state": "playing", "information": {"category": {"meta": {}}}})
+    mock_get.return_value = _response(
+        json_data={"state": "playing", "information": {"category": {"meta": {}}}}
+    )
 
     assert _source().get_now_playing() is None
 

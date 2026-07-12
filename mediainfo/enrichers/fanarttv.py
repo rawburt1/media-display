@@ -21,9 +21,7 @@ _PREFERRED_LANGS = {"en", "00", ""}
 
 def fetch(api_key: str, path: str) -> Optional[dict]:
     try:
-        response = requests.get(
-            f"{_BASE_URL}/{path}", params={"api_key": api_key}, timeout=10
-        )
+        response = requests.get(f"{_BASE_URL}/{path}", params={"api_key": api_key}, timeout=10)
         if response.status_code == 404:
             return None
         response.raise_for_status()
@@ -94,9 +92,7 @@ class FanartTvEnricher(ArtworkEnricher):
 
         season_posters = data.get("seasonposter") or []
         season_match = [
-            entry
-            for entry in season_posters
-            if str(entry.get("season")) == str(now_playing.season)
+            entry for entry in season_posters if str(entry.get("season")) == str(now_playing.season)
         ]
         if season_match:
             self._append_best(now_playing, season_match, "Season poster (fanart.tv)")

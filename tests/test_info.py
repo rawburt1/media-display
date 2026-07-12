@@ -14,8 +14,12 @@ def _config(**kwargs):
 
 
 def _music(
-    title="Bohemian Rhapsody", artist="Queen", summary="", rating=None,
-    position_seconds=None, duration_seconds=None,
+    title="Bohemian Rhapsody",
+    artist="Queen",
+    summary="",
+    rating=None,
+    position_seconds=None,
+    duration_seconds=None,
 ):
     return NowPlaying(
         source="kodi",
@@ -55,12 +59,14 @@ def no_server(monkeypatch):
 
 def _output(config=None):
     from mediainfo.outputs.info import InfoOutput
+
     return InfoOutput(config or _config())
 
 
 # ---------------------------------------------------------------------------
 # _get_payload
 # ---------------------------------------------------------------------------
+
 
 def test_payload_when_idle():
     out = _output()
@@ -123,6 +129,7 @@ def test_payload_when_playing_with_image(tmp_path):
 # _push
 # ---------------------------------------------------------------------------
 
+
 def test_push_sends_json_to_all_clients():
     out = _output()
     conn_a = _FakeConn()
@@ -152,6 +159,7 @@ def test_push_removes_dead_clients():
 # ---------------------------------------------------------------------------
 # update / on_new_item / on_idle trigger _push
 # ---------------------------------------------------------------------------
+
 
 def test_update_pushes_payload(tmp_path):
     out = _output()
@@ -190,6 +198,7 @@ def test_on_idle_clears_state():
 # No default transforms (high-resolution by default)
 # ---------------------------------------------------------------------------
 
+
 def test_default_transform_pipeline_is_empty():
     out = _output()
     assert out.transform_pipeline == []
@@ -198,6 +207,7 @@ def test_default_transform_pipeline_is_empty():
 # ---------------------------------------------------------------------------
 # HTTP endpoints
 # ---------------------------------------------------------------------------
+
 
 def test_index_page_includes_all_transitions_by_default():
     out = _output()

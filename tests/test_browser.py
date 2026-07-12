@@ -216,6 +216,7 @@ def test_missing_progress_and_duration_are_none():
 # Token authorization
 # ---------------------------------------------------------------------------
 
+
 def test_no_token_configured_authorizes_anything():
     source = _source(token="")
     assert source._is_authorized({}) is True
@@ -236,6 +237,7 @@ def test_missing_or_wrong_token_is_rejected():
 # ---------------------------------------------------------------------------
 # Config defaults
 # ---------------------------------------------------------------------------
+
 
 def test_config_disabled_by_default():
     assert BrowserConfig().enabled is False

@@ -39,14 +39,16 @@ def _mock_response(json_data, status_code=200):
     return resp
 
 
-PLACEHOLDER_URL = "https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png"
+PLACEHOLDER_URL = (
+    "https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png"
+)
 
 
 @patch("mediainfo.idle.lastfm.requests.get")
 def test_returns_artworks_from_recent_tracks(mock_get):
-    mock_get.return_value = _mock_response({
-        "recenttracks": {"track": [_track(name="Song A", artist="Artist A")]}
-    })
+    mock_get.return_value = _mock_response(
+        {"recenttracks": {"track": [_track(name="Song A", artist="Artist A")]}}
+    )
 
     artworks = _source().get_wallpapers()
 
@@ -80,12 +82,20 @@ def test_single_track_dict_is_wrapped_in_a_list(mock_get):
 
 @patch("mediainfo.idle.lastfm.requests.get")
 def test_prefers_larger_image_size(mock_get):
-    mock_get.return_value = _mock_response({
-        "recenttracks": {"track": [_track(images=[
-            _image("medium", "https://example.com/medium.jpg"),
-            _image("extralarge", "https://example.com/extralarge.jpg"),
-        ])]}
-    })
+    mock_get.return_value = _mock_response(
+        {
+            "recenttracks": {
+                "track": [
+                    _track(
+                        images=[
+                            _image("medium", "https://example.com/medium.jpg"),
+                            _image("extralarge", "https://example.com/extralarge.jpg"),
+                        ]
+                    )
+                ]
+            }
+        }
+    )
 
     artworks = _source().get_wallpapers()
 
@@ -94,9 +104,9 @@ def test_prefers_larger_image_size(mock_get):
 
 @patch("mediainfo.idle.lastfm.requests.get")
 def test_skips_placeholder_image(mock_get):
-    mock_get.return_value = _mock_response({
-        "recenttracks": {"track": [_track(images=[_image("extralarge", PLACEHOLDER_URL)])]}
-    })
+    mock_get.return_value = _mock_response(
+        {"recenttracks": {"track": [_track(images=[_image("extralarge", PLACEHOLDER_URL)])]}}
+    )
 
     assert _source().get_wallpapers() == []
 
@@ -104,12 +114,16 @@ def test_skips_placeholder_image(mock_get):
 @patch("mediainfo.idle.lastfm.requests.get")
 def test_deduplicates_by_album_art_url(mock_get):
     shared_url = "https://example.com/same-album.jpg"
-    mock_get.return_value = _mock_response({
-        "recenttracks": {"track": [
-            _track(name="Track 1", images=[_image("extralarge", shared_url)]),
-            _track(name="Track 2", images=[_image("extralarge", shared_url)]),
-        ]}
-    })
+    mock_get.return_value = _mock_response(
+        {
+            "recenttracks": {
+                "track": [
+                    _track(name="Track 1", images=[_image("extralarge", shared_url)]),
+                    _track(name="Track 2", images=[_image("extralarge", shared_url)]),
+                ]
+            }
+        }
+    )
 
     artworks = _source().get_wallpapers()
 

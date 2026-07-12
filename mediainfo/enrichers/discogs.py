@@ -105,7 +105,10 @@ class DiscogsEnricher(ArtworkEnricher):
         artist_id = self.library.get_or_create_artist(artist)
         album_id = self.library.get_or_create_album(artist_id, album)
         return self.library.get_or_fetch(
-            "album", album_id, "cover_art_url", "discogs",
+            "album",
+            album_id,
+            "cover_art_url",
+            "discogs",
             lambda: find_cover(self.config.token, artist, album),
         )
 

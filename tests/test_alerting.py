@@ -115,6 +115,7 @@ def test_multiple_outputs_alerted_independently(mock_post):
 # the source_error_since parameter rather than the required positional args)
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.alerting.requests.post")
 def test_source_does_not_alert_before_threshold(mock_post):
     manager = AlertManager(_config(error_threshold_seconds=300))

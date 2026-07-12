@@ -25,9 +25,7 @@ def _config(**kwargs):
 
 
 def _music(title="Bohemian Rhapsody", artist="Queen"):
-    return NowPlaying(
-        source="kodi", media_type="music", title=title, subtitle=artist, images=[]
-    )
+    return NowPlaying(source="kodi", media_type="music", title=title, subtitle=artist, images=[])
 
 
 def _artwork(label="Album art"):
@@ -397,14 +395,10 @@ def test_health_check_swallows_exception_from_one_theme(monkeypatch):
         "mediainfo.config.themes.THEMES_CONFIG_TYPES",
         {"glow": _FakeGlowConfig},
     )
-    monkeypatch.setattr(
-        "mediainfo.registries.THEME_CLASSES", {"glow": _RaisingHealthTheme}
-    )
+    monkeypatch.setattr("mediainfo.registries.THEME_CLASSES", {"glow": _RaisingHealthTheme})
     out = _output(_config(themes={"glow": {"enabled": True}}))
 
-    assert (
-        out.health_check() is None
-    )  # doesn't raise, just reports nothing for this theme
+    assert out.health_check() is None  # doesn't raise, just reports nothing for this theme
 
 
 class _BakingTheme(DisplayTheme):
@@ -458,9 +452,7 @@ class _FakeVinylTheme(DisplayTheme):
     name = "vinyl"
 
     def client_assets(self, config):
-        return ThemeClientAssets(
-            css=".vinyl { color: black; }", js="console.log('vinyl');"
-        )
+        return ThemeClientAssets(css=".vinyl { color: black; }", js="console.log('vinyl');")
 
     def prepare(self, now_playing, artwork, image_path, cache, media_data, config):
         return ThemeRenderResult(extra_payload={"spinning": True})
@@ -488,9 +480,7 @@ def _two_theme_output(**auto_rotate_kwargs):
     return out
 
 
-def test_auto_rotate_off_by_default_shows_every_enabled_theme(
-    fake_two_themes, tmp_path
-):
+def test_auto_rotate_off_by_default_shows_every_enabled_theme(fake_two_themes, tmp_path):
     out = _two_theme_output()
     img = tmp_path / "abc.jpg"
     img.write_bytes(b"x")
@@ -501,9 +491,7 @@ def test_auto_rotate_off_by_default_shows_every_enabled_theme(
     assert "active_preset" not in payload
 
 
-def test_auto_rotate_enabled_no_presets_shows_every_enabled_theme(
-    fake_two_themes, tmp_path
-):
+def test_auto_rotate_enabled_no_presets_shows_every_enabled_theme(fake_two_themes, tmp_path):
     out = _two_theme_output(enabled=True)  # presets left empty
     img = tmp_path / "abc.jpg"
     img.write_bytes(b"x")
@@ -535,9 +523,7 @@ def test_auto_rotate_still_loads_css_js_for_themes_outside_active_preset(
     page CSS/JS - a preset switch must not require a page reload."""
     out = _two_theme_output(enabled=True, presets={"minimal": ["glow"]})
     assert ".glow" in out._theme_css
-    assert (
-        ".vinyl" in out._theme_css
-    )  # vinyl's CSS still ships, even though filtered out
+    assert ".vinyl" in out._theme_css  # vinyl's CSS still ships, even though filtered out
 
 
 def test_advance_preset_rotates_to_next_and_pushes(fake_two_themes, tmp_path):
@@ -591,9 +577,7 @@ def test_real_color_palette_theme_end_to_end(tmp_path):
     img_path = tmp_path / "art.png"
     Image.new("RGB", (32, 32), (10, 20, 30)).save(img_path)
 
-    out = _output(
-        _config(themes={"color_palette": {"enabled": True, "swatch_count": 1}})
-    )
+    out = _output(_config(themes={"color_palette": {"enabled": True, "swatch_count": 1}}))
     assert out._themes[0].name == "color_palette"
 
     out.on_new_item(_music(), cache=MagicMock())
@@ -769,18 +753,14 @@ def test_real_ken_burns_theme_end_to_end(tmp_path):
     img_path = tmp_path / "art.jpg"
     img_path.write_bytes(b"x")
 
-    out = _output(
-        _config(themes={"ken_burns": {"enabled": True, "duration_seconds": 15}})
-    )
+    out = _output(_config(themes={"ken_burns": {"enabled": True, "duration_seconds": 15}}))
     assert out._themes[0].name == "ken_burns"
 
     out.on_new_item(_music(), cache=MagicMock())
     out.update(_music(), _artwork(), img_path)
 
     payload = out._get_payload()
-    assert (
-        payload["themes"]["ken_burns"]["image"] == f"/image/current?v={img_path.stem}"
-    )
+    assert payload["themes"]["ken_burns"]["image"] == f"/image/current?v={img_path.stem}"
 
     body = out.app.test_client().get("/").data.decode()
     assert body.count("window.themeHandlers.ken_burns = function") == 1
@@ -836,9 +816,7 @@ def test_real_media_mosaic_theme_end_to_end(tmp_path):
         media_type="music",
         title="Song",
         subtitle="Artist",
-        images=[
-            Artwork(url=f"file://{p}", label=f"Art {i}") for i, p in enumerate(paths)
-        ],
+        images=[Artwork(url=f"file://{p}", label=f"Art {i}") for i, p in enumerate(paths)],
     )
 
     out = _output(_config(themes={"media_mosaic": {"enabled": True}}))
@@ -945,15 +923,11 @@ def test_real_lyrics_ticker_theme_end_to_end_music(tmp_path):
     img_path = tmp_path / "art.jpg"
     img_path.write_bytes(b"x")
 
-    out = _output(
-        _config(themes={"lyrics_ticker": {"enabled": True, "position": "bottom"}})
-    )
+    out = _output(_config(themes={"lyrics_ticker": {"enabled": True, "position": "bottom"}}))
     assert out._themes[0].name == "lyrics_ticker"
 
     song = _music()
-    song.synced_lyrics = (
-        "[00:12.50]Davy's on the road again\n[00:16.00]hear him singing"
-    )
+    song.synced_lyrics = "[00:12.50]Davy's on the road again\n[00:16.00]hear him singing"
     song.position_seconds = 13.0
     song.duration_seconds = 200.0
     out.on_new_item(song, cache=MagicMock())
@@ -996,11 +970,7 @@ def test_real_progress_bar_theme_end_to_end_music(tmp_path):
     img_path.write_bytes(b"x")
 
     out = _output(
-        _config(
-            themes={
-                "progress_bar": {"enabled": True, "position": "top", "color": "#ff8800"}
-            }
-        )
+        _config(themes={"progress_bar": {"enabled": True, "position": "top", "color": "#ff8800"}})
     )
     assert out._themes[0].name == "progress_bar"
 

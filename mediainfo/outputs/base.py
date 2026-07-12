@@ -52,9 +52,7 @@ class Output(ABC):
     transform_pipeline: List = []
 
     @abstractmethod
-    def update(
-        self, now_playing: NowPlaying, artwork: Artwork, image_path: Path
-    ) -> None:
+    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         """Show new artwork."""
 
     def on_idle(self) -> None:

@@ -86,11 +86,13 @@ class LyricsTickerTheme(DisplayTheme):
             return None
 
         self._degraded_reason = None
-        return ThemeRenderResult(extra_payload={
-            "cues": [{"t": t, "text": text} for t, text in cues],
-            "position_seconds": now_playing.position_seconds,
-            "duration_seconds": now_playing.duration_seconds,
-        })
+        return ThemeRenderResult(
+            extra_payload={
+                "cues": [{"t": t, "text": text} for t, text in cues],
+                "position_seconds": now_playing.position_seconds,
+                "duration_seconds": now_playing.duration_seconds,
+            }
+        )
 
     def health_detail(self, config: LyricsTickerConfig) -> Optional[dict]:
         if self._degraded_reason:

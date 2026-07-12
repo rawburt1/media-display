@@ -54,8 +54,10 @@ def test_independent_outputs_tracked_separately():
 # record_backoff/clear_backoff rather than record_output_error/_success)
 # ---------------------------------------------------------------------------
 
+
 def _backoff_state():
     from mediainfo.orchestrator_health import _BackoffState
+
     return _BackoffState(delay=5.0, next_attempt=0.0)
 
 

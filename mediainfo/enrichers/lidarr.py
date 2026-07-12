@@ -34,9 +34,7 @@ class LidarrEnricher(ArrEnricher):
             if artist is None:
                 return
 
-            albums = self._get(
-                "/api/v1/album", params={"artistId": artist["id"]}
-            ) or []
+            albums = self._get("/api/v1/album", params={"artistId": artist["id"]}) or []
 
             self._append_album_art(now_playing, albums)
             now_playing.discography = self._build_discography(artist["id"], albums)

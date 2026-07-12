@@ -9,7 +9,9 @@ from mediainfo.idle.local import LocalWallpaperSource
 
 
 def _source(base_dir, **kwargs) -> LocalWallpaperSource:
-    defaults: dict[str, Any] = dict(enabled=True, dir=str(base_dir), rotation_interval_seconds=300, batch_size=15)
+    defaults: dict[str, Any] = dict(
+        enabled=True, dir=str(base_dir), rotation_interval_seconds=300, batch_size=15
+    )
     defaults.update(kwargs)
     return LocalWallpaperSource(LocalWallpaperConfig(**defaults))
 

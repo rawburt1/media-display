@@ -15,6 +15,7 @@ def _t(hhmm):
 # DisplaySchedule: parsing and evaluation
 # ---------------------------------------------------------------------------
 
+
 def test_unconfigured_schedule_is_inert():
     schedule = DisplaySchedule()
     assert not schedule.configured
@@ -59,6 +60,7 @@ def test_malformed_entries_are_skipped_not_fatal():
 # ---------------------------------------------------------------------------
 # ScheduledDisplay: change detection and retry throttling
 # ---------------------------------------------------------------------------
+
 
 def _display(schedule):
     set_power = MagicMock()

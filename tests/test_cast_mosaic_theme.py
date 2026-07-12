@@ -37,6 +37,7 @@ def _music():
 # prepare()
 # ---------------------------------------------------------------------------
 
+
 def test_resolves_headshots_and_builds_payload(tmp_path):
     art_path = _make_image(tmp_path / "poster.jpg")
     cache = ImageCache(tmp_path / "cache")
@@ -62,7 +63,9 @@ def test_episode_uses_show_level_cast(tmp_path):
     cache = ImageCache(tmp_path / "cache")
     cast = [_cast_entry(tmp_path, "Bryan Cranston", "bryan.jpg", "Walter White")]
 
-    result = CastMosaicTheme().prepare(_episode(cast=cast), None, art_path, cache, None, CastMosaicConfig())
+    result = CastMosaicTheme().prepare(
+        _episode(cast=cast), None, art_path, cache, None, CastMosaicConfig()
+    )
 
     assert result is not None
     assert result.extra_payload["cast"][0]["name"] == "Bryan Cranston"
@@ -100,7 +103,9 @@ def test_cast_entries_with_no_photo_url_are_skipped(tmp_path):
         _cast_entry(tmp_path, "Has Photo", "photo.jpg"),
     ]
 
-    result = CastMosaicTheme().prepare(_movie(cast=cast), None, art_path, cache, None, CastMosaicConfig())
+    result = CastMosaicTheme().prepare(
+        _movie(cast=cast), None, art_path, cache, None, CastMosaicConfig()
+    )
 
     assert len(result.extra_payload["cast"]) == 1
     assert result.extra_payload["cast"][0]["name"] == "Has Photo"
@@ -126,7 +131,12 @@ def test_respects_max_cast(tmp_path):
     cast = [_cast_entry(tmp_path, f"Person {i}", f"p{i}.jpg") for i in range(5)]
 
     result = CastMosaicTheme().prepare(
-        _movie(cast=cast), None, art_path, cache, None, CastMosaicConfig(max_cast=2),
+        _movie(cast=cast),
+        None,
+        art_path,
+        cache,
+        None,
+        CastMosaicConfig(max_cast=2),
     )
 
     assert len(result.extra_payload["cast"]) == 2
@@ -147,6 +157,7 @@ def test_movie_after_degraded_music_clears_state(tmp_path):
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = CastMosaicTheme()

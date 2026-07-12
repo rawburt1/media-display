@@ -172,7 +172,8 @@ class FeedOutput(Output):
             ET.SubElement(item, "guid", isPermaLink="false").text = e.guid
             if e.image_url:
                 ET.SubElement(
-                    item, "enclosure",
+                    item,
+                    "enclosure",
                     url=e.image_url,
                     type=_image_mime(e.image_url),
                     length="0",
@@ -184,7 +185,11 @@ class FeedOutput(Output):
         ET.SubElement(feed, _a("title")).text = self.config.title
         ET.SubElement(feed, _a("id")).text = f"urn:mediainfo:feed:{self.config.port}"
         ET.SubElement(feed, _a("link"), href=base_url, rel="alternate")
-        updated = entries[0].published.isoformat() if entries else datetime.now(tz=timezone.utc).isoformat()
+        updated = (
+            entries[0].published.isoformat()
+            if entries
+            else datetime.now(tz=timezone.utc).isoformat()
+        )
         ET.SubElement(feed, _a("updated")).text = updated
         for e in entries:
             entry = ET.SubElement(feed, _a("entry"))
@@ -195,7 +200,8 @@ class FeedOutput(Output):
                 ET.SubElement(entry, _a("summary")).text = e.description
             if e.image_url:
                 ET.SubElement(
-                    entry, _a("link"),
+                    entry,
+                    _a("link"),
                     rel="enclosure",
                     href=e.image_url,
                     type=_image_mime(e.image_url),

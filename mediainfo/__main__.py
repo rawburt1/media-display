@@ -67,9 +67,7 @@ def main() -> None:
         return
 
     parser = argparse.ArgumentParser(description="Pixoo64 / web media art display")
-    parser.add_argument(
-        "--config", default="config.yaml", help="Path to config YAML file"
-    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
     args = parser.parse_args()
     config_path = Path(args.config)
 
@@ -90,15 +88,11 @@ def main() -> None:
     signal.signal(signal.SIGINT, stop_handler)
 
     config_mtime = _file_mtime(config_path)
-    library = MusicLibrary(
-        config.library.db_path, max_age_days=config.library.max_age_days
-    )
+    library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
     overrides = build_artwork_overrides(config)
     poster_store = build_poster_store(config)
     history = build_history(config)
-    orch = _start_and_wire(
-        config, outputs, cache, library, overrides, poster_store, history
-    )
+    orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store, history)
 
     try:
         # Main loop: sleep until a stop signal or a config-file change.
@@ -209,9 +203,7 @@ def _start_and_wire(
         history,
         mediadata_store,
     )
-    services = build_app_services(
-        orch, config, outputs, history, overrides, mediadata_store
-    )
+    services = build_app_services(orch, config, outputs, history, overrides, mediadata_store)
     attach_services(outputs, services)
     return orch
 
@@ -289,9 +281,7 @@ def _validate_config_main(argv: list) -> None:
         prog="python -m mediainfo validate-config",
         description="Validate a config.yaml file and report any problems",
     )
-    parser.add_argument(
-        "--config", default="config.yaml", help="Path to config YAML file"
-    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
     args = parser.parse_args(argv)
 
     # Capture warnings emitted by Config.load() (unknown plugin names) and
@@ -352,12 +342,8 @@ def _set_password_main(argv: list) -> None:
         prog="python -m mediainfo set-password",
         description="Set or reset the config UI / web outputs' HTTP Basic Auth credentials",
     )
-    parser.add_argument(
-        "--config", default="config.yaml", help="Path to config YAML file"
-    )
-    parser.add_argument(
-        "--username", help="New username (defaults to the existing one, if any)"
-    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
+    parser.add_argument("--username", help="New username (defaults to the existing one, if any)")
     parser.add_argument(
         "--password",
         help="New password (omit to be prompted instead - safer, since a "
@@ -407,9 +393,7 @@ def _set_password_main(argv: list) -> None:
     try:
         Config.from_dict(data)
     except Exception as exc:
-        print(
-            f"Error: refusing to save - config would be invalid: {exc}", file=sys.stderr
-        )
+        print(f"Error: refusing to save - config would be invalid: {exc}", file=sys.stderr)
         sys.exit(1)
 
     backup_config_file(config_path)
@@ -452,12 +436,8 @@ def _restore_backup_main(argv: list) -> None:
         prog="python -m mediainfo restore-backup",
         description="Restore config.yaml from an automatic pre-save backup",
     )
-    parser.add_argument(
-        "--config", default="config.yaml", help="Path to config YAML file"
-    )
-    parser.add_argument(
-        "--list", action="store_true", help="List available backups and exit"
-    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
+    parser.add_argument("--list", action="store_true", help="List available backups and exit")
     parser.add_argument(
         "--backup",
         help="Backup filename (as printed by --list) to restore, or 'latest' "
@@ -509,9 +489,7 @@ def _restore_backup_main(argv: list) -> None:
         chosen = backups[index - 1]
 
     if not args.yes:
-        confirm = (
-            input(f"Restore {chosen.name} over {config_path}? [y/N]: ").strip().lower()
-        )
+        confirm = input(f"Restore {chosen.name} over {config_path}? [y/N]: ").strip().lower()
         if confirm != "y":
             print("Aborted - nothing was changed.")
             return
@@ -548,9 +526,7 @@ def _import_lidarr_main(argv: list) -> None:
         prog="python -m mediainfo import-lidarr",
         description="Populate the local music library from a Lidarr instance",
     )
-    parser.add_argument(
-        "--config", default="config.yaml", help="Path to config YAML file"
-    )
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
     parser.add_argument(
         "--url", required=True, help="Lidarr base URL, e.g. http://192.168.1.122:6003"
     )
@@ -561,9 +537,7 @@ def _import_lidarr_main(argv: list) -> None:
 
     config = Config.load(args.config)
     _setup_logging(config.logging)
-    library = MusicLibrary(
-        config.library.db_path, max_age_days=config.library.max_age_days
-    )
+    library = MusicLibrary(config.library.db_path, max_age_days=config.library.max_age_days)
     try:
         print(f"Importing from Lidarr at {args.url} ...")
         stats = import_from_lidarr(library, args.url, args.api_key)
@@ -575,9 +549,7 @@ def _import_lidarr_main(argv: list) -> None:
         f"{stats.tracks} track(s) imported into {config.library.db_path}"
     )
     if stats.failed_artists:
-        print(
-            f"Warning: {stats.failed_artists} artist(s) failed to import (see logs above)"
-        )
+        print(f"Warning: {stats.failed_artists} artist(s) failed to import (see logs above)")
 
 
 # ---------------------------------------------------------------------------
@@ -590,12 +562,8 @@ def _auth_main(argv: list) -> None:
         prog="python -m mediainfo auth",
         description="Authorize third-party services",
     )
-    parser.add_argument(
-        "service", choices=["appletv", "spotify"], help="Service to authorize"
-    )
-    parser.add_argument(
-        "--config", default="config.yaml", help="Path to config YAML file"
-    )
+    parser.add_argument("service", choices=["appletv", "spotify"], help="Service to authorize")
+    parser.add_argument("--config", default="config.yaml", help="Path to config YAML file")
     args = parser.parse_args(argv)
 
     if args.service == "appletv":
@@ -636,9 +604,7 @@ def _auth_spotify(config_path: str) -> None:
     if token_info:
         print(f"\nAuthorization successful! Token cached at: {spotify_cfg.cache_path}")
     else:
-        print(
-            "\nAuthorization failed — check your client_id, client_secret, and redirect_uri."
-        )
+        print("\nAuthorization failed — check your client_id, client_secret, and redirect_uri.")
         sys.exit(1)
 
 
@@ -699,9 +665,7 @@ async def _pair_appletv(host: str) -> None:
             print(f"  {protocol.name} not supported: {exc}")
 
     print("\nCould not pair with any supported protocol.")
-    print(
-        "Ensure the Apple TV is on the same network and Developer Mode is not required."
-    )
+    print("Ensure the Apple TV is on the same network and Developer Mode is not required.")
     sys.exit(1)
 
 

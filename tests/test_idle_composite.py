@@ -111,7 +111,9 @@ def test_refetches_a_source_once_its_own_interval_elapses(monkeypatch):
     times = iter([1000.0, 2001.0])
     monkeypatch.setattr("mediainfo.idle.composite.time.monotonic", lambda: next(times))
 
-    a = _fake_source([Artwork(url="https://example.com/a1.jpg", label="A1")], rotation_interval_seconds=1000)
+    a = _fake_source(
+        [Artwork(url="https://example.com/a1.jpg", label="A1")], rotation_interval_seconds=1000
+    )
     composite = CompositeIdleWallpaperSource([a])
 
     composite.get_wallpapers()

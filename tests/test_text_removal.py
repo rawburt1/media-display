@@ -40,6 +40,7 @@ def _gradient_image(w=300, h=300):
 # classify_regions
 # ---------------------------------------------------------------------------
 
+
 def test_classify_small_region():
     regions = [TextRegion(box=(0, 0, 10, 10), confidence=0.9, area_fraction=0.01)]
     result = classify_regions(regions, max_logo_area_percent=25.0)
@@ -68,6 +69,7 @@ def test_classify_does_not_mutate_input():
 # _legible_at_target_size
 # ---------------------------------------------------------------------------
 
+
 def test_tiny_region_is_illegible():
     img = _gradient_image()
     # A 2x2 source box will scale down to well under 3px at size=16.
@@ -88,6 +90,7 @@ def test_high_variance_region_at_adequate_scale_is_legible():
 # remove_text
 # ---------------------------------------------------------------------------
 
+
 def test_remove_text_with_no_regions_is_a_no_op():
     img = _gradient_image()
     result = remove_text(img, [], method="inpaint")
@@ -100,7 +103,9 @@ def test_soft_fill_changes_pixels_inside_masked_region():
     for x in range(40, 60):
         for y in range(40, 60):
             img.putpixel((x, y), (255, 255, 255))
-    region = TextRegion(box=(40, 40, 60, 60), confidence=0.9, area_fraction=0.04, classification="small")
+    region = TextRegion(
+        box=(40, 40, 60, 60), confidence=0.9, area_fraction=0.04, classification="small"
+    )
     result = remove_text(img, [region], method="soft_fill", margin_ratio=0.0)
     # The center of the removed region should no longer be pure white.
     assert result.getpixel((50, 50)) != (255, 255, 255)
@@ -112,7 +117,9 @@ def test_inpaint_changes_pixels_inside_masked_region():
     for x in range(40, 60):
         for y in range(40, 60):
             img.putpixel((x, y), (255, 255, 255))
-    region = TextRegion(box=(40, 40, 60, 60), confidence=0.9, area_fraction=0.04, classification="small")
+    region = TextRegion(
+        box=(40, 40, 60, 60), confidence=0.9, area_fraction=0.04, classification="small"
+    )
     result = remove_text(img, [region], method="inpaint", margin_ratio=0.0)
     assert result.getpixel((50, 50)) != (255, 255, 255)
     assert result.size == img.size
@@ -123,7 +130,9 @@ def test_inpaint_falls_back_to_soft_fill_when_cv2_unavailable():
     for x in range(40, 60):
         for y in range(40, 60):
             img.putpixel((x, y), (255, 255, 255))
-    region = TextRegion(box=(40, 40, 60, 60), confidence=0.9, area_fraction=0.04, classification="small")
+    region = TextRegion(
+        box=(40, 40, 60, 60), confidence=0.9, area_fraction=0.04, classification="small"
+    )
     with patch("mediainfo.text_removal._import_cv2", return_value=None):
         result = remove_text(img, [region], method="inpaint", margin_ratio=0.0)
     assert result.getpixel((50, 50)) != (255, 255, 255)
@@ -132,6 +141,7 @@ def test_inpaint_falls_back_to_soft_fill_when_cv2_unavailable():
 # ---------------------------------------------------------------------------
 # detect_text_regions - graceful no-ops
 # ---------------------------------------------------------------------------
+
 
 def test_detect_returns_empty_without_model_path():
     assert detect_text_regions(_gradient_image(), model_path="") == []
@@ -146,13 +156,16 @@ def test_detect_returns_empty_when_net_fails_to_load():
     def failing_loader(path):
         raise OSError("bad model file")
 
-    result = detect_text_regions(_gradient_image(), model_path="/bad/path.pb", net_loader=failing_loader)
+    result = detect_text_regions(
+        _gradient_image(), model_path="/bad/path.pb", net_loader=failing_loader
+    )
     assert result == []
 
 
 # ---------------------------------------------------------------------------
 # _decode_predictions - the EAST geometry decode math, in isolation
 # ---------------------------------------------------------------------------
+
 
 def test_decode_predictions_reconstructs_expected_box():
     # A single grid cell (y=0, x=0) with angle 0: box_h = 20 (top=10+bottom=10),
@@ -215,6 +228,7 @@ def test_detect_text_regions_end_to_end_with_fake_net():
 # _crop_avoiding_regions (crop_preference removal method)
 # ---------------------------------------------------------------------------
 
+
 def test_crop_avoiding_regions_is_a_no_op_for_square_images():
     img = Image.new("RGB", (100, 100), (1, 2, 3))
     result = _crop_avoiding_regions(img, "center", avoid_boxes=[(10, 10, 20, 20)])
@@ -238,6 +252,7 @@ def test_crop_avoiding_regions_falls_back_to_crop_strategy_without_avoid_boxes()
 # ---------------------------------------------------------------------------
 # maybe_remove_text - top-level entry point
 # ---------------------------------------------------------------------------
+
 
 def test_disabled_returns_image_unchanged_with_no_decision():
     img = _gradient_image()
@@ -335,6 +350,8 @@ def test_crop_preference_method_crops_instead_of_editing_pixels():
 def test_decision_record_includes_version_and_method():
     img = _gradient_image()
     with patch("mediainfo.text_removal.detect_text_regions", return_value=[]):
-        _, decision = maybe_remove_text(img, target_size=16, enabled=True, model_path="/x.pb", removal_method="inpaint")
+        _, decision = maybe_remove_text(
+            img, target_size=16, enabled=True, model_path="/x.pb", removal_method="inpaint"
+        )
     assert decision["version"] >= 1
     assert decision["method"] == "inpaint"

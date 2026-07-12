@@ -33,12 +33,18 @@ def _artwork():
 # prepare()
 # ---------------------------------------------------------------------------
 
+
 def test_prepare_returns_hex_colors(tmp_path):
     img_path = _half_and_half_image(tmp_path / "art.png")
     theme = ColorPaletteTheme()
 
     result = theme.prepare(
-        _now_playing(), _artwork(), img_path, MagicMock(), None, ColorPaletteConfig(swatch_count=2),
+        _now_playing(),
+        _artwork(),
+        img_path,
+        MagicMock(),
+        None,
+        ColorPaletteConfig(swatch_count=2),
     )
 
     assert result is not None
@@ -56,7 +62,12 @@ def test_prepare_respects_swatch_count(tmp_path):
     theme = ColorPaletteTheme()
 
     result = theme.prepare(
-        _now_playing(), _artwork(), img_path, MagicMock(), None, ColorPaletteConfig(swatch_count=3),
+        _now_playing(),
+        _artwork(),
+        img_path,
+        MagicMock(),
+        None,
+        ColorPaletteConfig(swatch_count=3),
     )
 
     assert len(result.extra_payload["colors"]) <= 3
@@ -65,7 +76,12 @@ def test_prepare_respects_swatch_count(tmp_path):
 def test_prepare_returns_none_for_unreadable_image(tmp_path):
     theme = ColorPaletteTheme()
     result = theme.prepare(
-        _now_playing(), _artwork(), tmp_path / "missing.jpg", MagicMock(), None, ColorPaletteConfig(),
+        _now_playing(),
+        _artwork(),
+        tmp_path / "missing.jpg",
+        MagicMock(),
+        None,
+        ColorPaletteConfig(),
     )
     assert result is None
 
@@ -73,6 +89,7 @@ def test_prepare_returns_none_for_unreadable_image(tmp_path):
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("position", ["bottom", "top", "side"])
 def test_client_assets_includes_configured_position(position):

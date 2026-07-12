@@ -73,7 +73,9 @@ class TheTvDbEnricher(ArtworkEnricher):
                 # original-language title if one was provided by a prior enricher
                 # (e.g. SVT's own `originalProgramTitle` field via the SVT enricher).
                 if not series_id and now_playing.original_title:
-                    series_id = self._resolve_series_id(now_playing.original_title, now_playing.subtitle)
+                    series_id = self._resolve_series_id(
+                        now_playing.original_title, now_playing.subtitle
+                    )
                 if not series_id:
                     return
                 now_playing.ids["tvdb"] = series_id
@@ -118,7 +120,10 @@ class TheTvDbEnricher(ArtworkEnricher):
                 logger.info(
                     "thetvdb: could not verify any of %d candidate(s) for %r against "
                     "episode %r (of %d total search results) - no artwork added",
-                    len(candidates), title, subtitle, len(all_candidates),
+                    len(candidates),
+                    title,
+                    subtitle,
+                    len(all_candidates),
                 )
 
         self._series_search_cache[cache_key] = series_id
@@ -134,7 +139,8 @@ class TheTvDbEnricher(ArtworkEnricher):
             logger.info(
                 "thetvdb: %d candidates for an ambiguous title, but subtitle %r isn't in "
                 "'<number>. <episode title>' form - can't disambiguate, no artwork added",
-                len(candidate_ids), subtitle,
+                len(candidate_ids),
+                subtitle,
             )
             return None
 

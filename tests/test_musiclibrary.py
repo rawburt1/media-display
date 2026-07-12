@@ -15,6 +15,7 @@ def _library(tmp_path, max_age_days=30):
 # normalize()
 # ---------------------------------------------------------------------------
 
+
 def test_normalize_lowercases():
     assert normalize("Pink Floyd") == "pink floyd"
 
@@ -42,6 +43,7 @@ def test_normalize_ignores_leading_trailing_whitespace():
 # ---------------------------------------------------------------------------
 # Canonical entities
 # ---------------------------------------------------------------------------
+
 
 def test_get_or_create_artist_is_idempotent(tmp_path):
     lib = _library(tmp_path)
@@ -85,6 +87,7 @@ def test_get_or_create_track_is_idempotent_per_artist(tmp_path):
 # ---------------------------------------------------------------------------
 # Fuzzy matching
 # ---------------------------------------------------------------------------
+
 
 def test_get_or_create_artist_matches_different_case(tmp_path):
     lib = _library(tmp_path)
@@ -153,6 +156,7 @@ def test_normalized_column_migration_backfills_legacy_database(tmp_path):
     lib = MusicLibrary(str(db_path))
     assert lib.find_artist("pink floyd") == 1
 
+
 def test_mbid_defaults_to_none(tmp_path):
     lib = _library(tmp_path)
     artist_id = lib.get_or_create_artist("Pink Floyd")
@@ -181,6 +185,7 @@ def test_mbid_persists_across_library_instances(tmp_path):
 # find_artist / find_track (lookup without create)
 # ---------------------------------------------------------------------------
 
+
 def test_find_artist_returns_none_when_missing(tmp_path):
     lib = _library(tmp_path)
     assert lib.find_artist("Pink Floyd") is None
@@ -208,6 +213,7 @@ def test_find_track_returns_existing_id(tmp_path):
 # ---------------------------------------------------------------------------
 # track <-> album linkage
 # ---------------------------------------------------------------------------
+
 
 def test_get_albums_for_track_returns_empty_when_unlinked(tmp_path):
     lib = _library(tmp_path)
@@ -258,6 +264,7 @@ def test_link_track_album_is_idempotent(tmp_path):
 # ---------------------------------------------------------------------------
 # random_albums / search / albums_for_artist / tracks_for_artist / stats
 # ---------------------------------------------------------------------------
+
 
 def test_random_albums_only_returns_albums_with_mbid(tmp_path):
     lib = _library(tmp_path)
@@ -339,6 +346,7 @@ def test_stats_counts_entities(tmp_path):
 # Source claims
 # ---------------------------------------------------------------------------
 
+
 def test_claim_defaults_to_none(tmp_path):
     lib = _library(tmp_path)
     artist_id = lib.get_or_create_artist("Pink Floyd")
@@ -364,8 +372,12 @@ def test_claims_from_different_sources_are_independent(tmp_path):
     album_id = lib.get_or_create_album(lib.get_or_create_artist("Pink Floyd"), "The Wall")
     lib.set_claim("album", album_id, "cover_art_url", "discogs", "https://discogs/cover.jpg")
     lib.set_claim("album", album_id, "cover_art_url", "musicbrainz", "https://caa/cover.jpg")
-    assert lib.get_claim("album", album_id, "cover_art_url", "discogs") == "https://discogs/cover.jpg"
-    assert lib.get_claim("album", album_id, "cover_art_url", "musicbrainz") == "https://caa/cover.jpg"
+    assert (
+        lib.get_claim("album", album_id, "cover_art_url", "discogs") == "https://discogs/cover.jpg"
+    )
+    assert (
+        lib.get_claim("album", album_id, "cover_art_url", "musicbrainz") == "https://caa/cover.jpg"
+    )
 
 
 def test_set_claim_overwrites_previous_value(tmp_path):
@@ -391,9 +403,10 @@ def test_get_claim_max_age_override_widens_the_default(tmp_path):
     time.sleep(0.01)
 
     assert lib.get_claim("artist", artist_id, "photo_url", "lastfm") is None
-    assert lib.get_claim(
-        "artist", artist_id, "photo_url", "lastfm", max_age_seconds=float("inf")
-    ) == "https://example.com/pf.jpg"
+    assert (
+        lib.get_claim("artist", artist_id, "photo_url", "lastfm", max_age_seconds=float("inf"))
+        == "https://example.com/pf.jpg"
+    )
 
 
 def test_get_claim_max_age_override_narrows_the_default(tmp_path):
@@ -409,6 +422,7 @@ def test_get_claim_max_age_override_narrows_the_default(tmp_path):
 # ---------------------------------------------------------------------------
 # get_or_fetch
 # ---------------------------------------------------------------------------
+
 
 def test_get_or_fetch_calls_fetch_fn_on_cache_miss(tmp_path):
     lib = _library(tmp_path)

@@ -203,9 +203,7 @@ class _IdleBatchManager:
             # tolerates duck-typed idle sources (e.g. test doubles) that
             # predate transform_pipeline and don't define it.
             winner = getattr(self.idle_source, "last_used", self.idle_source)
-            self._current_transform_pipeline = list(
-                getattr(winner, "transform_pipeline", []) or []
-            )
+            self._current_transform_pipeline = list(getattr(winner, "transform_pipeline", []) or [])
             self._push_current_batch()
             self._save_persisted_batch(images)
             return True
@@ -231,9 +229,7 @@ class _IdleBatchManager:
         )
         self._pushed = set()
         for index in sorted(self.wallpaper_indices):
-            self._call_output(
-                index, self.outputs[index].on_new_item, self.now_playing, self.cache
-            )
+            self._call_output(index, self.outputs[index].on_new_item, self.now_playing, self.cache)
         for index in sorted(self.wallpaper_indices):
             self._show_image_for_output(index, self.outputs[index])
             self._pushed.add(index)
@@ -243,9 +239,7 @@ class _IdleBatchManager:
             if not self._persist_path.exists():
                 return []
             raw = json.loads(self._persist_path.read_text(encoding="utf-8"))
-            return [
-                Artwork(url=item["url"], label=item.get("label", "")) for item in raw
-            ]
+            return [Artwork(url=item["url"], label=item.get("label", "")) for item in raw]
         except Exception:
             # Low severity and non-fatal either way - just means starting
             # with no previous batch to fall back on, same as a fresh
@@ -285,9 +279,7 @@ class _IdleBatchManager:
                 # its previous item up for the rest of a rotation interval.
                 self._pushed.add(index)
                 state.last_rotation = now
-                self._call_output(
-                    index, output.on_new_item, self.now_playing, self.cache
-                )
+                self._call_output(index, output.on_new_item, self.now_playing, self.cache)
                 self._show_image_for_output(index, output)
                 continue
 
@@ -311,9 +303,7 @@ class _IdleBatchManager:
         state = self.rotation_state[index]
 
         for attempt in range(len(self.images)):
-            artwork = self.images[
-                state.order[(state.position + attempt) % len(state.order)]
-            ]
+            artwork = self.images[state.order[(state.position + attempt) % len(state.order)]]
             original_path = None
             try:
                 original_path = self.cache.download_temp(artwork)
@@ -330,9 +320,7 @@ class _IdleBatchManager:
                 continue
 
             logger.info("Idle wallpaper: %s", artwork.label)
-            self._call_output(
-                index, output.update, self.now_playing, artwork, image_path
-            )
+            self._call_output(index, output.update, self.now_playing, artwork, image_path)
             _unlink_temp(original_path)
             if image_path is not original_path:
                 _unlink_temp(image_path)

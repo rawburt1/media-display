@@ -260,9 +260,7 @@ class Orchestrator:
             )
             for index in group.output_indices:
                 if index not in group.filtered_outputs:
-                    self._artwork.show_image_for_output(
-                        group, index, self.outputs[index]
-                    )
+                    self._artwork.show_image_for_output(group, index, self.outputs[index])
 
     def _force_rotation(self) -> None:
         """Reset every group's rotation clock so _router.tick()'s normal

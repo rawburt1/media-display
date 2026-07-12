@@ -17,6 +17,7 @@ from mediainfo.status import AvailabilityReason
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _config(**kwargs):
     defaults = dict(enabled=True, host="192.168.1.90")
     defaults.update(kwargs)
@@ -27,8 +28,13 @@ def _state(name="Playing"):
     return SimpleNamespace(name=name)
 
 
-def _playing(state="Playing", media_type="Music", title="Bohemian Rhapsody",
-             artist="Queen", album="A Night at the Opera"):
+def _playing(
+    state="Playing",
+    media_type="Music",
+    title="Bohemian Rhapsody",
+    artist="Queen",
+    album="A Night at the Opera",
+):
     return SimpleNamespace(
         device_state=_state(state),
         media_type=_state(media_type),
@@ -55,6 +61,7 @@ def run(coro):
 # _enum_name / _map_media_type utilities
 # ---------------------------------------------------------------------------
 
+
 def test_enum_name_uses_name_attribute():
     assert _enum_name(SimpleNamespace(name="Playing")) == "playing"
 
@@ -63,13 +70,16 @@ def test_enum_name_falls_back_to_str():
     assert _enum_name("Playing") == "playing"
 
 
-@pytest.mark.parametrize("raw,expected", [
-    ("Music", "music"),
-    ("Video", "movie"),
-    ("Unknown", "movie"),
-    ("TV", "episode"),
-    ("tvshow", "episode"),
-])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("Music", "music"),
+        ("Video", "movie"),
+        ("Unknown", "movie"),
+        ("TV", "episode"),
+        ("tvshow", "episode"),
+    ],
+)
 def test_map_media_type(raw, expected):
     assert _map_media_type(SimpleNamespace(name=raw)) == expected
 
@@ -77,6 +87,7 @@ def test_map_media_type(raw, expected):
 # ---------------------------------------------------------------------------
 # _fetch — normal playback
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_returns_now_playing_for_music():
     src = _source()
@@ -136,6 +147,7 @@ def test_fetch_returns_none_images_when_no_artwork():
 # _fetch — not playing
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "state,expected_reason",
     [
@@ -171,6 +183,7 @@ def test_fetch_returns_none_when_title_none():
 # ---------------------------------------------------------------------------
 # _fetch — connection handling
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_returns_none_when_not_connected_and_scan_finds_nothing():
     src = _source()
@@ -273,6 +286,7 @@ def test_connect_passes_loop_to_pyatv_scan_and_connect():
 # _fetch_artwork
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_artwork_writes_bytes_and_returns_path(tmp_path):
     src = _source()
     with patch("mediainfo.sources.appletv._ART_DIR", tmp_path):
@@ -292,6 +306,7 @@ def test_fetch_artwork_reuses_existing_file(tmp_path):
     src = _source()
     art_bytes = b"\xff\xd8\xff" * 50
     import hashlib
+
     digest = hashlib.sha256(art_bytes).hexdigest()[:16]
     existing = tmp_path / f"appletv_{digest}.jpg"
     existing.write_bytes(art_bytes)
@@ -326,12 +341,14 @@ def test_fetch_artwork_returns_none_on_exception():
 # get_now_playing (synchronous wrapper)
 # ---------------------------------------------------------------------------
 
+
 def test_get_now_playing_returns_none_on_future_error():
     src = _source()
     future = MagicMock()
     future.result.side_effect = concurrent.futures.TimeoutError()
 
     captured = []
+
     def _fake_threadsafe(coro, loop):
         captured.append(coro)
         return future
@@ -348,6 +365,7 @@ def test_get_now_playing_returns_none_on_future_error():
 # ---------------------------------------------------------------------------
 # ImageCache file:// support (integration with artwork path)
 # ---------------------------------------------------------------------------
+
 
 def test_cache_get_path_handles_file_url(tmp_path):
     from mediainfo.cache import ImageCache
@@ -373,6 +391,7 @@ def test_cache_get_path_returns_none_for_missing_file_url(tmp_path):
 # health_check
 # ---------------------------------------------------------------------------
 
+
 def test_health_check_reports_disconnected_before_first_connect():
     src = _source()
     assert src.health_check() == {"connected": False}
@@ -388,10 +407,13 @@ def test_health_check_reports_connected_once_atv_is_set():
 # test_connection
 # ---------------------------------------------------------------------------
 
+
 def test_test_connection_stops_background_loop():
     src = _source()
-    with patch.object(AppleTvSource, "get_now_playing", return_value=None), \
-         patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe:
+    with (
+        patch.object(AppleTvSource, "get_now_playing", return_value=None),
+        patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe,
+    ):
         ok, message = src.test_connection()
 
     assert ok is True
@@ -401,8 +423,10 @@ def test_test_connection_stops_background_loop():
 
 def test_test_connection_stops_background_loop_even_on_error():
     src = _source()
-    with patch.object(AppleTvSource, "get_now_playing", side_effect=RuntimeError("boom")), \
-         patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe:
+    with (
+        patch.object(AppleTvSource, "get_now_playing", side_effect=RuntimeError("boom")),
+        patch.object(src._loop, "call_soon_threadsafe") as call_soon_threadsafe,
+    ):
         ok, message = src.test_connection()
 
     assert ok is False

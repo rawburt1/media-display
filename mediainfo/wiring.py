@@ -35,9 +35,9 @@ def instantiate_outputs(config: Config, config_path: Path, cache: ImageCache) ->
         if output_cls is None:
             logger.warning("Unknown output: %s", name)
             continue
-        extra_args = registries.OUTPUT_EXTRA_ARGS.get(
-            name, lambda _config, _path, _cache: ()
-        )(config, config_path, cache)
+        extra_args = registries.OUTPUT_EXTRA_ARGS.get(name, lambda _config, _path, _cache: ())(
+            config, config_path, cache
+        )
         for output_config in output_configs:
             if not output_config.enabled:
                 continue
@@ -67,16 +67,10 @@ def _enabled_credential(config: Config, name: str, attr: str) -> str:
     MediaDataStore can reuse whatever credential a standalone enricher
     already has configured, without requiring a second copy of it."""
     enricher_config = config.enrichers.get(name)
-    return (
-        getattr(enricher_config, attr)
-        if enricher_config and enricher_config.enabled
-        else ""
-    )
+    return getattr(enricher_config, attr) if enricher_config and enricher_config.enabled else ""
 
 
-def build_mediadata_store(
-    config: Config, cache: ImageCache
-) -> Optional[MediaDataStore]:
+def build_mediadata_store(config: Config, cache: ImageCache) -> Optional[MediaDataStore]:
     """Construct the shared MediaDataStore instance used by both
     MediaDataArtworkEnricher and MediaDataLyricsEnricher (see
     registries.MEDIADATA_AWARE_ENRICHER_NAMES /
@@ -86,8 +80,7 @@ def build_mediadata_store(
     artwork_config = config.enrichers.get("mediadata")
     lyrics_config = config.text_enrichers.get("mediadata")
     if not (
-        (artwork_config and artwork_config.enabled)
-        or (lyrics_config and lyrics_config.enabled)
+        (artwork_config and artwork_config.enabled) or (lyrics_config and lyrics_config.enabled)
     ):
         return None
     return MediaDataStore(
@@ -116,9 +109,7 @@ def build_enrichers(
         if name in registries.LIBRARY_AWARE_ENRICHER_NAMES:
             enrichers.append(enricher_cls(enricher_config, library))
         elif name in registries.CACHE_AWARE_ENRICHER_NAMES:
-            enrichers.append(
-                enricher_cls(enricher_config, Path(config.cache.dir) / "ai_artwork")
-            )
+            enrichers.append(enricher_cls(enricher_config, Path(config.cache.dir) / "ai_artwork"))
         elif name in registries.MEDIADATA_AWARE_ENRICHER_NAMES:
             enrichers.append(enricher_cls(enricher_config, mediadata_store))
         else:
@@ -126,18 +117,14 @@ def build_enrichers(
     return enrichers
 
 
-def build_text_enrichers(
-    config: Config, mediadata_store: Optional[MediaDataStore] = None
-) -> list:
+def build_text_enrichers(config: Config, mediadata_store: Optional[MediaDataStore] = None) -> list:
     """Build the configured text enrichers (lyrics, AI-generated text -
     see mediainfo/enrichers/text_base.py), each sharing one TextCache
     instance under cache.dir/text (same retention as artwork, mirroring
     ImageCache's own idle/music subdirectories) - except "mediadata",
     which reads the shared MediaDataStore instead (see
     registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES)."""
-    text_cache = TextCache(
-        Path(config.cache.dir) / "text", max_age_days=config.cache.max_age_days
-    )
+    text_cache = TextCache(Path(config.cache.dir) / "text", max_age_days=config.cache.max_age_days)
     text_enrichers = []
     for name, text_enricher_config in config.text_enrichers.items():
         if not text_enricher_config.enabled:
@@ -147,9 +134,7 @@ def build_text_enrichers(
             logger.warning("Unknown text enricher: %s", name)
             continue
         if name in registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES:
-            text_enrichers.append(
-                text_enricher_cls(text_enricher_config, mediadata_store)
-            )
+            text_enrichers.append(text_enricher_cls(text_enricher_config, mediadata_store))
         else:
             text_enrichers.append(text_enricher_cls(text_enricher_config, text_cache))
     return text_enrichers

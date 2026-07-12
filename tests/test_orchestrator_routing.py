@@ -49,14 +49,18 @@ def _output(config=None):
 
 def _movie(source="kodi", title="Inception"):
     return NowPlaying(
-        source=source, media_type="movie", title=title,
+        source=source,
+        media_type="movie",
+        title=title,
         images=[Artwork(url=f"http://example.com/{source}-{title}.jpg")],
     )
 
 
 def _music(source="sonos", title="Song"):
     return NowPlaying(
-        source=source, media_type="music", title=title,
+        source=source,
+        media_type="music",
+        title=title,
         images=[Artwork(url=f"http://example.com/{source}-{title}.jpg")],
     )
 
@@ -82,6 +86,7 @@ def _shown_items(output):
 # ---------------------------------------------------------------------------
 # Group construction
 # ---------------------------------------------------------------------------
+
 
 def test_outputs_without_filters_share_one_group():
     orch = _orchestrator([_Source("kodi")], [_output(), _output()])
@@ -118,6 +123,7 @@ def test_active_hours_does_not_split_groups():
 # Routing
 # ---------------------------------------------------------------------------
 
+
 def test_outputs_bind_to_different_sources_simultaneously():
     movie = _movie(source="kodi")
     song = _music(source="sonos")
@@ -140,9 +146,7 @@ def test_media_type_filter_routes_past_higher_priority_source():
     movie = _movie(source="kodi")
     song = _music(source="sonos")
     music_only = _output(_FilterConfig(allow_media_types=["music"]))
-    orch = _orchestrator(
-        [_Source("kodi", movie), _Source("sonos", song)], [music_only]
-    )
+    orch = _orchestrator([_Source("kodi", movie), _Source("sonos", song)], [music_only])
 
     orch._tick()
 
@@ -184,14 +188,13 @@ def test_group_keeps_item_when_another_source_starts():
 # Enrichment
 # ---------------------------------------------------------------------------
 
+
 def test_shared_item_is_enriched_once():
     movie = _movie(source="kodi")
     enricher = MagicMock()
     everything = _output()
     kodi_only = _output(_FilterConfig(allow_sources=["kodi"]))
-    orch = _orchestrator(
-        [_Source("kodi", movie)], [everything, kodi_only], enrichers=[enricher]
-    )
+    orch = _orchestrator([_Source("kodi", movie)], [everything, kodi_only], enrichers=[enricher])
     assert len(orch._groups) == 2  # both groups pick the same kodi item
 
     orch._tick()
@@ -234,6 +237,7 @@ def test_distinct_items_are_each_enriched():
 # Grace period is per group
 # ---------------------------------------------------------------------------
 
+
 def test_source_blip_does_not_affect_other_group():
     kodi = _Source("kodi", _movie(source="kodi"))
     sonos = _Source("sonos", _music(source="sonos"))
@@ -257,6 +261,7 @@ def test_source_blip_does_not_affect_other_group():
 # Idle wallpapers are scoped to idle groups
 # ---------------------------------------------------------------------------
 
+
 class _FakeIdleSource:
     def __init__(self, artworks, rotation_interval_seconds=0):
         self.artworks = list(artworks)
@@ -267,8 +272,10 @@ class _FakeIdleSource:
 
 
 def _wallpapers():
-    return [Artwork(url="http://example.com/wall1.jpg"),
-            Artwork(url="http://example.com/wall2.jpg")]
+    return [
+        Artwork(url="http://example.com/wall1.jpg"),
+        Artwork(url="http://example.com/wall2.jpg"),
+    ]
 
 
 def test_idle_wallpapers_go_only_to_idle_group():
@@ -367,10 +374,10 @@ def test_idle_batch_survives_until_every_group_plays():
 # Hitster-safe with routing
 # ---------------------------------------------------------------------------
 
+
 def test_hitster_safe_suppresses_music_but_not_lower_priority_movie():
     orch = _orchestrator(
-        [_Source("spotify", _music(source="spotify")),
-         _Source("kodi", _movie(source="kodi"))],
+        [_Source("spotify", _music(source="spotify")), _Source("kodi", _movie(source="kodi"))],
         [_output()],
     )
     orch.set_hitster_safe(True)
@@ -385,6 +392,7 @@ def test_hitster_safe_suppresses_music_but_not_lower_priority_movie():
 # ---------------------------------------------------------------------------
 # Schedule ticks (display power/brightness scheduling)
 # ---------------------------------------------------------------------------
+
 
 def test_on_schedule_tick_called_for_every_output_even_filtered():
     movie = _movie(source="kodi")
@@ -412,6 +420,7 @@ def test_schedule_tick_error_does_not_break_the_tick():
 # ---------------------------------------------------------------------------
 # Playback history recording
 # ---------------------------------------------------------------------------
+
 
 def test_history_records_each_new_item_once(tmp_path):
     from mediainfo.history import PlaybackHistory

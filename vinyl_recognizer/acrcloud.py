@@ -84,9 +84,7 @@ def recognize(wav_bytes: bytes, host: str, access_key: str, access_secret: str) 
 
 
 def _sign(access_key: str, access_secret: str, timestamp: str) -> str:
-    string_to_sign = "\n".join(
-        ["POST", "/v1/identify", access_key, "audio", "1", timestamp]
-    )
+    string_to_sign = "\n".join(["POST", "/v1/identify", access_key, "audio", "1", timestamp])
     digest = hmac.new(
         access_secret.encode("utf-8"), string_to_sign.encode("utf-8"), hashlib.sha1
     ).digest()

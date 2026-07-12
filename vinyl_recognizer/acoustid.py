@@ -91,7 +91,9 @@ def _fingerprint(wav_bytes: bytes) -> Optional[tuple]:
         try:
             completed = subprocess.run(
                 ["fpcalc", "-json", f.name],
-                capture_output=True, timeout=30, check=True,
+                capture_output=True,
+                timeout=30,
+                check=True,
             )
         except Exception:
             logger.exception("fpcalc failed")

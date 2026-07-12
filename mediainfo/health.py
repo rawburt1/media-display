@@ -198,7 +198,9 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
             entry.update(enricher.health_check() or {})
             enrichers.append(entry)
         enrichers.extend(
-            _registered_but_inactive(active_enricher_names, registries.ENRICHER_CLASSES, config.enrichers)
+            _registered_but_inactive(
+                active_enricher_names, registries.ENRICHER_CLASSES, config.enrichers
+            )
         )
 
         # Idle sources — list of all known idle sources with their status.
@@ -235,6 +237,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
 
         # Video outputs expose their own idle video source (pexels/pixabay).
         from mediainfo.outputs.video import VideoOutput
+
         for output in outputs:
             if isinstance(output, VideoOutput):
                 idle_sources.append(output.idle_health_entry())

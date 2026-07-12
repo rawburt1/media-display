@@ -117,7 +117,9 @@ def prepare_led_image(
         image = _apply_ordered_dither(image, palette_size)
         image = image.quantize(colors=palette_size, dither=Image.Dither.NONE).convert("RGB")
     elif dithering == "floyd_steinberg":
-        image = image.quantize(colors=palette_size, dither=Image.Dither.FLOYDSTEINBERG).convert("RGB")
+        image = image.quantize(colors=palette_size, dither=Image.Dither.FLOYDSTEINBERG).convert(
+            "RGB"
+        )
     else:
         image = image.quantize(colors=palette_size, dither=Image.Dither.NONE).convert("RGB")
 

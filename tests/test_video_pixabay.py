@@ -24,9 +24,11 @@ def _source(**kwargs):
 
 @patch("mediainfo.video.pixabay.requests.get")
 def test_returns_video_clip_from_pixabay(mock_get):
-    mock_get.return_value = _pixabay_response([
-        {"videos": {"large": _make_video(720, 1280)}},
-    ])
+    mock_get.return_value = _pixabay_response(
+        [
+            {"videos": {"large": _make_video(720, 1280)}},
+        ]
+    )
 
     clips = _source().get_videos()
 

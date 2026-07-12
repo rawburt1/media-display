@@ -73,7 +73,9 @@ def test_unknown_backup_name_errors(config_path, capsys):
     backup_config_file(config_path)
 
     with pytest.raises(SystemExit) as exc:
-        _restore_backup_main(["--config", str(config_path), "--backup", "does-not-exist.bak", "--yes"])
+        _restore_backup_main(
+            ["--config", str(config_path), "--backup", "does-not-exist.bak", "--yes"]
+        )
 
     assert exc.value.code == 1
     assert "no backup named" in capsys.readouterr().err.lower()

@@ -96,9 +96,7 @@ class WebOutput(Output):
         # Markup: the transitions CSS/JS is code, not text - autoescaping it
         # would corrupt it (see templates/web/index.html).
         self._transitions_css = Markup(transitions.transitions_css())
-        self._transitions_js = Markup(
-            transitions.transitions_js(config.transition_exclude)
-        )
+        self._transitions_js = Markup(transitions.transitions_js(config.transition_exclude))
         self._lock = threading.Lock()
         self._now_playing: Optional[NowPlaying] = None
         # Set at construction so idle wallpapers can resolve images even
@@ -137,9 +135,7 @@ class WebOutput(Output):
         self.set_health_provider(services.health_provider)
         self.set_history(services.history)
 
-    def update(
-        self, now_playing: NowPlaying, artwork: Artwork, image_path: Path
-    ) -> None:
+    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         with self._lock:
             self._now_playing = now_playing
             self._artwork = artwork
@@ -272,9 +268,7 @@ class WebOutput(Output):
                 tier = "default"
 
             for attempt in range(len(images)):
-                artwork = images[
-                    state.order[(state.position + attempt) % len(state.order)]
-                ]
+                artwork = images[state.order[(state.position + attempt) % len(state.order)]]
                 path = self._resolve_artwork_path(cache, artwork, tier)
                 if path is None:
                     continue
@@ -383,9 +377,7 @@ class WebOutput(Output):
         @app.get("/health/ready")
         @app.get("/health")
         def health():
-            best = request.accept_mimetypes.best_match(
-                ["application/json", "text/html"]
-            )
+            best = request.accept_mimetypes.best_match(["application/json", "text/html"])
             if best == "text/html":
                 return render_template("web/health.html")
             if self._health_fn is None:

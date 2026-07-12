@@ -33,6 +33,7 @@ def add_playback_position(payload: dict, now_playing: NowPlaying) -> None:
         payload["position_seconds"] = now_playing.position_seconds
         payload["duration_seconds"] = now_playing.duration_seconds
 
+
 # Keep the underlying connection alive through NAT/firewall idle timeouts,
 # and - more importantly - reliably detect one that's gone dead without a
 # clean close (e.g. the client's network dropped silently, as can happen
