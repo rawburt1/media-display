@@ -66,7 +66,9 @@ OUTPUT_CLASSES: dict[str, Union[str, type]] = {
 OUTPUT_EXTRA_ARGS = {
     "config": lambda config, config_path, cache: (config_path, config.auth),
     "web": lambda config, config_path, cache: (
-        config.rotation_interval_seconds, cache, config.auth,
+        config.rotation_interval_seconds,
+        cache,
+        config.auth,
     ),
     "info": lambda config, config_path, cache: (config.auth,),
     "feed": lambda config, config_path, cache: (config.auth,),
@@ -152,7 +154,11 @@ LIBRARY_AWARE_IDLE_NAMES = {"library"}
 # Enrichers that look up music metadata by artist/album name and so can use
 # the local MusicLibrary cache to avoid repeating the same external lookup.
 LIBRARY_AWARE_ENRICHER_NAMES = {
-    "discogs", "fanarttv", "lastfm", "library", "musicbrainz",
+    "discogs",
+    "fanarttv",
+    "lastfm",
+    "library",
+    "musicbrainz",
 }
 
 # Enrichers that need a local directory to cache generated (rather than
@@ -168,17 +174,17 @@ MEDIADATA_AWARE_TEXT_ENRICHER_NAMES = {"mediadata"}
 
 # Config attributes to include per output type in the /health response.
 OUTPUT_DETAIL_FIELDS: dict = {
-    "config":   ["label", "port"],
-    "feed":     ["label", "port"],
-    "folder":   ["label", "dir"],
-    "info":     ["label", "port"],
-    "mqtt":     ["label", "host", "port", "topic"],
+    "config": ["label", "port"],
+    "feed": ["label", "port"],
+    "folder": ["label", "dir"],
+    "info": ["label", "port"],
+    "mqtt": ["label", "host", "port", "topic"],
     "nest_hub": ["label", "device_ip", "server_port"],
-    "pixoo":    ["label", "ip"],
-    "themes":   ["label", "port"],
-    "ulanzi":   ["label", "device_ip"],
-    "video":    ["label", "port"],
-    "web":      ["label", "port"],
+    "pixoo": ["label", "ip"],
+    "themes": ["label", "port"],
+    "ulanzi": ["label", "device_ip"],
+    "video": ["label", "port"],
+    "web": ["label", "port"],
 }
 
 

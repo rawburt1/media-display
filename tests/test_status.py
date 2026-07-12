@@ -50,7 +50,7 @@ def test_powered_off_is_healthy_not_error():
 
 
 def test_unknown_is_warning_not_error():
-    """"Can't currently tell" shouldn't look identical to "confirmed
+    """ "Can't currently tell" shouldn't look identical to "confirmed
     broken"."""
     status = translate_availability(AvailabilityReason.UNKNOWN)
     assert status.health == Health.WARNING

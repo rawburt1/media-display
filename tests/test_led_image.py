@@ -23,6 +23,7 @@ def _gradient_image(size=200):
 # Output size / mode
 # ---------------------------------------------------------------------------
 
+
 def test_output_is_64x64_by_default():
     result = prepare_led_image(_solid_image())
     assert result.size == (64, 64)
@@ -72,6 +73,7 @@ def test_pixel_art_mode_on_and_off_both_produce_correct_size():
 # Pass-through (already-prepared / hand-crafted override art)
 # ---------------------------------------------------------------------------
 
+
 def test_already_correct_size_and_palette_passes_through_unchanged():
     img = Image.new("RGB", (16, 16), (10, 20, 30))
     result = prepare_led_image(img, size=16, palette_size=24)
@@ -90,6 +92,7 @@ def test_correct_size_but_too_many_colors_is_still_processed():
 # ---------------------------------------------------------------------------
 # Crop strategies
 # ---------------------------------------------------------------------------
+
 
 def test_center_crop_is_vertically_centered_for_portrait():
     img = Image.new("RGB", (100, 200))
@@ -139,13 +142,12 @@ def test_automatic_matches_center_for_landscape_and_square():
 # Palette / dithering
 # ---------------------------------------------------------------------------
 
+
 def test_palette_size_is_honored_for_all_dithering_modes():
     img = _gradient_image()
     for dithering in ("none", "ordered", "floyd_steinberg"):
         for palette_size in (8, 16, 24, 32):
-            result = prepare_led_image(
-                img, size=32, palette_size=palette_size, dithering=dithering
-            )
+            result = prepare_led_image(img, size=32, palette_size=palette_size, dithering=dithering)
             colors = result.getcolors(maxcolors=256)
             assert colors is not None
             assert len(colors) <= palette_size, (dithering, palette_size)
@@ -159,6 +161,7 @@ def test_none_dithering_does_not_raise_and_returns_correct_size():
 # ---------------------------------------------------------------------------
 # Dark-image boost
 # ---------------------------------------------------------------------------
+
 
 def test_dark_image_boost_raises_mean_brightness():
     dark = Image.new("RGB", (200, 200), (10, 10, 10))

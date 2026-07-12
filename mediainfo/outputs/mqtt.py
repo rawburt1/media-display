@@ -87,9 +87,7 @@ class MqttOutput(Output):
             # Last-will: the broker marks us unavailable if this process
             # dies without a clean disconnect, so HA entities go
             # "unavailable" instead of freezing on the last state.
-            self._client.will_set(
-                self._availability_topic, "offline", qos=config.qos, retain=True
-            )
+            self._client.will_set(self._availability_topic, "offline", qos=config.qos, retain=True)
         self._health_fn: Optional[Callable[[], dict]] = None
         self._hitster_safe_get: Optional[Callable[[], bool]] = None
         self._hitster_safe_set: Optional[Callable[[bool], None]] = None
@@ -99,9 +97,7 @@ class MqttOutput(Output):
         try:
             self._client.connect_async(config.host, config.port, keepalive=60)
         except Exception:
-            logger.warning(
-                "MQTT: could not initiate connection to %s:%s", config.host, config.port
-            )
+            logger.warning("MQTT: could not initiate connection to %s:%s", config.host, config.port)
         self._client.loop_start()
 
     # -- cross-cutting wiring (see wiring.py) ------------------------------
@@ -134,9 +130,7 @@ class MqttOutput(Output):
 
     def attach(self, services: AppServices) -> None:
         self.set_health_provider(services.health_provider)
-        self.set_hitster_safe_handlers(
-            services.get_hitster_safe, services.set_hitster_safe
-        )
+        self.set_hitster_safe_handlers(services.get_hitster_safe, services.set_hitster_safe)
         self.set_refresh_artwork_handler(services.request_artwork_refresh)
         self.set_rotate_now_handler(services.request_rotation_now)
 
@@ -168,9 +162,7 @@ class MqttOutput(Output):
     def _health_state_topic(self) -> str:
         return f"{self.config.topic}/health/state"
 
-    def update(
-        self, now_playing: NowPlaying, artwork: Artwork, image_path: Path
-    ) -> None:
+    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         pass
 
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
@@ -275,12 +267,8 @@ class MqttOutput(Output):
 
     def _subscribe_commands(self) -> None:
         try:
-            self._client.subscribe(
-                self._hitster_safe_command_topic, qos=self.config.qos
-            )
-            self._client.subscribe(
-                self._refresh_artwork_command_topic, qos=self.config.qos
-            )
+            self._client.subscribe(self._hitster_safe_command_topic, qos=self.config.qos)
+            self._client.subscribe(self._refresh_artwork_command_topic, qos=self.config.qos)
             self._client.subscribe(self._rotate_now_command_topic, qos=self.config.qos)
             self._client.subscribe(self._restart_command_topic, qos=self.config.qos)
         except Exception:
@@ -379,9 +367,7 @@ class MqttOutput(Output):
             },
         }
         for object_id, payload in binary_sensors.items():
-            self._publish_discovery_entity(
-                "binary_sensor", node, object_id, device, payload
-            )
+            self._publish_discovery_entity("binary_sensor", node, object_id, device, payload)
 
         switches: dict[str, dict] = {
             "hitster_safe": {
@@ -432,17 +418,11 @@ class MqttOutput(Output):
         entry = dict(payload)
         entry["availability_topic"] = self._availability_topic
         entry["device"] = device
-        topic = (
-            f"{self.config.ha_discovery_prefix}/{component}/{node}/{object_id}/config"
-        )
+        topic = f"{self.config.ha_discovery_prefix}/{component}/{node}/{object_id}/config"
         try:
             # retain=True regardless of config.retain: an unretained
             # discovery config disappears for any HA that (re)starts
             # after we published it, which defeats the point.
-            self._client.publish(
-                topic, json.dumps(entry), qos=self.config.qos, retain=True
-            )
+            self._client.publish(topic, json.dumps(entry), qos=self.config.qos, retain=True)
         except Exception:
-            logger.exception(
-                "MQTT: failed to publish HA discovery config for %s", object_id
-            )
+            logger.exception("MQTT: failed to publish HA discovery config for %s", object_id)

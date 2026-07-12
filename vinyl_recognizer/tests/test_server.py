@@ -7,7 +7,12 @@ import pytest
 from vinyl_recognizer.server import create_app
 
 
-_TRACK = {"title": "Comfortably Numb", "artist": "Pink Floyd", "album": "The Wall", "artwork_url": ""}
+_TRACK = {
+    "title": "Comfortably Numb",
+    "artist": "Pink Floyd",
+    "album": "The Wall",
+    "artwork_url": "",
+}
 _WAV = b"RIFF\x00\x00\x00\x00WAVEfmt "
 
 

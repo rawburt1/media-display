@@ -7,8 +7,12 @@ from mediainfo.themes.timeline import TimelineTheme, _extract_albums
 
 def _music(discography=None, album="Houses of the Holy"):
     return NowPlaying(
-        source="kodi", media_type="music", title="No Quarter", subtitle="Led Zeppelin",
-        album=album, discography=discography or [],
+        source="kodi",
+        media_type="music",
+        title="No Quarter",
+        subtitle="Led Zeppelin",
+        album=album,
+        discography=discography or [],
     )
 
 
@@ -20,6 +24,7 @@ def _artwork():
 # _extract_albums
 # ---------------------------------------------------------------------------
 
+
 def test_extract_albums_dedupes_preserving_order():
     discography = [
         "Houses of the Holy – No Quarter",
@@ -28,7 +33,9 @@ def test_extract_albums_dedupes_preserving_order():
         "IV – Stairway to Heaven",
     ]
     assert _extract_albums(discography, max_albums=10) == [
-        "Houses of the Holy", "Physical Graffiti", "IV",
+        "Houses of the Holy",
+        "Physical Graffiti",
+        "IV",
     ]
 
 
@@ -49,6 +56,7 @@ def test_extract_albums_empty_input():
 # ---------------------------------------------------------------------------
 # prepare()
 # ---------------------------------------------------------------------------
+
 
 def test_music_with_discography_includes_current_album():
     theme = TimelineTheme()
@@ -127,6 +135,7 @@ def test_max_albums_cap_still_leaves_room_for_current_album():
 # health_detail() default state
 # ---------------------------------------------------------------------------
 
+
 def test_health_detail_none_before_any_prepare_call():
     theme = TimelineTheme()
     assert theme.health_detail(TimelineConfig()) is None
@@ -135,6 +144,7 @@ def test_health_detail_none_before_any_prepare_call():
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = TimelineTheme()

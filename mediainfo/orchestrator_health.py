@@ -78,9 +78,7 @@ class _HealthTracker:
                 i: {
                     "message": msg,
                     "ago_seconds": round(now - ts, 1),
-                    "failing_for_seconds": round(
-                        now - self.output_error_since.get(i, ts), 1
-                    ),
+                    "failing_for_seconds": round(now - self.output_error_since.get(i, ts), 1),
                 }
                 for i, (msg, ts) in self.output_errors.items()
             },

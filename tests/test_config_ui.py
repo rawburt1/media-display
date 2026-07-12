@@ -59,9 +59,7 @@ def library_config_path(tmp_path):
     """
     path = tmp_path / "config.yaml"
     text = EXAMPLE_CONFIG.read_text(encoding="utf-8")
-    text = text.replace(
-        "db_path: ./library/library.db", f"db_path: {tmp_path / 'library.db'}"
-    )
+    text = text.replace("db_path: ./library/library.db", f"db_path: {tmp_path / 'library.db'}")
     path.write_text(text, encoding="utf-8")
     return path
 
@@ -412,9 +410,7 @@ def test_hide_type_rejects_missing_name(config_path):
     out = _output(config_path)
     client = out.app.test_client()
 
-    resp = client.post(
-        "/api/config/hidden-types", json={"category": "sources", "hidden": True}
-    )
+    resp = client.post("/api/config/hidden-types", json={"category": "sources", "hidden": True})
 
     assert resp.status_code == 400
     assert resp.get_json()["ok"] is False
@@ -458,9 +454,7 @@ def test_hidden_types_written_under_ui_hidden_types_key(config_path):
 def test_save_form_updates_value(config_path):
     out = _output(config_path)
     client = out.app.test_client()
-    resp = client.post(
-        "/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.99"}}
-    )
+    resp = client.post("/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.99"}})
     assert resp.get_json() == {"ok": True, "restart_required": False}
 
     cfg = Config.load(config_path)
@@ -470,9 +464,7 @@ def test_save_form_updates_value(config_path):
 def test_save_form_updates_general_field(config_path):
     out = _output(config_path)
     client = out.app.test_client()
-    client.post(
-        "/api/config/form", json={"values": {"general.poll_interval_seconds": 42}}
-    )
+    client.post("/api/config/form", json={"values": {"general.poll_interval_seconds": 42}})
 
     cfg = Config.load(config_path)
     assert cfg.poll_interval_seconds == 42
@@ -486,9 +478,7 @@ def test_save_form_requires_restart_for_auth_change(config_path):
     # an `outputs` change is.
     out = _output(config_path)
     client = out.app.test_client()
-    resp = client.post(
-        "/api/config/form", json={"values": {"auth.password": "new-secret"}}
-    )
+    resp = client.post("/api/config/form", json={"values": {"auth.password": "new-secret"}})
 
     assert resp.get_json() == {"ok": True, "restart_required": True}
     assert Config.load(config_path).auth.password == "new-secret"
@@ -497,9 +487,7 @@ def test_save_form_requires_restart_for_auth_change(config_path):
 def test_save_form_no_restart_required_when_auth_untouched(config_path):
     out = _output(config_path)
     client = out.app.test_client()
-    resp = client.post(
-        "/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.1"}}
-    )
+    resp = client.post("/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.1"}})
 
     assert resp.get_json() == {"ok": True, "restart_required": False}
 
@@ -567,9 +555,7 @@ def test_save_form_sets_simple_list_field(config_path):
     client = out.app.test_client()
     client.post(
         "/api/config/form",
-        json={
-            "values": {"sources.sonos.speaker_ips": ["192.168.1.10", "192.168.1.11"]}
-        },
+        json={"values": {"sources.sonos.speaker_ips": ["192.168.1.10", "192.168.1.11"]}},
     )
 
     cfg = Config.load(config_path)
@@ -794,9 +780,7 @@ outputs:
         json={
             "values": {},
             "outputs": {
-                "ulanzi": [
-                    {"enabled": True, "device_ip": "1.1.1.1", "app_name": "now_playing"}
-                ]
+                "ulanzi": [{"enabled": True, "device_ip": "1.1.1.1", "app_name": "now_playing"}]
             },
         },
     )
@@ -1005,9 +989,7 @@ def test_restore_backup_rejects_unknown_filename(config_path):
     out = _output(config_path)
     client = out.app.test_client()
 
-    resp = client.post(
-        "/api/config/backups/restore", json={"filename": "not-a-real-backup.bak"}
-    )
+    resp = client.post("/api/config/backups/restore", json={"filename": "not-a-real-backup.bak"})
 
     assert resp.status_code == 400
     data = resp.get_json()
@@ -1081,9 +1063,7 @@ def test_restore_backup_warns_but_still_restores_when_result_fails_to_validate(
 
 
 @patch("mediainfo.outputs.config_ui.threading.Timer")
-def test_restart_endpoint_schedules_restart_without_blocking(
-    mock_timer_cls, config_path
-):
+def test_restart_endpoint_schedules_restart_without_blocking(mock_timer_cls, config_path):
     out = _output(config_path)
     client = out.app.test_client()
 
@@ -1177,9 +1157,7 @@ def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
         )
     )
 
-    assert out.app.test_client().get("/api/hitster-safe").get_json() == {
-        "enabled": True
-    }
+    assert out.app.test_client().get("/api/hitster-safe").get_json() == {"enabled": True}
     assert out._overrides is overrides
     assert out._health_fn is health_provider
 
@@ -1189,9 +1167,7 @@ def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _fake_pairing_handler(
-    device_provides_pin=True, has_paired=True, credentials="cafef00d"
-):
+def _fake_pairing_handler(device_provides_pin=True, has_paired=True, credentials="cafef00d"):
     handler = MagicMock()
     handler.device_provides_pin = device_provides_pin
     handler.begin = AsyncMock()
@@ -1240,9 +1216,7 @@ def test_pair_start_with_manual_pin(mock_scan, mock_pair, config_path):
 
     out = _output(config_path)
     client = out.app.test_client()
-    resp = client.post(
-        "/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "mrp"}
-    )
+    resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "mrp"})
 
     data = resp.get_json()
     assert data["ok"] is True
@@ -1256,9 +1230,7 @@ def test_pair_start_with_manual_pin(mock_scan, mock_pair, config_path):
 def test_pair_start_requires_host(mock_scan, mock_pair, config_path):
     out = _output(config_path)
     client = out.app.test_client()
-    resp = client.post(
-        "/api/appletv/pair/start", json={"host": "", "protocol": "companion"}
-    )
+    resp = client.post("/api/appletv/pair/start", json={"host": "", "protocol": "companion"})
 
     assert resp.status_code == 400
     assert resp.get_json()["ok"] is False
@@ -1312,13 +1284,9 @@ def test_pair_start_rejects_concurrent_attempt(mock_scan, mock_pair, config_path
 
 @patch("pyatv.pair")
 @patch("pyatv.scan")
-def test_pair_finish_with_correct_pin_saves_credentials(
-    mock_scan, mock_pair, config_path
-):
+def test_pair_finish_with_correct_pin_saves_credentials(mock_scan, mock_pair, config_path):
     mock_scan.return_value = [_fake_scan_result()]
-    handler = _fake_pairing_handler(
-        device_provides_pin=True, has_paired=True, credentials="abc123"
-    )
+    handler = _fake_pairing_handler(device_provides_pin=True, has_paired=True, credentials="abc123")
     mock_pair.return_value = handler
 
     out = _output(config_path)
@@ -1363,16 +1331,12 @@ def test_pair_finish_with_manual_pin_does_not_require_pin_in_request(
     mock_scan, mock_pair, config_path
 ):
     mock_scan.return_value = [_fake_scan_result()]
-    handler = _fake_pairing_handler(
-        device_provides_pin=False, has_paired=True, credentials="xyz"
-    )
+    handler = _fake_pairing_handler(device_provides_pin=False, has_paired=True, credentials="xyz")
     mock_pair.return_value = handler
 
     out = _output(config_path)
     client = out.app.test_client()
-    client.post(
-        "/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "mrp"}
-    )
+    client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "mrp"})
     resp = client.post("/api/appletv/pair/finish", json={})
 
     data = resp.get_json()
@@ -1411,9 +1375,7 @@ def test_pair_finish_without_start_fails(config_path):
 
 @patch("pyatv.pair")
 @patch("pyatv.scan")
-def test_pair_cancel_clears_session_and_allows_restart(
-    mock_scan, mock_pair, config_path
-):
+def test_pair_cancel_clears_session_and_allows_restart(mock_scan, mock_pair, config_path):
     mock_scan.return_value = [_fake_scan_result()]
     handler = _fake_pairing_handler()
     mock_pair.return_value = handler
@@ -1546,9 +1508,7 @@ def test_library_artist_returns_albums_and_tracks(library_config_path):
     data = resp.get_json()
     assert data["name"] == "Pink Floyd"
     assert data["mbid"] == "artist-mbid"
-    assert data["albums"] == [
-        {"id": album_id, "title": "The Wall", "mbid": "album-mbid"}
-    ]
+    assert data["albums"] == [{"id": album_id, "title": "The Wall", "mbid": "album-mbid"}]
     assert len(data["tracks"]) == 1
     assert data["tracks"][0]["title"] == "Money"
 
@@ -1596,9 +1556,7 @@ def test_auth_not_required_for_private_address_when_enabled(config_path):
 
     auth = AuthConfig(enabled=True, username="admin", password="secret")
     out = ConfigUiOutput(_config(), config_path, auth)
-    resp = out.app.test_client().get(
-        "/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"}
-    )
+    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
     assert resp.status_code == 200
 
 
@@ -1747,9 +1705,7 @@ def test_api_status_returns_health_provider_data(config_path):
 
 def test_api_test_source_route_dispatches(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    with patch(
-        "mediainfo.outputs.config_ui.test_source", return_value=(True, "ok")
-    ) as mock_test:
+    with patch("mediainfo.outputs.config_ui.test_source", return_value=(True, "ok")) as mock_test:
         resp = out.app.test_client().post("/api/test/source/kodi")
 
     assert resp.get_json() == {"ok": True, "message": "ok"}
@@ -1939,9 +1895,7 @@ def test_overrides_image_served(config_path, tmp_path):
         },
         content_type="multipart/form-data",
     )
-    filename = (
-        out.app.test_client().get("/api/overrides").get_json()["items"][0]["filename"]
-    )
+    filename = out.app.test_client().get("/api/overrides").get_json()["items"][0]["filename"]
 
     resp = out.app.test_client().get(f"/api/overrides/image/{filename}")
 

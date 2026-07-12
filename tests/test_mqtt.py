@@ -124,9 +124,7 @@ def test_update_is_noop(MockClient):
     output = MqttOutput(_config())
     mock_client.publish.reset_mock()
 
-    output.update(
-        _now_playing(), Artwork(url="https://example.com/a.jpg"), "/tmp/a.jpg"
-    )
+    output.update(_now_playing(), Artwork(url="https://example.com/a.jpg"), "/tmp/a.jpg")
 
     mock_client.publish.assert_not_called()
 
@@ -197,9 +195,7 @@ def test_discovery_publishes_retained_sensor_configs_on_connect(MockClient):
     assert payload["unique_id"] == "test-client_now_playing"
     assert payload["device"]["identifiers"] == ["test-client"]
 
-    title_payload = json.loads(
-        published["homeassistant/sensor/test-client/title/config"].args[1]
-    )
+    title_payload = json.loads(published["homeassistant/sensor/test-client/title/config"].args[1])
     assert title_payload["unique_id"] == "test-client_title"
     assert "value_json.title" in title_payload["value_template"]
 
@@ -213,9 +209,7 @@ def test_discovery_publishes_retained_sensor_configs_on_connect(MockClient):
 def test_discovery_respects_custom_prefix_and_sanitizes_client_id(MockClient):
     mock_client = MockClient.return_value
     output = MqttOutput(
-        _config(
-            ha_discovery=True, ha_discovery_prefix="ha/disc", client_id="my client!"
-        )
+        _config(ha_discovery=True, ha_discovery_prefix="ha/disc", client_id="my client!")
     )
 
     output._on_connect(mock_client, None, {}, 0)
@@ -242,17 +236,11 @@ def test_discovery_publishes_artist_album_source_sensors(MockClient):
     output._on_connect(mock_client, None, {}, 0)
 
     published = {call.args[0]: call for call in mock_client.publish.call_args_list}
-    artist = json.loads(
-        published["homeassistant/sensor/test-client/artist/config"].args[1]
-    )
+    artist = json.loads(published["homeassistant/sensor/test-client/artist/config"].args[1])
     assert "value_json.subtitle" in artist["value_template"]
-    album = json.loads(
-        published["homeassistant/sensor/test-client/album/config"].args[1]
-    )
+    album = json.loads(published["homeassistant/sensor/test-client/album/config"].args[1])
     assert "value_json.album" in album["value_template"]
-    source = json.loads(
-        published["homeassistant/sensor/test-client/source/config"].args[1]
-    )
+    source = json.loads(published["homeassistant/sensor/test-client/source/config"].args[1])
     assert "value_json.source" in source["value_template"]
 
 
@@ -373,9 +361,7 @@ def test_hitster_safe_command_toggles_via_handler(MockClient):
     output.set_hitster_safe_handlers(MagicMock(return_value=False), set_fn)
     mock_client.publish.reset_mock()
 
-    output._on_message(
-        mock_client, None, _message(output._hitster_safe_command_topic, "ON")
-    )
+    output._on_message(mock_client, None, _message(output._hitster_safe_command_topic, "ON"))
 
     set_fn.assert_called_once_with(True)
     # State is republished immediately after a command, not just on a timer.
@@ -395,9 +381,7 @@ def test_hitster_safe_command_off(MockClient):
     set_fn = MagicMock()
     output.set_hitster_safe_handlers(MagicMock(return_value=True), set_fn)
 
-    output._on_message(
-        mock_client, None, _message(output._hitster_safe_command_topic, "OFF")
-    )
+    output._on_message(mock_client, None, _message(output._hitster_safe_command_topic, "OFF"))
 
     set_fn.assert_called_once_with(False)
 
@@ -408,9 +392,7 @@ def test_hitster_safe_command_ignored_when_not_wired(MockClient):
     output = MqttOutput(_config(ha_discovery=True))
 
     # Must not raise even though set_hitster_safe_handlers was never called.
-    output._on_message(
-        mock_client, None, _message(output._hitster_safe_command_topic, "ON")
-    )
+    output._on_message(mock_client, None, _message(output._hitster_safe_command_topic, "ON"))
 
 
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
@@ -420,9 +402,7 @@ def test_refresh_artwork_command_calls_handler(MockClient):
     refresh_fn = MagicMock()
     output.set_refresh_artwork_handler(refresh_fn)
 
-    output._on_message(
-        mock_client, None, _message(output._refresh_artwork_command_topic, "PRESS")
-    )
+    output._on_message(mock_client, None, _message(output._refresh_artwork_command_topic, "PRESS"))
 
     refresh_fn.assert_called_once_with()
 
@@ -433,9 +413,7 @@ def test_refresh_artwork_command_ignored_when_not_wired(MockClient):
     output = MqttOutput(_config(ha_discovery=True))
 
     # Must not raise even though set_refresh_artwork_handler was never called.
-    output._on_message(
-        mock_client, None, _message(output._refresh_artwork_command_topic, "PRESS")
-    )
+    output._on_message(mock_client, None, _message(output._refresh_artwork_command_topic, "PRESS"))
 
 
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
@@ -445,9 +423,7 @@ def test_rotate_now_command_calls_handler(MockClient):
     rotate_fn = MagicMock()
     output.set_rotate_now_handler(rotate_fn)
 
-    output._on_message(
-        mock_client, None, _message(output._rotate_now_command_topic, "PRESS")
-    )
+    output._on_message(mock_client, None, _message(output._rotate_now_command_topic, "PRESS"))
 
     rotate_fn.assert_called_once_with()
 
@@ -458,9 +434,7 @@ def test_rotate_now_command_ignored_when_not_wired(MockClient):
     output = MqttOutput(_config(ha_discovery=True))
 
     # Must not raise even though set_rotate_now_handler was never called.
-    output._on_message(
-        mock_client, None, _message(output._rotate_now_command_topic, "PRESS")
-    )
+    output._on_message(mock_client, None, _message(output._rotate_now_command_topic, "PRESS"))
 
 
 @patch("mediainfo.outputs.mqtt.os.kill")
@@ -472,9 +446,7 @@ def test_restart_command_sends_sigterm_to_self(MockClient, mock_kill):
     mock_client = MockClient.return_value
     output = MqttOutput(_config(ha_discovery=True))
 
-    output._on_message(
-        mock_client, None, _message(output._restart_command_topic, "PRESS")
-    )
+    output._on_message(mock_client, None, _message(output._restart_command_topic, "PRESS"))
 
     mock_kill.assert_called_once_with(os.getpid(), signal.SIGTERM)
 
@@ -561,9 +533,7 @@ def test_schedule_tick_publishes_health_ok_when_no_errors(MockClient):
     output.on_schedule_tick()
 
     health_calls = [
-        c
-        for c in mock_client.publish.call_args_list
-        if c.args[0] == output._health_state_topic
+        c for c in mock_client.publish.call_args_list if c.args[0] == output._health_state_topic
     ]
     assert len(health_calls) == 1
     assert health_calls[0].args[1] == "OFF"
@@ -587,9 +557,7 @@ def test_schedule_tick_publishes_health_problem_when_an_entry_errors(MockClient)
     output.on_schedule_tick()
 
     health_calls = [
-        c
-        for c in mock_client.publish.call_args_list
-        if c.args[0] == output._health_state_topic
+        c for c in mock_client.publish.call_args_list if c.args[0] == output._health_state_topic
     ]
     assert len(health_calls) == 1
     assert health_calls[0].args[1] == "ON"

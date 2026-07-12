@@ -13,7 +13,12 @@ from mediainfo.media_data_store import MediaDataStore
 
 
 def _store(
-    tmp_path, refresh=None, cache=None, discogs_token="", tmdb_api_key="", fanarttv_api_key="",
+    tmp_path,
+    refresh=None,
+    cache=None,
+    discogs_token="",
+    tmdb_api_key="",
+    fanarttv_api_key="",
     lastfm_api_key="",
     **kwargs,
 ):
@@ -42,6 +47,7 @@ def _wait_for_background_refresh(store, timeout=2.0):
 # ---------------------------------------------------------------------------
 # Path builders
 # ---------------------------------------------------------------------------
+
 
 def test_movie_dir_includes_year(tmp_path):
     store = _store(tmp_path)
@@ -114,6 +120,7 @@ def test_movie_dir_is_rooted_under_configured_path(tmp_path):
 # Config wiring
 # ---------------------------------------------------------------------------
 
+
 def test_config_from_dict_defaults():
     from mediainfo.config import Config
 
@@ -129,13 +136,20 @@ def test_config_from_dict_defaults():
 def test_config_from_dict_honors_overrides():
     from mediainfo.config import Config
 
-    config = Config.from_dict({
-        "mediadata": {
-            "path": "/data/mediadata",
-            "cache_first": False,
-            "refresh": {"enabled": False, "movies_days": 30, "series_days": 7, "music_days": 90},
+    config = Config.from_dict(
+        {
+            "mediadata": {
+                "path": "/data/mediadata",
+                "cache_first": False,
+                "refresh": {
+                    "enabled": False,
+                    "movies_days": 30,
+                    "series_days": 7,
+                    "music_days": 90,
+                },
+            }
         }
-    })
+    )
     assert config.mediadata.path == "/data/mediadata"
     assert config.mediadata.cache_first is False
     assert config.mediadata.refresh.enabled is False
@@ -156,6 +170,7 @@ def test_config_from_dict_partial_refresh_override_keeps_other_defaults():
 # ---------------------------------------------------------------------------
 # metadata.json read/write
 # ---------------------------------------------------------------------------
+
 
 def test_read_metadata_returns_empty_dict_when_missing(tmp_path):
     store = _store(tmp_path)
@@ -207,16 +222,21 @@ def test_write_metadata_overwrites_previous_content(tmp_path):
     item_dir = store.movie_dir("Alien", 1979)
 
     store._write_metadata(item_dir, {"title": "Alien", "year": 1979})
-    store._write_metadata(item_dir, {"title": "Alien", "year": 1979, "external_ids": {"tmdb": "348"}})
+    store._write_metadata(
+        item_dir, {"title": "Alien", "year": 1979, "external_ids": {"tmdb": "348"}}
+    )
 
     assert store._read_metadata(item_dir) == {
-        "title": "Alien", "year": 1979, "external_ids": {"tmdb": "348"},
+        "title": "Alien",
+        "year": 1979,
+        "external_ids": {"tmdb": "348"},
     }
 
 
 # ---------------------------------------------------------------------------
 # _resolve_artwork: cache-first + refresh-policy core
 # ---------------------------------------------------------------------------
+
 
 def _seed_stale_entry(store, item_dir, filename, metadata_key, days_old, content=b"old-bytes"):
     """Write an existing artwork file plus a metadata.json entry whose
@@ -225,11 +245,19 @@ def _seed_stale_entry(store, item_dir, filename, metadata_key, days_old, content
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     old_ts = (datetime.now(timezone.utc) - timedelta(days=days_old)).isoformat()
-    store._write_metadata(item_dir, {
-        "artwork": {metadata_key: {
-            "path": filename, "source": "tmdb", "last_checked": old_ts, "last_updated": old_ts,
-        }},
-    })
+    store._write_metadata(
+        item_dir,
+        {
+            "artwork": {
+                metadata_key: {
+                    "path": filename,
+                    "source": "tmdb",
+                    "last_checked": old_ts,
+                    "last_updated": old_ts,
+                }
+            },
+        },
+    )
 
 
 def test_resolve_artwork_fetches_when_missing(tmp_path):
@@ -431,9 +459,12 @@ def test_resolve_artwork_with_max_age_none_never_refetches_once_present(tmp_path
 # Movies
 # ---------------------------------------------------------------------------
 
+
 def test_get_movie_poster_fetches_when_missing(tmp_path):
     store = _store(tmp_path)
-    with patch.object(store, "_fetch_movie_artwork", return_value=(b"poster-bytes", "tmdb")) as fetch:
+    with patch.object(
+        store, "_fetch_movie_artwork", return_value=(b"poster-bytes", "tmdb")
+    ) as fetch:
         result = store.get_movie_poster("Alien", 1979)
 
     assert result == store.movie_dir("Alien", 1979) / "poster.jpg"
@@ -465,7 +496,9 @@ def test_refresh_movie_forces_fetch_even_when_fresh(tmp_path):
     _seed_stale_entry(store, item_dir, "fanart.jpg", "fanart", days_old=1)
 
     with patch.object(
-        store, "_fetch_movie_artwork", return_value=(b"refreshed", "tmdb"),
+        store,
+        "_fetch_movie_artwork",
+        return_value=(b"refreshed", "tmdb"),
     ) as fetch:
         updated = store.refresh_movie("Alien", 1979)
 
@@ -484,9 +517,12 @@ def test_refresh_movie_returns_false_when_no_tmdb_key_configured(tmp_path):
 # Series
 # ---------------------------------------------------------------------------
 
+
 def test_get_series_poster_fetches_when_missing(tmp_path):
     store = _store(tmp_path)
-    with patch.object(store, "_fetch_series_artwork", return_value=(b"poster-bytes", "tvdb")) as fetch:
+    with patch.object(
+        store, "_fetch_series_artwork", return_value=(b"poster-bytes", "tvdb")
+    ) as fetch:
         result = store.get_series_poster("Zero Day", 2025)
 
     assert result == store.series_dir("Zero Day", 2025) / "poster.jpg"
@@ -511,7 +547,9 @@ def test_series_uses_series_days_refresh_policy_not_movies(tmp_path):
     confirm get_series_poster checks staleness against series_days."""
     store = _store(tmp_path)
     item_dir = store.series_dir("Zero Day", 2025)
-    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=45)  # stale for series, not movies
+    _seed_stale_entry(
+        store, item_dir, "poster.jpg", "poster", days_old=45
+    )  # stale for series, not movies
 
     with patch.object(store, "_fetch_series_artwork", return_value=(b"new", "tvdb")) as fetch:
         store.get_series_poster("Zero Day", 2025)
@@ -523,10 +561,13 @@ def test_series_uses_series_days_refresh_policy_not_movies(tmp_path):
 # Music
 # ---------------------------------------------------------------------------
 
+
 def test_get_album_art_fetches_when_missing(tmp_path):
     store = _store(tmp_path)
     with patch.object(
-        store, "_fetch_album_artwork", return_value=(b"art-bytes", "musicbrainz"),
+        store,
+        "_fetch_album_artwork",
+        return_value=(b"art-bytes", "musicbrainz"),
     ) as fetch:
         result = store.get_album_art("Led Zeppelin", "Houses of the Holy", 1973)
 
@@ -540,7 +581,9 @@ def test_refresh_album_forces_fetch_even_when_fresh(tmp_path):
     _seed_stale_entry(store, item_dir, "albumart.jpg", "albumart", days_old=1)
     _seed_stale_entry(store, item_dir, "fanart.jpg", "fanart", days_old=1)
 
-    with patch.object(store, "_fetch_album_artwork", return_value=(b"refreshed", "fanarttv")) as fetch:
+    with patch.object(
+        store, "_fetch_album_artwork", return_value=(b"refreshed", "fanarttv")
+    ) as fetch:
         updated = store.refresh_album("Led Zeppelin", "Houses of the Holy", 1973)
 
     assert fetch.call_count == 2
@@ -563,10 +606,13 @@ def test_album_uses_music_days_refresh_policy(tmp_path):
 # Artist photo
 # ---------------------------------------------------------------------------
 
+
 def test_get_artist_photo_fetches_when_missing(tmp_path):
     store = _store(tmp_path)
     with patch.object(
-        store, "_fetch_artist_photo", return_value=(b"photo-bytes", "wikipedia"),
+        store,
+        "_fetch_artist_photo",
+        return_value=(b"photo-bytes", "wikipedia"),
     ) as fetch:
         result = store.get_artist_photo("Led Zeppelin")
 
@@ -605,6 +651,7 @@ def test_artist_photo_uses_music_days_refresh_policy(tmp_path):
 # of the same underlying functions).
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.wikipedia.requests.get")
 def test_fetch_artist_photo_via_wikipedia(mock_get, tmp_path):
     search_response = MagicMock(
@@ -635,10 +682,13 @@ def test_fetch_artist_photo_via_wikipedia(mock_get, tmp_path):
 @patch("mediainfo.enrichers.wikipedia.requests.get")
 def test_fetch_artist_photo_falls_back_to_lastfm(mock_wiki_get, mock_lastfm_get, tmp_path):
     mock_wiki_get.return_value = MagicMock(
-        json=lambda: {"query": {"search": []}}, raise_for_status=MagicMock(),
+        json=lambda: {"query": {"search": []}},
+        raise_for_status=MagicMock(),
     )  # Wikipedia finds nothing
     mock_lastfm_get.return_value = MagicMock(
-        json=lambda: {"artist": {"image": [{"size": "mega", "#text": "https://lastfm.example/x.jpg"}]}},
+        json=lambda: {
+            "artist": {"image": [{"size": "mega", "#text": "https://lastfm.example/x.jpg"}]}
+        },
         raise_for_status=MagicMock(),
     )
 
@@ -653,7 +703,8 @@ def test_fetch_artist_photo_falls_back_to_lastfm(mock_wiki_get, mock_lastfm_get,
 @patch("mediainfo.enrichers.wikipedia.requests.get")
 def test_fetch_artist_photo_no_lastfm_key_skips_fallback(mock_get, tmp_path):
     mock_get.return_value = MagicMock(
-        json=lambda: {"query": {"search": []}}, raise_for_status=MagicMock(),
+        json=lambda: {"query": {"search": []}},
+        raise_for_status=MagicMock(),
     )
 
     store = _store(tmp_path, lastfm_api_key="")  # blank - Last.fm never even attempted
@@ -680,10 +731,13 @@ def test_fetch_artist_photo_downloads_real_bytes(tmp_path):
     downloaded = tmp_path / "downloaded.jpg"
     downloaded.write_bytes(b"real-photo-bytes")
 
-    with patch(
-        "mediainfo.media_data_store.wikipedia.lookup",
-        return_value=("bio", "https://example.com/x.jpg"),
-    ), patch.object(store._cache, "download_temp", return_value=downloaded):
+    with (
+        patch(
+            "mediainfo.media_data_store.wikipedia.lookup",
+            return_value=("bio", "https://example.com/x.jpg"),
+        ),
+        patch.object(store._cache, "download_temp", return_value=downloaded),
+    ):
         result = store._fetch_artist_photo("Led Zeppelin")
 
     assert result == (b"real-photo-bytes", "wikipedia")
@@ -697,12 +751,17 @@ def test_fetch_artist_photo_downloads_real_bytes(tmp_path):
 # equivalent enricher-level tests of the same underlying functions).
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.musicbrainz.requests.head")
 @patch("mediainfo.enrichers.musicbrainz.requests.get")
 def test_fetch_album_artwork_via_musicbrainz(mock_get, mock_head, tmp_path):
     mock_get.return_value.json.return_value = {
         "release-groups": [
-            {"id": "rg-1", "primary-type": "Album", "artist-credit": [{"artist": {"id": "artist-1"}}]}
+            {
+                "id": "rg-1",
+                "primary-type": "Album",
+                "artist-credit": [{"artist": {"id": "artist-1"}}],
+            }
         ]
     }
     mock_head.return_value.status_code = 200
@@ -714,14 +773,19 @@ def test_fetch_album_artwork_via_musicbrainz(mock_get, mock_head, tmp_path):
         result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
 
     download_temp.assert_called_once()
-    assert download_temp.call_args.args[0].url == "https://coverartarchive.org/release-group/rg-1/front-500.jpg"
+    assert (
+        download_temp.call_args.args[0].url
+        == "https://coverartarchive.org/release-group/rg-1/front-500.jpg"
+    )
     assert result is None  # download_temp returning None -> no bytes to write
 
 
 @patch("mediainfo.enrichers.discogs.requests.get")
 @patch("mediainfo.enrichers.musicbrainz.requests.head")
 @patch("mediainfo.enrichers.musicbrainz.requests.get")
-def test_fetch_album_artwork_falls_back_to_discogs(mock_mb_get, mock_mb_head, mock_discogs_get, tmp_path):
+def test_fetch_album_artwork_falls_back_to_discogs(
+    mock_mb_get, mock_mb_head, mock_discogs_get, tmp_path
+):
     mock_mb_get.return_value.json.return_value = {"release-groups": []}  # MusicBrainz finds nothing
     mock_discogs_get.return_value.json.return_value = {
         "results": [{"cover_image": "https://discogs.example/cover.jpg"}]
@@ -759,8 +823,16 @@ def test_fetch_album_artwork_fanart_kind_is_never_fetched(tmp_path):
 
 def test_fetch_album_artwork_without_cache_configured_returns_none(tmp_path):
     store = _store(tmp_path)  # no cache= passed
-    with patch("mediainfo.media_data_store.musicbrainz.resolve_release_group_ids", return_value=("a", "rg-1")), \
-         patch("mediainfo.media_data_store.musicbrainz.fetch_front_cover", return_value="https://example.com/x.jpg"):
+    with (
+        patch(
+            "mediainfo.media_data_store.musicbrainz.resolve_release_group_ids",
+            return_value=("a", "rg-1"),
+        ),
+        patch(
+            "mediainfo.media_data_store.musicbrainz.fetch_front_cover",
+            return_value="https://example.com/x.jpg",
+        ),
+    ):
         result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
 
     assert result is None
@@ -771,9 +843,17 @@ def test_fetch_album_artwork_downloads_real_bytes(tmp_path):
     downloaded = tmp_path / "downloaded.jpg"
     downloaded.write_bytes(b"fake-jpeg-bytes")
 
-    with patch("mediainfo.media_data_store.musicbrainz.resolve_release_group_ids", return_value=("a", "rg-1")), \
-         patch("mediainfo.media_data_store.musicbrainz.fetch_front_cover", return_value="https://example.com/x.jpg"), \
-         patch.object(ImageCache, "download_temp", return_value=downloaded):
+    with (
+        patch(
+            "mediainfo.media_data_store.musicbrainz.resolve_release_group_ids",
+            return_value=("a", "rg-1"),
+        ),
+        patch(
+            "mediainfo.media_data_store.musicbrainz.fetch_front_cover",
+            return_value="https://example.com/x.jpg",
+        ),
+        patch.object(ImageCache, "download_temp", return_value=downloaded),
+    ):
         result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
 
     assert result == (b"fake-jpeg-bytes", "musicbrainz")
@@ -787,12 +867,15 @@ def test_fetch_album_artwork_downloads_real_bytes(tmp_path):
 # those functions themselves).
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_movie_artwork_via_tmdb(tmp_path):
     store = _store(tmp_path, cache=ImageCache(tmp_path / "cache"), tmdb_api_key="tmdb-key")
     movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
 
-    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie) as find_movie, \
-         patch.object(ImageCache, "download_temp", return_value=None) as download_temp:
+    with (
+        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie) as find_movie,
+        patch.object(ImageCache, "download_temp", return_value=None) as download_temp,
+    ):
         result = store._fetch_movie_artwork("The Matrix", 1999, "poster")
 
     find_movie.assert_called_once_with("tmdb-key", "The Matrix", 1999)
@@ -804,8 +887,10 @@ def test_fetch_movie_fanart_via_tmdb_uses_backdrop(tmp_path):
     store = _store(tmp_path, cache=ImageCache(tmp_path / "cache"), tmdb_api_key="tmdb-key")
     movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
 
-    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie), \
-         patch.object(ImageCache, "download_temp", return_value=None) as download_temp:
+    with (
+        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie),
+        patch.object(ImageCache, "download_temp", return_value=None) as download_temp,
+    ):
         store._fetch_movie_artwork("The Matrix", 1999, "fanart")
 
     assert download_temp.call_args.args[0].url == "https://image.tmdb.org/t/p/w1280/backdrop.jpg"
@@ -818,8 +903,10 @@ def test_movie_poster_and_fanart_share_one_tmdb_search(tmp_path):
     store = _store(tmp_path, cache=ImageCache(tmp_path / "cache"), tmdb_api_key="tmdb-key")
     movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
 
-    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie) as find_movie, \
-         patch.object(ImageCache, "download_temp", return_value=None):
+    with (
+        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie) as find_movie,
+        patch.object(ImageCache, "download_temp", return_value=None),
+    ):
         store.get_movie_poster("The Matrix", 1999)
         store.get_movie_fanart("The Matrix", 1999)
 
@@ -828,15 +915,19 @@ def test_movie_poster_and_fanart_share_one_tmdb_search(tmp_path):
 
 def test_fetch_movie_artwork_falls_back_to_fanarttv(tmp_path):
     store = _store(
-        tmp_path, cache=ImageCache(tmp_path / "cache"),
-        tmdb_api_key="tmdb-key", fanarttv_api_key="fanarttv-key",
+        tmp_path,
+        cache=ImageCache(tmp_path / "cache"),
+        tmdb_api_key="tmdb-key",
+        fanarttv_api_key="fanarttv-key",
     )
     movie = {"id": 603, "poster_path": None, "backdrop_path": None}  # resolved, but no TMDb image
     fanarttv_data = {"movieposter": [{"url": "https://fanart.example/poster.jpg", "likes": "5"}]}
 
-    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie), \
-         patch("mediainfo.media_data_store.fanarttv.fetch", return_value=fanarttv_data) as fetch, \
-         patch.object(ImageCache, "download_temp", return_value=None) as download_temp:
+    with (
+        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie),
+        patch("mediainfo.media_data_store.fanarttv.fetch", return_value=fanarttv_data) as fetch,
+        patch.object(ImageCache, "download_temp", return_value=None) as download_temp,
+    ):
         store._fetch_movie_artwork("The Matrix", 1999, "poster")
 
     fetch.assert_called_once_with("fanarttv-key", "movies/603")
@@ -847,8 +938,10 @@ def test_fetch_movie_artwork_no_fanarttv_key_skips_fallback(tmp_path):
     store = _store(tmp_path, tmdb_api_key="tmdb-key", fanarttv_api_key="")
     movie = {"id": 603, "poster_path": None, "backdrop_path": None}
 
-    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie), \
-         patch("mediainfo.media_data_store.fanarttv.fetch") as fetch:
+    with (
+        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie),
+        patch("mediainfo.media_data_store.fanarttv.fetch") as fetch,
+    ):
         result = store._fetch_movie_artwork("The Matrix", 1999, "poster")
 
     fetch.assert_not_called()
@@ -860,8 +953,10 @@ def test_fetch_movie_artwork_no_tmdb_match_skips_fanarttv(tmp_path):
     TMDb has no match at all, there's no id to look fanart.tv up with."""
     store = _store(tmp_path, tmdb_api_key="tmdb-key", fanarttv_api_key="fanarttv-key")
 
-    with patch("mediainfo.media_data_store.tmdb.find_movie", return_value=None), \
-         patch("mediainfo.media_data_store.fanarttv.fetch") as fetch:
+    with (
+        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=None),
+        patch("mediainfo.media_data_store.fanarttv.fetch") as fetch,
+    ):
         result = store._fetch_movie_artwork("Unknown Movie", None, "poster")
 
     fetch.assert_not_called()
@@ -872,8 +967,10 @@ def test_fetch_series_artwork_via_tmdb(tmp_path):
     store = _store(tmp_path, cache=ImageCache(tmp_path / "cache"), tmdb_api_key="tmdb-key")
     show = {"id": 1399, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
 
-    with patch("mediainfo.media_data_store.tmdb.find_tv", return_value=show) as find_tv, \
-         patch.object(ImageCache, "download_temp", return_value=None) as download_temp:
+    with (
+        patch("mediainfo.media_data_store.tmdb.find_tv", return_value=show) as find_tv,
+        patch.object(ImageCache, "download_temp", return_value=None) as download_temp,
+    ):
         result = store._fetch_series_artwork("Game of Thrones", None, "poster")
 
     find_tv.assert_called_once_with("tmdb-key", "Game of Thrones")
@@ -904,8 +1001,10 @@ def test_fetch_series_artwork_never_uses_fanarttv(tmp_path):
     store = _store(tmp_path, tmdb_api_key="tmdb-key", fanarttv_api_key="fanarttv-key")
     show = {"id": 1399, "poster_path": None, "backdrop_path": None}
 
-    with patch("mediainfo.media_data_store.tmdb.find_tv", return_value=show), \
-         patch("mediainfo.media_data_store.fanarttv.fetch") as fetch:
+    with (
+        patch("mediainfo.media_data_store.tmdb.find_tv", return_value=show),
+        patch("mediainfo.media_data_store.fanarttv.fetch") as fetch,
+    ):
         result = store._fetch_series_artwork("Game of Thrones", None, "poster")
 
     fetch.assert_not_called()
@@ -955,6 +1054,7 @@ def test_fetch_lyrics_network_error_returns_none_not_raise(mock_get, tmp_path):
 # ---------------------------------------------------------------------------
 # _relocate_to_year_dir
 # ---------------------------------------------------------------------------
+
 
 def test_relocate_to_year_dir_moves_files(tmp_path):
     store = _store(tmp_path)
@@ -1013,6 +1113,7 @@ def test_relocate_to_year_dir_is_noop_when_dirs_are_identical(tmp_path):
 # Lyrics
 # ---------------------------------------------------------------------------
 
+
 def test_get_track_lyrics_fetches_when_missing(tmp_path):
     store = _store(tmp_path)
     lrc = "[00:01.00]The Song Remains The Same"
@@ -1055,12 +1156,21 @@ def test_lyrics_never_auto_refreshed_by_age(tmp_path):
     item_dir.mkdir(parents=True)
     (item_dir / "Dancing Days.lrc").write_text("[00:01.00]old lyrics", encoding="utf-8")
     ancient = (datetime.now(timezone.utc) - timedelta(days=10_000)).isoformat()
-    store._write_metadata(item_dir, {
-        "tracks": {"Dancing Days": {"lyrics": {
-            "path": "Dancing Days.lrc", "source": "lrclib",
-            "last_checked": ancient, "last_updated": ancient,
-        }}},
-    })
+    store._write_metadata(
+        item_dir,
+        {
+            "tracks": {
+                "Dancing Days": {
+                    "lyrics": {
+                        "path": "Dancing Days.lrc",
+                        "source": "lrclib",
+                        "last_checked": ancient,
+                        "last_updated": ancient,
+                    }
+                }
+            },
+        },
+    )
 
     with patch.object(store, "_fetch_lyrics") as fetch:
         result = store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "Dancing Days")
@@ -1074,16 +1184,19 @@ def test_refresh_track_lyrics_forces_fetch_even_when_cached(tmp_path):
     with patch.object(store, "_fetch_lyrics", return_value=(b"first version", "lrclib")):
         store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "No Quarter", year=1973)
 
-    with patch.object(store, "_fetch_lyrics", return_value=(b"corrected version", "lrclib")) as fetch:
+    with patch.object(
+        store, "_fetch_lyrics", return_value=(b"corrected version", "lrclib")
+    ) as fetch:
         updated = store.refresh_track_lyrics(
             "Led Zeppelin", "Houses of the Holy", "No Quarter", year=1973
         )
 
     fetch.assert_called_once()
     assert updated is True
-    assert store.get_track_lyrics(
-        "Led Zeppelin", "Houses of the Holy", "No Quarter", year=1973
-    ) == "corrected version"
+    assert (
+        store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "No Quarter", year=1973)
+        == "corrected version"
+    )
 
 
 def test_refresh_track_lyrics_keeps_old_file_when_fetch_fails(tmp_path):
@@ -1097,9 +1210,10 @@ def test_refresh_track_lyrics_keeps_old_file_when_fetch_fails(tmp_path):
         )
 
     assert updated is False
-    assert store.get_track_lyrics(
-        "Led Zeppelin", "Houses of the Holy", "The Crunge", year=1973
-    ) == "good lyrics"
+    assert (
+        store.get_track_lyrics("Led Zeppelin", "Houses of the Holy", "The Crunge", year=1973)
+        == "good lyrics"
+    )
 
 
 def test_track_title_with_special_characters_gets_safe_lrc_filename(tmp_path):
@@ -1133,6 +1247,7 @@ def test_lyrics_and_artwork_share_the_same_album_metadata_file(tmp_path):
 # MediaDataStore._render_wordcloud)
 # ---------------------------------------------------------------------------
 
+
 def test_get_track_wordcloud_generates_when_missing(tmp_path):
     store = _store(tmp_path)
     with patch.object(store, "_fetch_lyrics", return_value=(b"[00:01.00]hello world", "lrclib")):
@@ -1147,8 +1262,10 @@ def test_get_track_wordcloud_generates_when_missing(tmp_path):
             "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
         )
 
-    render.assert_called_once_with("[00:01.00]hello world", store.album_dir(
-        "Manfred Mann's Earth Band", "Watch", None) / "albumart.jpg")
+    render.assert_called_once_with(
+        "[00:01.00]hello world",
+        store.album_dir("Manfred Mann's Earth Band", "Watch", None) / "albumart.jpg",
+    )
     expected_path = (
         store.album_dir("Manfred Mann's Earth Band", "Watch", None)
         / "Davy's on the Road Again.wordcloud_nomask.png"
@@ -1159,9 +1276,11 @@ def test_get_track_wordcloud_generates_when_missing(tmp_path):
 
 def test_get_track_wordcloud_returns_none_without_lyrics(tmp_path):
     store = _store(tmp_path)
-    with patch.object(store, "_fetch_lyrics", return_value=None), \
-            patch.object(store, "get_album_art") as get_album_art, \
-            patch.object(store, "_render_wordcloud") as render:
+    with (
+        patch.object(store, "_fetch_lyrics", return_value=None),
+        patch.object(store, "get_album_art") as get_album_art,
+        patch.object(store, "_render_wordcloud") as render,
+    ):
         result = store.get_track_wordcloud(
             "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
         )
@@ -1176,8 +1295,10 @@ def test_get_track_wordcloud_returns_none_without_album_art(tmp_path):
     with patch.object(store, "_fetch_lyrics", return_value=(b"[00:01.00]hello", "lrclib")):
         store.get_track_lyrics("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
 
-    with patch.object(store, "_fetch_album_artwork", return_value=None), \
-            patch.object(store, "_render_wordcloud") as render:
+    with (
+        patch.object(store, "_fetch_album_artwork", return_value=None),
+        patch.object(store, "_render_wordcloud") as render,
+    ):
         result = store.get_track_wordcloud(
             "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
         )
@@ -1229,16 +1350,21 @@ def test_refresh_track_wordcloud_forces_regeneration_even_when_cached(tmp_path):
     with patch.object(store, "_render_wordcloud", return_value=(b"first-render", "generated")):
         store.get_track_wordcloud("Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again")
 
-    with patch.object(store, "_render_wordcloud", return_value=(b"second-render", "generated")) as render:
+    with patch.object(
+        store, "_render_wordcloud", return_value=(b"second-render", "generated")
+    ) as render:
         updated = store.refresh_track_wordcloud(
             "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
         )
 
     render.assert_called_once()
     assert updated is True
-    assert store.get_track_wordcloud(
-        "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
-    ).read_bytes() == b"second-render"
+    assert (
+        store.get_track_wordcloud(
+            "Manfred Mann's Earth Band", "Watch", "Davy's on the Road Again"
+        ).read_bytes()
+        == b"second-render"
+    )
 
 
 def test_refresh_track_wordcloud_returns_false_without_lyrics(tmp_path):
@@ -1279,6 +1405,7 @@ def test_render_wordcloud_logs_and_returns_none_on_failure(tmp_path):
 # rollout - see mediainfo/config/shared.py; these two are converted
 # together since MediaDataConfig nests MediaDataRefreshConfig)
 # ---------------------------------------------------------------------------
+
 
 def test_media_data_refresh_config_unknown_field_raises_validation_error():
     import pytest

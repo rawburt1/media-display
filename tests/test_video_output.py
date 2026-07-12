@@ -32,8 +32,9 @@ def test_idle_state_by_default():
 
 def test_playing_state_after_update():
     output = _make_output()
-    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception",
-                             subtitle="2010", images=[])
+    now_playing = NowPlaying(
+        source="kodi", media_type="movie", title="Inception", subtitle="2010", images=[]
+    )
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
     image_path = Path("/tmp/poster.jpg")
 

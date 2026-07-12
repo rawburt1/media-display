@@ -23,7 +23,11 @@ def _app_with_sock():
 def test_register_websocket_route_configures_ping_interval():
     app, sock = _app_with_sock()
     register_websocket_route(
-        sock, "/ws", threading.Lock(), set(), get_initial_payload=lambda conn: {},
+        sock,
+        "/ws",
+        threading.Lock(),
+        set(),
+        get_initial_payload=lambda conn: {},
     )
 
     assert app.config["SOCK_SERVER_OPTIONS"]["ping_interval"] == _PING_INTERVAL_SECONDS
@@ -34,7 +38,11 @@ def test_register_websocket_route_preserves_other_server_options():
     app.config["SOCK_SERVER_OPTIONS"] = {"max_message_size": 1024}
 
     register_websocket_route(
-        sock, "/ws", threading.Lock(), set(), get_initial_payload=lambda conn: {},
+        sock,
+        "/ws",
+        threading.Lock(),
+        set(),
+        get_initial_payload=lambda conn: {},
     )
 
     assert app.config["SOCK_SERVER_OPTIONS"]["max_message_size"] == 1024

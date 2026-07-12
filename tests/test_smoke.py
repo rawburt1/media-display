@@ -61,9 +61,22 @@ def test_build_sources_from_example_config(example_config):
     sources = wiring.build_sources(example_config)
     names = {s.name for s in sources}
     assert names == {
-        "kodi", "appletv", "homeassistant", "youtube", "shield",
-        "plex", "sonos", "spotify", "mopidy", "mpd", "lms", "foobar2000", "vlc", "vinyl",
-        "browser", "chromecast",
+        "kodi",
+        "appletv",
+        "homeassistant",
+        "youtube",
+        "shield",
+        "plex",
+        "sonos",
+        "spotify",
+        "mopidy",
+        "mpd",
+        "lms",
+        "foobar2000",
+        "vlc",
+        "vinyl",
+        "browser",
+        "chromecast",
     }
 
 

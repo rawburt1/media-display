@@ -54,7 +54,9 @@ class BlurredBackgroundTheme(DisplayTheme):
     ) -> Optional[ThemeRenderResult]:
         try:
             derived_path = cache.get_derived_path(
-                image_path, self._cache_key(config), lambda image: self._build(image, config),
+                image_path,
+                self._cache_key(config),
+                lambda image: self._build(image, config),
             )
         except Exception:
             logger.exception("Blurred Background: failed to build background for %s", image_path)

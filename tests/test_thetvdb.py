@@ -34,7 +34,9 @@ def _enricher(**kwargs) -> TheTvDbEnricher:
 
 
 def _now_playing(**kwargs) -> NowPlaying:
-    defaults: dict[str, Any] = dict(source="kodi", media_type="episode", title="Pilot", subtitle="S01E01")
+    defaults: dict[str, Any] = dict(
+        source="kodi", media_type="episode", title="Pilot", subtitle="S01E01"
+    )
     defaults.update(kwargs)
     return NowPlaying(**defaults, ids={"tvdb": "12345"})
 
@@ -84,9 +86,7 @@ def test_skips_non_episode(mock_post, mock_get):
 @patch("mediainfo.enrichers.thetvdb.requests.get")
 @patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_no_tvdb_id_and_no_title_skips(mock_post, mock_get):
-    now_playing = NowPlaying(
-        source="shield", media_type="episode", title="", subtitle="", ids={}
-    )
+    now_playing = NowPlaying(source="shield", media_type="episode", title="", subtitle="", ids={})
 
     _enricher().enrich(now_playing)
 
@@ -112,8 +112,11 @@ def test_resolves_series_id_by_title_when_no_tvdb_id(mock_post, mock_get):
     ]
 
     now_playing = NowPlaying(
-        source="shield", media_type="episode", title="Kingdom",
-        subtitle="5. När makten skiftar", ids={},
+        source="shield",
+        media_type="episode",
+        title="Kingdom",
+        subtitle="5. När makten skiftar",
+        ids={},
     )
     _enricher().enrich(now_playing)
 
@@ -192,8 +195,8 @@ def test_disambiguates_multiple_candidates_by_episode_name(mock_post, mock_get):
     mock_post.return_value = _response({"data": {"token": "test-token"}})
     mock_get.side_effect = [
         _response(_AMBIGUOUS_RESULTS),
-        _response(_episodes("Some Other Episode")),       # candidate 111: no match
-        _response(_episodes("När makten skiftar")),        # candidate 222: match
+        _response(_episodes("Some Other Episode")),  # candidate 111: no match
+        _response(_episodes("När makten skiftar")),  # candidate 222: match
         _response(_ARTWORK_TYPES),
         _response(_SERIES_ARTWORKS),
     ]
@@ -213,10 +216,10 @@ def test_disambiguates_using_swedish_translation_when_default_name_does_not_matc
     mock_post.return_value = _response({"data": {"token": "test-token"}})
     mock_get.side_effect = [
         _response(_AMBIGUOUS_RESULTS),
-        _response(_episodes("Episode One")),               # 111 default: no match
-        _response(_episodes("Episode Five")),               # 222 default: no match
-        _response(_episodes("Avsnitt ett")),                # 111 swedish: no match
-        _response(_episodes("När makten skiftar")),         # 222 swedish: match
+        _response(_episodes("Episode One")),  # 111 default: no match
+        _response(_episodes("Episode Five")),  # 222 default: no match
+        _response(_episodes("Avsnitt ett")),  # 111 swedish: no match
+        _response(_episodes("När makten skiftar")),  # 222 swedish: match
         _response(_ARTWORK_TYPES),
         _response(_SERIES_ARTWORKS),
     ]
@@ -359,7 +362,9 @@ def test_does_not_duplicate_existing_image(mock_post, mock_get):
     mock_get.side_effect = [_response(_ARTWORK_TYPES), _response(_SERIES_ARTWORKS)]
 
     now_playing = _now_playing()
-    now_playing.images.append(Artwork(url="https://thetvdb.com/poster-high.jpg", label="Poster (Kodi)"))
+    now_playing.images.append(
+        Artwork(url="https://thetvdb.com/poster-high.jpg", label="Poster (Kodi)")
+    )
 
     _enricher().enrich(now_playing)
 
@@ -415,20 +420,24 @@ def test_series_not_found_returns_gracefully(mock_post, mock_get):
 # original_title fallback (e.g. SVT shows with a Swedish device title)
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.thetvdb.requests.get")
 @patch("mediainfo.enrichers.thetvdb.requests.post")
 def test_falls_back_to_original_title_when_primary_search_returns_nothing(mock_post, mock_get):
     mock_post.return_value = _response({"data": {"token": "test-token"}})
     mock_get.side_effect = [
-        _response({"data": []}),          # primary title search → no results
-        _response(_SEARCH_RESULTS),       # original_title search → found
+        _response({"data": []}),  # primary title search → no results
+        _response(_SEARCH_RESULTS),  # original_title search → found
         _response(_ARTWORK_TYPES),
         _response(_SERIES_ARTWORKS),
     ]
 
     now_playing = NowPlaying(
-        source="shield", media_type="episode",
-        title="Den danska kvinnan", subtitle="5. Brutna ben", ids={},
+        source="shield",
+        media_type="episode",
+        title="Den danska kvinnan",
+        subtitle="5. Brutna ben",
+        ids={},
         original_title="The Danish Woman",
     )
     _enricher().enrich(now_playing)
@@ -446,14 +455,17 @@ def test_falls_back_to_original_title_when_primary_search_returns_nothing(mock_p
 def test_does_not_try_original_title_when_primary_search_finds_result(mock_post, mock_get):
     mock_post.return_value = _response({"data": {"token": "test-token"}})
     mock_get.side_effect = [
-        _response(_SEARCH_RESULTS),   # primary search finds something
+        _response(_SEARCH_RESULTS),  # primary search finds something
         _response(_ARTWORK_TYPES),
         _response(_SERIES_ARTWORKS),
     ]
 
     now_playing = NowPlaying(
-        source="shield", media_type="episode",
-        title="Bonusfamiljen", subtitle="1. Avsnitt 1", ids={},
+        source="shield",
+        media_type="episode",
+        title="Bonusfamiljen",
+        subtitle="1. Avsnitt 1",
+        ids={},
         original_title="The Bonus Family",
     )
     _enricher().enrich(now_playing)
@@ -471,8 +483,11 @@ def test_original_title_fallback_skipped_when_not_set(mock_post, mock_get):
     mock_get.return_value = _response({"data": []})
 
     now_playing = NowPlaying(
-        source="shield", media_type="episode",
-        title="Unknown Show", subtitle="1. Episode", ids={},
+        source="shield",
+        media_type="episode",
+        title="Unknown Show",
+        subtitle="1. Episode",
+        ids={},
     )
     _enricher().enrich(now_playing)
 
@@ -484,6 +499,7 @@ def test_original_title_fallback_skipped_when_not_set(mock_post, mock_get):
 # ---------------------------------------------------------------------------
 # test_connection
 # ---------------------------------------------------------------------------
+
 
 def test_test_connection_success():
     with patch.object(TheTvDbEnricher, "_login", return_value="tok"):

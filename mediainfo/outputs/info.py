@@ -109,7 +109,10 @@ class InfoOutput(Output):
         sock = Sock(app)
 
         register_websocket_route(
-            sock, "/ws", self._clients_lock, self._clients,
+            sock,
+            "/ws",
+            self._clients_lock,
+            self._clients,
             get_initial_payload=lambda conn: self._get_payload(),
         )
 

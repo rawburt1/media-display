@@ -47,7 +47,9 @@ def import_from_lidarr(library: MusicLibrary, base_url: str, api_key: str) -> Im
             continue
 
         try:
-            albums, tracks = _import_artist(library, base_url, headers, name, lidarr_artist_id, artist)
+            albums, tracks = _import_artist(
+                library, base_url, headers, name, lidarr_artist_id, artist
+            )
         except Exception:
             logger.exception("Failed to import %r from Lidarr; skipping", name)
             stats.failed_artists += 1
@@ -62,7 +64,12 @@ def import_from_lidarr(library: MusicLibrary, base_url: str, api_key: str) -> Im
 
 
 def _import_artist(
-    library: MusicLibrary, base_url: str, headers: dict, name: str, lidarr_artist_id: int, artist: dict
+    library: MusicLibrary,
+    base_url: str,
+    headers: dict,
+    name: str,
+    lidarr_artist_id: int,
+    artist: dict,
 ) -> tuple[int, int]:
     artist_id = library.get_or_create_artist(name)
     mbid = artist.get("foreignArtistId")

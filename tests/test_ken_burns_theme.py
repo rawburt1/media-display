@@ -19,6 +19,7 @@ def _artwork():
 # prepare()
 # ---------------------------------------------------------------------------
 
+
 def test_prepare_echoes_back_image_url():
     theme = KenBurnsTheme()
     image_path = Path("/some/dir/abc123.jpg")
@@ -31,6 +32,7 @@ def test_prepare_echoes_back_image_url():
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = KenBurnsTheme()

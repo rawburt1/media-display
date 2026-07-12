@@ -11,6 +11,7 @@ from mediainfo.sources.jellyfin import EmbySource, JellyfinSource, _image_url, _
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _jf(**kwargs) -> JellyfinSource:
     defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.10", port=8096, api_key="jf-key")
     defaults.update(kwargs)
@@ -18,7 +19,9 @@ def _jf(**kwargs) -> JellyfinSource:
 
 
 def _emby(**kwargs) -> EmbySource:
-    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.11", port=8096, api_key="emby-key")
+    defaults: dict[str, Any] = dict(
+        enabled=True, host="192.168.1.11", port=8096, api_key="emby-key"
+    )
     defaults.update(kwargs)
     return EmbySource(EmbyConfig(**defaults))
 
@@ -89,6 +92,7 @@ def _audio(**overrides):
 # Utility helpers
 # ---------------------------------------------------------------------------
 
+
 def test_image_url():
     url = _image_url("http://192.168.1.10:8096", "item1", "Primary", "key")
     assert url == "http://192.168.1.10:8096/Items/item1/Images/Primary?api_key=key"
@@ -107,6 +111,7 @@ def test_parse_ids_empty():
 # ---------------------------------------------------------------------------
 # Empty / paused / error
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_no_sessions_returns_none(mock_get):
@@ -151,6 +156,7 @@ def test_calls_sessions_endpoint_with_api_key(mock_get):
 # Movie
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_movie(mock_get):
     mock_get.return_value = _sessions(_playing(_movie()))
@@ -165,7 +171,9 @@ def test_movie(mock_get):
     assert len(np.images) == 2
     assert np.images[0].url == "http://192.168.1.10:8096/Items/movie1/Images/Primary?api_key=jf-key"
     assert np.images[0].label == "Poster (jellyfin)"
-    assert np.images[1].url == "http://192.168.1.10:8096/Items/movie1/Images/Backdrop?api_key=jf-key"
+    assert (
+        np.images[1].url == "http://192.168.1.10:8096/Items/movie1/Images/Backdrop?api_key=jf-key"
+    )
     assert np.images[1].label == "Fanart (jellyfin)"
 
 
@@ -188,6 +196,7 @@ def test_movie_without_any_images(mock_get):
 # Episode
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_episode(mock_get):
     mock_get.return_value = _sessions(_playing(_episode()))
@@ -199,9 +208,13 @@ def test_episode(mock_get):
     assert np.season == 1
     assert np.ids == {"tvdb": "81189"}
     assert len(np.images) == 2
-    assert np.images[0].url == "http://192.168.1.10:8096/Items/series1/Images/Primary?api_key=jf-key"
+    assert (
+        np.images[0].url == "http://192.168.1.10:8096/Items/series1/Images/Primary?api_key=jf-key"
+    )
     assert np.images[0].label == "Poster (jellyfin)"
-    assert np.images[1].url == "http://192.168.1.10:8096/Items/series1/Images/Backdrop?api_key=jf-key"
+    assert (
+        np.images[1].url == "http://192.168.1.10:8096/Items/series1/Images/Backdrop?api_key=jf-key"
+    )
     assert np.images[1].label == "Fanart (jellyfin)"
 
 
@@ -215,7 +228,9 @@ def test_episode_falls_back_to_episode_primary_when_no_series_tag(mock_get):
 
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_episode_falls_back_to_episode_backdrop(mock_get):
-    ep = _episode(ParentBackdropItemId=None, ParentBackdropImageTags=[], BackdropImageTags=["ebtag"])
+    ep = _episode(
+        ParentBackdropItemId=None, ParentBackdropImageTags=[], BackdropImageTags=["ebtag"]
+    )
     mock_get.return_value = _sessions(_playing(ep))
     np = _jf().get_now_playing()
     assert np.images[1].url == "http://192.168.1.10:8096/Items/ep1/Images/Backdrop?api_key=jf-key"
@@ -232,6 +247,7 @@ def test_episode_missing_season_episode_numbers(mock_get):
 # ---------------------------------------------------------------------------
 # Audio / music
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_audio(mock_get):
@@ -274,6 +290,7 @@ def test_audio_falls_back_to_artists_list_for_subtitle(mock_get):
 # Unknown media type falls back to music/audio path
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_unknown_type_treated_as_audio(mock_get):
     item = {**_audio(), "Type": "MusicVideo"}
@@ -286,6 +303,7 @@ def test_unknown_type_treated_as_audio(mock_get):
 # Emby — same logic, separate name and base URL
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_emby_movie(mock_get):
     mock_get.return_value = _sessions(_playing(_movie()))
@@ -293,7 +311,9 @@ def test_emby_movie(mock_get):
 
     assert np.source == "emby"
     assert np.title == "Inception"
-    assert np.images[0].url == "http://192.168.1.11:8096/Items/movie1/Images/Primary?api_key=emby-key"
+    assert (
+        np.images[0].url == "http://192.168.1.11:8096/Items/movie1/Images/Primary?api_key=emby-key"
+    )
     assert np.images[0].label == "Poster (emby)"
 
 
@@ -311,6 +331,7 @@ def test_emby_calls_correct_host(mock_get):
 # ---------------------------------------------------------------------------
 # First active session wins when multiple sessions exist
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.sources.jellyfin.requests.get")
 def test_first_non_paused_session_wins(mock_get):

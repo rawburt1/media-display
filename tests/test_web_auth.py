@@ -10,6 +10,7 @@ from mediainfo.web_auth import install_auth, is_loopback_address, is_private_add
 # is_private_address
 # ---------------------------------------------------------------------------
 
+
 def test_private_ipv4_ranges_are_exempt():
     assert is_private_address("10.0.0.1")
     assert is_private_address("172.16.0.1")
@@ -57,6 +58,7 @@ def test_ipv6_zone_id_is_stripped_before_parsing():
 # ---------------------------------------------------------------------------
 # install_auth
 # ---------------------------------------------------------------------------
+
 
 def _app(auth_config):
     app = Flask(__name__)
@@ -123,6 +125,7 @@ def test_public_address_with_wrong_credentials_is_rejected():
 # ---------------------------------------------------------------------------
 # is_loopback_address
 # ---------------------------------------------------------------------------
+
 
 def test_loopback_ipv4_is_loopback():
     assert is_loopback_address("127.0.0.1")

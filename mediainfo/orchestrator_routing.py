@@ -171,7 +171,10 @@ class _RoutingEngine:
             if not passes_filter(now_playing, config):
                 logger.debug(
                     "Output %d (%s) filtered for [%s/%s]",
-                    index, type(output).__name__, now_playing.source, now_playing.media_type,
+                    index,
+                    type(output).__name__,
+                    now_playing.source,
+                    now_playing.media_type,
                 )
                 filtered.add(index)
         return filtered
@@ -197,7 +200,8 @@ class _RoutingEngine:
                 group.filtered_outputs.add(index)
                 logger.debug(
                     "Output %d (%s) became filtered mid-play",
-                    index, type(output).__name__,
+                    index,
+                    type(output).__name__,
                 )
                 if getattr(config, "idle_when_filtered", False):
                     self._call_output(index, output.on_idle)
@@ -205,7 +209,8 @@ class _RoutingEngine:
                 group.filtered_outputs.discard(index)
                 logger.debug(
                     "Output %d (%s) became unfiltered mid-play",
-                    index, type(output).__name__,
+                    index,
+                    type(output).__name__,
                 )
                 self._call_output(index, output.on_new_item, group.current, self.cache)
                 if group.current.images:

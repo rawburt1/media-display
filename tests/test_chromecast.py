@@ -72,7 +72,9 @@ def test_returns_none_for_ignored_app(mock_connect):
 @patch("mediainfo.sources.chromecast.pychromecast.get_chromecast_from_host")
 def test_music_track(mock_connect):
     mock_connect.return_value = _cast(
-        _status(metadata_type=3, title="Comfortably Numb", artist="Pink Floyd", album_name="The Wall")
+        _status(
+            metadata_type=3, title="Comfortably Numb", artist="Pink Floyd", album_name="The Wall"
+        )
     )
 
     now_playing = _source().get_now_playing()

@@ -10,6 +10,7 @@ from mediainfo.status import AvailabilityReason
 # config_detail_fields
 # ---------------------------------------------------------------------------
 
+
 def test_config_detail_fields_excludes_secrets_and_enabled():
     from mediainfo.config import KodiConfig
 
@@ -37,6 +38,7 @@ def test_config_detail_fields_returns_empty_for_none():
 # make_health_provider - source error messaging + config detail on cards
 # ---------------------------------------------------------------------------
 
+
 def test_health_provider_includes_config_fields_and_error_message_for_backed_off_source():
     from mediainfo.config import KodiConfig
 
@@ -61,7 +63,8 @@ def test_health_provider_includes_config_fields_and_error_message_for_backed_off
         "poll_interval_seconds": 5,
         "rotation_interval_seconds": 30,
         "now_playing": None,
-        "idle_wallpapers_loaded": 0, "hitster_safe": False,
+        "idle_wallpapers_loaded": 0,
+        "hitster_safe": False,
     }
 
     cfg = MagicMock()
@@ -210,10 +213,17 @@ def test_health_provider_assigns_per_type_instance_index_to_outputs():
     orch.enrichers = []
     orch.idle_source = None
     orch.get_health.return_value = {
-        "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
-        "source_backoff_seconds": {}, "source_failing_for_seconds": {}, "uptime_seconds": 0,
+        "active_source": None,
+        "source_last_polled_ago": {},
+        "output_errors": {},
+        "source_backoff_seconds": {},
+        "source_failing_for_seconds": {},
+        "uptime_seconds": 0,
         "poll_interval_seconds": 5,
-        "rotation_interval_seconds": 30, "now_playing": None, "idle_wallpapers_loaded": 0, "hitster_safe": False,
+        "rotation_interval_seconds": 30,
+        "now_playing": None,
+        "idle_wallpapers_loaded": 0,
+        "hitster_safe": False,
     }
 
     cfg = MagicMock()
@@ -236,6 +246,7 @@ def test_health_provider_assigns_per_type_instance_index_to_outputs():
 # _registered_but_inactive / _inactive_outputs / _inactive_idle_sources
 # ---------------------------------------------------------------------------
 
+
 def test_registered_but_inactive_disabled_when_configured():
     from mediainfo.config import KodiConfig
     from mediainfo.health import _registered_but_inactive
@@ -246,9 +257,7 @@ def test_registered_but_inactive_disabled_when_configured():
         config_section={"kodi": KodiConfig(enabled=False, host="192.168.1.21")},
     )
 
-    assert entries == [
-        {"name": "kodi", "status": "disabled", "host": "192.168.1.21", "port": 8080}
-    ]
+    assert entries == [{"name": "kodi", "status": "disabled", "host": "192.168.1.21", "port": 8080}]
 
 
 def test_registered_but_inactive_not_configured_when_no_config_section():
@@ -322,13 +331,20 @@ def test_inactive_idle_sources_not_configured_when_missing():
 # reported detail (or nothing, if it returns None) into its /health entry.
 # ---------------------------------------------------------------------------
 
+
 def _base_orch_health() -> dict:
     return {
-        "active_source": None, "source_last_polled_ago": {}, "output_errors": {},
-        "source_backoff_seconds": {}, "source_failing_for_seconds": {}, "uptime_seconds": 0,
+        "active_source": None,
+        "source_last_polled_ago": {},
+        "output_errors": {},
+        "source_backoff_seconds": {},
+        "source_failing_for_seconds": {},
+        "uptime_seconds": 0,
         "poll_interval_seconds": 5,
-        "rotation_interval_seconds": 30, "now_playing": None,
-        "idle_wallpapers_loaded": 0, "hitster_safe": False,
+        "rotation_interval_seconds": 30,
+        "now_playing": None,
+        "idle_wallpapers_loaded": 0,
+        "hitster_safe": False,
     }
 
 

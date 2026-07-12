@@ -15,7 +15,8 @@ class _FakeThemeConfig:
 @pytest.fixture(autouse=True)
 def fake_theme_registry(monkeypatch):
     monkeypatch.setattr(
-        "mediainfo.config.themes.THEMES_CONFIG_TYPES", {"glow": _FakeThemeConfig},
+        "mediainfo.config.themes.THEMES_CONFIG_TYPES",
+        {"glow": _FakeThemeConfig},
     )
 
 

@@ -70,10 +70,29 @@ _STRAY_DASH_RE = re.compile(r"(?<=\S)-(?=\s)")
 # Version/edition tags that indicate a trailing "- <word>" segment is *not*
 # an artist name (e.g. "Song - Live", "Song - Remix").
 _QUALIFIER_WORDS = (
-    "remix", "live", "acoustic", "cover", "demo", "instrumental",
-    "extended", "edit", "version", "mix", "remaster", "remastered",
-    "mono", "stereo", "karaoke", "tribute", "medley", "explicit", "clean",
-    "unplugged", "session", "sessions", "performance",
+    "remix",
+    "live",
+    "acoustic",
+    "cover",
+    "demo",
+    "instrumental",
+    "extended",
+    "edit",
+    "version",
+    "mix",
+    "remaster",
+    "remastered",
+    "mono",
+    "stereo",
+    "karaoke",
+    "tribute",
+    "medley",
+    "explicit",
+    "clean",
+    "unplugged",
+    "session",
+    "sessions",
+    "performance",
 )
 _QUALIFIER_RE = re.compile(r"\b(" + "|".join(_QUALIFIER_WORDS) + r")\b", re.IGNORECASE)
 # A trailing " - <phrase containing a qualifier word>" suffix to strip.

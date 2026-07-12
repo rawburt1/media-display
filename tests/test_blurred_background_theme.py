@@ -33,6 +33,7 @@ def _artwork():
 # _build()
 # ---------------------------------------------------------------------------
 
+
 def test_build_downscales():
     img = _sharp_checkerboard(1600, 1600)
     result = BlurredBackgroundTheme._build(img, BlurredBackgroundConfig())
@@ -41,12 +42,12 @@ def test_build_downscales():
 
 def test_build_blurs_away_sharp_edges():
     img = _sharp_checkerboard()
-    result = BlurredBackgroundTheme._build(img, BlurredBackgroundConfig(blur_radius=40, brightness=1.0))
+    result = BlurredBackgroundTheme._build(
+        img, BlurredBackgroundConfig(blur_radius=40, brightness=1.0)
+    )
     # A heavily blurred checkerboard should have no pixel at the pure
     # extremes anymore - everything gets smeared toward gray.
-    extremes = sum(
-        1 for pixel in result.getdata() if pixel in ((0, 0, 0), (255, 255, 255))
-    )
+    extremes = sum(1 for pixel in result.getdata() if pixel in ((0, 0, 0), (255, 255, 255)))
     assert extremes == 0
 
 
@@ -66,6 +67,7 @@ def test_build_darkens_when_brightness_below_one():
 # prepare()
 # ---------------------------------------------------------------------------
 
+
 def test_prepare_returns_derived_image(tmp_path):
     img_path = tmp_path / "art.jpg"
     _sharp_checkerboard().save(img_path)
@@ -73,7 +75,12 @@ def test_prepare_returns_derived_image(tmp_path):
     theme = BlurredBackgroundTheme()
 
     result = theme.prepare(
-        _now_playing(), _artwork(), img_path, cache, None, BlurredBackgroundConfig(),
+        _now_playing(),
+        _artwork(),
+        img_path,
+        cache,
+        None,
+        BlurredBackgroundConfig(),
     )
 
     assert result is not None
@@ -106,10 +113,20 @@ def test_prepare_different_settings_produce_different_files(tmp_path):
     theme = BlurredBackgroundTheme()
 
     result1 = theme.prepare(
-        _now_playing(), _artwork(), img_path, cache, None, BlurredBackgroundConfig(blur_radius=20),
+        _now_playing(),
+        _artwork(),
+        img_path,
+        cache,
+        None,
+        BlurredBackgroundConfig(blur_radius=20),
     )
     result2 = theme.prepare(
-        _now_playing(), _artwork(), img_path, cache, None, BlurredBackgroundConfig(blur_radius=60),
+        _now_playing(),
+        _artwork(),
+        img_path,
+        cache,
+        None,
+        BlurredBackgroundConfig(blur_radius=60),
     )
 
     assert result1.derived_image_path != result2.derived_image_path
@@ -119,7 +136,12 @@ def test_prepare_returns_none_for_unreadable_image(tmp_path):
     cache = ImageCache(tmp_path / "cache")
     theme = BlurredBackgroundTheme()
     result = theme.prepare(
-        _now_playing(), _artwork(), tmp_path / "missing.jpg", cache, None, BlurredBackgroundConfig(),
+        _now_playing(),
+        _artwork(),
+        tmp_path / "missing.jpg",
+        cache,
+        None,
+        BlurredBackgroundConfig(),
     )
     assert result is None
 
@@ -127,6 +149,7 @@ def test_prepare_returns_none_for_unreadable_image(tmp_path):
 # ---------------------------------------------------------------------------
 # client_assets()
 # ---------------------------------------------------------------------------
+
 
 def test_client_assets_registers_theme_handler():
     theme = BlurredBackgroundTheme()

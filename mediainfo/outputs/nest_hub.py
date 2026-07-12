@@ -86,9 +86,7 @@ class NestHubOutput(Output):
             except OSError:
                 pass
 
-        logger.debug(
-            "NestHub image updated: %s (%d bytes)", stable.name, stable.stat().st_size
-        )
+        logger.debug("NestHub image updated: %s (%d bytes)", stable.name, stable.stat().st_size)
         self._idle = False
         self._cast_image(image_path)
 

@@ -72,9 +72,7 @@ class AppleTvSource(MediaSource):
         self._atv: Optional[pyatv.interface.AppleTV] = None
         self._loop = asyncio.new_event_loop()
         _ART_DIR.mkdir(exist_ok=True)
-        threading.Thread(
-            target=self._loop.run_forever, daemon=True, name="pyatv-loop"
-        ).start()
+        threading.Thread(target=self._loop.run_forever, daemon=True, name="pyatv-loop").start()
 
     # ------------------------------------------------------------------
     # Public interface

@@ -19,9 +19,16 @@ def config_path(tmp_path):
 
 
 def test_sets_username_and_password_noninteractively(config_path):
-    _set_password_main([
-        "--config", str(config_path), "--username", "admin", "--password", "hunter2",
-    ])
+    _set_password_main(
+        [
+            "--config",
+            str(config_path),
+            "--username",
+            "admin",
+            "--password",
+            "hunter2",
+        ]
+    )
 
     cfg = Config.load(config_path)
     assert cfg.auth.username == "admin"
@@ -29,30 +36,57 @@ def test_sets_username_and_password_noninteractively(config_path):
 
 
 def test_does_not_enable_auth_by_default(config_path):
-    _set_password_main([
-        "--config", str(config_path), "--username", "admin", "--password", "hunter2",
-    ])
+    _set_password_main(
+        [
+            "--config",
+            str(config_path),
+            "--username",
+            "admin",
+            "--password",
+            "hunter2",
+        ]
+    )
 
     cfg = Config.load(config_path)
     assert cfg.auth.enabled is False
 
 
 def test_enable_flag_turns_auth_on(config_path):
-    _set_password_main([
-        "--config", str(config_path), "--username", "admin", "--password", "hunter2", "--enable",
-    ])
+    _set_password_main(
+        [
+            "--config",
+            str(config_path),
+            "--username",
+            "admin",
+            "--password",
+            "hunter2",
+            "--enable",
+        ]
+    )
 
     cfg = Config.load(config_path)
     assert cfg.auth.enabled is True
 
 
 def test_reusing_existing_username_when_omitted(config_path):
-    _set_password_main([
-        "--config", str(config_path), "--username", "admin", "--password", "first",
-    ])
-    _set_password_main([
-        "--config", str(config_path), "--password", "second",
-    ])
+    _set_password_main(
+        [
+            "--config",
+            str(config_path),
+            "--username",
+            "admin",
+            "--password",
+            "first",
+        ]
+    )
+    _set_password_main(
+        [
+            "--config",
+            str(config_path),
+            "--password",
+            "second",
+        ]
+    )
 
     cfg = Config.load(config_path)
     assert cfg.auth.username == "admin"
@@ -60,9 +94,16 @@ def test_reusing_existing_username_when_omitted(config_path):
 
 
 def test_preserves_comments_and_other_config(config_path):
-    _set_password_main([
-        "--config", str(config_path), "--username", "admin", "--password", "hunter2",
-    ])
+    _set_password_main(
+        [
+            "--config",
+            str(config_path),
+            "--username",
+            "admin",
+            "--password",
+            "hunter2",
+        ]
+    )
 
     text = config_path.read_text()
     assert "# Copy this file to config.yaml" in text
@@ -133,7 +174,9 @@ def test_refuses_to_write_when_resulting_config_invalid(config_path, monkeypatch
 
 
 def test_prints_restart_required_note(config_path, capsys):
-    _set_password_main(["--config", str(config_path), "--username", "admin", "--password", "hunter2"])
+    _set_password_main(
+        ["--config", str(config_path), "--username", "admin", "--password", "hunter2"]
+    )
 
     out = capsys.readouterr().out
     assert "restart" in out.lower()

@@ -45,10 +45,14 @@ def _mock_get(json_data, status_code=200):
 
 @patch("mediainfo.enrichers.lastfm.requests.get")
 def test_adds_artist_photo_on_success(mock_get):
-    mock_get.return_value = _mock_get(_api_response([
-        _image("small", "https://example.com/small.jpg"),
-        _image("extralarge", REAL_URL),
-    ]))
+    mock_get.return_value = _mock_get(
+        _api_response(
+            [
+                _image("small", "https://example.com/small.jpg"),
+                _image("extralarge", REAL_URL),
+            ]
+        )
+    )
     enricher = LastFmEnricher(_config())
     np = _music()
 
@@ -64,11 +68,15 @@ def test_adds_artist_photo_on_success(mock_get):
 @patch("mediainfo.enrichers.lastfm.requests.get")
 def test_prefers_larger_size(mock_get):
     mega_url = "https://example.com/mega.jpg"
-    mock_get.return_value = _mock_get(_api_response([
-        _image("large", "https://example.com/large.jpg"),
-        _image("extralarge", "https://example.com/extralarge.jpg"),
-        _image("mega", mega_url),
-    ]))
+    mock_get.return_value = _mock_get(
+        _api_response(
+            [
+                _image("large", "https://example.com/large.jpg"),
+                _image("extralarge", "https://example.com/extralarge.jpg"),
+                _image("mega", mega_url),
+            ]
+        )
+    )
     enricher = LastFmEnricher(_config())
     np = _music()
 
@@ -79,10 +87,14 @@ def test_prefers_larger_size(mock_get):
 
 @patch("mediainfo.enrichers.lastfm.requests.get")
 def test_skips_placeholder_image(mock_get):
-    mock_get.return_value = _mock_get(_api_response([
-        _image("extralarge", PLACEHOLDER_URL),
-        _image("mega", PLACEHOLDER_URL),
-    ]))
+    mock_get.return_value = _mock_get(
+        _api_response(
+            [
+                _image("extralarge", PLACEHOLDER_URL),
+                _image("mega", PLACEHOLDER_URL),
+            ]
+        )
+    )
     enricher = LastFmEnricher(_config())
     np = _music()
 
@@ -93,10 +105,14 @@ def test_skips_placeholder_image(mock_get):
 
 @patch("mediainfo.enrichers.lastfm.requests.get")
 def test_skips_empty_url(mock_get):
-    mock_get.return_value = _mock_get(_api_response([
-        _image("extralarge", ""),
-        _image("mega", ""),
-    ]))
+    mock_get.return_value = _mock_get(
+        _api_response(
+            [
+                _image("extralarge", ""),
+                _image("mega", ""),
+            ]
+        )
+    )
     enricher = LastFmEnricher(_config())
     np = _music()
 
@@ -108,12 +124,16 @@ def test_skips_empty_url(mock_get):
 @patch("mediainfo.enrichers.lastfm.requests.get")
 def test_falls_back_to_smaller_size_when_large_is_placeholder(mock_get):
     medium_url = "https://example.com/medium.jpg"
-    mock_get.return_value = _mock_get(_api_response([
-        _image("mega", PLACEHOLDER_URL),
-        _image("extralarge", PLACEHOLDER_URL),
-        _image("large", PLACEHOLDER_URL),
-        _image("medium", medium_url),
-    ]))
+    mock_get.return_value = _mock_get(
+        _api_response(
+            [
+                _image("mega", PLACEHOLDER_URL),
+                _image("extralarge", PLACEHOLDER_URL),
+                _image("large", PLACEHOLDER_URL),
+                _image("medium", medium_url),
+            ]
+        )
+    )
     enricher = LastFmEnricher(_config())
     np = _music()
 
@@ -124,9 +144,13 @@ def test_falls_back_to_smaller_size_when_large_is_placeholder(mock_get):
 
 @patch("mediainfo.enrichers.lastfm.requests.get")
 def test_does_not_add_duplicate(mock_get):
-    mock_get.return_value = _mock_get(_api_response([
-        _image("extralarge", REAL_URL),
-    ]))
+    mock_get.return_value = _mock_get(
+        _api_response(
+            [
+                _image("extralarge", REAL_URL),
+            ]
+        )
+    )
     enricher = LastFmEnricher(_config())
     np = _music(images=[Artwork(url=REAL_URL, label="existing")])
 
@@ -140,8 +164,12 @@ def test_fetches_artist_photo_for_episode_with_artist_field(mock_get):
     mock_get.return_value = _mock_get(_api_response([_image("extralarge", REAL_URL)]))
     enricher = LastFmEnricher(_config())
     np = NowPlaying(
-        source="shield", media_type="episode", title="Melody Gardot live på Olympia",
-        subtitle="", artist="Melody Gardot", images=[],
+        source="shield",
+        media_type="episode",
+        title="Melody Gardot live på Olympia",
+        subtitle="",
+        artist="Melody Gardot",
+        images=[],
     )
 
     enricher.enrich(np)
@@ -155,7 +183,10 @@ def test_fetches_artist_photo_for_episode_with_artist_field(mock_get):
 def test_skips_episode_without_artist_field(mock_get):
     enricher = LastFmEnricher(_config())
     np = NowPlaying(
-        source="shield", media_type="episode", title="Breaking Bad", subtitle="Pilot",
+        source="shield",
+        media_type="episode",
+        title="Breaking Bad",
+        subtitle="Pilot",
         images=[],
     )
 
@@ -235,6 +266,7 @@ def test_passes_api_key(mock_get):
 # MusicLibrary caching
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.lastfm.requests.get")
 def test_caches_result_in_library_and_skips_lookup_on_repeat(mock_get, tmp_path):
     library = MusicLibrary(str(tmp_path / "library.db"))
@@ -267,8 +299,11 @@ def test_caches_negative_result_in_library(mock_get, tmp_path):
 # test_connection
 # ---------------------------------------------------------------------------
 
+
 def test_test_connection_found():
-    with patch.object(LastFmEnricher, "_fetch_artist_image", return_value="https://example.com/x.jpg"):
+    with patch.object(
+        LastFmEnricher, "_fetch_artist_image", return_value="https://example.com/x.jpg"
+    ):
         ok, message = LastFmEnricher(_config()).test_connection()
     assert ok is True
     assert "Found" in message

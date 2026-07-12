@@ -181,9 +181,7 @@ def test_update_pushes_payload(tmp_path):
     img = tmp_path / "xyz.jpg"
     img.write_bytes(b"x")
     art = _artwork()
-    out._cache = MagicMock(
-        get_path=lambda *a, **k: img, get_transformed_path=lambda p, _: p
-    )
+    out._cache = MagicMock(get_path=lambda *a, **k: img, get_transformed_path=lambda p, _: p)
 
     out.update(_music(images=[art]), art, img)
 
@@ -329,9 +327,7 @@ def test_resolve_artwork_path_passes_through_tier(tmp_path):
     art = _art("cover")
     path = tmp_path / "cover.jpg"
     path.write_bytes(b"x")
-    cache = MagicMock(
-        get_path=MagicMock(return_value=path), get_transformed_path=lambda p, _: p
-    )
+    cache = MagicMock(get_path=MagicMock(return_value=path), get_transformed_path=lambda p, _: p)
 
     out._resolve_artwork_path(cache, art, tier="music")
 
@@ -620,9 +616,7 @@ def test_auth_not_required_for_private_address_when_enabled():
 
     auth = AuthConfig(enabled=True, username="admin", password="secret")
     out = WebOutput(_config(), auth_config=auth)
-    resp = out.app.test_client().get(
-        "/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"}
-    )
+    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
     assert resp.status_code == 200
 
 

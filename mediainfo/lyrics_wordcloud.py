@@ -71,8 +71,14 @@ def _palette_color_func(colors: List[Tuple[int, int, int]]):
     weights = list(range(len(colors), 0, -1))
     total = sum(weights)
 
-    def color_func(word=None, font_size=None, position=None, orientation=None,
-                    font_path=None, random_state=None):
+    def color_func(
+        word=None,
+        font_size=None,
+        position=None,
+        orientation=None,
+        font_path=None,
+        random_state=None,
+    ):
         rnd = random_state if random_state is not None else _module_random_state()
         pick = rnd.randint(0, total)
         cumulative = 0

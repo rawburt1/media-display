@@ -13,9 +13,13 @@ def _config():
 
 
 def _music(**kwargs):
-    defaults = dict(source="spotify", media_type="music",
-                    title="Bohemian Rhapsody", subtitle="Queen",
-                    album="A Night at the Opera")
+    defaults = dict(
+        source="spotify",
+        media_type="music",
+        title="Bohemian Rhapsody",
+        subtitle="Queen",
+        album="A Night at the Opera",
+    )
     defaults.update(kwargs)
     return NowPlaying(**defaults)
 
@@ -40,11 +44,13 @@ def test_resolves_mbid_by_artist_and_album(mock_head, mock_get):
     np = _music()
     mock_get.return_value.status_code = 200
     mock_get.return_value.json.return_value = {
-        "release-groups": [{
-            "id": "resolved-mbid",
-            "primary-type": "Album",
-            "artist-credit": [{"artist": {"id": "artist-mbid"}}],
-        }]
+        "release-groups": [
+            {
+                "id": "resolved-mbid",
+                "primary-type": "Album",
+                "artist-credit": [{"artist": {"id": "artist-mbid"}}],
+            }
+        ]
     }
     mock_head.return_value.status_code = 200
     mock_head.return_value.url = "https://caa.example.com/resolved.jpg"
@@ -108,8 +114,9 @@ def test_skips_when_no_artist_or_album():
 @patch("mediainfo.enrichers.musicbrainz.requests.head")
 def test_no_duplicate_images(mock_head):
     existing_url = "https://caa.example.com/existing.jpg"
-    np = _music(ids={"musicbrainzalbum": "mbid"},
-                images=[Artwork(url=existing_url, label="existing")])
+    np = _music(
+        ids={"musicbrainzalbum": "mbid"}, images=[Artwork(url=existing_url, label="existing")]
+    )
     mock_head.return_value.status_code = 200
     mock_head.return_value.url = existing_url
 
@@ -122,16 +129,19 @@ def test_no_duplicate_images(mock_head):
 # resolve_release_group_ids - shared MusicLibrary-backed resolution
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.musicbrainz.requests.get")
 def test_resolve_release_group_ids_caches_result_in_library(mock_get, tmp_path):
     library = MusicLibrary(str(tmp_path / "library.db"))
     mock_get.return_value.status_code = 200
     mock_get.return_value.json.return_value = {
-        "release-groups": [{
-            "id": "resolved-mbid",
-            "primary-type": "Album",
-            "artist-credit": [{"artist": {"id": "artist-mbid"}}],
-        }]
+        "release-groups": [
+            {
+                "id": "resolved-mbid",
+                "primary-type": "Album",
+                "artist-credit": [{"artist": {"id": "artist-mbid"}}],
+            }
+        ]
     }
 
     first = resolve_release_group_ids(library, "Pink Floyd", "The Wall")
@@ -160,11 +170,13 @@ def test_resolve_release_group_ids_without_library_skips_caching():
     with patch("mediainfo.enrichers.musicbrainz.requests.get") as mock_get:
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
-            "release-groups": [{
-                "id": "resolved-mbid",
-                "primary-type": "Album",
-                "artist-credit": [{"artist": {"id": "artist-mbid"}}],
-            }]
+            "release-groups": [
+                {
+                    "id": "resolved-mbid",
+                    "primary-type": "Album",
+                    "artist-credit": [{"artist": {"id": "artist-mbid"}}],
+                }
+            ]
         }
         resolve_release_group_ids(None, "Pink Floyd", "The Wall")
         resolve_release_group_ids(None, "Pink Floyd", "The Wall")
@@ -174,6 +186,7 @@ def test_resolve_release_group_ids_without_library_skips_caching():
 # ---------------------------------------------------------------------------
 # test_connection
 # ---------------------------------------------------------------------------
+
 
 def test_test_connection_success():
     with patch(

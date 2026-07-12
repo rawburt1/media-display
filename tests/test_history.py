@@ -12,8 +12,12 @@ def _store(tmp_path, **kwargs):
 
 def _item(title="Aja", subtitle="Steely Dan", source="sonos", media_type="music", images=None):
     return NowPlaying(
-        source=source, media_type=media_type, title=title, subtitle=subtitle,
-        album="Aja", images=images if images is not None else [],
+        source=source,
+        media_type=media_type,
+        title=title,
+        subtitle=subtitle,
+        album="Aja",
+        images=images if images is not None else [],
     )
 
 
@@ -33,10 +37,14 @@ def test_record_and_list_newest_first(tmp_path):
 
 def test_prefers_non_artist_photo_artwork(tmp_path):
     store = _store(tmp_path)
-    store.record(_item(images=[
-        Artwork(url="http://x/bio.jpg", is_artist_photo=True),
-        Artwork(url="http://x/cover.jpg"),
-    ]))
+    store.record(
+        _item(
+            images=[
+                Artwork(url="http://x/bio.jpg", is_artist_photo=True),
+                Artwork(url="http://x/cover.jpg"),
+            ]
+        )
+    )
 
     entry_id = store.list()[0]["id"]
     assert store.entry_artwork(entry_id) == ("http://x/cover.jpg", "music")

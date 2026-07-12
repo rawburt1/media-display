@@ -428,9 +428,7 @@ def test_build_text_enrichers_passes_mediadata_store_to_mediadata_aware_enricher
 
     with (
         patch("mediainfo.registries.TEXT_ENRICHER_CLASSES", {"mediadata": fake_cls}),
-        patch(
-            "mediainfo.registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES", {"mediadata"}
-        ),
+        patch("mediainfo.registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES", {"mediadata"}),
     ):
         result = build_text_enrichers(cfg, mediadata_store=fake_store)
 

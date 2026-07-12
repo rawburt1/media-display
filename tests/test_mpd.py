@@ -147,9 +147,7 @@ def test_no_artwork_available_is_not_fatal(mock_cls):
 
 @patch("mediainfo.sources.mpd.mpd.MPDClient")
 def test_art_is_only_fetched_once_per_track(mock_cls):
-    client = _client(
-        status={"state": "play"}, song={"file": "music/d.mp3"}, art_error=True
-    )
+    client = _client(status={"state": "play"}, song={"file": "music/d.mp3"}, art_error=True)
     mock_cls.return_value = client
 
     source = _source()

@@ -78,9 +78,7 @@ class ChromecastSource(MediaSource):
 
         images = []
         if status.images:
-            images.append(
-                Artwork(url=status.images[0].url, label=f"Artwork (Cast: {app_name})")
-            )
+            images.append(Artwork(url=status.images[0].url, label=f"Artwork (Cast: {app_name})"))
 
         if status.media_is_musictrack:
             return NowPlaying(

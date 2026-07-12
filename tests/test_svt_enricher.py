@@ -11,7 +11,9 @@ from mediainfo.models import Artwork, NowPlaying
 
 
 def _now_playing(**kwargs):
-    defaults: dict[str, Any] = dict(source="shield", media_type="episode", title="Den danska kvinnan", subtitle="5. Brutna ben")
+    defaults: dict[str, Any] = dict(
+        source="shield", media_type="episode", title="Den danska kvinnan", subtitle="5. Brutna ben"
+    )
     return NowPlaying(**{**defaults, **kwargs})
 
 
@@ -20,9 +22,7 @@ def _mock_response(image_id="54285103"):
     mock.raise_for_status = MagicMock()
     mock.json.return_value = {
         "data": {
-            "contentBySlug": [
-                {"images": {"portrait": {"id": image_id}, "wide": {"id": "99999"}}}
-            ]
+            "contentBySlug": [{"images": {"portrait": {"id": image_id}, "wide": {"id": "99999"}}}]
         }
     }
     return mock
@@ -32,14 +32,18 @@ def _mock_response(image_id="54285103"):
 # _slugify
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("title,expected", [
-    ("Den danska kvinnan", "den-danska-kvinnan"),
-    ("Finlandsfärjornas försvunna passagerare", "finlandsfarjornas-forsvunna-passagerare"),
-    ("Ärliga lögner", "arliga-logner"),
-    ("Fröken Julie", "froken-julie"),
-    ("Klass 9A", "klass-9a"),
-    ("Mästerdetektiven Blomkvist", "masterdetektiven-blomkvist"),
-])
+
+@pytest.mark.parametrize(
+    "title,expected",
+    [
+        ("Den danska kvinnan", "den-danska-kvinnan"),
+        ("Finlandsfärjornas försvunna passagerare", "finlandsfarjornas-forsvunna-passagerare"),
+        ("Ärliga lögner", "arliga-logner"),
+        ("Fröken Julie", "froken-julie"),
+        ("Klass 9A", "klass-9a"),
+        ("Mästerdetektiven Blomkvist", "masterdetektiven-blomkvist"),
+    ],
+)
 def test_slugify(title, expected):
     assert _slugify(title) == expected
 
@@ -47,6 +51,7 @@ def test_slugify(title, expected):
 # ---------------------------------------------------------------------------
 # SvtEnricher.enrich — artwork
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.svt.requests.post")
 def test_adds_portrait_image_when_no_other_artwork(mock_post):
@@ -114,11 +119,7 @@ def test_falls_back_to_wide_when_portrait_id_missing(mock_post):
     mock = MagicMock()
     mock.raise_for_status = MagicMock()
     mock.json.return_value = {
-        "data": {
-            "contentBySlug": [
-                {"images": {"portrait": {"id": None}, "wide": {"id": "12345"}}}
-            ]
-        }
+        "data": {"contentBySlug": [{"images": {"portrait": {"id": None}, "wide": {"id": "12345"}}}]}
     }
     mock_post.return_value = mock
 
@@ -155,6 +156,7 @@ def test_network_error_leaves_images_unchanged(mock_post):
 # ---------------------------------------------------------------------------
 # originalProgramTitle (Single type)
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.svt.requests.post")
 def test_stores_original_program_title_from_single_type(mock_post):
@@ -254,8 +256,11 @@ def test_does_not_overwrite_existing_original_title(mock_post):
 # Sonarr alternate-title lookup
 # ---------------------------------------------------------------------------
 
+
 def _sonarr_config(**kwargs) -> SvtConfig:
-    defaults: dict[str, Any] = dict(enabled=True, sonarr_host="192.168.1.50", sonarr_port=8989, sonarr_api_key="key")
+    defaults: dict[str, Any] = dict(
+        enabled=True, sonarr_host="192.168.1.50", sonarr_port=8989, sonarr_api_key="key"
+    )
     defaults.update(kwargs)
     return SvtConfig(**defaults)
 
@@ -278,13 +283,15 @@ def _sonarr_get(data):
 @patch("mediainfo.enrichers.svt.requests.post")
 @patch("mediainfo.enrichers.svt.requests.get")
 def test_sonarr_sets_tvdb_id_from_alternate_title(mock_get, mock_post):
-    mock_get.return_value = _sonarr_get([
-        _series(
-            title="The Danish Woman",
-            tvdb_id=12345,
-            alternate_titles=[{"title": "Den danska kvinnan"}],
-        )
-    ])
+    mock_get.return_value = _sonarr_get(
+        [
+            _series(
+                title="The Danish Woman",
+                tvdb_id=12345,
+                alternate_titles=[{"title": "Den danska kvinnan"}],
+            )
+        ]
+    )
     mock_post.return_value = _mock_response()
 
     enricher = SvtEnricher(_sonarr_config())
@@ -297,9 +304,7 @@ def test_sonarr_sets_tvdb_id_from_alternate_title(mock_get, mock_post):
 @patch("mediainfo.enrichers.svt.requests.post")
 @patch("mediainfo.enrichers.svt.requests.get")
 def test_sonarr_sets_tvdb_id_from_main_title_match(mock_get, mock_post):
-    mock_get.return_value = _sonarr_get([
-        _series(title="Den danska kvinnan", tvdb_id=99999)
-    ])
+    mock_get.return_value = _sonarr_get([_series(title="Den danska kvinnan", tvdb_id=99999)])
     mock_post.return_value = _mock_response()
 
     enricher = SvtEnricher(_sonarr_config())
@@ -321,9 +326,7 @@ def test_sonarr_skips_lookup_when_tvdb_id_already_set(mock_get):
 @patch("mediainfo.enrichers.svt.requests.post")
 @patch("mediainfo.enrichers.svt.requests.get")
 def test_sonarr_leaves_ids_unchanged_when_no_match(mock_get, mock_post):
-    mock_get.return_value = _sonarr_get([
-        _series(title="Other Show", tvdb_id=11111)
-    ])
+    mock_get.return_value = _sonarr_get([_series(title="Other Show", tvdb_id=11111)])
     mock_post.return_value = _mock_response()
 
     enricher = SvtEnricher(_sonarr_config())
@@ -393,9 +396,7 @@ def test_sonarr_not_called_when_not_configured(mock_get):
 @patch("mediainfo.enrichers.svt.requests.get")
 def test_sonarr_match_skips_svg_artwork_lookup(mock_get, mock_post):
     """When Sonarr sets a tvdb-id, the SVT CDN artwork lookup is skipped."""
-    mock_get.return_value = _sonarr_get([
-        _series(title="Den danska kvinnan", tvdb_id=12345)
-    ])
+    mock_get.return_value = _sonarr_get([_series(title="Den danska kvinnan", tvdb_id=12345)])
 
     enricher = SvtEnricher(_sonarr_config())
     np = _now_playing(title="Den danska kvinnan")

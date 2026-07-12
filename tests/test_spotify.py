@@ -20,10 +20,17 @@ def _valid_token():
     return {"access_token": "tok", "scope": "user-read-playback-state"}
 
 
-def _make_result(is_playing=True, kind="track", title="Bohemian Rhapsody",
-                 artist="Queen", album="A Night at the Opera",
-                 image_url="https://example.com/cover.jpg",
-                 device_name="Kitchen speaker", progress_ms=12345, duration_ms=354000):
+def _make_result(
+    is_playing=True,
+    kind="track",
+    title="Bohemian Rhapsody",
+    artist="Queen",
+    album="A Night at the Opera",
+    image_url="https://example.com/cover.jpg",
+    device_name="Kitchen speaker",
+    progress_ms=12345,
+    duration_ms=354000,
+):
     return {
         "is_playing": is_playing,
         "currently_playing_type": kind,
@@ -103,7 +110,8 @@ def test_returns_none_when_cached_token_lacks_playback_state_scope(MockOAuth):
     # A token cached under the old, narrower scope (pre-upgrade) - must be
     # rejected with a clear "re-auth" signal, not a raw API 403.
     MockOAuth.return_value.get_cached_token.return_value = {
-        "access_token": "tok", "scope": "user-read-currently-playing",
+        "access_token": "tok",
+        "scope": "user-read-currently-playing",
     }
 
     source = SpotifySource(_make_config())

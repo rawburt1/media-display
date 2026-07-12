@@ -140,6 +140,7 @@ def test_no_transforms_gives_empty_pipeline():
 # idle source config - see mediainfo/config/idle.py)
 # ---------------------------------------------------------------------------
 
+
 def test_config_unknown_field_raises_validation_error():
     with pytest.raises(ValueError, match="no_such_field"):
         ArtsWallpaperConfig(enabled=True, no_such_field="x")

@@ -82,15 +82,23 @@ class DeviceStatus:
 # Warning rather than Error: "can't currently tell" shouldn't look the
 # same as "confirmed broken".
 _TRANSLATIONS = {
-    AvailabilityReason.AVAILABLE: DeviceStatus(Health.HEALTHY, Activity.IDLE, "Waiting for Playback"),
+    AvailabilityReason.AVAILABLE: DeviceStatus(
+        Health.HEALTHY, Activity.IDLE, "Waiting for Playback"
+    ),
     AvailabilityReason.IDLE: DeviceStatus(Health.HEALTHY, Activity.IDLE, "Idle"),
     AvailabilityReason.PLAYING: DeviceStatus(Health.HEALTHY, Activity.PLAYING, "Playing"),
     AvailabilityReason.PAUSED: DeviceStatus(Health.HEALTHY, Activity.PAUSED, "Paused"),
     AvailabilityReason.POWERED_OFF: DeviceStatus(Health.HEALTHY, Activity.SLEEPING, "Powered Off"),
     AvailabilityReason.SLEEPING: DeviceStatus(Health.HEALTHY, Activity.SLEEPING, "Sleeping"),
-    AvailabilityReason.NETWORK_UNREACHABLE: DeviceStatus(Health.WARNING, Activity.UNKNOWN, "Unavailable"),
-    AvailabilityReason.AUTH_FAILED: DeviceStatus(Health.ERROR, Activity.UNKNOWN, "Authentication Failed"),
-    AvailabilityReason.CONFIG_ERROR: DeviceStatus(Health.ERROR, Activity.UNKNOWN, "Configuration Error"),
+    AvailabilityReason.NETWORK_UNREACHABLE: DeviceStatus(
+        Health.WARNING, Activity.UNKNOWN, "Unavailable"
+    ),
+    AvailabilityReason.AUTH_FAILED: DeviceStatus(
+        Health.ERROR, Activity.UNKNOWN, "Authentication Failed"
+    ),
+    AvailabilityReason.CONFIG_ERROR: DeviceStatus(
+        Health.ERROR, Activity.UNKNOWN, "Configuration Error"
+    ),
     AvailabilityReason.API_ERROR: DeviceStatus(Health.ERROR, Activity.UNKNOWN, "Integration Error"),
     AvailabilityReason.UNKNOWN: DeviceStatus(Health.WARNING, Activity.UNKNOWN, "Unknown"),
 }

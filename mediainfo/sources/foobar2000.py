@@ -56,7 +56,9 @@ class Foobar2000Source(MediaSource):
 
         try:
             response = requests.get(
-                f"{self._base_url}/api/player", params={"columns": _COLUMNS}, timeout=self.config.timeout
+                f"{self._base_url}/api/player",
+                params={"columns": _COLUMNS},
+                timeout=self.config.timeout,
             )
             response.raise_for_status()
             player = (response.json() or {}).get("player") or {}
@@ -76,7 +78,10 @@ class Foobar2000Source(MediaSource):
             index = item.get("index")
             if playlist_id is not None and index is not None:
                 images.append(
-                    Artwork(url=f"{self._base_url}/api/artwork/{playlist_id}/{index}", label="Artwork (foobar2000)")
+                    Artwork(
+                        url=f"{self._base_url}/api/artwork/{playlist_id}/{index}",
+                        label="Artwork (foobar2000)",
+                    )
                 )
 
             position = item.get("position")

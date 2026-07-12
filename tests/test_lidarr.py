@@ -135,6 +135,7 @@ def test_api_error_does_not_propagate(mock_get):
 # _STATUS_PATH override - see also test_sonarr.py/test_radarr.py)
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.arr_base.requests.get")
 def test_test_connection_success(mock_get):
     mock_get.return_value.raise_for_status = MagicMock()

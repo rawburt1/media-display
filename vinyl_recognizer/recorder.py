@@ -24,7 +24,9 @@ def resolve_device(input_device: str) -> Union[int, str, None]:
     return input_device
 
 
-def record_clip(duration_seconds: float, sample_rate: int, device: Union[int, str, None]) -> np.ndarray:
+def record_clip(
+    duration_seconds: float, sample_rate: int, device: Union[int, str, None]
+) -> np.ndarray:
     """Record a mono 16-bit clip and return it as a 1-D numpy array."""
     frames = int(duration_seconds * sample_rate)
     audio = sd.rec(frames, samplerate=sample_rate, channels=1, dtype="int16", device=device)

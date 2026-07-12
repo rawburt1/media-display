@@ -35,7 +35,9 @@ class VlcSource(MediaSource):
         self.last_poll_failed = False
         try:
             response = requests.get(
-                f"{self._base_url}/requests/status.json", auth=self._auth, timeout=self.config.timeout
+                f"{self._base_url}/requests/status.json",
+                auth=self._auth,
+                timeout=self.config.timeout,
             )
             if response.status_code == 401:
                 logger.error(

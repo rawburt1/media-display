@@ -234,15 +234,11 @@ class ConfigUiOutput(Output):
         self._health_fn = fn
 
     def attach(self, services: AppServices) -> None:
-        self.set_hitster_safe_handlers(
-            services.get_hitster_safe, services.set_hitster_safe
-        )
+        self.set_hitster_safe_handlers(services.get_hitster_safe, services.set_hitster_safe)
         self.set_artwork_overrides(services.overrides)
         self.set_health_provider(services.health_provider)
 
-    def update(
-        self, now_playing: NowPlaying, artwork: Artwork, image_path: Path
-    ) -> None:
+    def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         pass
 
     def on_idle(self) -> None:
@@ -252,9 +248,7 @@ class ConfigUiOutput(Output):
         pass
 
     def _run_server(self) -> None:
-        logger.info(
-            "Starting config server on %s:%s", self.config.host, self.config.port
-        )
+        logger.info("Starting config server on %s:%s", self.config.host, self.config.port)
         self.app.run(host=self.config.host, port=self.config.port, threaded=True)
 
     # -- request handling -------------------------------------------------
@@ -275,9 +269,7 @@ class ConfigUiOutput(Output):
         if self._library is None or self._library_db_path != db_path:
             if self._library is not None:
                 self._library.close()
-            self._library = MusicLibrary(
-                db_path, max_age_days=library_cfg.get("max_age_days", 30)
-            )
+            self._library = MusicLibrary(db_path, max_age_days=library_cfg.get("max_age_days", 30))
             self._library_db_path = db_path
         return self._library
 
@@ -386,9 +378,7 @@ class ConfigUiOutput(Output):
     # since tests monkeypatch these two names directly on this class.
 
     @staticmethod
-    def _run_appletv_async(
-        loop: asyncio.AbstractEventLoop, coro, timeout: float = 30
-    ) -> Any:
+    def _run_appletv_async(loop: asyncio.AbstractEventLoop, coro, timeout: float = 30) -> Any:
         """Run `coro` on `loop` (which belongs to a different thread) and
         block this thread until it completes. Split out so tests can
         monkeypatch it to use asyncio.run() instead of a real background
@@ -398,9 +388,7 @@ class ConfigUiOutput(Output):
         return future.result(timeout=timeout)
 
     @staticmethod
-    def _stop_appletv_loop(
-        loop: asyncio.AbstractEventLoop, thread: threading.Thread
-    ) -> None:
+    def _stop_appletv_loop(loop: asyncio.AbstractEventLoop, thread: threading.Thread) -> None:
         loop.call_soon_threadsafe(loop.stop)
         thread.join(timeout=5)
         loop.close()
@@ -543,11 +531,7 @@ class ConfigUiOutput(Output):
             category = body.get("category")
             name = body.get("name")
             hidden = bool(body.get("hidden"))
-            if (
-                category not in _HIDDEN_TYPE_CATEGORIES
-                or not isinstance(name, str)
-                or not name
-            ):
+            if category not in _HIDDEN_TYPE_CATEGORIES or not isinstance(name, str) or not name:
                 return jsonify({"ok": False, "error": "Invalid category or name."}), 400
             error = self._store.set_hidden_type(category, name, hidden)
             if error:
@@ -558,12 +542,7 @@ class ConfigUiOutput(Output):
         def list_config_backups():
             backups = list_backups(self.config_path)
             return jsonify(
-                {
-                    "backups": [
-                        {"filename": b.name, "mtime": b.stat().st_mtime}
-                        for b in backups
-                    ]
-                }
+                {"backups": [{"filename": b.name, "mtime": b.stat().st_mtime} for b in backups]}
             )
 
         @app.post("/api/config/backups/restore")
@@ -619,9 +598,7 @@ class ConfigUiOutput(Output):
             host = (body.get("host") or "").strip()
             protocol = (body.get("protocol") or "companion").strip().lower()
             if not host:
-                return jsonify(
-                    {"ok": False, "error": "Enter the Apple TV's host/IP first."}
-                ), 400
+                return jsonify({"ok": False, "error": "Enter the Apple TV's host/IP first."}), 400
             try:
                 result = self._appletv.start(host, protocol)
             except Exception as exc:
@@ -658,9 +635,7 @@ class ConfigUiOutput(Output):
             if not query:
                 return jsonify([])
             results = self._get_library().search(query)
-            return jsonify(
-                [{"id": artist_id, "name": name} for artist_id, name in results]
-            )
+            return jsonify([{"id": artist_id, "name": name} for artist_id, name in results])
 
         @app.get("/api/library/artist/<int:artist_id>")
         def library_artist(artist_id: int):
@@ -732,9 +707,7 @@ class ConfigUiOutput(Output):
         @app.get("/api/status")
         def status():
             if self._health_fn is None:
-                return jsonify(
-                    {"sources": [], "outputs": [], "enrichers": [], "idle_sources": []}
-                )
+                return jsonify({"sources": [], "outputs": [], "enrichers": [], "idle_sources": []})
             data = self._health_fn()
             return jsonify(
                 {

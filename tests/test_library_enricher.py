@@ -13,15 +13,19 @@ def _library(tmp_path):
 
 def _song(**kwargs):
     defaults = dict(
-        source="youtube", media_type="music",
-        title="Comfortably Numb", subtitle="Pink Floyd", album="",
+        source="youtube",
+        media_type="music",
+        title="Comfortably Numb",
+        subtitle="Pink Floyd",
+        album="",
     )
     defaults.update(kwargs)
     return NowPlaying(**defaults)
 
 
-def _seed_track_with_album(library, artist="Pink Floyd", title="Comfortably Numb",
-                            album="The Wall", mbid="wall-mbid"):
+def _seed_track_with_album(
+    library, artist="Pink Floyd", title="Comfortably Numb", album="The Wall", mbid="wall-mbid"
+):
     artist_id = library.get_or_create_artist(artist)
     track_id = library.get_or_create_track(artist_id, title)
     album_id = library.get_or_create_album(artist_id, album)
@@ -67,7 +71,10 @@ def test_adds_art_for_all_albums_when_song_on_multiple(mock_fetch, tmp_path):
 
     assert len(np.images) == 2
     urls = {img.url for img in np.images}
-    assert urls == {"https://caa.example.com/wall-mbid.jpg", "https://caa.example.com/live-mbid.jpg"}
+    assert urls == {
+        "https://caa.example.com/wall-mbid.jpg",
+        "https://caa.example.com/live-mbid.jpg",
+    }
     # Album name is ambiguous with multiple matches - left for the source to decide.
     assert np.album == ""
 

@@ -61,7 +61,10 @@ def validate_config(config: Config) -> None:
         if missing:
             logger.warning(
                 "%s.%s is enabled but %s %s blank - it will fail on every attempt.",
-                category, name, " and ".join(missing), "is" if len(missing) == 1 else "are",
+                category,
+                name,
+                " and ".join(missing),
+                "is" if len(missing) == 1 else "are",
             )
 
     if config.auth.enabled and not (config.auth.username and config.auth.password):
@@ -81,5 +84,8 @@ def validate_config(config: Config) -> None:
                 logger.warning(
                     "%s.%s.%s contains an unexpanded env var reference ('%s') — "
                     "the environment variable was not set at startup.",
-                    category, name, f, val,
+                    category,
+                    name,
+                    f,
+                    val,
                 )

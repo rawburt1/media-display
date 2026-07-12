@@ -143,7 +143,9 @@ def test_idle_wallpaper_update_clears_custom_app(mock_post):
     output._last_text = "Pink Floyd - Comfortably Numb"
 
     idle_now_playing = NowPlaying(source="idle", media_type="wallpaper", title="", subtitle="")
-    output.update(idle_now_playing, Artwork(url="https://example.com/wallpaper.jpg"), Path("/tmp/w.jpg"))
+    output.update(
+        idle_now_playing, Artwork(url="https://example.com/wallpaper.jpg"), Path("/tmp/w.jpg")
+    )
 
     _, kwargs = mock_post.call_args
     assert kwargs["data"] == b""
@@ -203,6 +205,7 @@ def test_request_error_propagates(mock_post):
 # ---------------------------------------------------------------------------
 # Power/brightness scheduling (see display_schedule.py)
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.outputs.ulanzi.requests.post")
 def test_schedule_tick_without_schedule_sends_nothing(mock_post):

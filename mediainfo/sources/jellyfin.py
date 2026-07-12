@@ -76,18 +76,24 @@ class _MediaServerSource(MediaSource):
             return self._parse_episode(item, item_id, image_tags, backdrop_tags)
         return self._parse_audio(item, item_id, image_tags)
 
-    def _parse_movie(self, item: dict, item_id: str, image_tags: dict, backdrop_tags: list) -> NowPlaying:
+    def _parse_movie(
+        self, item: dict, item_id: str, image_tags: dict, backdrop_tags: list
+    ) -> NowPlaying:
         images = []
         if image_tags.get("Primary"):
-            images.append(Artwork(
-                url=_image_url(self._base, item_id, "Primary", self._api_key),
-                label=f"Poster ({self.name})",
-            ))
+            images.append(
+                Artwork(
+                    url=_image_url(self._base, item_id, "Primary", self._api_key),
+                    label=f"Poster ({self.name})",
+                )
+            )
         if backdrop_tags:
-            images.append(Artwork(
-                url=_image_url(self._base, item_id, "Backdrop", self._api_key),
-                label=f"Fanart ({self.name})",
-            ))
+            images.append(
+                Artwork(
+                    url=_image_url(self._base, item_id, "Backdrop", self._api_key),
+                    label=f"Fanart ({self.name})",
+                )
+            )
         return NowPlaying(
             source=self.name,
             media_type="movie",
@@ -98,40 +104,54 @@ class _MediaServerSource(MediaSource):
             year=item.get("ProductionYear"),
         )
 
-    def _parse_episode(self, item: dict, item_id: str, image_tags: dict, backdrop_tags: list) -> NowPlaying:
+    def _parse_episode(
+        self, item: dict, item_id: str, image_tags: dict, backdrop_tags: list
+    ) -> NowPlaying:
         season = item.get("ParentIndexNumber")
         episode = item.get("IndexNumber")
         ep_name = item.get("Name", "")
-        subtitle = f"S{season:02d}E{episode:02d} - {ep_name}" if (season is not None and episode is not None) else ep_name
+        subtitle = (
+            f"S{season:02d}E{episode:02d} - {ep_name}"
+            if (season is not None and episode is not None)
+            else ep_name
+        )
 
         series_id = item.get("SeriesId")
         images = []
 
         # Prefer the series-level poster; fall back to the episode's own primary.
         if series_id and item.get("SeriesPrimaryImageTag"):
-            images.append(Artwork(
-                url=_image_url(self._base, series_id, "Primary", self._api_key),
-                label=f"Poster ({self.name})",
-            ))
+            images.append(
+                Artwork(
+                    url=_image_url(self._base, series_id, "Primary", self._api_key),
+                    label=f"Poster ({self.name})",
+                )
+            )
         elif image_tags.get("Primary"):
-            images.append(Artwork(
-                url=_image_url(self._base, item_id, "Primary", self._api_key),
-                label=f"Poster ({self.name})",
-            ))
+            images.append(
+                Artwork(
+                    url=_image_url(self._base, item_id, "Primary", self._api_key),
+                    label=f"Poster ({self.name})",
+                )
+            )
 
         # Parent backdrop (series fanart) is preferred over any episode backdrop.
         parent_backdrop_id = item.get("ParentBackdropItemId")
         parent_backdrop_tags = item.get("ParentBackdropImageTags") or []
         if parent_backdrop_id and parent_backdrop_tags:
-            images.append(Artwork(
-                url=_image_url(self._base, parent_backdrop_id, "Backdrop", self._api_key),
-                label=f"Fanart ({self.name})",
-            ))
+            images.append(
+                Artwork(
+                    url=_image_url(self._base, parent_backdrop_id, "Backdrop", self._api_key),
+                    label=f"Fanart ({self.name})",
+                )
+            )
         elif backdrop_tags:
-            images.append(Artwork(
-                url=_image_url(self._base, item_id, "Backdrop", self._api_key),
-                label=f"Fanart ({self.name})",
-            ))
+            images.append(
+                Artwork(
+                    url=_image_url(self._base, item_id, "Backdrop", self._api_key),
+                    label=f"Fanart ({self.name})",
+                )
+            )
 
         return NowPlaying(
             source=self.name,
@@ -150,15 +170,19 @@ class _MediaServerSource(MediaSource):
 
         # Prefer the album's primary image over the track's own thumbnail.
         if album_id and item.get("AlbumPrimaryImageTag"):
-            images.append(Artwork(
-                url=_image_url(self._base, album_id, "Primary", self._api_key),
-                label=f"Album art ({self.name})",
-            ))
+            images.append(
+                Artwork(
+                    url=_image_url(self._base, album_id, "Primary", self._api_key),
+                    label=f"Album art ({self.name})",
+                )
+            )
         elif image_tags.get("Primary"):
-            images.append(Artwork(
-                url=_image_url(self._base, item_id, "Primary", self._api_key),
-                label=f"Album art ({self.name})",
-            ))
+            images.append(
+                Artwork(
+                    url=_image_url(self._base, item_id, "Primary", self._api_key),
+                    label=f"Album art ({self.name})",
+                )
+            )
 
         return NowPlaying(
             source=self.name,

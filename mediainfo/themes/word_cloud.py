@@ -87,7 +87,8 @@ class WordCloudTheme(DisplayTheme):
             return None
         try:
             derived_path = cache.get_derived_path(
-                image_path, self._cache_key(text),
+                image_path,
+                self._cache_key(text),
                 lambda _image: self._build_summary(image_path, text),
             )
         except Exception:

@@ -70,18 +70,22 @@ class CastMosaicTheme(DisplayTheme):
             if not photo_url:
                 continue
             try:
-                path = cache.get_path(Artwork(url=photo_url, label=member.get("name", "")), tier="default")
+                path = cache.get_path(
+                    Artwork(url=photo_url, label=member.get("name", "")), tier="default"
+                )
             except Exception:
                 logger.exception("Cast Mosaic: failed to resolve %s", photo_url)
                 continue
             if path is None:
                 continue
             paths.append(path)
-            cast.append({
-                "name": member.get("name", ""),
-                "character": member.get("character", ""),
-                "image": f"/image/current?v={path.stem}",
-            })
+            cast.append(
+                {
+                    "name": member.get("name", ""),
+                    "character": member.get("character", ""),
+                    "image": f"/image/current?v={path.stem}",
+                }
+            )
 
         if not cast:
             self._degraded_reason = "No cast headshots could be resolved for this title."

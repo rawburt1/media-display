@@ -22,7 +22,9 @@ def test_resolve_kodi_image_url():
 
 
 def _source(**kwargs) -> KodiSource:
-    defaults: dict[str, Any] = dict(enabled=True, host="192.168.1.21", port=8080, username="kodi", password="kodi")
+    defaults: dict[str, Any] = dict(
+        enabled=True, host="192.168.1.21", port=8080, username="kodi", password="kodi"
+    )
     defaults.update(kwargs)
     return KodiSource(KodiConfig(**defaults))
 
@@ -93,9 +95,13 @@ def test_movie_item(mock_post):
     assert now_playing.ids == {"tmdb": "27205"}
     assert len(now_playing.images) == 2
     assert now_playing.images[0].label == "Poster (Kodi)"
-    assert now_playing.images[0].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://poster.jpg/")
+    assert now_playing.images[0].url == resolve_kodi_image_url(
+        "192.168.1.21", 8080, "image://poster.jpg/"
+    )
     assert now_playing.images[1].label == "Fanart (Kodi)"
-    assert now_playing.images[1].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://fanart.jpg/")
+    assert now_playing.images[1].url == resolve_kodi_image_url(
+        "192.168.1.21", 8080, "image://fanart.jpg/"
+    )
 
 
 @patch("mediainfo.sources.kodi.requests.post")
@@ -128,8 +134,12 @@ def test_episode_item_prefers_series_art(mock_post):
     assert now_playing.season == 1
     assert len(now_playing.images) == 2
     # Prefers the series poster/fanart over the episode's own thumb/fanart.
-    assert now_playing.images[0].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://show-poster.jpg/")
-    assert now_playing.images[1].url == resolve_kodi_image_url("192.168.1.21", 8080, "image://show-fanart.jpg/")
+    assert now_playing.images[0].url == resolve_kodi_image_url(
+        "192.168.1.21", 8080, "image://show-poster.jpg/"
+    )
+    assert now_playing.images[1].url == resolve_kodi_image_url(
+        "192.168.1.21", 8080, "image://show-fanart.jpg/"
+    )
     # Uses the series-level ids (from VideoLibrary.GetTVShowDetails) for
     # enrichers, not the episode's own uniqueid.
     assert now_playing.ids == {"tvdb": "405535", "tmdb": "128098", "imdb": "tt3960394"}
@@ -208,6 +218,7 @@ def test_music_item_with_musicbrainz_ids(mock_post):
 # ---------------------------------------------------------------------------
 # Playback position (Player.GetProperties)
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.sources.kodi.requests.post")
 def test_position_and_duration_are_converted_to_seconds(mock_post):
@@ -301,6 +312,7 @@ def test_http_500_sets_api_error_not_network_unreachable(mock_post):
 # KodiConfig validation (pydantic dataclass rollout - see
 # mediainfo/config/sources.py)
 # ---------------------------------------------------------------------------
+
 
 def test_config_unknown_field_raises_validation_error():
     import pytest

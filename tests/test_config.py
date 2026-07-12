@@ -18,8 +18,22 @@ def test_load_example_config():
     assert config.backoff_max_seconds == 300
     assert config.nothing_playing_grace_seconds == 2
     assert config.priority == [
-        "kodi", "appletv", "homeassistant", "youtube", "shield", "plex", "sonos", "spotify", "mopidy",
-        "mpd", "lms", "foobar2000", "vlc", "vinyl", "browser", "chromecast",
+        "kodi",
+        "appletv",
+        "homeassistant",
+        "youtube",
+        "shield",
+        "plex",
+        "sonos",
+        "spotify",
+        "mopidy",
+        "mpd",
+        "lms",
+        "foobar2000",
+        "vlc",
+        "vinyl",
+        "browser",
+        "chromecast",
     ]
 
     assert config.sources["kodi"].enabled is True
@@ -94,9 +108,12 @@ outputs:
 # Config.from_dict
 # ---------------------------------------------------------------------------
 
+
 def test_from_dict_builds_equivalent_config_to_load(tmp_path):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("poll_interval_seconds: 9\nsources:\n  kodi:\n    enabled: true\n    host: 1.2.3.4\n")
+    config_path.write_text(
+        "poll_interval_seconds: 9\nsources:\n  kodi:\n    enabled: true\n    host: 1.2.3.4\n"
+    )
 
     via_load = Config.load(config_path)
     via_dict = Config.from_dict(
@@ -131,8 +148,10 @@ def test_from_dict_raises_on_unknown_field():
 # Unknown plugin name warnings
 # ---------------------------------------------------------------------------
 
+
 def test_from_dict_warns_on_unknown_source_name(caplog):
     import logging
+
     with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
         Config.from_dict({"sources": {"youtubee": {"enabled": True, "host": "1.2.3.4"}}})
     assert any("youtubee" in r.message for r in caplog.records)
@@ -140,6 +159,7 @@ def test_from_dict_warns_on_unknown_source_name(caplog):
 
 def test_from_dict_warns_on_unknown_output_name(caplog):
     import logging
+
     with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
         Config.from_dict({"outputs": {"webb": {"enabled": True}}})
     assert any("webb" in r.message for r in caplog.records)
@@ -147,6 +167,7 @@ def test_from_dict_warns_on_unknown_output_name(caplog):
 
 def test_from_dict_warns_on_unknown_enricher_name(caplog):
     import logging
+
     with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
         Config.from_dict({"enrichers": {"fanartv": {"enabled": True, "api_key": "x"}}})
     assert any("fanartv" in r.message for r in caplog.records)
@@ -154,6 +175,7 @@ def test_from_dict_warns_on_unknown_enricher_name(caplog):
 
 def test_from_dict_warns_on_unknown_idle_name(caplog):
     import logging
+
     with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
         Config.from_dict({"idle": {"unsplashh": {"enabled": True, "access_key": "x"}}})
     assert any("unsplashh" in r.message for r in caplog.records)
@@ -161,8 +183,11 @@ def test_from_dict_warns_on_unknown_idle_name(caplog):
 
 def test_from_dict_does_not_warn_on_known_plugin_names(caplog):
     import logging
+
     with caplog.at_level(logging.WARNING, logger="mediainfo.config"):
-        Config.from_dict({"sources": {"kodi": {"enabled": True}}, "outputs": {"web": {"enabled": True}}})
+        Config.from_dict(
+            {"sources": {"kodi": {"enabled": True}}, "outputs": {"web": {"enabled": True}}}
+        )
     assert caplog.records == []
 
 
@@ -170,14 +195,17 @@ def test_from_dict_does_not_warn_on_known_plugin_names(caplog):
 # ConfigUiConfig host default
 # ---------------------------------------------------------------------------
 
+
 def test_config_ui_config_default_host_is_loopback():
     from mediainfo.config import ConfigUiConfig
+
     cfg = ConfigUiConfig()
     assert cfg.host == "127.0.0.1"
 
 
 def test_web_config_default_host_is_any():
     from mediainfo.config import WebConfig
+
     cfg = WebConfig()
     assert cfg.host == "0.0.0.0"
 
@@ -185,6 +213,7 @@ def test_web_config_default_host_is_any():
 # ---------------------------------------------------------------------------
 # Environment variable expansion
 # ---------------------------------------------------------------------------
+
 
 def test_load_expands_env_var_in_string_value(tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_PLEX_TOKEN", "secret-token-123")

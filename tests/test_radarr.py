@@ -9,7 +9,9 @@ from mediainfo.models import Artwork, NowPlaying
 
 
 def _enricher() -> RadarrEnricher:
-    return RadarrEnricher(RadarrConfig(enabled=True, host="192.168.1.50", port=7878, api_key="key123"))
+    return RadarrEnricher(
+        RadarrConfig(enabled=True, host="192.168.1.50", port=7878, api_key="key123")
+    )
 
 
 def _movie_now_playing(**kwargs) -> NowPlaying:
@@ -131,6 +133,7 @@ def test_api_error_does_not_propagate(mock_get):
 # test_connection (shared ArrEnricher implementation - see also
 # test_sonarr.py/test_lidarr.py for the same coverage on the other two)
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.arr_base.requests.get")
 def test_test_connection_success(mock_get):

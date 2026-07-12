@@ -254,9 +254,7 @@ def test_idle_source_without_transform_pipeline_behaves_as_before():
     orchestrator = _orchestrator(outputs=[output], cache=cache, idle_source=idle_source)
     orchestrator._tick()
 
-    cache.get_transformed_path.assert_called_once_with(
-        "/tmp/wallpaper.jpg", ["output-transform"]
-    )
+    cache.get_transformed_path.assert_called_once_with("/tmp/wallpaper.jpg", ["output-transform"])
 
 
 def test_idle_wallpaper_does_not_refetch_before_interval():
@@ -313,12 +311,8 @@ def test_non_image_output_gets_on_idle_even_with_idle_source():
 def test_non_image_output_does_not_get_on_idle_when_playing_without_artwork():
     # When playing a no-artwork item, non-image outputs keep their last display
     # (text stays on Ulanzi, video keeps running on VideoOutput).
-    idle_source = _FakeIdleSource(
-        _idle_wallpapers(count=1), rotation_interval_seconds=300
-    )
-    now_playing = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[]
-    )
+    idle_source = _FakeIdleSource(_idle_wallpapers(count=1), rotation_interval_seconds=300)
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[])
 
     class _TogglingSource:
         name = "toggling"
@@ -360,8 +354,7 @@ def test_non_image_output_does_not_get_on_idle_when_playing_without_artwork():
 
 def _idle_wallpapers(count=3):
     return [
-        Artwork(url=f"https://example.com/{i}.jpg", label=f"Wallpaper {i}")
-        for i in range(count)
+        Artwork(url=f"https://example.com/{i}.jpg", label=f"Wallpaper {i}") for i in range(count)
     ]
 
 
@@ -377,9 +370,7 @@ def test_idle_batch_each_output_starts_on_a_different_picture():
     cache.download_temp.side_effect = lambda artwork: f"/cache/{artwork.label}"
     cache.get_transformed_path.side_effect = lambda path, _: path
 
-    orchestrator = _orchestrator(
-        outputs=[output_a, output_b], cache=cache, idle_source=idle_source
-    )
+    orchestrator = _orchestrator(outputs=[output_a, output_b], cache=cache, idle_source=idle_source)
 
     with patch(
         "mediainfo.orchestrator_artwork.random.shuffle",
@@ -424,9 +415,7 @@ def test_idle_batch_falls_through_pool_when_first_pick_fails_to_fetch():
 
 
 def test_single_wallpaper_retries_output_that_previously_failed():
-    idle_source = _FakeIdleSource(
-        _idle_wallpapers(count=1), rotation_interval_seconds=300
-    )
+    idle_source = _FakeIdleSource(_idle_wallpapers(count=1), rotation_interval_seconds=300)
     output = MagicMock()
     output.update.side_effect = [RuntimeError("device unreachable"), None]
     cache = MagicMock()
@@ -454,9 +443,7 @@ def test_single_wallpaper_retries_output_that_previously_failed():
 def test_idle_batch_no_two_outputs_share_a_picture_when_enough_images():
     # Real (unmocked) shuffle - with >= as many images as outputs, no two
     # outputs should ever start on the same picture.
-    idle_source = _FakeIdleSource(
-        _idle_wallpapers(count=10), rotation_interval_seconds=300
-    )
+    idle_source = _FakeIdleSource(_idle_wallpapers(count=10), rotation_interval_seconds=300)
     outputs = [MagicMock() for _ in range(4)]
     cache = MagicMock()
     cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
@@ -496,13 +483,9 @@ def test_idle_rotation_state_staggers_initial_last_rotation_per_output():
     cache.get_path.side_effect = lambda artwork, **kwargs: f"/cache/{artwork.label}"
     cache.get_transformed_path.side_effect = lambda path, _: path
 
-    orchestrator = _orchestrator(
-        outputs=[output_a, output_b], cache=cache, idle_source=idle_source
-    )
+    orchestrator = _orchestrator(outputs=[output_a, output_b], cache=cache, idle_source=idle_source)
 
-    with patch(
-        "mediainfo.orchestrator_artwork.random.uniform", side_effect=[5.0, 12.0]
-    ):
+    with patch("mediainfo.orchestrator_artwork.random.uniform", side_effect=[5.0, 12.0]):
         orchestrator._tick()
 
     assert (
@@ -571,9 +554,7 @@ def test_idle_rotation_advances_each_output_independently():
         output_a.update.reset_mock()
         output_b.update.reset_mock()
 
-        clock.now += (
-            100  # past rotation_interval_seconds, but not the batch refresh interval
-        )
+        clock.now += 100  # past rotation_interval_seconds, but not the batch refresh interval
         orchestrator._tick()
 
     _, artwork_a, _ = output_a.update.call_args[0]
@@ -584,9 +565,7 @@ def test_idle_rotation_advances_each_output_independently():
 
 
 def test_idle_batch_refetched_after_interval():
-    idle_source = _FakeIdleSource(
-        _idle_wallpapers(count=1), rotation_interval_seconds=300
-    )
+    idle_source = _FakeIdleSource(_idle_wallpapers(count=1), rotation_interval_seconds=300)
     output = MagicMock()
     cache = MagicMock()
     cache.get_path.return_value = "/tmp/wallpaper.jpg"
@@ -606,12 +585,8 @@ def test_idle_batch_not_cleared_when_playing_without_artwork():
     # When a no-artwork item plays, idle wallpapers keep showing uninterrupted.
     # The existing batch is not discarded, so no extra fetch happens on return
     # to idle within the normal interval.
-    idle_source = _FakeIdleSource(
-        _idle_wallpapers(count=1), rotation_interval_seconds=300
-    )
-    now_playing = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[]
-    )
+    idle_source = _FakeIdleSource(_idle_wallpapers(count=1), rotation_interval_seconds=300)
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[])
 
     class _TogglingSource:
         name = "toggling2"
@@ -656,9 +631,7 @@ def test_purges_expired_cache_once_then_waits_for_interval():
 
 def test_new_item_calls_on_new_item_with_full_image_list():
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
-    now_playing = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[artwork]
-    )
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[artwork])
 
     output = MagicMock()
     cache = MagicMock()
@@ -748,9 +721,7 @@ def test_no_override_match_leaves_enriched_images_untouched():
 
 def test_no_overrides_store_is_a_no_op():
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
-    now_playing = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[artwork]
-    )
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[artwork])
 
     output = MagicMock()
     cache = MagicMock()
@@ -774,9 +745,7 @@ def test_override_lookup_error_is_caught_and_does_not_block_display():
     from mediainfo.artwork_overrides import ArtworkOverrideStore
 
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
-    now_playing = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[artwork]
-    )
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[artwork])
 
     overrides = MagicMock(spec=ArtworkOverrideStore)
     overrides.get.side_effect = RuntimeError("disk error")
@@ -879,9 +848,7 @@ def test_music_artwork_is_fetched_as_permanent():
 
 def test_movie_artwork_is_not_fetched_as_permanent():
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
-    now_playing = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[artwork]
-    )
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[artwork])
 
     output = MagicMock()
     cache = MagicMock()
@@ -962,9 +929,7 @@ def test_does_not_strip_leading_parenthetical_that_is_part_of_the_real_title():
 
 
 def test_does_not_strip_mid_title_parenthetical_followed_by_more_text():
-    now_playing = NowPlaying(
-        source="kodi", media_type="music", title="Money (Live) - Edit"
-    )
+    now_playing = NowPlaying(source="kodi", media_type="music", title="Money (Live) - Edit")
 
     orchestrator = _tick_with_now_playing(now_playing)
 
@@ -972,13 +937,8 @@ def test_does_not_strip_mid_title_parenthetical_followed_by_more_text():
 
 
 def _multi_image_now_playing():
-    artworks = [
-        Artwork(url=f"https://example.com/{i}.jpg", label=f"Image {i}")
-        for i in range(3)
-    ]
-    return NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=artworks
-    )
+    artworks = [Artwork(url=f"https://example.com/{i}.jpg", label=f"Image {i}") for i in range(3)]
+    return NowPlaying(source="kodi", media_type="movie", title="Inception", images=artworks)
 
 
 def test_each_output_starts_on_a_different_picture():
@@ -1118,9 +1078,7 @@ def test_single_image_does_not_advance_but_still_repushes():
     # (e.g. a Pixoo64 briefly unreachable) gets retried instead of leaving
     # that output frozen on stale content for as long as the item plays.
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
-    now_playing = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[artwork]
-    )
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[artwork])
     output = MagicMock()
     cache = MagicMock()
     cache.get_path.return_value = "/tmp/poster.jpg"
@@ -1140,16 +1098,12 @@ def test_single_image_does_not_advance_but_still_repushes():
 
     output.update.assert_called_once()
     _, pushed_artwork, _ = output.update.call_args[0]
-    assert (
-        pushed_artwork.label == "Poster"
-    )  # same artwork, not rotated to something else
+    assert pushed_artwork.label == "Poster"  # same artwork, not rotated to something else
 
 
 def test_single_image_retries_output_that_previously_failed():
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
-    now_playing = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[artwork]
-    )
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[artwork])
     output = MagicMock()
     output.update.side_effect = [RuntimeError("device unreachable"), None]
     cache = MagicMock()
@@ -1178,9 +1132,7 @@ def test_single_image_retries_output_that_previously_failed():
 # ---------------------------------------------------------------------------
 
 
-def _health_orchestrator(
-    sources=None, outputs=None, idle_source=None, alert_config=None
-):
+def _health_orchestrator(sources=None, outputs=None, idle_source=None, alert_config=None):
     return Orchestrator(
         sources=sources or [_FakeSource()],
         enrichers=[],
@@ -1332,9 +1284,7 @@ def test_alert_fires_after_threshold_via_tick():
 def test_alert_check_is_a_no_op_when_alerting_disabled():
     output = MagicMock()
     output.on_idle.side_effect = RuntimeError("gone")
-    orch = _health_orchestrator(
-        outputs=[output]
-    )  # alert_config=None -> disabled by default
+    orch = _health_orchestrator(outputs=[output])  # alert_config=None -> disabled by default
 
     with patch("mediainfo.alerting.requests.post") as mock_post:
         orch._tick()
@@ -1540,9 +1490,7 @@ def test_get_health_includes_source_backoff_seconds():
 
 
 def _music_item(title="Comfortably Numb"):
-    return NowPlaying(
-        source="static", media_type="music", title=title, subtitle="Pink Floyd"
-    )
+    return NowPlaying(source="static", media_type="music", title=title, subtitle="Pink Floyd")
 
 
 def _movie_item(title="The Matrix"):
@@ -1664,9 +1612,7 @@ def test_classify_same_item_rotate_when_identity_matches_and_has_images():
 def test_classify_same_item_no_artwork_when_identity_matches_and_no_images():
     from mediainfo.orchestrator_state import _Transition, classify
 
-    current = NowPlaying(
-        source="kodi", media_type="movie", title="Inception", images=[]
-    )
+    current = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[])
     orch = _orch_with_current(current)
     now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception")
 
@@ -1724,17 +1670,13 @@ def test_poll_sources_ignores_hitster_safe_for_movies():
 
 def test_idle_batch_needs_refetch_when_no_batch_yet():
     idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
-    orch = _orchestrator(
-        outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source
-    )
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
     assert orch._idle.needs_refetch(time.monotonic()) is True
 
 
 def test_idle_batch_does_not_need_refetch_before_interval_elapses():
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=1000)
-    orch = _orchestrator(
-        outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source
-    )
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
     orch._idle.images = _idle_wallpapers()
     orch._idle.last_batch_fetch = time.monotonic()
     assert orch._idle.needs_refetch(time.monotonic()) is False
@@ -1742,9 +1684,7 @@ def test_idle_batch_does_not_need_refetch_before_interval_elapses():
 
 def test_idle_batch_needs_refetch_once_interval_elapses():
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=10)
-    orch = _orchestrator(
-        outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source
-    )
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
     orch._idle.images = _idle_wallpapers()
     orch._idle.last_batch_fetch = 1000.0
     assert orch._idle.needs_refetch(1011.0) is True
@@ -1752,9 +1692,7 @@ def test_idle_batch_needs_refetch_once_interval_elapses():
 
 def test_idle_batch_needs_refetch_does_not_mutate_state():
     idle_source = _FakeIdleSource(_idle_wallpapers(), rotation_interval_seconds=1000)
-    orch = _orchestrator(
-        outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source
-    )
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
     orch._idle.images = _idle_wallpapers()
     orch._idle.last_batch_fetch = time.monotonic()
     before = orch._idle.images
@@ -1767,9 +1705,7 @@ def test_idle_batch_needs_refetch_does_not_mutate_state():
 
 def test_refetch_idle_batch_returns_false_when_source_empty_and_no_previous_batch():
     idle_source = _FakeIdleSource([], rotation_interval_seconds=300)
-    orch = _orchestrator(
-        outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source
-    )
+    orch = _orchestrator(outputs=[MagicMock()], cache=MagicMock(), idle_source=idle_source)
 
     result = orch._idle.refetch(time.monotonic())
 
@@ -1851,9 +1787,7 @@ def test_persisted_batch_is_loaded_on_construction_and_used_as_fallback(tmp_path
     persist_path = cache.idle_dir / "last_idle_batch.json"
     import json
 
-    persist_path.write_text(
-        json.dumps([{"url": "https://example.com/old.jpg", "label": "Old"}])
-    )
+    persist_path.write_text(json.dumps([{"url": "https://example.com/old.jpg", "label": "Old"}]))
 
     idle_source = _FakeIdleSource([], rotation_interval_seconds=300)  # unavailable
     output = MagicMock()
@@ -1922,9 +1856,7 @@ def test_refetch_idle_batch_returns_true_and_updates_state():
 
 
 def test_music_album_art_only_output_skips_artist_photo():
-    album_art = Artwork(
-        url="https://example.com/album.jpg", label="Album art (Spotify)"
-    )
+    album_art = Artwork(url="https://example.com/album.jpg", label="Album art (Spotify)")
     artist_photo = Artwork(
         url="https://example.com/artist.jpg",
         label="Photo (Wikipedia)",
@@ -2032,9 +1964,7 @@ def test_regular_output_still_shows_artist_photo():
 
 
 def test_output_without_wordclouds_skips_wordcloud_image():
-    album_art = Artwork(
-        url="https://example.com/album.jpg", label="Album art (Spotify)"
-    )
+    album_art = Artwork(url="https://example.com/album.jpg", label="Album art (Spotify)")
     wordcloud = Artwork(
         url="https://example.com/wordcloud.png",
         label="Lyrics word cloud (mediadata)",
@@ -2179,9 +2109,7 @@ def test_request_artwork_refresh_reenriches_and_repushes_current_item():
 
 def test_request_artwork_refresh_is_noop_when_nothing_playing():
     output = MagicMock()
-    orch = _orchestrator(
-        outputs=[output], cache=MagicMock()
-    )  # _FakeSource: nothing playing
+    orch = _orchestrator(outputs=[output], cache=MagicMock())  # _FakeSource: nothing playing
 
     orch.request_artwork_refresh()
     orch._tick()  # must not raise
@@ -2254,9 +2182,7 @@ def test_request_rotation_now_repushes_immediately_without_waiting_for_interval(
 
 def test_request_rotation_now_is_noop_when_nothing_playing():
     output = MagicMock()
-    orch = _orchestrator(
-        outputs=[output], cache=MagicMock()
-    )  # _FakeSource: nothing playing
+    orch = _orchestrator(outputs=[output], cache=MagicMock())  # _FakeSource: nothing playing
 
     orch.request_rotation_now()
     orch._tick()  # must not raise

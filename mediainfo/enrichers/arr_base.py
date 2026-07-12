@@ -61,8 +61,11 @@ class ArrEnricher(ArtworkEnricher):
     @staticmethod
     def _image_url(images: List[dict], cover_type: str) -> Optional[str]:
         return next(
-            (img.get("remoteUrl") or img.get("url")
-             for img in images if img.get("coverType") == cover_type),
+            (
+                img.get("remoteUrl") or img.get("url")
+                for img in images
+                if img.get("coverType") == cover_type
+            ),
             None,
         )
 

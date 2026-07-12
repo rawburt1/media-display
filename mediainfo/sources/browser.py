@@ -69,7 +69,9 @@ class BrowserSource(MediaSource):
         @sock.route("/ws")
         def _handler(conn):
             if not self._is_authorized(request.args):
-                logger.warning("Browser source: rejected a connection with a missing/incorrect token")
+                logger.warning(
+                    "Browser source: rejected a connection with a missing/incorrect token"
+                )
                 return
             try:
                 while True:
@@ -131,7 +133,9 @@ class BrowserSource(MediaSource):
         images = []
         artwork_url = event.get("artwork_url")
         if artwork_url:
-            images.append(Artwork(url=artwork_url, label=f"Artwork ({event.get('site', 'browser')})"))
+            images.append(
+                Artwork(url=artwork_url, label=f"Artwork ({event.get('site', 'browser')})")
+            )
 
         artist = event.get("artist") or ""
         duration = event.get("duration")

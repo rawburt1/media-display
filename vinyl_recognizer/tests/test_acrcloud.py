@@ -19,7 +19,9 @@ def test_recognize_returns_track_with_spotify_artwork(mock_post):
                     "artists": [{"name": "Pink Floyd"}],
                     "album": {"name": "The Wall"},
                     "external_metadata": {
-                        "spotify": {"album": {"images": [{"url": "https://example.com/cover.jpg"}]}},
+                        "spotify": {
+                            "album": {"images": [{"url": "https://example.com/cover.jpg"}]}
+                        },
                     },
                 }
             ]

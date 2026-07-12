@@ -14,9 +14,7 @@ def _enricher() -> TmdbEnricher:
 
 
 def _movie(title="The Matrix", year=1999, ids=None):
-    return NowPlaying(
-        source="kodi", media_type="movie", title=title, year=year, ids=ids or {}
-    )
+    return NowPlaying(source="kodi", media_type="movie", title=title, year=year, ids=ids or {})
 
 
 def _episode(title="Breaking Bad", ids=None):
@@ -50,9 +48,7 @@ def test_skips_lookup_when_rating_already_set(mock_get):
 
 @patch("mediainfo.enrichers.tmdb.requests.get")
 def test_movie_search_sets_rating(mock_get):
-    mock_get.return_value = _response(
-        json_data={"results": [{"vote_average": 8.456}]}
-    )
+    mock_get.return_value = _response(json_data={"results": [{"vote_average": 8.456}]})
 
     np = _movie()
     _enricher().enrich(np)
@@ -121,6 +117,7 @@ def test_network_error_leaves_rating_none(mock_get):
 # Auth: v3 api_key (query param) vs v4 API Read Access Token (Bearer header)
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.tmdb.requests.get")
 def test_v3_api_key_sent_as_query_param(mock_get):
     mock_get.return_value = _response(json_data={"vote_average": 8.0})
@@ -151,12 +148,17 @@ def test_v4_jwt_token_sent_as_bearer_header(mock_get):
 # TmdbEnricher itself.
 # ---------------------------------------------------------------------------
 
+
 @patch("mediainfo.enrichers.tmdb.requests.get")
 def test_find_movie_prefers_result_matching_year(mock_get):
-    mock_get.return_value = _response(json_data={"results": [
-        {"id": 1, "release_date": "1985-01-01"},
-        {"id": 2, "release_date": "1999-03-31"},
-    ]})
+    mock_get.return_value = _response(
+        json_data={
+            "results": [
+                {"id": 1, "release_date": "1985-01-01"},
+                {"id": 2, "release_date": "1999-03-31"},
+            ]
+        }
+    )
 
     result = find_movie("test-key", "The Matrix", 1999)
 
@@ -165,9 +167,13 @@ def test_find_movie_prefers_result_matching_year(mock_get):
 
 @patch("mediainfo.enrichers.tmdb.requests.get")
 def test_find_movie_falls_back_to_first_result_without_year_match(mock_get):
-    mock_get.return_value = _response(json_data={"results": [
-        {"id": 1, "release_date": "1985-01-01"},
-    ]})
+    mock_get.return_value = _response(
+        json_data={
+            "results": [
+                {"id": 1, "release_date": "1985-01-01"},
+            ]
+        }
+    )
 
     result = find_movie("test-key", "The Matrix", 2010)
 
@@ -183,9 +189,13 @@ def test_find_movie_no_results_returns_none(mock_get):
 
 @patch("mediainfo.enrichers.tmdb.requests.get")
 def test_find_tv_takes_top_result_no_year_filter(mock_get):
-    mock_get.return_value = _response(json_data={"results": [
-        {"id": 1399, "first_air_date": "2011-04-17"},
-    ]})
+    mock_get.return_value = _response(
+        json_data={
+            "results": [
+                {"id": 1399, "first_air_date": "2011-04-17"},
+            ]
+        }
+    )
 
     result = find_tv("test-key", "Game of Thrones")
 
@@ -205,6 +215,7 @@ def test_image_url_none_path_returns_none():
 # ---------------------------------------------------------------------------
 # test_connection
 # ---------------------------------------------------------------------------
+
 
 def test_test_connection_success():
     with patch("mediainfo.enrichers.tmdb.fetch_rating", return_value=8.7):
@@ -233,8 +244,11 @@ def test_test_connection_handles_exception():
 # pre-setting np.rating, so only the cast call is ever mocked/asserted on.
 # ---------------------------------------------------------------------------
 
+
 def _cast_enricher(fetch_cast=True, cast_size=8) -> TmdbEnricher:
-    return TmdbEnricher(TmdbConfig(enabled=True, api_key="test-key", fetch_cast=fetch_cast, cast_size=cast_size))
+    return TmdbEnricher(
+        TmdbConfig(enabled=True, api_key="test-key", fetch_cast=fetch_cast, cast_size=cast_size)
+    )
 
 
 _CREDITS_JSON = {
@@ -269,7 +283,11 @@ def test_fetch_cast_via_known_tmdb_id_skips_search(mock_get):
     url = mock_get.call_args[0][0]
     assert url.endswith("/movie/603/credits")
     assert np.cast == [
-        {"name": "Keanu Reeves", "character": "Neo", "photo_url": "https://image.tmdb.org/t/p/h632/keanu.jpg"},
+        {
+            "name": "Keanu Reeves",
+            "character": "Neo",
+            "photo_url": "https://image.tmdb.org/t/p/h632/keanu.jpg",
+        },
         {"name": "Laurence Fishburne", "character": "Morpheus", "photo_url": ""},
     ]
 
@@ -395,6 +413,7 @@ def test_fetch_cast_module_function_directly():
         result = fetch_cast("test-key", "movie", "603", limit=8)
 
     assert result[0] == {
-        "name": "Keanu Reeves", "character": "Neo",
+        "name": "Keanu Reeves",
+        "character": "Neo",
         "photo_url": "https://image.tmdb.org/t/p/h632/keanu.jpg",
     }

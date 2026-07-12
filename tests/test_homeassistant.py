@@ -25,7 +25,10 @@ def no_real_connection():
 
 def _source(**kwargs) -> HomeAssistantSource:
     defaults: dict[str, Any] = dict(
-        enabled=True, host="192.168.1.11", port=8123, token="test-token",
+        enabled=True,
+        host="192.168.1.11",
+        port=8123,
+        token="test-token",
         entity_id="media_player.apple_tv_4k",
     )
     defaults.update(kwargs)
@@ -40,16 +43,18 @@ def _authenticate(source, ws=None):
 
 
 def _state_changed(entity_id, state, attributes=None):
-    return json.dumps({
-        "type": "event",
-        "event": {
-            "event_type": "state_changed",
-            "data": {
-                "entity_id": entity_id,
-                "new_state": {"state": state, "attributes": attributes or {}},
+    return json.dumps(
+        {
+            "type": "event",
+            "event": {
+                "event_type": "state_changed",
+                "data": {
+                    "entity_id": entity_id,
+                    "new_state": {"state": state, "attributes": attributes or {}},
+                },
             },
-        },
-    })
+        }
+    )
 
 
 def _get_states_result(entities):
@@ -59,6 +64,7 @@ def _get_states_result(entities):
 # ---------------------------------------------------------------------------
 # Connection URL
 # ---------------------------------------------------------------------------
+
 
 def test_ws_url_uses_ws_by_default():
     source = _source()
@@ -73,6 +79,7 @@ def test_ws_url_uses_wss_when_use_ssl():
 # ---------------------------------------------------------------------------
 # Auth handshake
 # ---------------------------------------------------------------------------
+
 
 def test_sends_auth_message_on_auth_required():
     source = _source()
@@ -140,14 +147,24 @@ def test_malformed_message_is_ignored_not_fatal():
 # get_states snapshot + state_changed events -> entity cache
 # ---------------------------------------------------------------------------
 
+
 def test_get_states_result_populates_entity_cache():
     source = _source()
     _authenticate(source)
 
-    source._on_message(MagicMock(), _get_states_result([
-        {"entity_id": "media_player.apple_tv_4k", "state": "playing", "attributes": {"media_title": "X"}},
-        {"entity_id": "sensor.temperature", "state": "21", "attributes": {}},
-    ]))
+    source._on_message(
+        MagicMock(),
+        _get_states_result(
+            [
+                {
+                    "entity_id": "media_player.apple_tv_4k",
+                    "state": "playing",
+                    "attributes": {"media_title": "X"},
+                },
+                {"entity_id": "sensor.temperature", "state": "21", "attributes": {}},
+            ]
+        ),
+    )
 
     assert "media_player.apple_tv_4k" in source._entities
     assert "sensor.temperature" not in source._entities  # non-media_player domain ignored
@@ -157,7 +174,9 @@ def test_state_changed_event_updates_entity_cache():
     source = _source()
     _authenticate(source)
 
-    source._on_message(MagicMock(), _state_changed("media_player.apple_tv_4k", "playing", {"media_title": "X"}))
+    source._on_message(
+        MagicMock(), _state_changed("media_player.apple_tv_4k", "playing", {"media_title": "X"})
+    )
 
     assert source._entities["media_player.apple_tv_4k"]["state"] == "playing"
 
@@ -165,6 +184,7 @@ def test_state_changed_event_updates_entity_cache():
 # ---------------------------------------------------------------------------
 # get_now_playing() with a configured entity_id
 # ---------------------------------------------------------------------------
+
 
 def test_idle_state_returns_none():
     source = _source()
@@ -177,7 +197,9 @@ def test_idle_state_returns_none():
 def test_paused_state_returns_none():
     source = _source()
     _authenticate(source)
-    source._on_message(MagicMock(), _state_changed("media_player.apple_tv_4k", "paused", {"media_title": "X"}))
+    source._on_message(
+        MagicMock(), _state_changed("media_player.apple_tv_4k", "paused", {"media_title": "X"})
+    )
 
     assert source.get_now_playing() is None
 
@@ -185,12 +207,19 @@ def test_paused_state_returns_none():
 def test_playing_video_without_series_info_is_movie():
     source = _source()
     _authenticate(source)
-    source._on_message(MagicMock(), _state_changed("media_player.apple_tv_4k", "playing", {
-        "media_content_type": "video",
-        "media_title": "Brottsplats: Wales",
-        "app_name": "SVT Play",
-        "entity_picture": "/api/media_player_proxy/media_player.apple_tv_4k?token=abc",
-    }))
+    source._on_message(
+        MagicMock(),
+        _state_changed(
+            "media_player.apple_tv_4k",
+            "playing",
+            {
+                "media_content_type": "video",
+                "media_title": "Brottsplats: Wales",
+                "app_name": "SVT Play",
+                "entity_picture": "/api/media_player_proxy/media_player.apple_tv_4k?token=abc",
+            },
+        ),
+    )
 
     now_playing = source.get_now_playing()
 
@@ -206,13 +235,20 @@ def test_playing_video_without_series_info_is_movie():
 def test_playing_episode_with_series_info():
     source = _source()
     _authenticate(source)
-    source._on_message(MagicMock(), _state_changed("media_player.apple_tv_4k", "playing", {
-        "media_content_type": "tvshow",
-        "media_series_title": "Breaking Bad",
-        "media_title": "Pilot",
-        "media_season": 1,
-        "media_episode": 1,
-    }))
+    source._on_message(
+        MagicMock(),
+        _state_changed(
+            "media_player.apple_tv_4k",
+            "playing",
+            {
+                "media_content_type": "tvshow",
+                "media_series_title": "Breaking Bad",
+                "media_title": "Pilot",
+                "media_season": 1,
+                "media_episode": 1,
+            },
+        ),
+    )
 
     now_playing = source.get_now_playing()
 
@@ -225,12 +261,19 @@ def test_playing_episode_with_series_info():
 def test_playing_music():
     source = _source()
     _authenticate(source)
-    source._on_message(MagicMock(), _state_changed("media_player.apple_tv_4k", "playing", {
-        "media_content_type": "music",
-        "media_title": "Comfortably Numb",
-        "media_artist": "Pink Floyd",
-        "media_album_name": "The Wall",
-    }))
+    source._on_message(
+        MagicMock(),
+        _state_changed(
+            "media_player.apple_tv_4k",
+            "playing",
+            {
+                "media_content_type": "music",
+                "media_title": "Comfortably Numb",
+                "media_artist": "Pink Floyd",
+                "media_album_name": "The Wall",
+            },
+        ),
+    )
 
     now_playing = source.get_now_playing()
 
@@ -243,9 +286,17 @@ def test_playing_music():
 def test_uses_https_for_artwork_when_use_ssl():
     source = _source(use_ssl=True)
     _authenticate(source)
-    source._on_message(MagicMock(), _state_changed("media_player.apple_tv_4k", "playing", {
-        "entity_picture": "/img.jpg", "media_title": "X",
-    }))
+    source._on_message(
+        MagicMock(),
+        _state_changed(
+            "media_player.apple_tv_4k",
+            "playing",
+            {
+                "entity_picture": "/img.jpg",
+                "media_title": "X",
+            },
+        ),
+    )
 
     now_playing = source.get_now_playing()
     assert now_playing.images[0].url.startswith("https://")
@@ -254,7 +305,10 @@ def test_uses_https_for_artwork_when_use_ssl():
 def test_configured_entity_id_ignores_other_entities():
     source = _source(entity_id="media_player.apple_tv_4k")
     _authenticate(source)
-    source._on_message(MagicMock(), _state_changed("media_player.other_device", "playing", {"media_title": "Other"}))
+    source._on_message(
+        MagicMock(),
+        _state_changed("media_player.other_device", "playing", {"media_title": "Other"}),
+    )
 
     assert source.get_now_playing() is None
 
@@ -263,11 +317,16 @@ def test_configured_entity_id_ignores_other_entities():
 # Auto-select (blank entity_id) - mirrors the LMS source's pattern
 # ---------------------------------------------------------------------------
 
+
 def test_auto_select_prefers_playing_over_paused():
     source = _source(entity_id="")
     _authenticate(source)
-    source._on_message(MagicMock(), _state_changed("media_player.a", "paused", {"media_title": "A"}))
-    source._on_message(MagicMock(), _state_changed("media_player.b", "playing", {"media_title": "B"}))
+    source._on_message(
+        MagicMock(), _state_changed("media_player.a", "paused", {"media_title": "A"})
+    )
+    source._on_message(
+        MagicMock(), _state_changed("media_player.b", "playing", {"media_title": "B"})
+    )
 
     now_playing = source.get_now_playing()
     assert now_playing.title == "B"
@@ -279,10 +338,14 @@ def test_auto_select_picks_most_recently_updated_playing(monkeypatch):
 
     real_monotonic = time.monotonic
     monkeypatch.setattr(time, "monotonic", lambda: real_monotonic())
-    source._on_message(MagicMock(), _state_changed("media_player.a", "playing", {"media_title": "A"}))
+    source._on_message(
+        MagicMock(), _state_changed("media_player.a", "playing", {"media_title": "A"})
+    )
 
     monkeypatch.setattr(time, "monotonic", lambda: real_monotonic() + 5)
-    source._on_message(MagicMock(), _state_changed("media_player.b", "playing", {"media_title": "B"}))
+    source._on_message(
+        MagicMock(), _state_changed("media_player.b", "playing", {"media_title": "B"})
+    )
 
     now_playing = source.get_now_playing()
     assert now_playing.title == "B"
@@ -298,7 +361,9 @@ def test_auto_select_no_entities_returns_none():
 def test_auto_select_only_paused_still_reports_idle():
     source = _source(entity_id="")
     _authenticate(source)
-    source._on_message(MagicMock(), _state_changed("media_player.a", "paused", {"media_title": "A"}))
+    source._on_message(
+        MagicMock(), _state_changed("media_player.a", "paused", {"media_title": "A"})
+    )
 
     assert source.get_now_playing() is None
 
@@ -306,6 +371,7 @@ def test_auto_select_only_paused_still_reports_idle():
 # ---------------------------------------------------------------------------
 # health_check
 # ---------------------------------------------------------------------------
+
 
 def test_health_check_reports_disconnected_by_default():
     source = _source()
@@ -321,6 +387,7 @@ def test_health_check_reports_connected_after_authentication():
 # ---------------------------------------------------------------------------
 # Config defaults
 # ---------------------------------------------------------------------------
+
 
 def test_config_entity_id_defaults_to_blank():
     assert HomeAssistantConfig().entity_id == ""

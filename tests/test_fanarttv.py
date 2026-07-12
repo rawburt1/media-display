@@ -44,7 +44,10 @@ def _song(**kwargs) -> NowPlaying:
         media_type="music",
         title="Comfortably Numb",
         subtitle="Pink Floyd",
-        ids={"musicbrainzartist": "83d91898-7763-47d7-b03b-b92132375c47", "musicbrainzalbum": "album-mbid"},
+        ids={
+            "musicbrainzartist": "83d91898-7763-47d7-b03b-b92132375c47",
+            "musicbrainzalbum": "album-mbid",
+        },
     )
     defaults.update(kwargs)
     return NowPlaying(**defaults)
@@ -98,9 +101,7 @@ def test_skips_duplicate_already_in_images(mock_get):
     mock_response.raise_for_status = MagicMock()
     mock_get.return_value = mock_response
 
-    now_playing = _movie(
-        images=[Artwork(url="http://existing/poster.jpg", label="Poster (Kodi)")]
-    )
+    now_playing = _movie(images=[Artwork(url="http://existing/poster.jpg", label="Poster (Kodi)")])
     _enricher().enrich(now_playing)
 
     assert len(now_playing.images) == 1
@@ -207,9 +208,7 @@ def test_music_prepends_album_cover(mock_get):
     mock_response.raise_for_status = MagicMock()
     mock_get.return_value = mock_response
 
-    now_playing = _song(
-        images=[Artwork(url="http://kodi/album-thumb.jpg", label="Poster (Kodi)")]
-    )
+    now_playing = _song(images=[Artwork(url="http://kodi/album-thumb.jpg", label="Poster (Kodi)")])
     _enricher().enrich(now_playing)
 
     # fanart.tv's album cover is preferred: shown first.
@@ -281,11 +280,17 @@ def test_music_resolves_musicbrainz_ids_by_name_when_missing(mock_get):
 
     mb_args, mb_kwargs = mock_get.call_args_list[0]
     assert mb_args[0] == "https://musicbrainz.org/ws/2/release-group/"
-    assert mb_kwargs["params"]["query"] == 'artist:"Pink Floyd" AND release:"The Dark Side of the Moon"'
+    assert (
+        mb_kwargs["params"]["query"]
+        == 'artist:"Pink Floyd" AND release:"The Dark Side of the Moon"'
+    )
     assert "User-Agent" in mb_kwargs["headers"]
 
     fanart_args, _ = mock_get.call_args_list[1]
-    assert fanart_args[0] == "https://webservice.fanart.tv/v3/music/83d91898-7763-47d7-b03b-b92132375c47"
+    assert (
+        fanart_args[0]
+        == "https://webservice.fanart.tv/v3/music/83d91898-7763-47d7-b03b-b92132375c47"
+    )
 
 
 @patch("mediainfo.enrichers.fanarttv.requests.get")
@@ -315,6 +320,7 @@ def test_music_musicbrainz_no_results_does_nothing(mock_get):
 # ---------------------------------------------------------------------------
 # fetch / best_url - used by MediaDataStore, not by FanartTvEnricher itself.
 # ---------------------------------------------------------------------------
+
 
 @patch("mediainfo.enrichers.fanarttv.requests.get")
 def test_fetch_returns_json_body(mock_get):
@@ -372,6 +378,7 @@ def test_best_url_empty_returns_none():
 # ---------------------------------------------------------------------------
 # test_connection
 # ---------------------------------------------------------------------------
+
 
 def test_test_connection_success():
     with patch.object(FanartTvEnricher, "_get", return_value={"movieposter": []}):

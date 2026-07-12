@@ -18,8 +18,11 @@ def _config(wordcloud_enabled: bool = False) -> MediaDataArtworkEnricherConfig:
 
 def _song(**kwargs):
     defaults: dict[str, Any] = dict(
-        source="youtube", media_type="music",
-        title="Comfortably Numb", subtitle="Pink Floyd", album="The Wall",
+        source="youtube",
+        media_type="music",
+        title="Comfortably Numb",
+        subtitle="Pink Floyd",
+        album="The Wall",
     )
     defaults.update(kwargs)
     return NowPlaying(**defaults)
@@ -198,6 +201,7 @@ def test_swallows_store_exception():
 # Artist photo (music)
 # ---------------------------------------------------------------------------
 
+
 def test_adds_artist_photo_on_hit(tmp_path):
     store = Mock(spec=MediaDataStore)
     photo_path = tmp_path / "artist.jpg"
@@ -281,6 +285,7 @@ def test_swallows_artist_photo_store_exception():
 # Lyrics word cloud (music) - behind its own config.wordcloud.enabled
 # switch, independent of the enricher's own `enabled`.
 # ---------------------------------------------------------------------------
+
 
 def test_adds_wordcloud_when_enabled(tmp_path):
     store = Mock(spec=MediaDataStore)
@@ -371,6 +376,7 @@ def test_swallows_wordcloud_store_exception(tmp_path):
 # ---------------------------------------------------------------------------
 # MediaDataWordcloudConfig validation (pydantic dataclass)
 # ---------------------------------------------------------------------------
+
 
 def test_wordcloud_config_unknown_field_raises_validation_error():
     import pytest

@@ -153,9 +153,7 @@ def test_update_with_non_idle_now_playing_does_not_modify_folder(tmp_path):
     (out_dir / "current.jpg").write_bytes(b"current")
 
     output = FolderOutput(FolderConfig(enabled=True, dir=str(out_dir)))
-    output.update(
-        _now_playing([]), Artwork(url="https://example.com/p.jpg"), tmp_path / "p.jpg"
-    )
+    output.update(_now_playing([]), Artwork(url="https://example.com/p.jpg"), tmp_path / "p.jpg")
 
     assert (out_dir / "current.jpg").read_bytes() == b"current"
 

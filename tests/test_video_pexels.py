@@ -7,8 +7,13 @@ from mediainfo.video.pexels import PexelsVideoSource, _best_mp4_url
 
 
 def _make_file(quality, width, height, file_type="video/mp4"):
-    return {"quality": quality, "width": width, "height": height,
-            "file_type": file_type, "link": f"https://cdn.pexels.com/{quality}.mp4"}
+    return {
+        "quality": quality,
+        "width": width,
+        "height": height,
+        "file_type": file_type,
+        "link": f"https://cdn.pexels.com/{quality}.mp4",
+    }
 
 
 def _pexels_response(videos):
@@ -26,9 +31,11 @@ def _source(**kwargs):
 
 @patch("mediainfo.video.pexels.requests.get")
 def test_returns_video_clip_from_pexels(mock_get):
-    mock_get.return_value = _pexels_response([
-        {"video_files": [_make_file("hd", 720, 1280)]},
-    ])
+    mock_get.return_value = _pexels_response(
+        [
+            {"video_files": [_make_file("hd", 720, 1280)]},
+        ]
+    )
 
     clips = _source().get_videos()
 
@@ -85,7 +92,7 @@ def test_returns_empty_for_empty_queries(mock_get):
 def test_best_mp4_url_prefers_portrait():
     files = [
         _make_file("hd", 1920, 1080),  # landscape
-        _make_file("hd", 720, 1280),   # portrait
+        _make_file("hd", 720, 1280),  # portrait
     ]
     url = _best_mp4_url(files)
     assert url == "https://cdn.pexels.com/hd.mp4"  # second file (portrait hd)
@@ -107,8 +114,15 @@ def test_best_mp4_url_falls_back_to_landscape_when_no_portrait():
 
 
 def test_best_mp4_url_skips_non_mp4():
-    files = [{"quality": "hd", "width": 720, "height": 1280,
-              "file_type": "video/webm", "link": "https://cdn/hd.webm"}]
+    files = [
+        {
+            "quality": "hd",
+            "width": 720,
+            "height": 1280,
+            "file_type": "video/webm",
+            "link": "https://cdn/hd.webm",
+        }
+    ]
     url = _best_mp4_url(files)
     assert url is None
 

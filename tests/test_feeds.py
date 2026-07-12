@@ -54,6 +54,7 @@ def _output(**kwargs):
 # _format
 # ---------------------------------------------------------------------------
 
+
 def test_format_music_with_artist_and_album():
     title, desc = FeedOutput._format(_music())
     assert title == "Queen – Bohemian Rhapsody"
@@ -122,6 +123,7 @@ def test_format_episode_includes_summary():
 # ---------------------------------------------------------------------------
 # on_new_item
 # ---------------------------------------------------------------------------
+
 
 def test_on_new_item_adds_entry():
     out = _output()
@@ -203,15 +205,19 @@ def test_update_is_noop():
 # _image_mime
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("url,expected", [
-    ("https://example.com/cover.jpg", "image/jpeg"),
-    ("https://example.com/cover.JPEG", "image/jpeg"),
-    ("https://example.com/cover.png", "image/png"),
-    ("https://example.com/cover.webp", "image/webp"),
-    ("https://example.com/cover.gif", "image/gif"),
-    ("https://example.com/cover.png?v=123", "image/png"),
-    ("https://example.com/image", "image/jpeg"),  # unknown → jpeg
-])
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://example.com/cover.jpg", "image/jpeg"),
+        ("https://example.com/cover.JPEG", "image/jpeg"),
+        ("https://example.com/cover.png", "image/png"),
+        ("https://example.com/cover.webp", "image/webp"),
+        ("https://example.com/cover.gif", "image/gif"),
+        ("https://example.com/cover.png?v=123", "image/png"),
+        ("https://example.com/image", "image/jpeg"),  # unknown → jpeg
+    ],
+)
 def test_image_mime(url, expected):
     assert _image_mime(url) == expected
 
@@ -219,6 +225,7 @@ def test_image_mime(url, expected):
 # ---------------------------------------------------------------------------
 # RSS XML structure
 # ---------------------------------------------------------------------------
+
 
 def test_rss_endpoint_returns_xml_with_correct_content_type():
     out = _output()
@@ -309,6 +316,7 @@ def test_rss_empty_feed_has_no_items():
 # Atom XML structure
 # ---------------------------------------------------------------------------
 
+
 def test_atom_endpoint_returns_xml_with_correct_content_type():
     out = _output()
     with out.app.test_client() as client:
@@ -376,6 +384,7 @@ def test_atom_no_summary_when_description_empty():
 # ---------------------------------------------------------------------------
 # HTML discovery page
 # ---------------------------------------------------------------------------
+
 
 def test_index_page_links_to_both_feeds():
     out = _output()
