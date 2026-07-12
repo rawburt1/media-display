@@ -28,7 +28,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from flask import Flask, jsonify, render_template, request, send_file
 from flask_sock import Sock
@@ -36,7 +36,8 @@ from markupsafe import Markup
 
 from mediainfo.app_services import AppServices
 from mediainfo.cache import ImageCache
-from mediainfo.config import AuthConfig, ThemesConfig
+from mediainfo.config import AuthConfig, AutoRotatePresetConfig, ThemesConfig
+from mediainfo.config.outputs import parse_presets
 from mediainfo.config.themes import parse_themes
 from mediainfo.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
@@ -53,6 +54,14 @@ from mediainfo.transforms import parse_pipeline
 from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
+
+# NowPlaying.media_type is "music" | "movie" | "episode" for real playback,
+# and "wallpaper" for idle wallpapers (see orchestrator_idle.py's
+# NowPlaying(..., media_type="wallpaper", ...) construction sites - the
+# model's own type comment doesn't mention this case). AutoRotatePresetConfig
+# .when uses the friendlier "idle" instead; this is the only place that
+# translation happens - nothing else compares against "idle"/"wallpaper".
+_IDLE_MEDIA_TYPE_ALIAS = {"idle": "wallpaper"}
 
 
 class ThemesOutput(Output):
@@ -106,27 +115,39 @@ class ThemesOutput(Output):
         self._clients_lock = threading.Lock()
 
         # Auto-rotate (see config.AutoRotateConfig / _active_theme_names):
-        # preset names in stable config order, the currently active one
-        # (guarded by _lock, like the other mutable state above), and a
-        # background thread that advances it. Left empty/None when
-        # disabled or no presets are configured, which is what
-        # _active_theme_names() checks to fall back to "show every
+        # presets split into two groups. _rotation_pool holds unconditioned
+        # presets (no `when`) in stable config order - the timer-rotation
+        # pool, exactly like every preset before `when` existed. _conditioned
+        # holds presets that do have a `when`, each paired with its
+        # alias-normalized media-type set - checked first, on every payload,
+        # against whatever's currently playing (see _current_preset_name());
+        # a match is pinned and the timer never rotates away from it. Both
+        # empty/None when disabled or no presets are configured, which is
+        # what _current_preset_name() checks to fall back to "show every
         # enabled theme" - today's pre-Phase-8 behavior.
-        self._preset_names: List[str] = (
-            list(config.auto_rotate.presets.keys()) if config.auto_rotate.enabled else []
+        self._presets: Dict[str, AutoRotatePresetConfig] = (
+            parse_presets(config.auto_rotate.presets) if config.auto_rotate.enabled else {}
         )
-        self._active_preset: Optional[str] = self._preset_names[0] if self._preset_names else None
-        self._warn_unknown_preset_themes()
-        if self._preset_names:
+        self._rotation_pool: List[str] = [
+            name for name, preset in self._presets.items() if not preset.when
+        ]
+        self._conditioned: List[Tuple[str, Set[str]]] = [
+            (name, {_IDLE_MEDIA_TYPE_ALIAS.get(mt, mt) for mt in preset.when})
+            for name, preset in self._presets.items()
+            if preset.when
+        ]
+        self._active_preset: Optional[str] = self._rotation_pool[0] if self._rotation_pool else None
+        self._warn_preset_issues()
+        if self._rotation_pool:
             threading.Thread(target=self._auto_rotate_loop, daemon=True).start()
 
         self.app = self._build_app()
         threading.Thread(target=self._run_server, daemon=True).start()
 
-    def _warn_unknown_preset_themes(self) -> None:
+    def _warn_preset_issues(self) -> None:
         enabled_names = {theme.name for theme in self._themes}
-        for preset_name, theme_names in self.config.auto_rotate.presets.items():
-            unknown = [n for n in theme_names if n not in enabled_names]
+        for preset_name, preset in self._presets.items():
+            unknown = [n for n in preset.themes if n not in enabled_names]
             if unknown:
                 logger.warning(
                     "Themes output: auto_rotate preset %r names theme(s) %s that "
@@ -134,6 +155,23 @@ class ThemesOutput(Output):
                     preset_name,
                     unknown,
                 )
+
+        claimed: Dict[str, str] = {}
+        for preset_name, when_set in self._conditioned:
+            for media_type in when_set:
+                first_preset = claimed.get(media_type)
+                if first_preset is None:
+                    claimed[media_type] = preset_name
+                else:
+                    logger.warning(
+                        "Themes output: auto_rotate preset %r also claims media "
+                        "type %r, already claimed by preset %r - %r wins for that "
+                        "media type (first one declared in config)",
+                        preset_name,
+                        media_type,
+                        first_preset,
+                        first_preset,
+                    )
 
     def set_media_data_store(self, store: Optional[MediaDataStore]) -> None:
         """Wired in post-construction by attach() (see AppServices.
@@ -176,30 +214,49 @@ class ThemesOutput(Output):
             self._advance_preset()
 
     def _advance_preset(self) -> None:
-        """Move to the next configured preset (wrapping around) and push
-        the re-filtered payload - split out from _auto_rotate_loop so
-        tests can trigger a rotation directly instead of sleeping."""
+        """Move to the next preset in the rotation pool (wrapping around)
+        and push the re-filtered payload - split out from
+        _auto_rotate_loop so tests can trigger a rotation directly instead
+        of sleeping. Only ever touches the unconditioned rotation pool - a
+        conditioned preset currently pinned (see _current_preset_name)
+        overrides whatever this pointer is doing, so the pointer is free
+        to keep ticking silently in the background; once the pin lifts,
+        display just resumes wherever the pool already advanced to."""
         with self._lock:
-            # Invariant: whenever _preset_names is non-empty (the only
+            # Invariant: whenever _rotation_pool is non-empty (the only
             # time this method runs), _active_preset is always one of its
-            # members - set from _preset_names[0] at construction and
-            # only ever reassigned here, to another _preset_names member.
+            # members - set from _rotation_pool[0] at construction and
+            # only ever reassigned here, to another _rotation_pool member.
             assert self._active_preset is not None
-            idx = self._preset_names.index(self._active_preset)
-            self._active_preset = self._preset_names[(idx + 1) % len(self._preset_names)]
+            idx = self._rotation_pool.index(self._active_preset)
+            self._active_preset = self._rotation_pool[(idx + 1) % len(self._rotation_pool)]
         self._push(self._get_payload())
 
-    def _active_theme_names(self) -> Optional[Set[str]]:
-        """The theme names allowed in the outgoing payload right now, or
-        None to mean "no filtering - include every prepared theme" (auto-
-        rotate off, or on with no presets configured - the default,
-        backward-compatible behavior)."""
-        if not self._preset_names:
+    def _current_preset_name(self) -> Optional[str]:
+        """The preset actually governing the payload right now: a
+        conditioned preset whose `when` matches the current media type
+        (first one declared in config wins - see _warn_preset_issues),
+        else the rotation pool's current pointer, else None (no filtering
+        - show every enabled theme, auto-rotate off or nothing configured)."""
+        if not self._presets:
             return None
         with self._lock:
             active_preset = self._active_preset
-        assert active_preset is not None  # see _advance_preset's invariant note
-        return set(self.config.auto_rotate.presets.get(active_preset, []))
+            now_playing = self._now_playing
+        media_type = now_playing.media_type if now_playing is not None else None
+        if media_type is not None:
+            for name, when_set in self._conditioned:
+                if media_type in when_set:
+                    return name
+        return active_preset
+
+    def _active_theme_names(self) -> Optional[Set[str]]:
+        """The theme names allowed in the outgoing payload right now, or
+        None to mean "no filtering - include every prepared theme"."""
+        preset_name = self._current_preset_name()
+        if preset_name is None:
+            return None
+        return set(self._presets[preset_name].themes)
 
     def _client_assets(self):
         for theme in self._themes:
@@ -276,9 +333,9 @@ class ThemesOutput(Output):
         add_playback_position(payload, now_playing)
         if image_path is not None:
             payload["image"] = f"/image/current?v={image_path.stem}"
-        if self._preset_names:
-            with self._lock:
-                payload["active_preset"] = self._active_preset
+        preset_name = self._current_preset_name()
+        if preset_name is not None:
+            payload["active_preset"] = preset_name
 
         if artwork is not None and image_path is not None:
             themes_payload = self._prepare_themes(now_playing, artwork, image_path, cache)

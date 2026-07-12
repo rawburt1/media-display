@@ -28,6 +28,18 @@ def _music(title="Bohemian Rhapsody", artist="Queen"):
     return NowPlaying(source="kodi", media_type="music", title=title, subtitle=artist, images=[])
 
 
+def _movie(title="Inception"):
+    return NowPlaying(source="kodi", media_type="movie", title=title, images=[])
+
+
+def _wallpaper():
+    # Matches orchestrator_idle.py's NowPlaying(..., media_type="wallpaper",
+    # ...) construction for idle wallpapers - the "idle" media type in a
+    # preset's `when` maps onto this internal value (see ThemesOutput's
+    # _IDLE_MEDIA_TYPE_ALIAS).
+    return NowPlaying(source="idle", media_type="wallpaper", title="", images=[])
+
+
 def _artwork(label="Album art"):
     return Artwork(url="https://example.com/art.jpg", label=label)
 
@@ -560,6 +572,103 @@ def test_auto_rotate_preset_naming_unenabled_theme_is_logged(fake_two_themes, ca
     _two_theme_output(enabled=True, presets={"oops": ["glow", "nonexistent"]})
     assert "oops" in caplog.text
     assert "nonexistent" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Conditioned presets (`when`) - a group that auto-activates and pins for a
+# given media type, instead of waiting its turn in the timer rotation.
+# ---------------------------------------------------------------------------
+
+
+def test_conditioned_preset_pins_regardless_of_rotation_pointer(fake_two_themes, tmp_path):
+    out = _two_theme_output(
+        enabled=True,
+        presets={
+            "music_group": {"themes": ["glow"], "when": ["music"]},
+            "minimal": ["vinyl"],
+        },
+    )
+    img = tmp_path / "abc.jpg"
+    img.write_bytes(b"x")
+    out.update(_music(), _artwork(), img)
+
+    payload = out._get_payload()
+    assert payload["active_preset"] == "music_group"
+    assert set(payload["themes"]) == {"glow"}
+
+    # Advancing the (unconditioned) rotation pool must not disturb the pin -
+    # the pointer is free to move in the background, but the conditioned
+    # match always wins while music is still playing.
+    out._advance_preset()
+    payload = out._get_payload()
+    assert payload["active_preset"] == "music_group"
+    assert set(payload["themes"]) == {"glow"}
+
+
+def test_no_matching_conditioned_preset_falls_back_to_rotation(fake_two_themes, tmp_path):
+    out = _two_theme_output(
+        enabled=True,
+        presets={
+            "music_group": {"themes": ["glow"], "when": ["music"]},
+            "minimal": ["vinyl"],
+        },
+    )
+    img = tmp_path / "abc.jpg"
+    img.write_bytes(b"x")
+    out.update(_movie(), _artwork(), img)
+
+    # No group claims "movie" - behaves exactly as if music_group didn't
+    # exist, falling back to the unconditioned rotation pool.
+    payload = out._get_payload()
+    assert payload["active_preset"] == "minimal"
+    assert set(payload["themes"]) == {"vinyl"}
+
+
+def test_only_conditioned_presets_no_match_shows_every_enabled_theme(fake_two_themes, tmp_path):
+    out = _two_theme_output(
+        enabled=True,
+        presets={"music_group": {"themes": ["glow"], "when": ["music"]}},
+    )
+    img = tmp_path / "abc.jpg"
+    img.write_bytes(b"x")
+    out.update(_movie(), _artwork(), img)
+
+    payload = out._get_payload()
+    assert "active_preset" not in payload
+    assert set(payload["themes"]) == {"glow", "vinyl"}
+
+
+def test_idle_when_maps_to_wallpaper_media_type(fake_two_themes, tmp_path):
+    out = _two_theme_output(
+        enabled=True,
+        presets={"idle_group": {"themes": ["glow"], "when": ["idle"]}},
+    )
+    img = tmp_path / "abc.jpg"
+    img.write_bytes(b"x")
+    out.update(_wallpaper(), _artwork(), img)
+
+    payload = out._get_payload()
+    assert payload["active_preset"] == "idle_group"
+    assert set(payload["themes"]) == {"glow"}
+
+
+def test_conflicting_when_first_preset_wins_with_warning(fake_two_themes, caplog, tmp_path):
+    out = _two_theme_output(
+        enabled=True,
+        presets={
+            "a": {"themes": ["glow"], "when": ["music"]},
+            "b": {"themes": ["vinyl"], "when": ["music"]},
+        },
+    )
+    img = tmp_path / "abc.jpg"
+    img.write_bytes(b"x")
+    out.update(_music(), _artwork(), img)
+
+    payload = out._get_payload()
+    assert payload["active_preset"] == "a"
+    assert set(payload["themes"]) == {"glow"}
+    assert "a" in caplog.text
+    assert "b" in caplog.text
 
 
 # ---------------------------------------------------------------------------
