@@ -59,6 +59,28 @@ if you never need to reach the config UI from another device at all -
 Docker users note that this makes it unreachable even from the Docker
 host itself (see "Operating modes at a glance" below).
 
+## Cross-site request protection
+
+A LAN source address being exempt from `auth` (above) says nothing about whether a
+request was actually initiated by someone on your LAN - a malicious webpage a household
+member's browser visits can still fire a state-changing request at, e.g.,
+`http://192.168.1.x:8094/api/config`, and it looks identical to a legitimate one. Two
+protections are always active, regardless of whether `auth.enabled` is set, on every
+Flask-based output:
+
+- **A required header on state-changing requests.** Every POST/PUT/PATCH/DELETE route
+  must carry a custom header this app's own JavaScript always sends. A plain HTML
+  `<form>` submission (the classic CSRF vector) can't set custom headers at all, and a
+  cross-origin `fetch()`/`XMLHttpRequest` that tries to forces a CORS preflight this app
+  never satisfies (it never sends `Access-Control-Allow-Origin` for any origin) - so
+  only this app's own same-origin page can get a mutating request through.
+- **A Host header allowlist**, to close DNS-rebinding (where an attacker's own hostname
+  gets pointed at your LAN IP after the page has already loaded, defeating source-address
+  checks entirely): the `Host` header on every request must be `localhost` or a literal
+  private/loopback IP address. **This means a reverse-proxy setup using a real hostname
+  (e.g. a LAN DNS name or a VPN domain) is not currently allowlisted and will be
+  rejected** - if you need that, open an issue.
+
 ## Keeping credentials out of config.yaml
 
 Any string value in config.yaml can reference an environment variable:
