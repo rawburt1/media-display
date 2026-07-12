@@ -287,7 +287,7 @@ def test_get_config_outputs_single_instance_as_list_of_one(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/config").get_json()
     assert len(data["outputs"]["web"]) == 1
-    assert data["outputs"]["web"][0]["port"] == 8090
+    assert data["outputs"]["web"][0]["enabled"] is True
 
 
 def test_get_config_outputs_multiple_instances(config_path):
@@ -792,7 +792,6 @@ outputs:
   # A comment that originally trailed the ulanzi section.
   web:
     enabled: true
-    port: 8090
 """
     )
     out = _output(config_path)
@@ -822,7 +821,7 @@ outputs:
     cfg = Config.load(config_path)
     ips = [c.device_ip for c in cfg.outputs["ulanzi"]]
     assert ips == ["1.1.1.1", "2.2.2.2"]
-    assert cfg.outputs["web"][0].port == 8090
+    assert cfg.outputs["web"][0].enabled is True
 
 
 def test_save_form_removes_trailing_output_instance(config_path):

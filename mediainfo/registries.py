@@ -65,11 +65,7 @@ OUTPUT_CLASSES: dict[str, Union[str, type]] = {
 # config.auth, to optionally require HTTP Basic Auth - see web_auth.py.
 OUTPUT_EXTRA_ARGS = {
     "config": lambda config, config_path, cache: (config_path, config.auth),
-    "web": lambda config, config_path, cache: (
-        config.rotation_interval_seconds,
-        cache,
-        config.auth,
-    ),
+    "web": lambda config, config_path, cache: (config.rotation_interval_seconds, cache),
     "info": lambda config, config_path, cache: (config.auth,),
     "video": lambda config, config_path, cache: (config.auth,),
     # http_port, not config.auth like the others (nest_hub's blueprint
@@ -172,7 +168,7 @@ OUTPUT_DETAIL_FIELDS: dict = {
     "themes": ["label", "port"],
     "ulanzi": ["label", "device_ip"],
     "video": ["label", "port"],
-    "web": ["label", "port"],
+    "web": ["label"],
 }
 
 

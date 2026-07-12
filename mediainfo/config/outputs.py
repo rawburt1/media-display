@@ -130,8 +130,6 @@ class PixooConfig(_OutputFilterMixin):
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class WebConfig(_OutputFilterMixin):
     enabled: bool = False
-    host: str = "0.0.0.0"
-    port: int = 8090
     transforms: list = dataclasses.field(default_factory=list)
     # Image-change transition variants to exclude, e.g. [slide-left, zoom].
     # All variants (fade, slide-left, slide-right, slide-up, slide-down,

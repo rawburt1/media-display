@@ -58,7 +58,7 @@ def test_load_example_config():
     assert config.sources["vinyl"].port == 8091
 
     assert config.outputs["pixoo"][0].ip == "192.168.1.32"
-    assert config.outputs["web"][0].port == 8090
+    assert config.outputs["web"][0].enabled is True
     assert config.outputs["folder"][0].enabled is True
     assert config.outputs["folder"][0].dir == "./artwork"
 
@@ -96,7 +96,6 @@ outputs:
       app_name: now_playing_bedroom
   web:
     enabled: true
-    port: 8090
 """
     )
 
@@ -104,7 +103,7 @@ outputs:
 
     assert [u.device_ip for u in config.outputs["ulanzi"]] == ["192.168.1.30", "192.168.1.31"]
     assert config.outputs["ulanzi"][1].app_name == "now_playing_bedroom"
-    assert config.outputs["web"] == [WebConfig(enabled=True, port=8090)]
+    assert config.outputs["web"] == [WebConfig(enabled=True)]
 
 
 # ---------------------------------------------------------------------------
@@ -212,13 +211,6 @@ def test_config_ui_config_default_host_is_loopback():
 
     cfg = ConfigUiConfig()
     assert cfg.host == "127.0.0.1"
-
-
-def test_web_config_default_host_is_any():
-    from mediainfo.config import WebConfig
-
-    cfg = WebConfig()
-    assert cfg.host == "0.0.0.0"
 
 
 # ---------------------------------------------------------------------------

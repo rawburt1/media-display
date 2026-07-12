@@ -36,13 +36,13 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Blueprint, jsonify, render_template, request, send_file
 from flask_sock import Sock
 from markupsafe import Markup
 
 from mediainfo.app_services import AppServices
 from mediainfo.cache import CacheTier, ImageCache
-from mediainfo.config import AuthConfig, WebConfig
+from mediainfo.config import WebConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
@@ -53,7 +53,6 @@ from mediainfo.outputs.websocket_push import (
     send_to_one,
 )
 from mediainfo.transforms import parse_pipeline
-from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -82,15 +81,17 @@ class WebOutput(Output):
     # Output.show_wordclouds and orchestrator_artwork.py).
     show_wordclouds = True
 
+    # Mounts at "/" on the shared HTTP server, not "/web" - see
+    # Output.root_mounted and wiring.py.
+    root_mounted = True
+
     def __init__(
         self,
         config: WebConfig,
         rotation_interval_seconds: float = 30,
         cache: Optional[ImageCache] = None,
-        auth_config: Optional[AuthConfig] = None,
     ):
         self.config = config
-        self.auth_config = auth_config
         self.rotation_interval_seconds = rotation_interval_seconds
         self.transform_pipeline = parse_pipeline(config.transforms)
         # Markup: the transitions CSS/JS is code, not text - autoescaping it
@@ -118,8 +119,6 @@ class WebOutput(Output):
 
         self._health_fn = None
         self._history = None
-        self.app = self._build_app()
-        threading.Thread(target=self._run_server, daemon=True).start()
         threading.Thread(target=self._rotate_clients_loop, daemon=True).start()
 
     def set_health_provider(self, fn) -> None:
@@ -344,25 +343,22 @@ class WebOutput(Output):
             on_drop=lambda c: self._client_rotation.pop(c, None),
         )
 
-    def _run_server(self) -> None:
-        logger.info("Starting web server on %s:%s", self.config.host, self.config.port)
-        self.app.run(host=self.config.host, port=self.config.port, threaded=True)
+    def build_http_blueprint(self, url_prefix: str, sock: Optional[Sock] = None) -> Blueprint:
+        bp = Blueprint("web", __name__)
 
-    def _build_app(self) -> Flask:
-        app = Flask(__name__)
-        sock = Sock(app)
+        if sock is not None:
+            register_websocket_route(
+                sock,
+                "/ws",
+                self._clients_lock,
+                self._clients,
+                get_initial_payload=self._personalized_payload,
+                on_connect=self._assign_client_rotation,
+                on_disconnect=lambda conn: self._client_rotation.pop(conn, None),
+                bp=bp,
+            )
 
-        register_websocket_route(
-            sock,
-            "/ws",
-            self._clients_lock,
-            self._clients,
-            get_initial_payload=self._personalized_payload,
-            on_connect=self._assign_client_rotation,
-            on_disconnect=lambda conn: self._client_rotation.pop(conn, None),
-        )
-
-        @app.get("/")
+        @bp.get("/")
         def index():
             return render_template(
                 "web/index.html",
@@ -370,12 +366,12 @@ class WebOutput(Output):
                 transitions_js=self._transitions_js,
             )
 
-        @app.get("/health/live")
+        @bp.get("/health/live")
         def health_live():
             return jsonify({"status": "ok"})
 
-        @app.get("/health/ready")
-        @app.get("/health")
+        @bp.get("/health/ready")
+        @bp.get("/health")
         def health():
             best = request.accept_mimetypes.best_match(["application/json", "text/html"])
             if best == "text/html":
@@ -384,15 +380,15 @@ class WebOutput(Output):
                 return jsonify({"status": "starting"})
             return jsonify(self._health_fn())
 
-        @app.get("/api/now-playing")
+        @bp.get("/api/now-playing")
         def now_playing_json():
             return jsonify(self._get_payload())
 
-        @app.get("/history")
+        @bp.get("/history")
         def history_page():
             return render_template("web/history.html")
 
-        @app.get("/api/history")
+        @bp.get("/api/history")
         def history_json():
             if self._history is None:
                 return jsonify({"enabled": False, "items": []})
@@ -402,7 +398,7 @@ class WebOutput(Output):
                 limit = 50
             return jsonify({"enabled": True, "items": self._history.list(limit)})
 
-        @app.get("/history/image/<int:entry_id>")
+        @bp.get("/history/image/<int:entry_id>")
         def history_image(entry_id: int):
             """Thumbnail for one history entry, resolved through the
             regular artwork cache by the entry's stored URL - usually a
@@ -424,7 +420,7 @@ class WebOutput(Output):
                 return "", 404
             return send_file(path)
 
-        @app.get("/image/current")
+        @bp.get("/image/current")
         def current_image():
             requested = request.args.get("v")
             with self._lock:
@@ -437,5 +433,4 @@ class WebOutput(Output):
 
             return send_file(image_path)
 
-        install_auth(app, self.auth_config)
-        return app
+        return bp

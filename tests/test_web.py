@@ -5,13 +5,14 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+from flask import Flask
 
 from mediainfo.config import WebConfig
 from mediainfo.models import Artwork, NowPlaying
 
 
 def _config(**kwargs):
-    return WebConfig(enabled=True, host="127.0.0.1", port=8090, **kwargs)
+    return WebConfig(enabled=True, **kwargs)
 
 
 def _music(title="Bohemian Rhapsody", artist="Queen", images=None):
@@ -42,7 +43,9 @@ class _FakeConn:
         return None
 
 
-# Suppress the Flask dev-server thread for all tests in this module.
+# Suppress the real _rotate_clients_loop background thread (still started
+# in __init__, unlike the old Flask server thread this output no longer
+# owns) for all tests in this module - it loops forever otherwise.
 @pytest.fixture(autouse=True)
 def no_server(monkeypatch):
     monkeypatch.setattr("threading.Thread.start", lambda self: None)
@@ -52,6 +55,24 @@ def _output(config=None, rotation_interval_seconds=30):
     from mediainfo.outputs.web import WebOutput
 
     return WebOutput(config or _config(), rotation_interval_seconds)
+
+
+def _client(out, url_prefix=""):
+    """Register out's blueprint on a throwaway local Flask app and return
+    a test client against it - see tests/test_nest_hub.py for the harness
+    pattern (H1, see docs/architecture-usability-review-2026-07.md). Built
+    as Flask("mediainfo.outputs.web"), not Flask(__name__), so the real
+    mediainfo/outputs/templates/ directory resolves (see tests/test_feeds.py
+    for why). sock=None (the default build_http_blueprint() argument) skips
+    /ws registration - every test here that exercises WebSocket behavior
+    does so via _connect()'s _FakeConn simulation, not a real socket
+    handshake (Flask's test client can't hijack one - see
+    mediainfo/outputs/http_server.py's module docstring for why /ws needs a
+    real server at all).
+    """
+    app = Flask("mediainfo.outputs.web")
+    app.register_blueprint(out.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
 
 
 def _connect(out) -> "_FakeConn":
@@ -130,7 +151,7 @@ def test_personalized_payload_includes_playback_position():
 
 def test_index_page_has_progress_bar():
     out = _output()
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert 'id="progress"' in body
 
 
@@ -471,7 +492,7 @@ def test_image_current_serves_file_for_known_v(tmp_path):
     img.write_bytes(b"image-bytes")
     out._known_images["abc"] = img
 
-    resp = out.app.test_client().get("/image/current?v=abc")
+    resp = _client(out).get("/image/current?v=abc")
 
     assert resp.status_code == 200
     assert resp.data == b"image-bytes"
@@ -483,7 +504,7 @@ def test_image_current_falls_back_to_global_pick_for_unknown_v(tmp_path):
     img.write_bytes(b"fallback-bytes")
     out._image_path = img
 
-    resp = out.app.test_client().get("/image/current?v=does-not-exist")
+    resp = _client(out).get("/image/current?v=does-not-exist")
 
     assert resp.status_code == 200
     assert resp.data == b"fallback-bytes"
@@ -491,7 +512,7 @@ def test_image_current_falls_back_to_global_pick_for_unknown_v(tmp_path):
 
 def test_image_current_404_when_nothing_available():
     out = _output()
-    resp = out.app.test_client().get("/image/current")
+    resp = _client(out).get("/image/current")
     assert resp.status_code == 404
 
 
@@ -502,7 +523,7 @@ def test_image_current_404_when_nothing_available():
 
 def test_health_returns_starting_when_no_provider():
     out = _output()
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.get_json()
@@ -512,7 +533,7 @@ def test_health_returns_starting_when_no_provider():
 def test_health_calls_provider_and_returns_json():
     out = _output()
     out.set_health_provider(lambda: {"status": "ok", "uptime_seconds": 42.0})
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.get_json()
@@ -524,7 +545,7 @@ def test_health_provider_can_be_replaced():
     out = _output()
     out.set_health_provider(lambda: {"status": "old"})
     out.set_health_provider(lambda: {"status": "new"})
-    client = out.app.test_client()
+    client = _client(out)
     data = client.get("/health").get_json()
     assert data["status"] == "new"
 
@@ -532,7 +553,7 @@ def test_health_provider_can_be_replaced():
 def test_health_content_type_is_json():
     out = _output()
     out.set_health_provider(lambda: {"status": "ok"})
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.get("/health")
     assert "application/json" in resp.content_type
 
@@ -554,7 +575,7 @@ def test_attach_wires_health_provider_and_history():
 
     out.attach(AppServices(health_provider=provider, history=history))
 
-    client = out.app.test_client()
+    client = _client(out)
     assert client.get("/health").get_json()["status"] == "ok"
     assert out._history is history
 
@@ -574,50 +595,24 @@ def test_attach_passes_through_none_history():
 
 def test_index_page_includes_all_transitions_by_default():
     out = _output()
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     assert "t-slide-left" in body
     assert "prepareForTransition" in body
 
 
 def test_index_page_excludes_configured_transitions():
     out = _output(_config(transition_exclude=["slide-left", "zoom"]))
-    body = out.app.test_client().get("/").data.decode()
+    body = _client(out).get("/").data.decode()
     variants_section = body.split("TRANSITION_VARIANTS = ")[1].split(";")[0]
     assert "t-slide-left" not in variants_section
     assert "t-zoom" not in variants_section
 
 
-# ---------------------------------------------------------------------------
-# Optional auth
-# ---------------------------------------------------------------------------
-
-
-def test_auth_disabled_by_default():
-    from mediainfo.outputs.web import WebOutput
-
-    out = WebOutput(_config())
-    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
-    assert resp.status_code == 200
-
-
-def test_auth_required_for_public_address_when_enabled():
-    from mediainfo.config import AuthConfig
-    from mediainfo.outputs.web import WebOutput
-
-    auth = AuthConfig(enabled=True, username="admin", password="secret")
-    out = WebOutput(_config(), auth_config=auth)
-    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
-    assert resp.status_code == 401
-
-
-def test_auth_not_required_for_private_address_when_enabled():
-    from mediainfo.config import AuthConfig
-    from mediainfo.outputs.web import WebOutput
-
-    auth = AuthConfig(enabled=True, username="admin", password="secret")
-    out = WebOutput(_config(), auth_config=auth)
-    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
-    assert resp.status_code == 200
+# Optional auth: no longer tested per-output - install_auth() is called
+# once, centrally, by SharedHttpServer (mediainfo/outputs/http_server.py),
+# not by WebOutput itself. See tests/test_web_auth.py (the private/public
+# address + Basic Auth logic itself) and tests/test_http_server.py (the
+# CSRF-header guard, wired the same way).
 
 
 # ---------------------------------------------------------------------------
@@ -633,7 +628,7 @@ def _history_store(tmp_path):
 
 def test_history_api_reports_disabled_without_store():
     out = _output()
-    resp = out.app.test_client().get("/api/history")
+    resp = _client(out).get("/api/history")
     assert resp.get_json() == {"enabled": False, "items": []}
 
 
@@ -643,14 +638,14 @@ def test_history_api_lists_entries(tmp_path):
     out = _output()
     out.set_history(store)
 
-    data = out.app.test_client().get("/api/history").get_json()
+    data = _client(out).get("/api/history").get_json()
     assert data["enabled"] is True
     assert data["items"][0]["title"] == "Bohemian Rhapsody"
 
 
 def test_history_page_served():
     out = _output()
-    body = out.app.test_client().get("/history").data.decode()
+    body = _client(out).get("/history").data.decode()
     assert "Recently played" in body
 
 
@@ -669,7 +664,7 @@ def test_history_image_resolved_through_cache(tmp_path):
     out = WebOutput(_config(), 30, cache)
     out.set_history(store)
 
-    resp = out.app.test_client().get(f"/history/image/{entry_id}")
+    resp = _client(out).get(f"/history/image/{entry_id}")
     assert resp.status_code == 200
     assert resp.data == b"cover-bytes"
     # music entry -> music cache tier (never purged)
@@ -679,7 +674,7 @@ def test_history_image_resolved_through_cache(tmp_path):
 def test_history_image_404_for_unknown_entry(tmp_path):
     out = _output()
     out.set_history(_history_store(tmp_path))
-    assert out.app.test_client().get("/history/image/999").status_code == 404
+    assert _client(out).get("/history/image/999").status_code == 404
 
 
 def test_show_wordclouds_is_enabled():
