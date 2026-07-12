@@ -3,7 +3,12 @@
 from flask import Flask
 
 from mediainfo.config import AuthConfig
-from mediainfo.web_auth import install_auth, is_loopback_address, is_private_address
+from mediainfo.web_auth import (
+    _host_without_port,
+    install_auth,
+    is_loopback_address,
+    is_private_address,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +72,12 @@ def _app(auth_config):
     def secret():
         return "ok"
 
+    @app.post("/secret")
+    @app.put("/secret")
+    @app.delete("/secret")
+    def mutate_secret():
+        return "ok"
+
     install_auth(app, auth_config)
     return app
 
@@ -120,6 +131,99 @@ def test_public_address_with_wrong_credentials_is_rejected():
         auth=("u", "wrong"),
     )
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# _require_csrf_header / _require_trusted_host - always installed,
+# independent of AuthConfig (auth disabled/None in most of these, to prove
+# that's true).
+# ---------------------------------------------------------------------------
+
+
+def test_mutating_request_without_csrf_header_is_rejected():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.post("/secret")
+    assert resp.status_code == 403
+
+
+def test_mutating_request_with_csrf_header_is_allowed():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.post("/secret", headers={"X-Requested-With": "XMLHttpRequest"})
+    assert resp.status_code == 200
+
+
+def test_put_and_delete_also_require_csrf_header():
+    app = _app(None)
+    client = app.test_client()
+    assert client.put("/secret").status_code == 403
+    assert client.delete("/secret").status_code == 403
+    headers = {"X-Requested-With": "XMLHttpRequest"}
+    assert client.put("/secret", headers=headers).status_code == 200
+    assert client.delete("/secret", headers=headers).status_code == 200
+
+
+def test_get_request_never_needs_the_csrf_header():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.get("/secret")
+    assert resp.status_code == 200
+
+
+def test_wrong_csrf_header_value_is_rejected():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.post("/secret", headers={"X-Requested-With": "something-else"})
+    assert resp.status_code == 403
+
+
+def test_untrusted_host_header_is_rejected():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.get("/secret", headers={"Host": "evil.example"})
+    assert resp.status_code == 403
+
+
+def test_untrusted_host_header_with_port_is_rejected():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.get("/secret", headers={"Host": "evil.example:8094"})
+    assert resp.status_code == 403
+
+
+def test_localhost_host_header_is_trusted():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.get("/secret", headers={"Host": "localhost:8094"})
+    assert resp.status_code == 200
+
+
+def test_private_ip_host_header_is_trusted():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.get("/secret", headers={"Host": "192.168.1.40:8094"})
+    assert resp.status_code == 200
+
+
+def test_bracketed_ipv6_host_header_is_trusted():
+    app = _app(None)
+    client = app.test_client()
+    resp = client.get("/secret", headers={"Host": "[::1]:8094"})
+    assert resp.status_code == 200
+
+
+def test_host_without_port_strips_plain_port():
+    assert _host_without_port("192.168.1.40:8094") == "192.168.1.40"
+
+
+def test_host_without_port_leaves_bare_host_alone():
+    assert _host_without_port("localhost") == "localhost"
+
+
+def test_host_without_port_handles_bracketed_ipv6():
+    assert _host_without_port("[::1]:8094") == "::1"
+    assert _host_without_port("[::1]") == "::1"
 
 
 # ---------------------------------------------------------------------------
