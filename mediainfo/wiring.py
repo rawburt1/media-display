@@ -22,6 +22,7 @@ from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.media_data_store import MediaDataStore
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
+from mediainfo.outputs.base import Output
 from mediainfo.outputs.http_server import SharedHttpServer
 from mediainfo.poster_store import PosterStore
 from mediainfo.text_cache import TextCache
@@ -89,7 +90,17 @@ def instantiate_outputs(
                 continue
             output = output_cls(output_config, *extra_args)
             output.start()
-            if shared_server is not None:
+            # Only Flask-based outputs (those overriding build_http_blueprint)
+            # need a URL prefix/label-collision check - a non-HTTP output
+            # (pixoo, ulanzi, folder, mqtt, ...) never mounts anything on the
+            # shared server, so requiring a `label` on its 2nd+ instance would
+            # be an unrelated, surprising restriction. See Output.
+            # build_http_blueprint()'s docstring for the "Flask-based only"
+            # contract this checks.
+            is_http_output = (
+                getattr(output_cls, "build_http_blueprint", None) is not Output.build_http_blueprint
+            )
+            if shared_server is not None and is_http_output:
                 url_prefix, blueprint_name = _compute_url_mount(
                     name, index, enabled_count, output_cls, getattr(output_config, "label", "")
                 )

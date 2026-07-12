@@ -127,6 +127,43 @@ def test_compute_url_mount_missing_label_on_second_instance_raises():
         _compute_url_mount("config", 1, 2, _FakeOutputCls, "")
 
 
+def test_instantiate_outputs_second_instance_of_non_http_output_needs_no_label():
+    # Regression test: _compute_url_mount()'s label-collision check must
+    # only apply to Flask-based outputs (those overriding
+    # build_http_blueprint) - a non-HTTP output (e.g. ulanzi, ran with two
+    # unlabeled instances in a real config this was caught against) never
+    # mounts anything on the shared server, so it must not be required to
+    # set a `label` just because a second instance exists. Uses the real
+    # Output.build_http_blueprint (inherited, unoverridden) rather than a
+    # MagicMock class so the "isn't overridden" check actually exercises
+    # the same attribute lookup real Output subclasses go through.
+    from mediainfo.outputs.base import Output
+
+    class _NonHttpOutput:
+        root_mounted = False
+        build_http_blueprint = Output.build_http_blueprint
+
+        def __init__(self, config):
+            self.config = config
+
+        def start(self):
+            pass
+
+    first_cfg = MagicMock(enabled=True, label="")
+    second_cfg = MagicMock(enabled=True, label="")
+    cfg = _minimal_config(outputs={"ulanzi": [first_cfg, second_cfg]})
+    shared_server = MagicMock()
+
+    with (
+        patch("mediainfo.registries.OUTPUT_CLASSES", {"ulanzi": _NonHttpOutput}),
+        patch("mediainfo.registries.OUTPUT_EXTRA_ARGS", {}),
+    ):
+        result = instantiate_outputs(cfg, Path("config.yaml"), MagicMock(), shared_server)
+
+    assert len(result) == 2
+    shared_server.register_blueprint.assert_not_called()
+
+
 def test_instantiate_outputs_registers_blueprint_on_shared_server():
     output_cfg = MagicMock()
     output_cfg.enabled = True
