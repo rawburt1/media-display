@@ -37,7 +37,16 @@ class SharedHttpServer:
 
     def __init__(self, config: HttpServerConfig, auth_config: Optional[AuthConfig]):
         self.config = config
-        self.app = Flask(__name__)
+        # static_folder=None: the app-level default static route (which
+        # would otherwise point at mediainfo/outputs/ - the parent of every
+        # output's own static/<name>/ subfolder) would register at the same
+        # "/static/<path:filename>" URL pattern as config_ui's own
+        # blueprint-scoped static route and silently shadow it (Werkzeug
+        # resolves the conflict by whichever rule was added first, not by
+        # specificity - the app's own default is always added first).
+        # Outputs that want static files declare their own blueprint-scoped
+        # static_folder/static_url_path instead (see ConfigUiOutput).
+        self.app = Flask(__name__, static_folder=None)
         self.sock = Sock(self.app)
         # Always the same shared config.auth object every output used to
         # pass individually - one registration instead of seven identical

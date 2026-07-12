@@ -49,7 +49,7 @@
 </style>
 </head>
 <body>
-<a class="nav-link" href="/form">&larr; Configuration</a>
+<a class="nav-link" href="{{ url_for('config.form_page') }}">&larr; Configuration</a>
 <h1>Artwork overrides</h1>
 <p class="hint">
   Pin a specific image for a title/subtitle that never gets a good poster
@@ -76,6 +76,8 @@
 // this - see mediainfo/web_auth.py's _require_csrf_header. Not needed
 // on GETs.
 const CSRF_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' };
+const API_PREFIX = {{ url_prefix|tojson }};
+function apiFetch(url, opts) { return fetch(API_PREFIX + url, opts); }
 
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -100,7 +102,7 @@ function renderList(items) {
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML =
-      '<img src="/api/overrides/image/' + encodeURIComponent(item.filename) + '" alt="">' +
+      '<img src="' + API_PREFIX + '/api/overrides/image/' + encodeURIComponent(item.filename) + '" alt="">' +
       '<div class="card-info">' +
         '<div class="card-title">' + escapeHtml(item.title) + '</div>' +
         '<div class="card-subtitle">' + escapeHtml(item.subtitle || '(no subtitle)') + '</div>' +
@@ -114,7 +116,7 @@ function renderList(items) {
 }
 
 function loadList() {
-  fetch('/api/overrides').then(function(r) { return r.json(); }).then(function(data) {
+  apiFetch('/api/overrides').then(function(r) { return r.json(); }).then(function(data) {
     if (data.enabled === false) {
       document.getElementById('disabled').style.display = 'block';
       document.getElementById('add-form').style.display = 'none';
@@ -124,7 +126,7 @@ function loadList() {
 }
 
 function removeOverride(title, subtitle) {
-  fetch('/api/overrides', {
+  apiFetch('/api/overrides', {
     method: 'DELETE',
     headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify({ title: title, subtitle: subtitle }),
@@ -134,7 +136,7 @@ function removeOverride(title, subtitle) {
 document.getElementById('add-form').addEventListener('submit', function(e) {
   e.preventDefault();
   const formData = new FormData(e.target);
-  fetch('/api/overrides', { method: 'POST', headers: CSRF_HEADERS, body: formData })
+  apiFetch('/api/overrides', { method: 'POST', headers: CSRF_HEADERS, body: formData })
     .then(function(r) { return r.json().then(function(data) { return [r.ok, data]; }); })
     .then(function(result) {
       const ok = result[0], data = result[1];

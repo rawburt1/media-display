@@ -202,18 +202,6 @@ def test_from_dict_does_not_warn_on_known_plugin_names(caplog):
 
 
 # ---------------------------------------------------------------------------
-# ConfigUiConfig host default
-# ---------------------------------------------------------------------------
-
-
-def test_config_ui_config_default_host_is_loopback():
-    from mediainfo.config import ConfigUiConfig
-
-    cfg = ConfigUiConfig()
-    assert cfg.host == "127.0.0.1"
-
-
-# ---------------------------------------------------------------------------
 # Environment variable expansion
 # ---------------------------------------------------------------------------
 

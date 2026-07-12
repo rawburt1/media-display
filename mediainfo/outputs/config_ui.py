@@ -76,8 +76,9 @@ never overwritten.
 `self._restart_required` is set whenever a save touches `outputs` (the
 one category that can't hot-reload) or `auth` (every Flask-based output's
 HTTP Basic Auth check closes over the AuthConfig instance from process
-startup - see install_auth() in _build_app() - so a changed password
-doesn't take effect until the process actually restarts), and cleared
+startup - see install_auth() in mediainfo/outputs/http_server.py's
+SharedHttpServer - so a changed password doesn't take effect until the
+process actually restarts), and cleared
 when /api/restart is called - it's surfaced via /api/overview so the
 Overview page can show a "Restart needed" banner. This is a coarse flag
 (any outputs/auth save sets it, even a no-op resubmission) rather than a
@@ -130,7 +131,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Blueprint, jsonify, render_template, request, send_file
 from PIL import Image, UnidentifiedImageError
 
 from mediainfo.app_services import AppServices
@@ -165,7 +166,7 @@ from mediainfo.outputs.ui_builder import (
     build_dashboard,
     build_pipeline,
 )
-from mediainfo.web_auth import install_auth, is_loopback_address
+from mediainfo.web_auth import is_loopback_address
 
 logger = logging.getLogger(__name__)
 
@@ -187,9 +188,15 @@ class ConfigUiOutput(Output):
         config: ConfigUiConfig,
         config_path: Path,
         auth_config: Optional[AuthConfig] = None,
+        http_host: str = "0.0.0.0",
     ):
         self.config = config
         self.auth_config = auth_config
+        # The shared HTTP server's bind host (see
+        # mediainfo/outputs/http_server.py) - kept here (unlike every other
+        # output) only for _is_exposed_without_auth()'s warning-banner
+        # logic, now that this output no longer has its own host to check.
+        self.http_host = http_host
         self.config_path = Path(config_path)
         self._lock = threading.Lock()
         self._store = ConfigStore(self.config_path, self._lock)
@@ -211,8 +218,10 @@ class ConfigUiOutput(Output):
         # on the Overview page (/api/overview). Cleared when /api/restart
         # is called.
         self._restart_required = False
-        self.app = self._build_app()
-        threading.Thread(target=self._run_server, daemon=True).start()
+        # Set by build_http_blueprint() once wiring.py has computed it -
+        # threaded into templates so their JS can prefix its own fetch()
+        # calls (see static/config_ui/*.js).
+        self._url_prefix = ""
 
     def set_hitster_safe_handlers(self, get_fn, set_fn) -> None:
         """Register the orchestrator's Hitster-safe get/set, so this
@@ -246,10 +255,6 @@ class ConfigUiOutput(Output):
 
     def on_new_item(self, now_playing: NowPlaying, cache: ImageCache) -> None:
         pass
-
-    def _run_server(self) -> None:
-        logger.info("Starting config server on %s:%s", self.config.host, self.config.port)
-        self.app.run(host=self.config.host, port=self.config.port, threaded=True)
 
     # -- request handling -------------------------------------------------
 
@@ -333,8 +338,8 @@ class ConfigUiOutput(Output):
         which is about whether *this visitor* should see the banner)."""
         auth_on = bool(self.auth_config and self.auth_config.enabled)
         return (
-            not is_loopback_address(self.config.host)
-            and self.config.host != "localhost"
+            not is_loopback_address(self.http_host)
+            and self.http_host != "localhost"
             and not auth_on
         )
 
@@ -403,23 +408,31 @@ class ConfigUiOutput(Output):
             return False
         return not is_loopback_address(request.remote_addr)
 
-    def _build_app(self) -> Flask:
-        app = Flask(__name__)
+    def build_http_blueprint(self, url_prefix: str, sock=None) -> Blueprint:
+        self._url_prefix = url_prefix
+        bp = Blueprint(
+            "config",
+            __name__,
+            static_folder="static/config_ui",
+            static_url_path="/static",
+        )
 
         def _shell(initial_section: str):
             return render_template(
                 "config_ui/app.html",
                 show_auth_warning=self._show_auth_warning(),
                 initial_section=initial_section,
+                url_prefix=url_prefix,
             )
 
         def _dashboard_shell():
             return render_template(
                 "config_ui/dashboard.html",
                 show_auth_warning=self._show_auth_warning(),
+                url_prefix=url_prefix,
             )
 
-        @app.get("/")
+        @bp.get("/")
         def index():
             # `ui: dashboard` keeps landing on the classic health-grid,
             # unchanged - anyone who already opted into that view keeps
@@ -438,19 +451,19 @@ class ConfigUiOutput(Output):
         # editable sections (and vice versa) without running a second
         # output instance. Both render the same single-page shell; only
         # the initially-selected nav section differs.
-        @app.get("/form")
+        @bp.get("/form")
         def form_page():
             return _shell("overview")
 
-        @app.get("/dashboard")
+        @bp.get("/dashboard")
         def dashboard_page():
             return _shell("status")
 
-        @app.get("/api/schema")
+        @bp.get("/api/schema")
         def schema():
             return jsonify(_build_schema())
 
-        @app.get("/api/config")
+        @bp.get("/api/config")
         def get_config():
             with self._lock:
                 raw_yaml = (
@@ -470,7 +483,7 @@ class ConfigUiOutput(Output):
                 }
             )
 
-        @app.get("/api/overview")
+        @bp.get("/api/overview")
         def overview():
             return jsonify(self._compute_overview())
 
@@ -479,12 +492,12 @@ class ConfigUiOutput(Output):
         # routes above already expose - see ui_builder.py. Additive: none
         # of the routes above change.
 
-        @app.get("/api/ui/components")
+        @bp.get("/api/ui/components")
         def ui_components():
             components = self._build_ui_components()
             return jsonify([dataclasses.asdict(c) for c in components])
 
-        @app.get("/api/ui/component/<id>")
+        @bp.get("/api/ui/component/<id>")
         def ui_component(id: str):
             components = self._build_ui_components()
             for c in components:
@@ -492,18 +505,18 @@ class ConfigUiOutput(Output):
                     return jsonify(dataclasses.asdict(c))
             return jsonify({"error": f"Unknown component id: {id}"}), 404
 
-        @app.get("/api/ui/pipelines")
+        @bp.get("/api/ui/pipelines")
         def ui_pipelines():
             components = self._build_ui_components()
             pipeline = build_pipeline(components)
             return jsonify([dataclasses.asdict(pipeline)])
 
-        @app.get("/api/ui/dashboard")
+        @bp.get("/api/ui/dashboard")
         def ui_dashboard():
             _components, _pipeline, dashboard = self._build_ui_dashboard()
             return jsonify(dataclasses.asdict(dashboard))
 
-        @app.post("/api/config/form")
+        @bp.post("/api/config/form")
         def save_form():
             body = request.get_json(silent=True) or {}
             error, restart_required = self._store.save_form(
@@ -515,7 +528,7 @@ class ConfigUiOutput(Output):
                 self._restart_required = True
             return jsonify({"ok": True, "restart_required": self._restart_required})
 
-        @app.post("/api/config/raw")
+        @bp.post("/api/config/raw")
         def save_raw():
             body = request.get_json(silent=True) or {}
             error, restart_required = self._store.save_raw(body.get("yaml") or "")
@@ -525,7 +538,7 @@ class ConfigUiOutput(Output):
                 self._restart_required = True
             return jsonify({"ok": True, "restart_required": self._restart_required})
 
-        @app.post("/api/config/hidden-types")
+        @bp.post("/api/config/hidden-types")
         def set_hidden_type():
             body = request.get_json(silent=True) or {}
             category = body.get("category")
@@ -538,14 +551,14 @@ class ConfigUiOutput(Output):
                 return jsonify({"ok": False, "error": error}), 400
             return jsonify({"ok": True, "hidden_types": self._store.get_hidden_types()})
 
-        @app.get("/api/config/backups")
+        @bp.get("/api/config/backups")
         def list_config_backups():
             backups = list_backups(self.config_path)
             return jsonify(
                 {"backups": [{"filename": b.name, "mtime": b.stat().st_mtime} for b in backups]}
             )
 
-        @app.post("/api/config/backups/restore")
+        @bp.post("/api/config/backups/restore")
         def restore_config_backup():
             body = request.get_json(silent=True) or {}
             filename = (body.get("filename") or "").strip()
@@ -572,18 +585,18 @@ class ConfigUiOutput(Output):
                 )
             return jsonify(response)
 
-        @app.post("/api/restart")
+        @bp.post("/api/restart")
         def restart():
             self._restart_required = False
             threading.Timer(_RESTART_DELAY_SECONDS, _restart_process).start()
             return jsonify({"ok": True})
 
-        @app.get("/api/hitster-safe")
+        @bp.get("/api/hitster-safe")
         def hitster_safe_status():
             enabled = self._hitster_safe_get() if self._hitster_safe_get else False
             return jsonify({"enabled": enabled})
 
-        @app.post("/api/hitster-safe")
+        @bp.post("/api/hitster-safe")
         def hitster_safe_toggle():
             if self._hitster_safe_set is None:
                 return jsonify({"error": "Hitster-safe is not available"}), 503
@@ -592,7 +605,7 @@ class ConfigUiOutput(Output):
             self._hitster_safe_set(enabled)
             return jsonify({"enabled": enabled})
 
-        @app.post("/api/appletv/pair/start")
+        @bp.post("/api/appletv/pair/start")
         def appletv_pair_start():
             body = request.get_json(silent=True) or {}
             host = (body.get("host") or "").strip()
@@ -606,7 +619,7 @@ class ConfigUiOutput(Output):
                 return jsonify({"ok": False, "error": str(exc)}), 400
             return jsonify({"ok": True, **result})
 
-        @app.post("/api/appletv/pair/finish")
+        @bp.post("/api/appletv/pair/finish")
         def appletv_pair_finish():
             body = request.get_json(silent=True) or {}
             try:
@@ -616,20 +629,20 @@ class ConfigUiOutput(Output):
                 return jsonify({"ok": False, "error": str(exc)}), 400
             return jsonify({"ok": True, **result})
 
-        @app.post("/api/appletv/pair/cancel")
+        @bp.post("/api/appletv/pair/cancel")
         def appletv_pair_cancel():
             self._appletv.cancel()
             return jsonify({"ok": True})
 
-        @app.get("/library")
+        @bp.get("/library")
         def library_page():
-            return render_template("config_ui/library.html")
+            return render_template("config_ui/library.html", url_prefix=url_prefix)
 
-        @app.get("/api/library/stats")
+        @bp.get("/api/library/stats")
         def library_stats():
             return jsonify(self._get_library().stats())
 
-        @app.get("/api/library/search")
+        @bp.get("/api/library/search")
         def library_search():
             query = (request.args.get("q") or "").strip()
             if not query:
@@ -637,7 +650,7 @@ class ConfigUiOutput(Output):
             results = self._get_library().search(query)
             return jsonify([{"id": artist_id, "name": name} for artist_id, name in results])
 
-        @app.get("/api/library/artist/<int:artist_id>")
+        @bp.get("/api/library/artist/<int:artist_id>")
         def library_artist(artist_id: int):
             library = self._get_library()
             name = library.artist_name(artist_id)
@@ -655,17 +668,17 @@ class ConfigUiOutput(Output):
                 }
             )
 
-        @app.get("/overrides")
+        @bp.get("/overrides")
         def overrides_page():
-            return render_template("config_ui/overrides.html")
+            return render_template("config_ui/overrides.html", url_prefix=url_prefix)
 
-        @app.get("/api/overrides")
+        @bp.get("/api/overrides")
         def overrides_list():
             if self._overrides is None:
                 return jsonify({"enabled": False, "items": []})
             return jsonify({"enabled": True, "items": self._overrides.list()})
 
-        @app.post("/api/overrides")
+        @bp.post("/api/overrides")
         def overrides_add():
             if self._overrides is None:
                 return jsonify({"ok": False, "error": "Overrides are disabled"}), 503
@@ -682,7 +695,7 @@ class ConfigUiOutput(Output):
             self._overrides.set(title, subtitle, file.read(), extension)
             return jsonify({"ok": True})
 
-        @app.delete("/api/overrides")
+        @bp.delete("/api/overrides")
         def overrides_remove():
             if self._overrides is None:
                 return jsonify({"ok": False, "error": "Overrides are disabled"}), 503
@@ -693,7 +706,7 @@ class ConfigUiOutput(Output):
             )
             return jsonify({"ok": removed})
 
-        @app.get("/api/overrides/image/<filename>")
+        @bp.get("/api/overrides/image/<filename>")
         def overrides_image(filename: str):
             if self._overrides is None:
                 return "", 404
@@ -704,7 +717,7 @@ class ConfigUiOutput(Output):
                 return "", 404
             return send_file(path)
 
-        @app.get("/api/status")
+        @bp.get("/api/status")
         def status():
             if self._health_fn is None:
                 return jsonify({"sources": [], "outputs": [], "enrichers": [], "idle_sources": []})
@@ -718,28 +731,28 @@ class ConfigUiOutput(Output):
                 }
             )
 
-        @app.post("/api/test/source/<name>")
+        @bp.post("/api/test/source/<name>")
         def test_source_route(name: str):
             config = Config.load(self.config_path)
             source_config = config.sources.get(name)
             ok, message = test_source(name, source_config)
             return jsonify({"ok": ok, "message": message})
 
-        @app.post("/api/test/enricher/<name>")
+        @bp.post("/api/test/enricher/<name>")
         def test_enricher_route(name: str):
             config = Config.load(self.config_path)
             enricher_config = config.enrichers.get(name)
             ok, message = test_enricher(name, enricher_config)
             return jsonify({"ok": ok, "message": message})
 
-        @app.post("/api/test/output")
+        @bp.post("/api/test/output")
         def test_output_route():
             body = request.get_json(silent=True) or {}
             type_name = body.get("type", "")
             ok, message = test_output(type_name, body)
             return jsonify({"ok": ok, "message": message})
 
-        @app.post("/api/preview/pixoo")
+        @bp.post("/api/preview/pixoo")
         def preview_pixoo():
             """Run an uploaded test image through mediainfo.led_image's
             pipeline using the *currently-edited* form settings (sent as a
@@ -810,5 +823,4 @@ class ConfigUiOutput(Output):
                 }
             )
 
-        install_auth(app, self.auth_config)
-        return app
+        return bp

@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from flask import Flask
 
 from mediainfo.config import ConfigUiConfig
 from mediainfo.outputs.config_ui import ConfigUiOutput
@@ -15,13 +16,21 @@ from mediainfo.outputs.config_ui import ConfigUiOutput
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 
 
-@pytest.fixture(autouse=True)
-def no_server(monkeypatch):
-    monkeypatch.setattr("threading.Thread.start", lambda self: None)
-
-
 def _config(**kwargs):
-    return ConfigUiConfig(enabled=True, host="127.0.0.1", port=8094, **kwargs)
+    return ConfigUiConfig(enabled=True, **kwargs)
+
+
+def _client(out, url_prefix=""):
+    """See tests/test_nest_hub.py for the harness pattern (H1, see
+    docs/architecture-usability-review-2026-07.md). Built as
+    Flask("mediainfo.outputs.config_ui") so templates/ and the blueprint's
+    own static_folder resolve - see tests/test_feeds.py for why."""
+    # static_folder=None: matches the real SharedHttpServer - see its own
+    # comment for why (the app-level default static route would shadow
+    # config_ui's own blueprint-scoped one at the same URL pattern).
+    app = Flask("mediainfo.outputs.config_ui", static_folder=None)
+    app.register_blueprint(out.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
 
 
 @pytest.fixture
@@ -38,7 +47,7 @@ def config_path(tmp_path):
 
 def test_root_serves_new_dashboard_shell_by_default(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/")
+    resp = _client(out).get("/")
     assert resp.status_code == 200
     body = resp.data
     assert b'data-section="dashboard"' in body
@@ -49,14 +58,14 @@ def test_root_serves_new_dashboard_shell_by_default(config_path):
 
 def test_root_with_ui_dashboard_still_serves_classic_status_shell(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = out.app.test_client().get("/")
+    resp = _client(out).get("/")
     assert resp.status_code == 200
     assert b'data-initial-section="status"' in resp.data
 
 
 def test_form_and_dashboard_routes_are_unaffected(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    client = out.app.test_client()
+    client = _client(out)
     assert b'data-initial-section="overview"' in client.get("/form").data
     assert b'data-initial-section="status"' in client.get("/dashboard").data
 
@@ -73,14 +82,14 @@ def test_new_shell_nav_has_in_shell_category_sections(config_path):
     # Fas 6 and Library in Fas 7 - only Advanced remains a plain link
     # (next test).
     out = ConfigUiOutput(_config(), config_path)
-    body = out.app.test_client().get("/").data
+    body = _client(out).get("/").data
     for section in (b"media", b"metadata", b"appearance", b"displays", b"library", b"health"):
         assert b'data-section="' + section + b'"' in body, section
 
 
 def test_new_shell_nav_links_into_classic_sections(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    body = out.app.test_client().get("/").data
+    body = _client(out).get("/").data
     assert b'href="/form"' in body
 
 
@@ -91,13 +100,13 @@ def test_new_shell_nav_links_into_classic_sections(config_path):
 
 def test_new_shell_shows_auth_warning_for_non_loopback_caller(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
+    resp = _client(out).get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
     assert b"No authentication" in resp.data
 
 
 def test_new_shell_no_auth_warning_for_loopback_caller(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/")
+    resp = _client(out).get("/")
     assert b"No authentication" not in resp.data
 
 
@@ -108,17 +117,17 @@ def test_new_shell_no_auth_warning_for_loopback_caller(config_path):
 
 def test_dashboard_static_js_is_served(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/static/config_ui/dashboard.js")
+    resp = _client(out).get("/static/dashboard.js")
     assert resp.status_code == 200
 
 
 def test_components_static_js_is_served(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/static/config_ui/components.js")
+    resp = _client(out).get("/static/components.js")
     assert resp.status_code == 200
 
 
 def test_dashboard_static_css_is_served(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/static/config_ui/dashboard.css")
+    resp = _client(out).get("/static/dashboard.css")
     assert resp.status_code == 200

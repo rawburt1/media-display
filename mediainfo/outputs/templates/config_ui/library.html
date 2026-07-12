@@ -35,13 +35,16 @@
 </style>
 </head>
 <body>
-<a class="nav-link" href="/form">&larr; Configuration</a>
+<a class="nav-link" href="{{ url_for('config.form_page') }}">&larr; Configuration</a>
 <h1>Music library</h1>
 <div id="stats">Loading...</div>
 <input id="search" type="text" placeholder="Search artists..." autofocus>
 <div id="results"></div>
 
 <script>
+const API_PREFIX = {{ url_prefix|tojson }};
+function apiFetch(url, opts) { return fetch(API_PREFIX + url, opts); }
+
 let debounceTimer = null;
 
 function escapeHtml(text) {
@@ -51,7 +54,7 @@ function escapeHtml(text) {
 }
 
 function loadStats() {
-  fetch('/api/library/stats').then(function(r) { return r.json(); }).then(function(s) {
+  apiFetch('/api/library/stats').then(function(r) { return r.json(); }).then(function(s) {
     document.getElementById('stats').textContent =
       s.artists + ' artist(s), ' + s.albums + ' album(s), ' + s.tracks + ' track(s)';
   });
@@ -63,7 +66,7 @@ function renderMbid(mbid) {
 }
 
 function showArtist(id) {
-  fetch('/api/library/artist/' + id).then(function(r) { return r.json(); }).then(function(a) {
+  apiFetch('/api/library/artist/' + id).then(function(r) { return r.json(); }).then(function(a) {
     let html = '<div class="card"><div class="card-title">' + escapeHtml(a.name) + '</div>' +
       '<div class="card-meta">' + renderMbid(a.mbid) + '</div>';
     html += '<h2>Albums (' + a.albums.length + ')</h2><ul class="detail-list">';
@@ -106,7 +109,7 @@ document.getElementById('search').addEventListener('input', function(e) {
     return;
   }
   debounceTimer = setTimeout(function() {
-    fetch('/api/library/search?q=' + encodeURIComponent(query))
+    apiFetch('/api/library/search?q=' + encodeURIComponent(query))
       .then(function(r) { return r.json(); })
       .then(renderResults);
   }, 200);

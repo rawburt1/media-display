@@ -62,10 +62,18 @@ OUTPUT_CLASSES: dict[str, Union[str, type]] = {
 # arrives (e.g. idle wallpapers shown at startup, before anything plays) -
 # see WebOutput's docstring for why it can't just reuse the orchestrator's
 # rotation like other outputs do). Flask-based outputs no longer take
-# config.auth here - install_auth() (see web_auth.py) is called once,
-# centrally, by SharedHttpServer (mediainfo/outputs/http_server.py).
+# config.auth here for install_auth()'s sake - that's called once,
+# centrally, by SharedHttpServer (mediainfo/outputs/http_server.py). The
+# `config` output is the one exception: it still takes config.auth and
+# config.http.host, but only to decide whether to show its own "you're
+# exposed without auth" warning banner - see
+# ConfigUiOutput._is_exposed_without_auth().
 OUTPUT_EXTRA_ARGS = {
-    "config": lambda config, config_path, cache: (config_path, config.auth),
+    "config": lambda config, config_path, cache: (
+        config_path,
+        config.auth,
+        config.http.host,
+    ),
     "web": lambda config, config_path, cache: (config.rotation_interval_seconds, cache),
     # http_port, not config.auth like the others (nest_hub's blueprint
     # doesn't call install_auth itself anymore - see
@@ -158,7 +166,7 @@ IDLE_CLASSES: dict[str, Union[str, type]] = {
 
 # Config attributes to include per output type in the /health response.
 OUTPUT_DETAIL_FIELDS: dict = {
-    "config": ["label", "port"],
+    "config": ["label"],
     "feed": ["label", "title"],
     "folder": ["label", "dir"],
     "info": ["label"],

@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from flask import Flask
 
 from mediainfo.config import ConfigUiConfig
 from mediainfo.outputs.config_schema import _build_schema
@@ -18,13 +19,17 @@ from mediainfo.outputs.ui_model import UiComponent, UiPipeline
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 
 
-@pytest.fixture(autouse=True)
-def no_server(monkeypatch):
-    monkeypatch.setattr("threading.Thread.start", lambda self: None)
+def _output(config_path, **kwargs):
+    return ConfigUiOutput(ConfigUiConfig(enabled=True), config_path, **kwargs)
 
 
-def _output(config_path):
-    return ConfigUiOutput(ConfigUiConfig(enabled=True, host="127.0.0.1", port=8094), config_path)
+def _client(out, url_prefix=""):
+    """See tests/test_nest_hub.py for the harness pattern (H1, see
+    docs/architecture-usability-review-2026-07.md). static_folder=None
+    matches the real SharedHttpServer - see its own comment for why."""
+    app = Flask("mediainfo.outputs.config_ui", static_folder=None)
+    app.register_blueprint(out.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
 
 
 @pytest.fixture
@@ -313,7 +318,7 @@ def test_config_path_points_at_the_right_yaml_location(config_path):
 
 def test_api_ui_components_returns_a_list(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/components").get_json()
+    data = _client(out).get("/api/ui/components").get_json()
     assert isinstance(data, list)
     assert len(data) > 0
     assert {"id", "category", "component_type", "status", "essential_fields"} <= data[0].keys()
@@ -321,21 +326,21 @@ def test_api_ui_components_returns_a_list(config_path):
 
 def test_api_ui_component_returns_the_matching_one(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/component/sources.kodi").get_json()
+    data = _client(out).get("/api/ui/component/sources.kodi").get_json()
     assert data["id"] == "sources.kodi"
     assert data["category"] == "media"
 
 
 def test_api_ui_component_unknown_id_is_404(config_path):
     out = _output(config_path)
-    resp = out.app.test_client().get("/api/ui/component/does.not.exist")
+    resp = _client(out).get("/api/ui/component/does.not.exist")
     assert resp.status_code == 404
     assert "error" in resp.get_json()
 
 
 def test_api_ui_components_does_not_leak_secrets(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/components").get_json()
+    data = _client(out).get("/api/ui/components").get_json()
     for c in data:
         for f in c["essential_fields"] + c["advanced_fields"]:
             if f["secret"]:
@@ -349,14 +354,14 @@ def test_api_ui_components_does_not_leak_secrets(config_path):
 
 def test_api_ui_pipelines_returns_one_default_pipeline(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/pipelines").get_json()
+    data = _client(out).get("/api/ui/pipelines").get_json()
     assert len(data) == 1
     assert data[0]["id"] == "default"
 
 
 def test_pipeline_buckets_only_enabled_components(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/pipelines").get_json()[0]
+    data = _client(out).get("/api/ui/pipelines").get_json()[0]
     assert "sources.kodi" in data["media_component_ids"]
     assert "sources.emby" not in data["media_component_ids"]
     assert "outputs.web" in data["display_component_ids"]
@@ -368,7 +373,7 @@ def test_pipeline_with_no_enabled_sources_is_empty_not_broken(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text("poll_interval_seconds: 5\n", encoding="utf-8")
     out = _output(path)
-    data = out.app.test_client().get("/api/ui/pipelines").get_json()[0]
+    data = _client(out).get("/api/ui/pipelines").get_json()[0]
     assert data["media_component_ids"] == []
     assert data["display_component_ids"] == []
 
@@ -380,7 +385,7 @@ def test_pipeline_with_no_enabled_sources_is_empty_not_broken(tmp_path):
 
 def test_api_ui_dashboard_returns_expected_shape(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    data = _client(out).get("/api/ui/dashboard").get_json()
     assert "now_playing" in data
     assert "restart_required" in data
     assert data["pipeline"]["id"] == "default"
@@ -390,34 +395,39 @@ def test_api_ui_dashboard_returns_expected_shape(config_path):
 def test_api_ui_dashboard_has_no_warnings_for_intentionally_disabled_components(
     config_path,
 ):
-    out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    # http_host="127.0.0.1": isolates this from the (legitimate, separate)
+    # "exposed without auth" warning, which fires by default now that the
+    # shared HTTP server defaults to 0.0.0.0 - see
+    # test_overview_reports_exposed_without_auth in test_config_ui.py for
+    # that behavior's own dedicated coverage.
+    out = _output(config_path, http_host="127.0.0.1")
+    data = _client(out).get("/api/ui/dashboard").get_json()
     assert data["health"]["warnings"] == []
 
 
 def test_api_ui_dashboard_surfaces_needs_configuration_warning(incomplete_config_path):
     out = _output(incomplete_config_path)
-    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    data = _client(out).get("/api/ui/dashboard").get_json()
     assert any("host" in w for w in data["health"]["warnings"])
 
 
 def test_api_ui_dashboard_works_without_currently_playing_data(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    data = _client(out).get("/api/ui/dashboard").get_json()
     assert data["now_playing"] is None
     assert data["active_source"] is None
 
 
 def test_dashboard_quick_actions_has_no_restart_action_by_default(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    data = _client(out).get("/api/ui/dashboard").get_json()
     assert data["restart_required"] is False
     assert [a["id"] for a in data["quick_actions"]].count("restart") == 0
 
 
 def test_api_ui_dashboard_includes_empty_activity_summary_without_health_provider(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    data = _client(out).get("/api/ui/dashboard").get_json()
     assert data["activity_summary"] == {}
 
 
@@ -507,7 +517,7 @@ def test_dashboard_quick_actions_leads_with_restart_action_when_restart_required
 ):
     out = _output(config_path)
     out._restart_required = True
-    data = out.app.test_client().get("/api/ui/dashboard").get_json()
+    data = _client(out).get("/api/ui/dashboard").get_json()
     assert data["restart_required"] is True
     first = data["quick_actions"][0]
     assert first["id"] == "restart"

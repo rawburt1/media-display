@@ -61,6 +61,16 @@ var hasUnsavedComponentEdits = false;
 // <form> POST can't set custom headers at all. Not needed on GETs.
 var CSRF_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' };
 
+// window.API_PREFIX is set by a small inline <script> in dashboard.html,
+// before this file loads (see config_ui.py's build_http_blueprint()) - the
+// path this instance is mounted at (e.g. "/config", or "" at the root).
+// Every fetch() in this file and components.js/wizard.js that targets one
+// of this output's own routes must go through this, not a bare fetch(),
+// now that routes aren't guaranteed to be unprefixed - see H1 in
+// docs/architecture-usability-review-2026-07.md.
+var API_PREFIX = window.API_PREFIX || '';
+function apiFetch(url, opts) { return fetch(API_PREFIX + url, opts); }
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 }
@@ -203,7 +213,7 @@ function actionButton(action) {
 
 function runRestartAction(href) {
   if (!confirm('Restart mediainfo now? Every display goes offline until it comes back up.')) return;
-  fetch(href, { method: 'POST', headers: CSRF_HEADERS }).catch(function() {});
+  apiFetch(href, { method: 'POST', headers: CSRF_HEADERS }).catch(function() {});
   alert('Restarting… this page will keep working once the process is back up (if something supervises it, e.g. Docker’s restart: unless-stopped).');
   fetchDashboard();
 }
@@ -261,7 +271,7 @@ function renderDashboard() {
 }
 
 function fetchDashboard() {
-  return fetch('/api/ui/dashboard').then(function(r) { return r.json(); }).then(function(data) {
+  return apiFetch('/api/ui/dashboard').then(function(r) { return r.json(); }).then(function(data) {
     dashboardData = data;
     if (currentSection === 'dashboard') renderDashboard();
   }).catch(function() {});
@@ -324,14 +334,14 @@ function renderPipeline() {
 }
 
 function fetchPipeline() {
-  return fetch('/api/ui/pipelines').then(function(r) { return r.json(); }).then(function(data) {
+  return apiFetch('/api/ui/pipelines').then(function(r) { return r.json(); }).then(function(data) {
     pipelineData = data;
     if (currentSection === 'pipeline') renderPipeline();
   }).catch(function() {});
 }
 
 function fetchComponents() {
-  return fetch('/api/ui/components').then(function(r) { return r.json(); }).then(function(data) {
+  return apiFetch('/api/ui/components').then(function(r) { return r.json(); }).then(function(data) {
     componentsData = data;
     componentsById = {};
     data.forEach(function(c) { componentsById[c.id] = c; });

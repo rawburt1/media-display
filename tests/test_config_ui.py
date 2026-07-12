@@ -61,11 +61,28 @@ def fake_appletv_async(monkeypatch):
 
 
 def _config(**kwargs):
-    return ConfigUiConfig(enabled=True, host="127.0.0.1", port=8094, **kwargs)
+    return ConfigUiConfig(enabled=True, **kwargs)
 
 
 def _output(config_path):
     return ConfigUiOutput(_config(), config_path)
+
+
+def _client(out, url_prefix=""):
+    """Register out's blueprint on a throwaway local Flask app and return
+    a test client against it - see tests/test_nest_hub.py for the harness
+    pattern (H1, see docs/architecture-usability-review-2026-07.md). Built
+    as Flask("mediainfo.outputs.config_ui") so templates/ and the
+    blueprint's own static_folder resolve - see tests/test_feeds.py for
+    why. The csrf_exempt_test_client fixture above patches Flask.test_client_class
+    globally, so this fresh app picks it up too.
+    """
+    # static_folder=None: matches the real SharedHttpServer - see its own
+    # comment for why (the app-level default static route would shadow
+    # config_ui's own blueprint-scoped one at the same URL pattern).
+    app = Flask("mediainfo.outputs.config_ui", static_folder=None)
+    app.register_blueprint(out.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
 
 
 @pytest.fixture
@@ -117,7 +134,7 @@ def incomplete_config_path(tmp_path):
 
 def test_schema_includes_all_categories(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     # One key per _FLAT_SECTIONS entry (cache/history/library/overrides/
     # posters/alerts/auth/logging/mediadata), the four per-type-registry
     # categories, "themes" (the individual Display Theme plugins nested
@@ -155,14 +172,14 @@ def test_schema_includes_all_categories(config_path):
 
 def test_schema_mediadata_section_has_its_two_scalar_fields(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     field_names = {f["name"] for f in data["mediadata"]}
     assert field_names == {"path", "cache_first"}
 
 
 def test_form_saves_history_section(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/config/form", json={"values": {"history.max_entries": 500}})
     saved = config_path.read_text()
     assert "max_entries: 500" in saved
@@ -170,7 +187,7 @@ def test_form_saves_history_section(config_path):
 
 def test_schema_includes_known_source_types(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     assert "kodi" in data["sources"]
     assert "plex" in data["sources"]
 
@@ -179,7 +196,7 @@ def test_schema_includes_simple_list_fields(config_path):
     # speaker_ips/blacklist are flat lists of strings - simple enough to
     # edit as a one-item-per-line text box in the form.
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     fields = {f["name"]: f for f in data["sources"]["sonos"]}
     assert fields["blacklist"]["type"] == "list"
     assert fields["blacklist"]["default"] == []
@@ -192,7 +209,7 @@ def test_schema_excludes_complex_list_typed_fields(config_path):
     # list of strings - excluded from the form, only editable via the
     # page's "Advanced" raw YAML editor.
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     field_names = {f["name"] for f in data["outputs"]["pixoo"]}
     assert "transforms" not in field_names
     assert "ip" in field_names
@@ -200,14 +217,14 @@ def test_schema_excludes_complex_list_typed_fields(config_path):
 
 def test_schema_marks_secret_fields(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     fields = {f["name"]: f for f in data["enrichers"]["fanarttv"]}
     assert fields["api_key"]["secret"] is True
 
 
 def test_schema_does_not_mark_host_as_secret(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     fields = {f["name"]: f for f in data["sources"]["kodi"]}
     assert fields["host"]["secret"] is False
 
@@ -221,14 +238,14 @@ def test_schema_does_not_mark_host_as_secret(config_path):
 
 def test_schema_marks_kodi_host_as_required(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     fields = {f["name"]: f for f in data["sources"]["kodi"]}
     assert fields["host"]["required"] is True
 
 
 def test_schema_does_not_mark_non_required_field_as_required(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     fields = {f["name"]: f for f in data["sources"]["kodi"]}
     assert fields["port"]["required"] is False
 
@@ -237,7 +254,7 @@ def test_get_config_reports_empty_value_for_missing_required_field(
     incomplete_config_path,
 ):
     out = _output(incomplete_config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert data["values"]["sources.kodi.enabled"] is True
     assert data["values"]["sources.kodi.host"] == ""
 
@@ -246,7 +263,7 @@ def test_get_config_does_not_leak_secrets_when_a_sibling_field_is_missing(
     incomplete_config_path,
 ):
     out = _output(incomplete_config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     # kodi.password is still set in this fixture (only host was blanked) -
     # it must stay reported as set-but-masked, never as a raw value.
     assert data["secrets_set"]["sources.kodi.password"] is True
@@ -260,20 +277,20 @@ def test_get_config_does_not_leak_secrets_when_a_sibling_field_is_missing(
 
 def test_get_config_returns_current_values(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert data["values"]["sources.kodi.host"] == "192.168.1.21"
     assert data["values"]["general.poll_interval_seconds"] == 5
 
 
 def test_get_config_returns_raw_yaml(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert "sources:" in data["raw_yaml"]
 
 
 def test_get_config_uses_defaults_for_unconfigured_type(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     # discogs is not present in config.example.yaml
     assert data["values"]["enrichers.discogs.enabled"] is False
 
@@ -285,7 +302,7 @@ def test_get_config_uses_defaults_for_unconfigured_type(config_path):
 
 def test_get_config_outputs_single_instance_as_list_of_one(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert len(data["outputs"]["web"]) == 1
     assert data["outputs"]["web"][0]["enabled"] is True
 
@@ -302,7 +319,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     ips = [inst["device_ip"] for inst in data["outputs"]["ulanzi"]]
     assert ips == ["1.1.1.1", "2.2.2.2"]
 
@@ -310,7 +327,7 @@ outputs:
 def test_get_config_outputs_unconfigured_type_has_one_default_instance(config_path):
     config_path.write_text("poll_interval_seconds: 5\n")  # no outputs section at all
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert len(data["outputs"]["web"]) == 1
     assert data["outputs"]["web"][0]["enabled"] is False  # default
 
@@ -333,7 +350,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert data["outputs"]["themes"][0]["themes"] == {
         "color_palette": {"enabled": True, "swatch_count": 3},
     }
@@ -342,7 +359,7 @@ outputs:
 def test_get_config_themes_output_defaults_to_empty_dict(config_path):
     config_path.write_text("outputs:\n  themes:\n    enabled: true\n")
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert data["outputs"]["themes"][0]["themes"] == {}
 
 
@@ -371,7 +388,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert data["outputs"]["themes"][0]["auto_rotate"] == {
         "enabled": True,
         "interval_seconds": 20,
@@ -384,7 +401,7 @@ outputs:
 
 def test_other_output_types_do_not_get_a_themes_key(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert "themes" not in data["outputs"]["web"][0]
 
 
@@ -395,13 +412,13 @@ def test_other_output_types_do_not_get_a_themes_key(config_path):
 
 def test_get_config_hidden_types_empty_by_default(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert data["hidden_types"] == {"sources": [], "outputs": [], "enrichers": []}
 
 
 def test_hide_type_adds_it_to_hidden_types(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post(
         "/api/config/hidden-types",
@@ -417,7 +434,7 @@ def test_hide_type_adds_it_to_hidden_types(config_path):
 
 def test_unhide_type_removes_it_from_hidden_types(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/hidden-types",
         json={"category": "sources", "name": "sonos", "hidden": True},
@@ -436,19 +453,19 @@ def test_unhide_type_removes_it_from_hidden_types(config_path):
 
 def test_hide_type_persists_across_instances(config_path):
     out1 = _output(config_path)
-    out1.app.test_client().post(
+    _client(out1).post(
         "/api/config/hidden-types",
         json={"category": "enrichers", "name": "discogs", "hidden": True},
     )
 
     out2 = _output(config_path)
-    data = out2.app.test_client().get("/api/config").get_json()
+    data = _client(out2).get("/api/config").get_json()
     assert data["hidden_types"]["enrichers"] == ["discogs"]
 
 
 def test_hide_type_does_not_require_restart(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     client.post(
         "/api/config/hidden-types",
@@ -460,7 +477,7 @@ def test_hide_type_does_not_require_restart(config_path):
 
 def test_hide_type_rejects_unknown_category(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post(
         "/api/config/hidden-types",
@@ -473,7 +490,7 @@ def test_hide_type_rejects_unknown_category(config_path):
 
 def test_hide_type_rejects_missing_name(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post("/api/config/hidden-types", json={"category": "sources", "hidden": True})
 
@@ -483,7 +500,7 @@ def test_hide_type_rejects_missing_name(config_path):
 
 def test_hiding_same_type_twice_is_a_noop(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/hidden-types",
         json={"category": "sources", "name": "sonos", "hidden": True},
@@ -499,7 +516,7 @@ def test_hiding_same_type_twice_is_a_noop(config_path):
 
 def test_hidden_types_written_under_ui_hidden_types_key(config_path):
     out = _output(config_path)
-    out.app.test_client().post(
+    _client(out).post(
         "/api/config/hidden-types",
         json={"category": "sources", "name": "sonos", "hidden": True},
     )
@@ -518,7 +535,7 @@ def test_hidden_types_written_under_ui_hidden_types_key(config_path):
 
 def test_save_form_updates_value(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.99"}})
     assert resp.get_json() == {"ok": True, "restart_required": False}
 
@@ -528,7 +545,7 @@ def test_save_form_updates_value(config_path):
 
 def test_save_form_updates_general_field(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/config/form", json={"values": {"general.poll_interval_seconds": 42}})
 
     cfg = Config.load(config_path)
@@ -542,7 +559,7 @@ def test_save_form_requires_restart_for_auth_change(config_path):
     # server via the regular hot-reload, so this must be flagged just like
     # an `outputs` change is.
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/config/form", json={"values": {"auth.password": "new-secret"}})
 
     assert resp.get_json() == {"ok": True, "restart_required": True}
@@ -551,7 +568,7 @@ def test_save_form_requires_restart_for_auth_change(config_path):
 
 def test_save_form_no_restart_required_when_auth_untouched(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.1"}})
 
     assert resp.get_json() == {"ok": True, "restart_required": False}
@@ -559,7 +576,7 @@ def test_save_form_no_restart_required_when_auth_untouched(config_path):
 
 def test_schema_includes_cache_section(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     field_names = {f["name"] for f in data["cache"]}
     assert "min_width" in field_names
     assert "min_height" in field_names
@@ -568,14 +585,14 @@ def test_schema_includes_cache_section(config_path):
 
 def test_get_values_includes_cache_fields(config_path):
     out = _output(config_path)
-    values = out.app.test_client().get("/api/config").get_json()["values"]
+    values = _client(out).get("/api/config").get_json()["values"]
     assert values["cache.min_width"] == 640
     assert values["cache.min_height"] == 480
 
 
 def test_save_form_updates_cache_min_width(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={"values": {"cache.min_width": 320, "cache.min_height": 240}},
@@ -588,7 +605,7 @@ def test_save_form_updates_cache_min_width(config_path):
 
 def test_save_form_updates_cache_preserves_other_cache_fields(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/config/form", json={"values": {"cache.min_width": 100}})
 
     cfg = Config.load(config_path)
@@ -598,7 +615,7 @@ def test_save_form_updates_cache_preserves_other_cache_fields(config_path):
 
 def test_save_form_preserves_untouched_fields(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.99"}})
 
     cfg = Config.load(config_path)
@@ -608,7 +625,7 @@ def test_save_form_preserves_untouched_fields(config_path):
 
 def test_save_form_preserves_comments(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/config/form", json={"values": {"sources.kodi.host": "10.0.0.99"}})
 
     text = config_path.read_text()
@@ -617,7 +634,7 @@ def test_save_form_preserves_comments(config_path):
 
 def test_save_form_sets_simple_list_field(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={"values": {"sources.sonos.speaker_ips": ["192.168.1.10", "192.168.1.11"]}},
@@ -629,7 +646,7 @@ def test_save_form_sets_simple_list_field(config_path):
 
 def test_get_values_returns_simple_list_field(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={"values": {"sources.sonos.blacklist": ["Bedroom"]}},
@@ -641,7 +658,7 @@ def test_get_values_returns_simple_list_field(config_path):
 
 def test_save_form_sets_bool_field(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/config/form", json={"values": {"sources.plex.enabled": False}})
 
     cfg = Config.load(config_path)
@@ -650,7 +667,7 @@ def test_save_form_sets_bool_field(config_path):
 
 def test_save_form_creates_new_section_for_unconfigured_type(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post(
         "/api/config/form",
         json={
@@ -677,7 +694,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={
@@ -710,7 +727,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={
@@ -748,7 +765,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={
@@ -795,7 +812,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post(
         "/api/config/form",
         json={
@@ -838,7 +855,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={
@@ -866,7 +883,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={"values": {}, "outputs": {"pixoo": [{"enabled": True, "ip": "9.9.9.9"}]}},
@@ -894,7 +911,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     # Mirrors what the browser actually posts: the full outputsData.themes
     # entry (as returned by GET /api/config, then possibly edited) - not
     # just the changed field, matching saveAll()'s Object.assign-free
@@ -934,7 +951,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     get_data = client.get("/api/config").get_json()
     instance = get_data["outputs"]["themes"][0]
     instance["auto_rotate"]["presets"]["music"]["when"] = ["music"]
@@ -960,7 +977,7 @@ outputs:
 """
     )
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/config/form", json={"values": {}, "outputs": {"ulanzi": []}})
 
     cfg = Config.load(config_path)
@@ -969,7 +986,7 @@ outputs:
 
 def test_save_form_rejects_unknown_category(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/config/form", json={"values": {"bogus.kodi.host": "x"}})
     assert resp.get_json() == {
         "ok": True,
@@ -982,7 +999,7 @@ def test_save_form_rejects_unknown_category(config_path):
 
 def test_save_form_empty_values_is_noop(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/config/form", json={"values": {}})
     assert resp.get_json() == {"ok": True, "restart_required": False}
 
@@ -994,7 +1011,7 @@ def test_save_form_empty_values_is_noop(config_path):
 
 def test_save_raw_writes_valid_yaml(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     new_yaml = "poll_interval_seconds: 7\nrotation_interval_seconds: 30\npriority: []\n"
     resp = client.post("/api/config/raw", json={"yaml": new_yaml})
     # A raw save can change anything, including outputs - always flagged as
@@ -1005,7 +1022,7 @@ def test_save_raw_writes_valid_yaml(config_path):
 
 def test_save_raw_rejects_invalid_yaml(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     original = config_path.read_text()
     resp = client.post("/api/config/raw", json={"yaml": "not: [valid"})
     data = resp.get_json()
@@ -1016,7 +1033,7 @@ def test_save_raw_rejects_invalid_yaml(config_path):
 
 def test_save_raw_rejects_malformed_source_section(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     original = config_path.read_text()
     # "sources.kodi" must be a mapping; a list breaks the `**values` expansion in Config.from_dict.
     resp = client.post(
@@ -1034,7 +1051,7 @@ def test_save_raw_rejects_malformed_source_section(config_path):
 
 def test_list_config_backups_empty_when_no_backups(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.get("/api/config/backups")
     assert resp.get_json() == {"backups": []}
 
@@ -1043,7 +1060,7 @@ def test_list_config_backups_returns_entries_with_filename_and_mtime(config_path
     backup_config_file(config_path)
     backup_config_file(config_path)
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.get("/api/config/backups")
     data = resp.get_json()
@@ -1061,7 +1078,7 @@ def test_restore_backup_writes_backup_content_and_is_readable_via_config_load(
     config_path.write_text("poll_interval_seconds: 999\npriority: []\n")
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     filename = list_backups(config_path)[0].name
 
     resp = client.post("/api/config/backups/restore", json={"filename": filename})
@@ -1075,7 +1092,7 @@ def test_restore_backup_sets_restart_required(config_path):
     backup_config_file(config_path)
     config_path.write_text("poll_interval_seconds: 999\npriority: []\n")
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     filename = list_backups(config_path)[0].name
 
     resp = client.post("/api/config/backups/restore", json={"filename": filename})
@@ -1087,7 +1104,7 @@ def test_restore_backup_rejects_unknown_filename(config_path):
     backup_config_file(config_path)
     original = config_path.read_text()
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post("/api/config/backups/restore", json={"filename": "not-a-real-backup.bak"})
 
@@ -1100,7 +1117,7 @@ def test_restore_backup_rejects_unknown_filename(config_path):
 
 def test_restore_backup_errors_when_no_backups_exist(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post(
         "/api/config/backups/restore",
@@ -1116,7 +1133,7 @@ def test_restore_backup_errors_when_no_backups_exist(config_path):
 def test_restore_backup_missing_filename_returns_400(config_path):
     backup_config_file(config_path)
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post("/api/config/backups/restore", json={})
 
@@ -1129,7 +1146,7 @@ def test_restore_backup_missing_filename_returns_400(config_path):
 def test_restore_backup_itself_creates_a_new_undo_backup(config_path):
     backup_config_file(config_path)
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     filename = list_backups(config_path)[0].name
     before_count = len(list_backups(config_path))
 
@@ -1147,7 +1164,7 @@ def test_restore_backup_warns_but_still_restores_when_result_fails_to_validate(
     broken.write_text("not: [valid, yaml, at, all")
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post("/api/config/backups/restore", json={"filename": broken.name})
     data = resp.get_json()
@@ -1165,7 +1182,7 @@ def test_restore_backup_warns_but_still_restores_when_result_fails_to_validate(
 @patch("mediainfo.outputs.config_ui.threading.Timer")
 def test_restart_endpoint_schedules_restart_without_blocking(mock_timer_cls, config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post("/api/restart")
 
@@ -1190,14 +1207,14 @@ def test_restart_process_sends_sigterm_to_self(mock_kill):
 
 def test_hitster_safe_status_defaults_to_disabled_when_unwired(config_path):
     out = _output(config_path)
-    resp = out.app.test_client().get("/api/hitster-safe")
+    resp = _client(out).get("/api/hitster-safe")
     assert resp.get_json() == {"enabled": False}
 
 
 def test_hitster_safe_status_reflects_get_handler(config_path):
     out = _output(config_path)
     out.set_hitster_safe_handlers(lambda: True, MagicMock())
-    resp = out.app.test_client().get("/api/hitster-safe")
+    resp = _client(out).get("/api/hitster-safe")
     assert resp.get_json() == {"enabled": True}
 
 
@@ -1206,7 +1223,7 @@ def test_hitster_safe_toggle_calls_set_handler(config_path):
     set_fn = MagicMock()
     out.set_hitster_safe_handlers(lambda: False, set_fn)
 
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/hitster-safe",
         json={"enabled": True},
     )
@@ -1217,13 +1234,13 @@ def test_hitster_safe_toggle_calls_set_handler(config_path):
 
 def test_hitster_safe_toggle_unavailable_when_unwired(config_path):
     out = _output(config_path)
-    resp = out.app.test_client().post("/api/hitster-safe", json={"enabled": True})
+    resp = _client(out).post("/api/hitster-safe", json={"enabled": True})
     assert resp.status_code == 503
 
 
 def test_hitster_safe_button_present_on_form_and_dashboard_pages(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     assert b"hitster-safe-btn" in client.get("/form").data
     assert b"hitster-safe-btn" in client.get("/dashboard").data
 
@@ -1257,7 +1274,7 @@ def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
         )
     )
 
-    assert out.app.test_client().get("/api/hitster-safe").get_json() == {"enabled": True}
+    assert _client(out).get("/api/hitster-safe").get_json() == {"enabled": True}
     assert out._overrides is overrides
     assert out._health_fn is health_provider
 
@@ -1292,7 +1309,7 @@ def test_pair_start_with_device_provided_pin(mock_scan, mock_pair, config_path):
     mock_pair.return_value = handler
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post(
         "/api/appletv/pair/start",
         json={"host": "192.168.1.90", "protocol": "companion"},
@@ -1315,7 +1332,7 @@ def test_pair_start_with_manual_pin(mock_scan, mock_pair, config_path):
     mock_pair.return_value = handler
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "mrp"})
 
     data = resp.get_json()
@@ -1329,7 +1346,7 @@ def test_pair_start_with_manual_pin(mock_scan, mock_pair, config_path):
 @patch("pyatv.scan")
 def test_pair_start_requires_host(mock_scan, mock_pair, config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/appletv/pair/start", json={"host": "", "protocol": "companion"})
 
     assert resp.status_code == 400
@@ -1342,7 +1359,7 @@ def test_pair_start_no_device_found(mock_scan, config_path):
     mock_scan.return_value = []
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
 
     data = resp.get_json()
@@ -1357,7 +1374,7 @@ def test_pair_start_rejects_unknown_protocol(mock_scan, mock_pair, config_path):
     mock_scan.return_value = [_fake_scan_result()]
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post(
         "/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "bogus"}
     )
@@ -1374,7 +1391,7 @@ def test_pair_start_rejects_concurrent_attempt(mock_scan, mock_pair, config_path
     mock_pair.return_value = _fake_pairing_handler()
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
     resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
 
@@ -1390,7 +1407,7 @@ def test_pair_finish_with_correct_pin_saves_credentials(mock_scan, mock_pair, co
     mock_pair.return_value = handler
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/appletv/pair/start",
         json={"host": "192.168.1.90", "protocol": "companion"},
@@ -1417,7 +1434,7 @@ def test_pair_finish_without_pin_when_required_fails(mock_scan, mock_pair, confi
     mock_pair.return_value = handler
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
     resp = client.post("/api/appletv/pair/finish", json={})
 
@@ -1435,7 +1452,7 @@ def test_pair_finish_with_manual_pin_does_not_require_pin_in_request(
     mock_pair.return_value = handler
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/appletv/pair/start", json={"host": "192.168.1.90", "protocol": "mrp"})
     resp = client.post("/api/appletv/pair/finish", json={})
 
@@ -1455,7 +1472,7 @@ def test_pair_finish_when_pairing_fails(mock_scan, mock_pair, config_path):
     mock_pair.return_value = handler
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
     resp = client.post("/api/appletv/pair/finish", json={"pin": "1111"})
 
@@ -1466,7 +1483,7 @@ def test_pair_finish_when_pairing_fails(mock_scan, mock_pair, config_path):
 
 def test_pair_finish_without_start_fails(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/appletv/pair/finish", json={"pin": "1234"})
 
     assert resp.status_code == 400
@@ -1481,7 +1498,7 @@ def test_pair_cancel_clears_session_and_allows_restart(mock_scan, mock_pair, con
     mock_pair.return_value = handler
 
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
     cancel_resp = client.post("/api/appletv/pair/cancel")
     restart_resp = client.post("/api/appletv/pair/start", json={"host": "192.168.1.90"})
@@ -1493,7 +1510,7 @@ def test_pair_cancel_clears_session_and_allows_restart(mock_scan, mock_pair, con
 
 def test_pair_cancel_with_no_session_is_noop(config_path):
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post("/api/appletv/pair/cancel")
 
     assert resp.get_json() == {"ok": True}
@@ -1529,11 +1546,11 @@ def test_index_page_served(config_path):
     # coverage. The classic shell (still titled "... configuration") lives
     # on at /form, tested separately below.
     out = _output(config_path)
-    resp = out.app.test_client().get("/")
+    resp = _client(out).get("/")
     assert resp.status_code == 200
     assert b"mediainfo" in resp.data
 
-    resp = out.app.test_client().get("/form")
+    resp = _client(out).get("/form")
     assert resp.status_code == 200
     assert b"configuration" in resp.data
 
@@ -1545,14 +1562,14 @@ def test_index_page_served(config_path):
 
 def test_library_page_served(library_config_path):
     out = _output(library_config_path)
-    resp = out.app.test_client().get("/library")
+    resp = _client(out).get("/library")
     assert resp.status_code == 200
     assert b"library" in resp.data.lower()
 
 
 def test_library_stats_empty(library_config_path):
     out = _output(library_config_path)
-    resp = out.app.test_client().get("/api/library/stats")
+    resp = _client(out).get("/api/library/stats")
     assert resp.get_json() == {"artists": 0, "albums": 0, "tracks": 0}
 
 
@@ -1563,13 +1580,13 @@ def test_library_stats_counts_seeded_data(library_config_path):
     library.get_or_create_album(artist_id, "The Wall")
     library.get_or_create_track(artist_id, "Money")
 
-    resp = out.app.test_client().get("/api/library/stats")
+    resp = _client(out).get("/api/library/stats")
     assert resp.get_json() == {"artists": 1, "albums": 1, "tracks": 1}
 
 
 def test_library_search_empty_query_returns_empty_list(library_config_path):
     out = _output(library_config_path)
-    resp = out.app.test_client().get("/api/library/search")
+    resp = _client(out).get("/api/library/search")
     assert resp.get_json() == []
 
 
@@ -1579,7 +1596,7 @@ def test_library_search_returns_matching_artists(library_config_path):
     library.get_or_create_artist("Pink Floyd")
     library.get_or_create_artist("Queen")
 
-    resp = out.app.test_client().get("/api/library/search?q=pink")
+    resp = _client(out).get("/api/library/search?q=pink")
     data = resp.get_json()
     assert len(data) == 1
     assert data[0]["name"] == "Pink Floyd"
@@ -1591,7 +1608,7 @@ def test_library_search_is_fuzzy(library_config_path):
     library = out._get_library()
     library.get_or_create_artist("Simon & Garfunkel")
 
-    resp = out.app.test_client().get("/api/library/search?q=simon and garfunkel")
+    resp = _client(out).get("/api/library/search?q=simon and garfunkel")
     assert [a["name"] for a in resp.get_json()] == ["Simon & Garfunkel"]
 
 
@@ -1604,7 +1621,7 @@ def test_library_artist_returns_albums_and_tracks(library_config_path):
     library.set_mbid("album", album_id, "album-mbid")
     library.get_or_create_track(artist_id, "Money")
 
-    resp = out.app.test_client().get(f"/api/library/artist/{artist_id}")
+    resp = _client(out).get(f"/api/library/artist/{artist_id}")
     data = resp.get_json()
     assert data["name"] == "Pink Floyd"
     assert data["mbid"] == "artist-mbid"
@@ -1615,7 +1632,7 @@ def test_library_artist_returns_albums_and_tracks(library_config_path):
 
 def test_library_artist_not_found_returns_404(library_config_path):
     out = _output(library_config_path)
-    resp = out.app.test_client().get("/api/library/artist/999")
+    resp = _client(out).get("/api/library/artist/999")
     assert resp.status_code == 404
 
 
@@ -1626,38 +1643,39 @@ def test_get_library_reuses_connection_across_requests(library_config_path):
     assert lib1 is lib2
 
 
-# ---------------------------------------------------------------------------
-# Optional auth (config.yaml's config has write access to credentials, so
-# this is the highest-value place for it - see web_auth.py)
-# ---------------------------------------------------------------------------
+# Optional auth: no longer tested per-output - install_auth() is called
+# once, centrally, by SharedHttpServer (mediainfo/outputs/http_server.py),
+# not by ConfigUiOutput itself. See tests/test_web_auth.py (the private/
+# public address + Basic Auth logic itself) and tests/test_http_server.py
+# (the CSRF-header guard, wired the same way).
+#
+# _is_exposed_without_auth() itself is still this output's own logic (it
+# only drives a warning banner, not enforcement) - now checking the shared
+# server's http_host instead of a per-output config.host (H1).
 
 
-def test_auth_disabled_by_default(config_path):
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-
-    out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
-    assert resp.status_code == 200
+def test_exposed_without_auth_true_for_lan_host_with_no_auth(config_path):
+    out = ConfigUiOutput(_config(), config_path, http_host="0.0.0.0")
+    assert out._is_exposed_without_auth() is True
 
 
-def test_auth_required_for_public_address_when_enabled(config_path):
+def test_exposed_without_auth_false_for_loopback_host(config_path):
+    out = ConfigUiOutput(_config(), config_path, http_host="127.0.0.1")
+    assert out._is_exposed_without_auth() is False
+
+
+def test_exposed_without_auth_false_when_auth_enabled(config_path):
     from mediainfo.config import AuthConfig
-    from mediainfo.outputs.config_ui import ConfigUiOutput
 
     auth = AuthConfig(enabled=True, username="admin", password="secret")
-    out = ConfigUiOutput(_config(), config_path, auth)
-    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
-    assert resp.status_code == 401
+    out = ConfigUiOutput(_config(), config_path, auth, http_host="0.0.0.0")
+    assert out._is_exposed_without_auth() is False
 
 
-def test_auth_not_required_for_private_address_when_enabled(config_path):
-    from mediainfo.config import AuthConfig
-    from mediainfo.outputs.config_ui import ConfigUiOutput
-
-    auth = AuthConfig(enabled=True, username="admin", password="secret")
-    out = ConfigUiOutput(_config(), config_path, auth)
-    resp = out.app.test_client().get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.50"})
-    assert resp.status_code == 200
+def test_overview_reports_exposed_without_auth(config_path):
+    out = ConfigUiOutput(_config(), config_path, http_host="0.0.0.0")
+    data = _client(out).get("/api/overview").get_json()
+    assert data["exposed_without_auth"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -1676,21 +1694,21 @@ def test_auth_not_required_for_private_address_when_enabled(config_path):
 
 def test_dashboard_ui_serves_dashboard_page(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = out.app.test_client().get("/")
+    resp = _client(out).get("/")
     assert resp.status_code == 200
     assert b'data-initial-section="status"' in resp.data
 
 
 def test_form_page_reachable_on_dashboard_instance(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = out.app.test_client().get("/form")
+    resp = _client(out).get("/form")
     assert resp.status_code == 200
     assert b'data-initial-section="overview"' in resp.data
 
 
 def test_dashboard_page_reachable_on_form_instance(config_path):
     out = ConfigUiOutput(_config(), config_path)
-    resp = out.app.test_client().get("/dashboard")
+    resp = _client(out).get("/dashboard")
     assert resp.status_code == 200
     assert b'data-initial-section="status"' in resp.data
 
@@ -1700,7 +1718,7 @@ def test_all_nav_sections_present_on_every_route(config_path):
     # Dashboard shell, not this classic one - see
     # tests/test_dashboard_shell.py for its nav coverage.
     out = ConfigUiOutput(_config(), config_path)
-    client = out.app.test_client()
+    client = _client(out)
     expected_sections = [
         "overview",
         "sources",
@@ -1727,7 +1745,7 @@ def test_editing_capability_lives_in_guided_sections_not_status(config_path):
     # that writes field edits (setValue/setOutputField), used by all of
     # them, rather than a status-page-only edit mode.
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = out.app.test_client().get("/dashboard")
+    resp = _client(out).get("/dashboard")
     assert b"function setValue(" in resp.data
     assert b"function setOutputField(" in resp.data
     assert b"function renderStatus()" in resp.data
@@ -1735,7 +1753,7 @@ def test_editing_capability_lives_in_guided_sections_not_status(config_path):
 
 def test_dashboard_instance_can_read_schema_and_config_for_editing(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     schema = client.get("/api/schema").get_json()
     assert "kodi" in schema["sources"]
@@ -1746,7 +1764,7 @@ def test_dashboard_instance_can_read_schema_and_config_for_editing(config_path):
 
 def test_dashboard_instance_can_save_form_edits(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    client = out.app.test_client()
+    client = _client(out)
 
     resp = client.post(
         "/api/config/form",
@@ -1757,7 +1775,7 @@ def test_dashboard_instance_can_save_form_edits(config_path):
 
 def test_dashboard_page_has_restart_button(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = out.app.test_client().get("/dashboard")
+    resp = _client(out).get("/dashboard")
     assert b"function restartNow(" in resp.data
     assert b"/api/restart" in resp.data
     assert b"Restart now" in resp.data or b"Restart mediainfo" in resp.data
@@ -1765,7 +1783,7 @@ def test_dashboard_page_has_restart_button(config_path):
 
 def test_dashboard_page_marks_failed_source_test_as_unavailable(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = out.app.test_client().get("/dashboard")
+    resp = _client(out).get("/dashboard")
     assert b"statusOverrides[key" in resp.data
     assert b"'unavailable'" in resp.data
     assert b"b-unavailable" in resp.data
@@ -1774,7 +1792,7 @@ def test_dashboard_page_marks_failed_source_test_as_unavailable(config_path):
 
 def test_api_status_returns_empty_lists_without_health_provider(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = out.app.test_client().get("/api/status")
+    resp = _client(out).get("/api/status")
     assert resp.get_json() == {
         "sources": [],
         "outputs": [],
@@ -1794,7 +1812,7 @@ def test_api_status_returns_health_provider_data(config_path):
         }
     )
 
-    resp = out.app.test_client().get("/api/status")
+    resp = _client(out).get("/api/status")
     data = resp.get_json()
 
     assert data["sources"] == [{"name": "kodi", "status": "active"}]
@@ -1806,7 +1824,7 @@ def test_api_status_returns_health_provider_data(config_path):
 def test_api_test_source_route_dispatches(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     with patch("mediainfo.outputs.config_ui.test_source", return_value=(True, "ok")) as mock_test:
-        resp = out.app.test_client().post("/api/test/source/kodi")
+        resp = _client(out).post("/api/test/source/kodi")
 
     assert resp.get_json() == {"ok": True, "message": "ok"}
     name_arg, config_arg = mock_test.call_args.args
@@ -1818,7 +1836,7 @@ def test_api_test_enricher_route_dispatches(config_path):
     with patch(
         "mediainfo.outputs.config_ui.test_enricher", return_value=(False, "no")
     ) as mock_test:
-        resp = out.app.test_client().post("/api/test/enricher/thetvdb")
+        resp = _client(out).post("/api/test/enricher/thetvdb")
 
     assert resp.get_json() == {"ok": False, "message": "no"}
     name_arg, _ = mock_test.call_args.args
@@ -1830,7 +1848,7 @@ def test_api_test_output_route_dispatches(config_path):
     with patch(
         "mediainfo.outputs.config_ui.test_output", return_value=(True, "reached")
     ) as mock_test:
-        resp = out.app.test_client().post(
+        resp = _client(out).post(
             "/api/test/output",
             json={"type": "pixoo", "ip": "192.168.1.32"},
         )
@@ -1845,7 +1863,7 @@ def test_api_test_output_route_handles_missing_body(config_path):
         "mediainfo.outputs.config_ui.test_output",
         return_value=(False, "No connection test"),
     ):
-        resp = out.app.test_client().post("/api/test/output")
+        resp = _client(out).post("/api/test/output")
 
     assert resp.status_code == 200
     assert resp.get_json()["ok"] is False
@@ -1858,14 +1876,14 @@ def test_api_test_output_route_handles_missing_body(config_path):
 
 def test_overrides_page_served(config_path):
     out = _output(config_path)
-    resp = out.app.test_client().get("/overrides")
+    resp = _client(out).get("/overrides")
     assert resp.status_code == 200
     assert b"overrides" in resp.data.lower()
 
 
 def test_overrides_list_reports_disabled_when_no_store_registered(config_path):
     out = _output(config_path)
-    resp = out.app.test_client().get("/api/overrides")
+    resp = _client(out).get("/api/overrides")
     assert resp.get_json() == {"enabled": False, "items": []}
 
 
@@ -1875,7 +1893,7 @@ def test_overrides_list_empty_when_enabled(config_path, tmp_path):
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
 
-    resp = out.app.test_client().get("/api/overrides")
+    resp = _client(out).get("/api/overrides")
 
     assert resp.get_json() == {"enabled": True, "items": []}
 
@@ -1888,7 +1906,7 @@ def test_overrides_add_then_list(config_path, tmp_path):
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
 
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/overrides",
         data={
             "title": "Inception",
@@ -1899,7 +1917,7 @@ def test_overrides_add_then_list(config_path, tmp_path):
     )
     assert resp.get_json() == {"ok": True}
 
-    listed = out.app.test_client().get("/api/overrides").get_json()
+    listed = _client(out).get("/api/overrides").get_json()
     assert listed["enabled"] is True
     assert len(listed["items"]) == 1
     assert listed["items"][0]["title"] == "Inception"
@@ -1913,7 +1931,7 @@ def test_overrides_add_without_title_is_rejected(config_path, tmp_path):
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
 
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/overrides",
         data={"title": "", "file": (io.BytesIO(b"x"), "poster.jpg")},
         content_type="multipart/form-data",
@@ -1929,7 +1947,7 @@ def test_overrides_add_without_file_is_rejected(config_path, tmp_path):
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
 
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/overrides",
         data={"title": "Inception"},
         content_type="multipart/form-data",
@@ -1943,7 +1961,7 @@ def test_overrides_add_when_disabled_returns_503(config_path):
     import io
 
     out = _output(config_path)
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/overrides",
         data={"title": "Inception", "file": (io.BytesIO(b"x"), "poster.jpg")},
         content_type="multipart/form-data",
@@ -1959,24 +1977,24 @@ def test_overrides_remove(config_path, tmp_path):
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
-    out.app.test_client().post(
+    _client(out).post(
         "/api/overrides",
         data={"title": "Inception", "file": (io.BytesIO(b"x"), "poster.jpg")},
         content_type="multipart/form-data",
     )
 
-    resp = out.app.test_client().delete(
+    resp = _client(out).delete(
         "/api/overrides",
         json={"title": "Inception", "subtitle": ""},
     )
 
     assert resp.get_json() == {"ok": True}
-    assert out.app.test_client().get("/api/overrides").get_json()["items"] == []
+    assert _client(out).get("/api/overrides").get_json()["items"] == []
 
 
 def test_overrides_remove_when_disabled_returns_503(config_path):
     out = _output(config_path)
-    resp = out.app.test_client().delete("/api/overrides", json={"title": "Inception"})
+    resp = _client(out).delete("/api/overrides", json={"title": "Inception"})
     assert resp.status_code == 503
 
 
@@ -1987,7 +2005,7 @@ def test_overrides_image_served(config_path, tmp_path):
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
-    out.app.test_client().post(
+    _client(out).post(
         "/api/overrides",
         data={
             "title": "Inception",
@@ -1995,9 +2013,9 @@ def test_overrides_image_served(config_path, tmp_path):
         },
         content_type="multipart/form-data",
     )
-    filename = out.app.test_client().get("/api/overrides").get_json()["items"][0]["filename"]
+    filename = _client(out).get("/api/overrides").get_json()["items"][0]["filename"]
 
-    resp = out.app.test_client().get(f"/api/overrides/image/{filename}")
+    resp = _client(out).get(f"/api/overrides/image/{filename}")
 
     assert resp.status_code == 200
     assert resp.data == b"fake-image-bytes"
@@ -2009,14 +2027,14 @@ def test_overrides_image_rejects_path_traversal(config_path, tmp_path):
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
 
-    resp = out.app.test_client().get("/api/overrides/image/..%2F..%2Fetc%2Fpasswd")
+    resp = _client(out).get("/api/overrides/image/..%2F..%2Fetc%2Fpasswd")
 
     assert resp.status_code == 404
 
 
 def test_overrides_image_404_when_disabled(config_path):
     out = _output(config_path)
-    resp = out.app.test_client().get("/api/overrides/image/whatever.jpg")
+    resp = _client(out).get("/api/overrides/image/whatever.jpg")
     assert resp.status_code == 404
 
 
@@ -2027,7 +2045,7 @@ def test_overrides_image_404_when_disabled(config_path):
 
 def test_schema_filter_meta_has_media_types_and_known_sources(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     fm = data["filter_meta"]
     assert set(fm["media_types"]) == {"music", "movie", "episode"}
     assert "kodi" in fm["known_sources"]
@@ -2036,7 +2054,7 @@ def test_schema_filter_meta_has_media_types_and_known_sources(config_path):
 
 def test_schema_filter_fields_excluded_from_outputs_fields(config_path):
     out = _output(config_path)
-    data = out.app.test_client().get("/api/schema").get_json()
+    data = _client(out).get("/api/schema").get_json()
     for type_name, fields in data["outputs"].items():
         field_names = {f["name"] for f in fields}
         for filter_field in (
@@ -2057,7 +2075,7 @@ def test_get_config_outputs_includes_filter_fields(config_path):
         "outputs:\n  web:\n    - enabled: true\n      port: 8090\n      allow_media_types: [music]\n"
     )
     out = _output(config_path)
-    data = out.app.test_client().get("/api/config").get_json()
+    data = _client(out).get("/api/config").get_json()
     assert data["outputs"]["web"][0]["allow_media_types"] == ["music"]
     assert data["outputs"]["web"][0]["deny_media_types"] == []
 
@@ -2065,7 +2083,7 @@ def test_get_config_outputs_includes_filter_fields(config_path):
 def test_save_form_saves_allow_media_types(config_path):
     config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     resp = client.post(
         "/api/config/form",
         json={
@@ -2094,7 +2112,7 @@ def test_save_form_saves_allow_media_types(config_path):
 def test_save_form_cleans_empty_filter_lists_from_yaml(config_path):
     config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
     out = _output(config_path)
-    client = out.app.test_client()
+    client = _client(out)
     client.post(
         "/api/config/form",
         json={
@@ -2130,7 +2148,7 @@ def test_save_form_cleans_empty_filter_lists_from_yaml(config_path):
 def test_save_form_rejects_conflicting_allow_deny_media_types(config_path):
     config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
     out = _output(config_path)
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/config/form",
         json={
             "values": {},
@@ -2158,7 +2176,7 @@ def test_save_form_rejects_conflicting_allow_deny_media_types(config_path):
 def test_save_form_rejects_conflicting_allow_deny_sources(config_path):
     config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
     out = _output(config_path)
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/config/form",
         json={
             "values": {},
@@ -2186,7 +2204,7 @@ def test_save_form_rejects_conflicting_allow_deny_sources(config_path):
 def test_save_form_rejects_invalid_active_hours(config_path):
     config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
     out = _output(config_path)
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/config/form",
         json={
             "values": {},
@@ -2214,7 +2232,7 @@ def test_save_form_rejects_invalid_active_hours(config_path):
 def test_save_form_accepts_valid_active_hours_with_midnight_wrap(config_path):
     config_path.write_text("outputs:\n  web:\n    - enabled: true\n      port: 8090\n")
     out = _output(config_path)
-    resp = out.app.test_client().post(
+    resp = _client(out).post(
         "/api/config/form",
         json={
             "values": {},

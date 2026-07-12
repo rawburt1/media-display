@@ -121,12 +121,12 @@ var detailNewGroupName = '';         // theme_group_editor's "+ Add group" name 
 var detailPendingStatus = null;
 
 function classicHrefFor(c) {
-  if (c.component_type === 'text_enricher') return '/form#advanced';
-  if (c.component_type === 'idle_source') return '/form#idle';
-  if (c.component_type === 'source') return '/form#sources';
-  if (c.component_type === 'enricher') return '/form#artwork';
-  if (c.component_type === 'theme' || c.component_type === 'output') return '/form#outputs';
-  return '/form';
+  if (c.component_type === 'text_enricher') return API_PREFIX + '/form#advanced';
+  if (c.component_type === 'idle_source') return API_PREFIX + '/form#idle';
+  if (c.component_type === 'source') return API_PREFIX + '/form#sources';
+  if (c.component_type === 'enricher') return API_PREFIX + '/form#artwork';
+  if (c.component_type === 'theme' || c.component_type === 'output') return API_PREFIX + '/form#outputs';
+  return API_PREFIX + '/form';
 }
 
 function findDetailField(name) {
@@ -401,7 +401,7 @@ function removeGroup(groupName) {
 
 function loadOutputInstances(c) {
   var typeName = c.config_path.split('.')[1];
-  return fetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+  return apiFetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
     var instances = (cfg.outputs && cfg.outputs[typeName]) || [];
     detailOutputType = typeName;
     detailOutputsWorking = JSON.parse(JSON.stringify(instances));
@@ -411,7 +411,7 @@ function loadOutputInstances(c) {
 
 function loadThemeInstances(c) {
   var themeName = c.config_path.split('.')[1];
-  return fetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+  return apiFetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
     var instances = (cfg.outputs && cfg.outputs.themes) || [];
     detailOutputType = 'themes';
     detailThemeName = themeName;
@@ -424,8 +424,8 @@ function loadThemeInstances(c) {
 
 function loadAutoRotateInstances(c) {
   return Promise.all([
-    fetch('/api/config').then(function(r) { return r.json(); }),
-    fetch('/api/schema').then(function(r) { return r.json(); }),
+    apiFetch('/api/config').then(function(r) { return r.json(); }),
+    apiFetch('/api/schema').then(function(r) { return r.json(); }),
   ]).then(function(results) {
     var cfg = results[0], schema = results[1];
     var instances = (cfg.outputs && cfg.outputs.themes) || [];
@@ -452,7 +452,7 @@ function loadAutoRotateInstances(c) {
 
 function fetchComponentDetail(id) {
   var el = document.getElementById('section-component');
-  fetch('/api/ui/component/' + encodeURIComponent(id)).then(function(r) { return r.json(); }).then(function(c) {
+  apiFetch('/api/ui/component/' + encodeURIComponent(id)).then(function(r) { return r.json(); }).then(function(c) {
     if (c.error) {
       el.innerHTML = '<h1>Not found</h1><p class="lede">' + esc(c.error) + '</p>';
       return;
@@ -513,7 +513,7 @@ function saveDetailComponent() {
     body = { values: values };
   }
 
-  fetch('/api/config/form', {
+  apiFetch('/api/config/form', {
     method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify(body),
   }).then(function(r) { return r.json(); }).then(function(d) {
@@ -559,12 +559,12 @@ function runDetailTest() {
   var typeName = c.config_path.split('.')[1];
   var req;
   if (c.component_type === 'source') {
-    req = fetch('/api/test/source/' + encodeURIComponent(typeName), { method: 'POST', headers: CSRF_HEADERS });
+    req = apiFetch('/api/test/source/' + encodeURIComponent(typeName), { method: 'POST', headers: CSRF_HEADERS });
   } else if (c.component_type === 'enricher') {
-    req = fetch('/api/test/enricher/' + encodeURIComponent(typeName), { method: 'POST', headers: CSRF_HEADERS });
+    req = apiFetch('/api/test/enricher/' + encodeURIComponent(typeName), { method: 'POST', headers: CSRF_HEADERS });
   } else if (c.component_type === 'output') {
     var body = Object.assign({ type: typeName }, detailOutputsWorking[0]);
-    req = fetch('/api/test/output', {
+    req = apiFetch('/api/test/output', {
       method: 'POST',
       headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
       body: JSON.stringify(body),
@@ -733,7 +733,7 @@ function runHealthTest(btn) {
     ? '/api/test/source/' + encodeURIComponent(typeName)
     : '/api/test/enricher/' + encodeURIComponent(typeName);
 
-  fetch(url, { method: 'POST', headers: CSRF_HEADERS }).then(function(r) { return r.json(); }).then(function(d) {
+  apiFetch(url, { method: 'POST', headers: CSRF_HEADERS }).then(function(r) { return r.json(); }).then(function(d) {
     resultEl.classList.add(d.ok ? 'ok' : 'fail');
     resultEl.textContent = d.message;
   }).catch(function() {
@@ -855,7 +855,7 @@ function libraryPageHtml() {
     + '<div id="library-overrides-panel">Loading…</div>'
     + '</div>'
     + '<div id="library-settings-cards"></div>'
-    + '<p class="field-help">Prefer the classic pages? <a href="/library">Library</a> &middot; <a href="/overrides">Overrides</a></p>';
+    + '<p class="field-help">Prefer the classic pages? <a href="' + API_PREFIX + '/library">Library</a> &middot; <a href="' + API_PREFIX + '/overrides">Overrides</a></p>';
 }
 
 function renderLibrarySection(param) {
@@ -918,7 +918,7 @@ function onLibrarySearchInput(value) {
     return;
   }
   librarySearchTimer = setTimeout(function() {
-    fetch('/api/library/search?q=' + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(data) {
+    apiFetch('/api/library/search?q=' + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(data) {
       librarySearchResults = data;
       renderLibrarySearchResults();
     }).catch(function() {});
@@ -932,7 +932,7 @@ function renderLibraryStats() {
 }
 
 function fetchLibraryStats() {
-  fetch('/api/library/stats').then(function(r) { return r.json(); }).then(function(data) {
+  apiFetch('/api/library/stats').then(function(r) { return r.json(); }).then(function(data) {
     libraryStats = data;
     renderLibraryStats();
   }).catch(function() {});
@@ -951,7 +951,7 @@ function renderLibraryArtistDetail(id) {
   var el = document.getElementById('section-library');
   var backLink = '<a class="back-link" href="#library">← Back to Library</a>';
   el.innerHTML = backLink + '<h1>Artist</h1><p class="lede">Loading…</p>';
-  fetch('/api/library/artist/' + encodeURIComponent(id)).then(function(r) { return r.json(); }).then(function(a) {
+  apiFetch('/api/library/artist/' + encodeURIComponent(id)).then(function(r) { return r.json(); }).then(function(a) {
     if (a.error) {
       el.innerHTML = backLink + '<h1>Artist</h1><p class="lede">' + esc(a.error) + '</p>';
       return;
@@ -972,7 +972,7 @@ function renderLibraryArtistDetail(id) {
 // classic overrides.html (multipart POST, JSON-body DELETE).
 // ---------------------------------------------------------------------
 function fetchOverrides() {
-  fetch('/api/overrides').then(function(r) { return r.json(); }).then(function(data) {
+  apiFetch('/api/overrides').then(function(r) { return r.json(); }).then(function(data) {
     overridesData = data;
     renderOverridesPanel();
   }).catch(function() {});
@@ -980,7 +980,7 @@ function fetchOverrides() {
 
 function overrideCard(item) {
   return '<div class="override-card">'
-    + '<img src="/api/overrides/image/' + encodeURIComponent(item.filename) + '" alt="">'
+    + '<img src="' + API_PREFIX + '/api/overrides/image/' + encodeURIComponent(item.filename) + '" alt="">'
     + '<div class="info"><div class="title">' + esc(item.title) + '</div>'
     + '<div class="subtitle">' + esc(item.subtitle || '(no subtitle)') + '</div></div>'
     + '<button type="button" class="btn danger small" data-title="' + esc(item.title) + '" data-subtitle="' + esc(item.subtitle || '') + '" '
@@ -1019,7 +1019,7 @@ function submitOverrideForm(e) {
   var form = e.target;
   var statusEl = document.getElementById('override-form-status');
   statusEl.textContent = 'Saving…';
-  fetch('/api/overrides', { method: 'POST', headers: CSRF_HEADERS, body: new FormData(form) })
+  apiFetch('/api/overrides', { method: 'POST', headers: CSRF_HEADERS, body: new FormData(form) })
     .then(function(r) { return r.json().then(function(data) { return [r.ok, data]; }); })
     .then(function(result) {
       if (result[0]) { form.reset(); fetchOverrides(); }
@@ -1030,7 +1030,7 @@ function submitOverrideForm(e) {
 
 function removeOverride(btn) {
   btn.disabled = true;
-  fetch('/api/overrides', {
+  apiFetch('/api/overrides', {
     method: 'DELETE',
     headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify({ title: btn.dataset.title, subtitle: btn.dataset.subtitle }),

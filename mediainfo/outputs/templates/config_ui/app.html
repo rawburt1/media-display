@@ -378,6 +378,8 @@ function setSectionHTML(el, html) {
 // preflight this app never grants, and a plain <form> POST can't set
 // custom headers at all. Not needed on GETs.
 var CSRF_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' };
+var API_PREFIX = {{ url_prefix|tojson }};
+function apiFetch(url, opts) { return fetch(API_PREFIX + url, opts); }
 var schema = null;
 var serverValues = {};      // last-saved values, dotted-key -> value ("" for secrets)
 var secretsSet = {};        // dotted-key -> bool, whether a secret currently has a value
@@ -490,14 +492,14 @@ function renderHitsterSafeButton() {
   btn.setAttribute('aria-pressed', String(hitsterSafeEnabled));
 }
 function toggleHitsterSafe() {
-  fetch('/api/hitster-safe', {
+  apiFetch('/api/hitster-safe', {
     method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify({ enabled: !hitsterSafeEnabled }),
   }).then(function(r) { return r.json(); })
     .then(function(d) { hitsterSafeEnabled = !!d.enabled; renderHitsterSafeButton(); })
     .catch(function() {});
 }
-fetch('/api/hitster-safe').then(function(r) { return r.json(); })
+apiFetch('/api/hitster-safe').then(function(r) { return r.json(); })
   .then(function(d) { hitsterSafeEnabled = !!d.enabled; renderHitsterSafeButton(); }).catch(function() {});
 
 // ---------------------------------------------------------------------
@@ -872,7 +874,7 @@ function testAllEnabled() {
   var names = enabledSourceNames();
   if (!names.length) { resultEl.textContent = 'No sources are enabled.'; return; }
   Promise.all(names.map(function(name) {
-    return fetch('/api/test/source/' + encodeURIComponent(name), { method: 'POST', headers: CSRF_HEADERS }).then(function(r) { return r.json(); })
+    return apiFetch('/api/test/source/' + encodeURIComponent(name), { method: 'POST', headers: CSRF_HEADERS }).then(function(r) { return r.json(); })
       .then(function(d) { return { name: name, ok: d.ok, message: d.message }; });
   })).then(function(results) {
     resultEl.textContent = results.map(function(r) { return (r.ok ? '✓ ' : '✗ ') + r.name + ': ' + r.message; }).join('\n');
@@ -881,7 +883,7 @@ function testAllEnabled() {
 
 function restartNow() {
   if (!confirm('Restart mediainfo now? Every display goes offline until it comes back up.')) return;
-  fetch('/api/restart', { method: 'POST', headers: CSRF_HEADERS }).catch(function() {});
+  apiFetch('/api/restart', { method: 'POST', headers: CSRF_HEADERS }).catch(function() {});
   fetchOverview();
   alert('Restarting… this page will keep working once the process is back up (if something supervises it, e.g. Docker’s restart: unless-stopped).');
 }
@@ -915,7 +917,7 @@ function isTypeHidden(category, name) {
   return (hiddenTypes[category] || []).indexOf(name) !== -1;
 }
 function setTypeHidden(category, name, hidden) {
-  fetch('/api/config/hidden-types', {
+  apiFetch('/api/config/hidden-types', {
     method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify({ category: category, name: name, hidden: hidden }),
   }).then(function(r) { return r.json(); }).then(function(d) {
@@ -1050,7 +1052,7 @@ function appletvPairStart() {
   appletvState.protocol = document.getElementById('appletv-protocol').value;
   appletvState.step = 'starting'; appletvState.error = null;
   appletvRerender();
-  fetch('/api/appletv/pair/start', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
+  apiFetch('/api/appletv/pair/start', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify({ host: host || '', protocol: appletvState.protocol }) })
     .then(function(r) { return r.json(); }).then(function(d) {
       if (!d.ok) { appletvState.step = 'idle'; appletvState.error = d.error; }
@@ -1063,7 +1065,7 @@ function appletvPairSubmit() {
   var pinEl = document.getElementById('appletv-pin');
   var pin = pinEl ? pinEl.value : null;
   appletvState.step = 'finishing'; appletvRerender();
-  fetch('/api/appletv/pair/finish', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS), body: JSON.stringify({ pin: pin }) })
+  apiFetch('/api/appletv/pair/finish', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS), body: JSON.stringify({ pin: pin }) })
     .then(function(r) { return r.json(); }).then(function(d) {
       if (!d.ok) { appletvState.step = appletvState.devicePin ? 'need_manual_entry' : 'need_pin'; appletvState.error = d.error; appletvRerender(); return; }
       setValue('sources.appletv.' + d.field, d.credentials);
@@ -1072,7 +1074,7 @@ function appletvPairSubmit() {
     }).catch(function() { appletvState.error = 'Request failed.'; appletvRerender(); });
 }
 function appletvPairCancel() {
-  fetch('/api/appletv/pair/cancel', { method: 'POST', headers: CSRF_HEADERS }).catch(function() {});
+  apiFetch('/api/appletv/pair/cancel', { method: 'POST', headers: CSRF_HEADERS }).catch(function() {});
   appletvState = { step: 'idle', protocol: appletvState.protocol, devicePin: null, error: null };
   appletvRerender();
 }
@@ -1092,8 +1094,8 @@ function runInlineTest(kind, id, btn) {
   var resultEl = document.getElementById('test-' + kind + '-' + id);
   btn.disabled = true; btn.textContent = 'Testing…';
   resultEl.className = 'test-result show'; resultEl.textContent = 'Running…';
-  var req = kind === 'source' ? fetch('/api/test/source/' + encodeURIComponent(id), { method: 'POST', headers: CSRF_HEADERS })
-    : fetch('/api/test/enricher/' + encodeURIComponent(id), { method: 'POST', headers: CSRF_HEADERS });
+  var req = kind === 'source' ? apiFetch('/api/test/source/' + encodeURIComponent(id), { method: 'POST', headers: CSRF_HEADERS })
+    : apiFetch('/api/test/enricher/' + encodeURIComponent(id), { method: 'POST', headers: CSRF_HEADERS });
   req.then(function(r) { return r.json(); }).then(function(d) {
     testResults[kind + ':' + id] = d;
     resultEl.classList.add(d.ok ? 'ok' : 'fail'); resultEl.textContent = d.message;
@@ -1517,7 +1519,7 @@ function runOutputTest(typeName, idx, btn, resultEl) {
   btn.disabled = true; btn.textContent = 'Testing…';
   resultEl.className = 'test-result show'; resultEl.textContent = 'Running…';
   var body = Object.assign({ type: typeName }, outputsData[typeName][idx]);
-  fetch('/api/test/output', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS), body: JSON.stringify(body) })
+  apiFetch('/api/test/output', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS), body: JSON.stringify(body) })
     .then(function(r) { return r.json(); }).then(function(d) {
       resultEl.classList.add(d.ok ? 'ok' : 'fail'); resultEl.textContent = d.message;
     }).catch(function() { resultEl.classList.add('fail'); resultEl.textContent = 'Request failed.'; })
@@ -1565,7 +1567,7 @@ function runPixooPreview(idx) {
 
   errorEl.className = 'test-result show'; errorEl.textContent = 'Generating…';
   gridEl.style.display = 'none';
-  fetch('/api/preview/pixoo', { method: 'POST', headers: CSRF_HEADERS, body: form })
+  apiFetch('/api/preview/pixoo', { method: 'POST', headers: CSRF_HEADERS, body: form })
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (!d.ok) { errorEl.className = 'test-result show fail'; errorEl.textContent = d.error || 'Preview failed.'; return; }
@@ -1677,10 +1679,10 @@ function renderLibrary() {
   var el = document.getElementById('section-library');
   var html = '<h1>Library &amp; overrides</h1><p class="lede">Local caches and manual artwork pins, plus their own dedicated browser pages.</p>';
 
-  html += '<div class="card-row" style="margin-bottom:10px;"><h2 class="heading-sm">Music library cache</h2><a class="btn secondary small" href="/library">Open library browser &rarr;</a></div>'
+  html += '<div class="card-row" style="margin-bottom:10px;"><h2 class="heading-sm">Music library cache</h2><a class="btn secondary small" href="' + API_PREFIX + '/library">Open library browser &rarr;</a></div>'
     + '<div class="card">' + renderFieldGroup(schema.library, scopeForSingle('library'), 'library') + '</div>';
 
-  html += '<div class="card-row" style="margin:18px 0 10px;"><h2 class="heading-sm">Artwork overrides</h2><a class="btn secondary small" href="/overrides">Open overrides &rarr;</a></div>'
+  html += '<div class="card-row" style="margin:18px 0 10px;"><h2 class="heading-sm">Artwork overrides</h2><a class="btn secondary small" href="' + API_PREFIX + '/overrides">Open overrides &rarr;</a></div>'
     + '<div class="card">' + renderFieldGroup(schema.overrides, scopeForSingle('overrides'), 'overrides') + '</div>';
 
   setSectionHTML(el, html);
@@ -1742,9 +1744,9 @@ function runStatusTest(kind, id, btn) {
   var resultEl = btn.nextElementSibling;
   btn.disabled = true; btn.textContent = 'Testing…';
   resultEl.className = 'test-result show'; resultEl.textContent = 'Running…';
-  var req = kind === 'source' ? fetch('/api/test/source/' + encodeURIComponent(id), { method: 'POST', headers: CSRF_HEADERS })
-    : kind === 'enricher' ? fetch('/api/test/enricher/' + encodeURIComponent(id), { method: 'POST', headers: CSRF_HEADERS })
-    : fetch('/api/test/output', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS), body: JSON.stringify({ type: id }) });
+  var req = kind === 'source' ? apiFetch('/api/test/source/' + encodeURIComponent(id), { method: 'POST', headers: CSRF_HEADERS })
+    : kind === 'enricher' ? apiFetch('/api/test/enricher/' + encodeURIComponent(id), { method: 'POST', headers: CSRF_HEADERS })
+    : apiFetch('/api/test/output', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS), body: JSON.stringify({ type: id }) });
   req.then(function(r) { return r.json(); }).then(function(d) {
     testResults[kind + ':' + id] = d;
     if (kind === 'source') { if (d.ok) delete statusOverrides['source:' + id]; else statusOverrides['source:' + id] = 'unavailable'; renderStatus(); return; }
@@ -1780,7 +1782,7 @@ function renderStatus() {
 }
 
 function fetchStatus() {
-  return fetch('/api/status').then(function(r) { return r.json(); }).then(function(d) {
+  return apiFetch('/api/status').then(function(r) { return r.json(); }).then(function(d) {
     statusData = d; statusLastUpdated = new Date();
     if (currentSection === 'status') renderStatus();
   }).catch(function() {});
@@ -1843,7 +1845,7 @@ function renderBackupsList() {
 }
 
 function fetchConfigBackups() {
-  return fetch('/api/config/backups').then(function(r) { return r.json(); }).then(function(d) {
+  return apiFetch('/api/config/backups').then(function(r) { return r.json(); }).then(function(d) {
     configBackups = d.backups || [];
   }).catch(function() { configBackups = []; });
 }
@@ -1853,7 +1855,7 @@ function restoreConfigBackup(filename) {
     + 'first, so this can be undone the same way. Some changes may need a restart to take effect.')) return;
   var statusEl = document.getElementById('backups-status');
   statusEl.textContent = 'Restoring…'; statusEl.className = '';
-  fetch('/api/config/backups/restore', {
+  apiFetch('/api/config/backups/restore', {
     method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify({ filename: filename }),
   }).then(function(r) { return r.json(); }).then(function(d) {
@@ -1883,7 +1885,7 @@ function saveRawYaml() {
   var statusEl = document.getElementById('raw-status');
   var text = document.getElementById('raw-yaml').value;
   statusEl.textContent = 'Saving…'; statusEl.className = '';
-  fetch('/api/config/raw', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS), body: JSON.stringify({ yaml: text }) })
+  apiFetch('/api/config/raw', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS), body: JSON.stringify({ yaml: text }) })
     .then(function(r) { return r.json(); }).then(function(d) {
       statusEl.textContent = d.ok ? 'Saved - most changes take effect within a few seconds (outputs and authentication need a restart).' : d.error;
       statusEl.className = d.ok ? 'ok' : 'err';
@@ -1929,7 +1931,7 @@ function saveAll() {
   var outputsPayload = {};
   Object.keys(dirty.outputTypes).forEach(function(t) { outputsPayload[t] = outputsData[t]; });
 
-  fetch('/api/config/form', {
+  apiFetch('/api/config/form', {
     method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
     body: JSON.stringify({ values: dirty.values, outputs: outputsPayload }),
   }).then(function(r) { return r.json(); }).then(function(d) {
@@ -1957,7 +1959,7 @@ function discardChanges() {
 // Loading
 // ---------------------------------------------------------------------
 function fetchOverview() {
-  return fetch('/api/overview').then(function(r) { return r.json(); }).then(function(d) {
+  return apiFetch('/api/overview').then(function(r) { return r.json(); }).then(function(d) {
     overviewData = d;
     if (currentSection === 'overview') renderOverview();
   }).catch(function() {});
@@ -1965,8 +1967,8 @@ function fetchOverview() {
 
 function loadAll() {
   return Promise.all([
-    fetch('/api/schema').then(function(r) { return r.json(); }),
-    fetch('/api/config').then(function(r) { return r.json(); }),
+    apiFetch('/api/schema').then(function(r) { return r.json(); }),
+    apiFetch('/api/config').then(function(r) { return r.json(); }),
   ]).then(function(results) {
     schema = results[0];
     serverValues = results[1].values;
