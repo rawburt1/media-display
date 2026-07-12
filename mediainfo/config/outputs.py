@@ -280,11 +280,11 @@ class NestHubConfig(_OutputFilterMixin):
     # IP address of the Google Nest Hub (or other Cast-compatible display).
     device_ip: str = ""
     # This machine's LAN address, so the Nest Hub can fetch the image being
-    # cast (Cast devices load media via HTTP URL, not a direct push).
+    # cast (Cast devices load media via HTTP URL, not a direct push) from
+    # the shared HTTP server (config.http) - not a bind address itself, so
+    # it survives the config_version 2 host/port cleanup that removed every
+    # other per-output host/port field (see mediainfo/config/migrations.py).
     server_host: str = ""
-    # Port for the small built-in HTTP server that serves the current
-    # image to the Nest Hub. Must be reachable from the device.
-    server_port: int = 8092
     transforms: list = dataclasses.field(default_factory=list)
 
 

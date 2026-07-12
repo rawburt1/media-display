@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from flask import Flask
 
 from mediainfo.config import NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -11,16 +12,27 @@ from mediainfo.outputs.nest_hub import NestHubOutput
 
 
 def _config(**kwargs):
-    defaults = dict(
-        enabled=True, device_ip="192.168.1.50", server_host="192.168.1.10", server_port=8092
-    )
+    defaults = dict(enabled=True, device_ip="192.168.1.50", server_host="192.168.1.10")
     defaults.update(kwargs)
     return NestHubConfig(**defaults)
 
 
-def _output(**kwargs):
-    with patch("mediainfo.outputs.nest_hub.threading.Thread"):
-        return NestHubOutput(_config(**kwargs))
+def _output(http_port=8092, **kwargs):
+    return NestHubOutput(_config(**kwargs), http_port=http_port)
+
+
+def _client(output, url_prefix=""):
+    """Register output's blueprint on a throwaway local Flask app and
+    return a test client against it - the reusable harness every other
+    output's tests reuse once converted (H1, see
+    docs/architecture-usability-review-2026-07.md). Unlike the real
+    SharedHttpServer, this is a plain app with no install_auth() wired in,
+    since these tests care about routing/behavior, not auth - see
+    tests/test_http_server.py for auth coverage.
+    """
+    app = Flask(__name__)
+    app.register_blueprint(output.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
 
 
 def _img(tmp_path: Path, name: str) -> Path:
@@ -137,8 +149,7 @@ def test_serves_current_image(tmp_path):
     output._stable_path = image
     output._stable_content_type = "image/jpeg"
 
-    with output.app.test_client() as client:
-        response = client.get("/image/current")
+    response = _client(output).get("/image/current")
 
     assert response.status_code == 200
     assert response.data == b"image-bytes"
@@ -147,7 +158,32 @@ def test_serves_current_image(tmp_path):
 def test_serves_404_before_any_image():
     output = _output()
 
-    with output.app.test_client() as client:
-        response = client.get("/image/current")
+    response = _client(output).get("/image/current")
 
     assert response.status_code == 404
+
+
+def test_blueprint_is_reachable_under_its_computed_prefix(tmp_path):
+    image = tmp_path / "current.jpg"
+    image.write_bytes(b"image-bytes")
+
+    output = _output()
+    output._stable_path = image
+    output._stable_content_type = "image/jpeg"
+
+    response = _client(output, url_prefix="/nest_hub").get("/nest_hub/image/current")
+
+    assert response.status_code == 200
+
+
+@patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
+def test_cast_url_includes_the_computed_prefix(mock_get_cast, tmp_path):
+    cast = MagicMock()
+    mock_get_cast.return_value = cast
+
+    output = _output()
+    output.build_http_blueprint("/nest_hub")  # wiring.py calls this before any update()
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
+
+    url, _ = cast.media_controller.play_media.call_args[0]
+    assert url == "http://192.168.1.10:8092/nest_hub/image/current?v=abc123"

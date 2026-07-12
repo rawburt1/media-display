@@ -481,7 +481,6 @@ _ESSENTIAL_FIELD_NAMES = frozenset(
         "device_ips",
         "server_host",
         "port",
-        "server_port",
         "api_key",
         "token",
         "client_id",

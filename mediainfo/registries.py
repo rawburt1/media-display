@@ -73,7 +73,13 @@ OUTPUT_EXTRA_ARGS = {
     "info": lambda config, config_path, cache: (config.auth,),
     "feed": lambda config, config_path, cache: (config.auth,),
     "video": lambda config, config_path, cache: (config.auth,),
-    "nest_hub": lambda config, config_path, cache: (config.auth,),
+    # http_port, not config.auth like the others (nest_hub's blueprint
+    # doesn't call install_auth itself anymore - see
+    # mediainfo/outputs/http_server.py.SharedHttpServer, which does that
+    # once for the whole shared app) - it needs the shared server's port to
+    # build the Cast device's absolute image URL (see
+    # NestHubOutput._cast_image()).
+    "nest_hub": lambda config, config_path, cache: (config.http.port,),
     # Pixoo disk-caches its LED-prepared derivative via the shared
     # ImageCache (see mediainfo/led_image.py + ImageCache.get_derived_path)
     # instead of reprocessing the image on every update().
@@ -162,7 +168,7 @@ OUTPUT_DETAIL_FIELDS: dict = {
     "folder": ["label", "dir"],
     "info": ["label", "port"],
     "mqtt": ["label", "host", "port", "topic"],
-    "nest_hub": ["label", "device_ip", "server_port"],
+    "nest_hub": ["label", "device_ip"],
     "pixoo": ["label", "ip"],
     "themes": ["label", "port"],
     "ulanzi": ["label", "device_ip"],

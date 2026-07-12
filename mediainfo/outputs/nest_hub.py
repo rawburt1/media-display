@@ -19,13 +19,12 @@ from pathlib import Path
 from typing import Optional
 
 import pychromecast
-from flask import Flask, send_file
+from flask import Blueprint, send_file
 
-from mediainfo.config import AuthConfig, NestHubConfig
+from mediainfo.config import NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
 from mediainfo.transforms import parse_pipeline
-from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +42,13 @@ _CONNECT_TIMEOUT_SECONDS = 10
 
 
 class NestHubOutput(Output):
-    def __init__(self, config: NestHubConfig, auth_config: Optional[AuthConfig] = None):
+    def __init__(self, config: NestHubConfig, http_port: int = 8090):
         self.config = config
-        self.auth_config = auth_config
+        # The shared HTTP server's port (see mediainfo/outputs/http_server.py)
+        # - needed here (unlike every other Flask-based output) because
+        # _cast_image() builds an absolute URL for a physical Cast device to
+        # fetch, rather than a browser resolving a relative one.
+        self.http_port = http_port
         self.transform_pipeline = parse_pipeline(config.transforms)
         self._lock = threading.Lock()
         # Stable file that survives idle rotations so the Nest Hub can always
@@ -56,8 +59,8 @@ class NestHubOutput(Output):
         self._last_url: Optional[str] = None
         self._last_connect_attempt: Optional[float] = None
         self._idle = False
-        self.app = self._build_app()
-        threading.Thread(target=self._run_server, daemon=True).start()
+        # Set by build_http_blueprint() once wiring.py has computed it.
+        self._url_prefix = ""
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         content_type = _CONTENT_TYPES.get(image_path.suffix.lower(), _DEFAULT_CONTENT_TYPE)
@@ -111,13 +114,11 @@ class NestHubOutput(Output):
         self._idle = True
         self._last_url = None
 
-    def _run_server(self) -> None:
-        self.app.run(host="0.0.0.0", port=self.config.server_port)
+    def build_http_blueprint(self, url_prefix: str, sock=None) -> Blueprint:
+        self._url_prefix = url_prefix
+        bp = Blueprint("nest_hub", __name__)
 
-    def _build_app(self) -> Flask:
-        app = Flask(__name__)
-
-        @app.get("/image/current")
+        @bp.get("/image/current")
         def current_image():
             with self._lock:
                 path = self._stable_path
@@ -127,14 +128,13 @@ class NestHubOutput(Output):
                 return "", 404
             return send_file(path, mimetype=content_type)
 
-        install_auth(app, self.auth_config)
-        return app
+        return bp
 
     def _cast_image(self, image_path: Path) -> None:
         content_type = _CONTENT_TYPES.get(image_path.suffix.lower(), _DEFAULT_CONTENT_TYPE)
         url = (
-            f"http://{self.config.server_host}:{self.config.server_port}"
-            f"/image/current?v={image_path.stem}"
+            f"http://{self.config.server_host}:{self.http_port}"
+            f"{self._url_prefix}/image/current?v={image_path.stem}"
         )
         if url == self._last_url:
             return
