@@ -2180,6 +2180,45 @@ def test_request_rotation_now_repushes_immediately_without_waiting_for_interval(
     assert output.update.call_count == 2
 
 
+def test_request_rotation_now_works_on_a_freshly_booted_machine():
+    """_force_rotation() must make every output due "right now" regardless
+    of time.monotonic()'s epoch, which counts from an arbitrary reference
+    point (often boot time) rather than the Unix epoch. On a freshly
+    booted machine - a real device just after a reboot, or a fresh CI
+    runner - time.monotonic() can read smaller than rotation_interval_
+    seconds, so resetting last_rotation to 0.0 wouldn't actually look
+    overdue. Regression test for that: simulate low system uptime.
+    """
+    now_playing = NowPlaying(
+        source="kodi",
+        media_type="music",
+        title="Money",
+        subtitle="Pink Floyd",
+        images=[Artwork(url="https://example.com/original.jpg")],
+    )
+    output = MagicMock()
+    cache = MagicMock()
+    cache.get_path.return_value = "/tmp/art.jpg"
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    with patch("time.monotonic", return_value=50.0):
+        orch = Orchestrator(
+            sources=[_StaticSource(now_playing)],
+            enrichers=[],
+            outputs=[output],
+            cache=cache,
+            poll_interval_seconds=1,
+            rotation_interval_seconds=9999,  # exceeds the simulated 50s of uptime
+        )
+        orch._tick()
+        assert output.update.call_count == 1
+
+        orch.request_rotation_now()
+        orch._tick()
+
+        assert output.update.call_count == 2
+
+
 def test_request_rotation_now_is_noop_when_nothing_playing():
     output = MagicMock()
     orch = _orchestrator(outputs=[output], cache=MagicMock())  # _FakeSource: nothing playing

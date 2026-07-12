@@ -272,7 +272,14 @@ class Orchestrator:
         """
         for group in self._groups:
             for state in group.rotation_state.values():
-                state.last_rotation = 0.0
+                # -inf, not 0.0: last_rotation is compared against
+                # time.monotonic(), which counts from an arbitrary epoch
+                # (often boot time) rather than the Unix epoch - on a
+                # freshly booted machine it can be smaller than
+                # rotation_interval_seconds, making `now - 0.0` read as
+                # "not due yet" and silently swallowing the forced
+                # rotation.
+                state.last_rotation = float("-inf")
 
     def _maybe_purge_cache(self) -> None:
         now = time.monotonic()
