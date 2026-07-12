@@ -8,16 +8,15 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from flask import Flask, jsonify, render_template, send_file
+from flask import Blueprint, jsonify, render_template, send_file
 from markupsafe import Markup
 
 from mediainfo.cache import ImageCache
-from mediainfo.config import AuthConfig, VideoOutputConfig
+from mediainfo.config import VideoOutputConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
 from mediainfo.video.base import VideoClip, VideoSource
-from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +44,8 @@ class VideoOutput(Output):
     # routed here (see _show_idle_image_for_output in orchestrator).
     handles_images = False
 
-    def __init__(self, config: VideoOutputConfig, auth_config: Optional[AuthConfig] = None):
+    def __init__(self, config: VideoOutputConfig):
         self.config = config
-        self.auth_config = auth_config
         # Markup: the transitions CSS/JS is code, not text - autoescaping it
         # would corrupt it (see templates/video/index.html).
         self._transitions_css = Markup(transitions.transitions_css("#art-wrap"))
@@ -61,8 +59,10 @@ class VideoOutput(Output):
         self._last_refresh: float = 0.0
         self._refresh_thread: Optional[threading.Thread] = None
         self._video_source = _make_video_source(config)
-        self.app = self._build_app()
-        threading.Thread(target=self._run_server, daemon=True).start()
+        # Set by build_http_blueprint() once wiring.py has computed it -
+        # baked into /api/state's "image" URL, since it's a relative path
+        # a browser resolves against the current page.
+        self._url_prefix = ""
 
     # --- Output interface ---
 
@@ -119,16 +119,13 @@ class VideoOutput(Output):
                 self._videos = videos
                 self._last_refresh = time.monotonic()
 
-    # --- Flask server ---
+    # --- Flask blueprint ---
 
-    def _run_server(self) -> None:
-        logger.info("Starting video server on %s:%s", self.config.host, self.config.port)
-        self.app.run(host=self.config.host, port=self.config.port)
+    def build_http_blueprint(self, url_prefix: str, sock=None) -> Blueprint:
+        self._url_prefix = url_prefix
+        bp = Blueprint("video", __name__)
 
-    def _build_app(self) -> Flask:
-        app = Flask(__name__)
-
-        @app.get("/")
+        @bp.get("/")
         def index():
             return render_template(
                 "video/index.html",
@@ -136,7 +133,7 @@ class VideoOutput(Output):
                 transitions_js=self._transitions_js,
             )
 
-        @app.get("/api/state")
+        @bp.get("/api/state")
         def state():
             with self._lock:
                 is_idle = self._is_idle
@@ -152,16 +149,16 @@ class VideoOutput(Output):
                 "subtitle": now_playing.subtitle if now_playing else "",
             }
             if image_path is not None:
-                payload["image"] = f"/image/current?v={image_path.stem}"
+                payload["image"] = f"{self._url_prefix}/image/current?v={image_path.stem}"
             return jsonify(payload)
 
-        @app.get("/api/videos")
+        @bp.get("/api/videos")
         def videos():
             with self._lock:
                 clips = list(self._videos)
             return jsonify([{"url": c.url, "label": c.label} for c in clips])
 
-        @app.get("/image/current")
+        @bp.get("/image/current")
         def current_image():
             with self._lock:
                 image_path = self._image_path
@@ -171,5 +168,4 @@ class VideoOutput(Output):
 
             return send_file(image_path)
 
-        install_auth(app, self.auth_config)
-        return app
+        return bp

@@ -85,7 +85,7 @@
       if (loadingVideos) return;
       loadingVideos = true;
       try {
-        const res = await fetch('/api/videos');
+        const res = await fetch('{{ url_for("video.videos") }}');
         const vids = await res.json();
         if (vids.length) {
           playlist = shuffled(vids.map(v => v.url));
@@ -117,7 +117,7 @@
 
     async function poll() {
       try {
-        const res = await fetch('/api/state');
+        const res = await fetch('{{ url_for("video.state") }}');
         const data = await res.json();
 
         if (data.state === 'idle') {

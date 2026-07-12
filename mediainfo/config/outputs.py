@@ -348,8 +348,6 @@ class MqttConfig(_OutputFilterMixin):
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class VideoOutputConfig(_OutputFilterMixin):
     enabled: bool = False
-    host: str = "0.0.0.0"
-    port: int = 8091
     # Primary video source: "pexels" or "pixabay".
     source: str = "pexels"
     # Comma-separated search queries; one is chosen at random per refresh.

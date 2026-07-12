@@ -61,12 +61,12 @@ OUTPUT_CLASSES: dict[str, Union[str, type]] = {
 # its own per-client rotation before the first on_new_item() call ever
 # arrives (e.g. idle wallpapers shown at startup, before anything plays) -
 # see WebOutput's docstring for why it can't just reuse the orchestrator's
-# rotation like other outputs do). Every Flask-based output also takes
-# config.auth, to optionally require HTTP Basic Auth - see web_auth.py.
+# rotation like other outputs do). Flask-based outputs no longer take
+# config.auth here - install_auth() (see web_auth.py) is called once,
+# centrally, by SharedHttpServer (mediainfo/outputs/http_server.py).
 OUTPUT_EXTRA_ARGS = {
     "config": lambda config, config_path, cache: (config_path, config.auth),
     "web": lambda config, config_path, cache: (config.rotation_interval_seconds, cache),
-    "video": lambda config, config_path, cache: (config.auth,),
     # http_port, not config.auth like the others (nest_hub's blueprint
     # doesn't call install_auth itself anymore - see
     # mediainfo/outputs/http_server.py.SharedHttpServer, which does that
@@ -167,7 +167,7 @@ OUTPUT_DETAIL_FIELDS: dict = {
     "pixoo": ["label", "ip"],
     "themes": ["label"],
     "ulanzi": ["label", "device_ip"],
-    "video": ["label", "port"],
+    "video": ["label"],
     "web": ["label"],
 }
 

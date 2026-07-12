@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from flask import Flask
 
 from mediainfo.config import VideoOutputConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -11,7 +12,8 @@ from mediainfo.video.base import VideoClip
 
 
 def _make_output(**kwargs):
-    """Create a VideoOutput with the server thread suppressed."""
+    """Create a VideoOutput with the one-shot video-refresh thread
+    suppressed (see _maybe_refresh_videos/on_idle)."""
     defaults = {"enabled": True, "pexels_api_key": "key"}
     defaults.update(kwargs)
     config = VideoOutputConfig(**defaults)
@@ -19,8 +21,14 @@ def _make_output(**kwargs):
         return VideoOutput(config)
 
 
-def _client(output):
-    return output.app.test_client()
+def _client(output, url_prefix=""):
+    """See tests/test_nest_hub.py for the harness pattern (H1, see
+    docs/architecture-usability-review-2026-07.md). Built as
+    Flask("mediainfo.outputs.video") so templates/ resolves - see
+    tests/test_feeds.py for why."""
+    app = Flask("mediainfo.outputs.video")
+    app.register_blueprint(output.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
 
 
 def test_idle_state_by_default():
@@ -169,3 +177,15 @@ def test_index_page_excludes_configured_transitions():
     variants_section = body.split("TRANSITION_VARIANTS = ")[1].split(";")[0]
     assert "t-slide-left" not in variants_section
     assert "t-zoom" not in variants_section
+
+
+def test_state_image_url_includes_computed_prefix(tmp_path):
+    output = _make_output()
+    f = tmp_path / "cover.jpg"
+    f.write_bytes(b"\xff\xd8\xff")
+    now_playing = NowPlaying(source="kodi", media_type="movie", title="X", images=[])
+    output.build_http_blueprint("/video")  # wiring.py calls this before any update()
+    output.update(now_playing, Artwork(url="", label=""), f)
+
+    data = _client(output, url_prefix="/video").get("/video/api/state").get_json()
+    assert data["image"] == f"/video/image/current?v={f.stem}"
