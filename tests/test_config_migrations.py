@@ -6,11 +6,11 @@ from mediainfo.config import migrations
 from mediainfo.config.migrations import CURRENT_CONFIG_VERSION, migrate_config
 
 
-def test_missing_config_version_is_treated_as_current_and_left_untouched():
+def test_missing_config_version_is_treated_as_1_and_migrated_forward():
     raw = {"poll_interval_seconds": 9}
     result = migrate_config(raw)
-    assert result is raw
-    assert "config_version" not in result
+    assert result["poll_interval_seconds"] == 9
+    assert result["config_version"] == CURRENT_CONFIG_VERSION
 
 
 def test_explicit_current_version_is_left_untouched():
@@ -23,7 +23,7 @@ def test_non_integer_config_version_is_treated_as_1_with_warning(caplog):
     raw = {"config_version": "not-a-number"}
     with caplog.at_level(logging.WARNING, logger="mediainfo.config.migrations"):
         result = migrate_config(raw)
-    assert result is raw
+    assert result["config_version"] == CURRENT_CONFIG_VERSION
     assert any("config_version" in r.message for r in caplog.records)
 
 
@@ -89,6 +89,81 @@ def test_missing_migration_stops_the_walk_partway(monkeypatch):
 
     assert result["v2_key"] == "value"
     assert result["config_version"] == 2
+
+
+# ---------------------------------------------------------------------------
+# v1 -> v2: per-output host/port dropped in favor of config.http
+# ---------------------------------------------------------------------------
+
+
+def test_v1_to_v2_drops_host_and_port_from_single_instance_output():
+    raw = {
+        "config_version": 1,
+        "outputs": {"web": {"enabled": True, "host": "0.0.0.0", "port": 8090}},
+    }
+    result = migrate_config(raw)
+    assert result["outputs"]["web"] == {"enabled": True}
+    assert result["config_version"] == CURRENT_CONFIG_VERSION
+
+
+def test_v1_to_v2_drops_host_and_port_from_every_instance_in_a_list():
+    raw = {
+        "config_version": 1,
+        "outputs": {
+            "config": [
+                {"enabled": True, "host": "0.0.0.0", "port": 8094},
+                {"enabled": True, "host": "0.0.0.0", "port": 8095, "label": "dashboard"},
+            ]
+        },
+    }
+    result = migrate_config(raw)
+    assert result["outputs"]["config"] == [
+        {"enabled": True},
+        {"enabled": True, "label": "dashboard"},
+    ]
+
+
+def test_v1_to_v2_keeps_nest_hub_server_host_but_drops_server_port():
+    raw = {
+        "config_version": 1,
+        "outputs": {
+            "nest_hub": {"enabled": True, "server_host": "192.168.1.40", "server_port": 8092}
+        },
+    }
+    result = migrate_config(raw)
+    assert result["outputs"]["nest_hub"] == {"enabled": True, "server_host": "192.168.1.40"}
+
+
+def test_v1_to_v2_warns_when_config_host_is_not_the_default(caplog):
+    raw = {"config_version": 1, "outputs": {"config": {"enabled": True, "host": "127.0.0.1"}}}
+    with caplog.at_level(logging.WARNING, logger="mediainfo.config.migrations"):
+        migrate_config(raw)
+    assert any("outputs.config.host" in r.message for r in caplog.records)
+
+
+def test_v1_to_v2_no_warning_when_config_host_is_the_default(caplog):
+    raw = {"config_version": 1, "outputs": {"config": {"enabled": True, "host": "0.0.0.0"}}}
+    with caplog.at_level(logging.WARNING, logger="mediainfo.config.migrations"):
+        migrate_config(raw)
+    assert not any("outputs.config.host" in r.message for r in caplog.records)
+
+
+def test_v1_to_v2_no_warning_when_config_host_is_absent(caplog):
+    raw = {"config_version": 1, "outputs": {"config": {"enabled": True}}}
+    with caplog.at_level(logging.WARNING, logger="mediainfo.config.migrations"):
+        migrate_config(raw)
+    assert not any("outputs.config.host" in r.message for r in caplog.records)
+
+
+def test_v1_to_v2_tolerates_missing_or_non_dict_outputs():
+    assert migrate_config({"config_version": 1})["config_version"] == CURRENT_CONFIG_VERSION
+    assert migrate_config({"config_version": 1, "outputs": []})["outputs"] == []
+
+
+def test_v1_to_v2_leaves_unrelated_output_types_untouched():
+    raw = {"config_version": 1, "outputs": {"pixoo": {"enabled": True, "device_ip": "1.2.3.4"}}}
+    result = migrate_config(raw)
+    assert result["outputs"]["pixoo"] == {"enabled": True, "device_ip": "1.2.3.4"}
 
 
 def test_from_dict_applies_migrations_before_building_config(monkeypatch):

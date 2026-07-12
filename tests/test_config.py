@@ -18,6 +18,8 @@ def test_load_example_config():
     assert config.backoff_max_seconds == 300
     assert config.nothing_playing_grace_seconds == 2
     assert config.enrichment_deadline_seconds == 30
+    assert config.http.host == "0.0.0.0"
+    assert config.http.port == 8090
     assert config.priority == [
         "kodi",
         "appletv",
@@ -133,6 +135,8 @@ def test_from_dict_empty_dict_uses_defaults():
     assert config.backoff_max_seconds == 300
     assert config.nothing_playing_grace_seconds == 2
     assert config.enrichment_deadline_seconds == 30
+    assert config.http.host == "0.0.0.0"
+    assert config.http.port == 8090
     assert config.priority == []
     assert config.sources == {}
     assert config.outputs == {}

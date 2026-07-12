@@ -97,6 +97,7 @@ def register_websocket_route(
     get_initial_payload: Callable[[Any], dict],
     on_connect: Optional[Callable[[Any], Any]] = None,
     on_disconnect: Optional[Callable[[Any], Any]] = None,
+    bp=None,
 ) -> None:
     """Wire a flask_sock route at `path`: add the connection to `clients`
     (plus an optional `on_connect` hook, run under the same lock
@@ -105,10 +106,16 @@ def register_websocket_route(
     page-load or reconnect doesn't wait for the next push, then block on
     `conn.receive()` until the client disconnects (discarding it from
     `clients`, plus an optional `on_disconnect` hook, again atomically).
+
+    `bp`, if given, registers the route on that Blueprint (with its own
+    url_prefix applied automatically) instead of directly on `sock.app` -
+    see SharedHttpServer (mediainfo/outputs/http_server.py), which gives
+    every Flask-based output its own blueprint on one shared app/Sock
+    instance rather than each owning its own app.
     """
     sock.app.config.setdefault("SOCK_SERVER_OPTIONS", {})["ping_interval"] = _PING_INTERVAL_SECONDS
 
-    @sock.route(path)
+    @sock.route(path, bp=bp)
     def _handler(conn):
         with clients_lock:
             clients.add(conn)

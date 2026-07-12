@@ -6,6 +6,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
+from flask import Blueprint
+from flask_sock import Sock
+
 from mediainfo.app_services import AppServices
 from mediainfo.cache import ImageCache
 from mediainfo.models import Artwork, NowPlaying
@@ -50,6 +53,14 @@ class Output(ABC):
     # List of Transform objects applied to every image before update() is
     # called.  Populated from the output's config `transforms:` key.
     transform_pipeline: List = []
+
+    # Set to True on exactly one output (WebOutput) so wiring.py mounts its
+    # blueprint at "/" instead of "/<registry name>" - see
+    # build_http_blueprint() below and H1 in
+    # docs/architecture-usability-review-2026-07.md. Declarative rather than
+    # an isinstance/name check in wiring.py, matching how `capabilities`
+    # already drives dispatch there.
+    root_mounted: bool = False
 
     @abstractmethod
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
@@ -117,6 +128,33 @@ class Output(ABC):
         entries back to existing (possibly multi-instance) output objects
         isn't solved yet. Default: do nothing.
         """
+
+    def build_http_blueprint(
+        self, url_prefix: str, sock: Optional[Sock] = None
+    ) -> Optional[Blueprint]:
+        """For Flask-based outputs only: return a Blueprint with this
+        output's routes registered on it (unprefixed, e.g. `@bp.route("/
+        api/schema")`) instead of owning a `Flask(__name__)` app and server
+        of its own - see mediainfo/outputs/http_server.py's
+        SharedHttpServer, which mounts every enabled output's blueprint
+        onto one shared app/port.
+
+        `url_prefix` is the path wiring.py has already computed for this
+        instance (e.g. "/config", or "" for the root-mounted output - see
+        `root_mounted` above); a plugin that needs to build an absolute URL
+        of its own (e.g. NestHubOutput's Cast-device image URL) should keep
+        it. `sock` is the shared app's one `flask_sock.Sock` instance,
+        passed to every output regardless of whether it needs a WebSocket
+        route - a plugin registering one calls
+        `sock.route(path, bp=that_blueprint)` (flask_sock's own
+        Blueprint-scoping support) rather than `@sock.route(path)`, which
+        would register against the whole app with no prefix. Plugins with
+        no WebSocket route ignore this argument.
+
+        Default: None, meaning this output isn't HTTP-based and contributes
+        nothing to the shared server.
+        """
+        return None
 
     def health_check(self) -> Optional[dict]:
         """Optional self-reported health detail beyond what the

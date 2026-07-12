@@ -36,6 +36,19 @@ class AuthConfig:
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
+class HttpServerConfig:
+    # The single HTTP server every Flask-based output (web/config/themes/
+    # info/feed/video/nest_hub) shares - one process, one port, one
+    # listener (see H1 in docs/architecture-usability-review-2026-07.md).
+    # Each output still has its own `enabled` flag and mounts under its own
+    # path prefix (outputs.web at "/", everything else at "/<name>", e.g.
+    # "/config", "/themes" - see wiring.py) instead of owning a separate
+    # port the way it used to.
+    host: str = "0.0.0.0"
+    port: int = 8090
+
+
+@pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class CacheConfig:
     dir: str = "./cache"
     max_age_days: int = 30

@@ -68,6 +68,7 @@ from mediainfo.config.shared import (
     AuthConfig,
     CacheConfig,
     HistoryConfig,
+    HttpServerConfig,
     LibraryConfig,
     LoggingConfig,
     MediaDataConfig,
@@ -149,6 +150,7 @@ __all__ = [
     "GlowConfig",
     "HistoryConfig",
     "HomeAssistantConfig",
+    "HttpServerConfig",
     "IDLE_CONFIG_TYPES",
     "InfoConfig",
     "JellyfinConfig",
@@ -269,6 +271,10 @@ class Config:
     library: LibraryConfig
     logging: LoggingConfig
     auth: AuthConfig
+    # The single HTTP server every Flask-based output shares - see
+    # HttpServerConfig. Replaces each output's own host/port fields
+    # (removed in config_version 2 - see mediainfo/config/migrations.py).
+    http: HttpServerConfig
     # Backoff for sources whose device/service couldn't be reached - see
     # MediaSource.last_poll_failed. Delay starts at backoff_initial_seconds,
     # doubles after each consecutive failure, and is capped at
@@ -403,6 +409,7 @@ class Config:
             library=LibraryConfig(**(raw.get("library") or {})),
             logging=LoggingConfig(**(raw.get("logging") or {})),
             auth=AuthConfig(**(raw.get("auth") or {})),
+            http=HttpServerConfig(**(raw.get("http") or {})),
             backoff_initial_seconds=raw.get("backoff_initial_seconds", 30),
             backoff_max_seconds=raw.get("backoff_max_seconds", 300),
             nothing_playing_grace_seconds=raw.get("nothing_playing_grace_seconds", 2),
