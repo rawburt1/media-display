@@ -129,6 +129,14 @@ class ConfigStore:
                     # this path) - mediainfo.config.themes.parse_themes()
                     # does that at actual app startup.
                     entry["themes"] = instance.get("themes") or {}
+                    # auto_rotate.presets can hold either shape (a plain
+                    # list of theme names, or {"themes": [...],
+                    # "when": [...]}) - same raw pass-through as `themes`
+                    # above, so the groups editor UI can read/write it
+                    # whole without this layer needing to know its
+                    # internal shape. mediainfo.config.outputs.
+                    # parse_presets() validates it at actual app startup.
+                    entry["auto_rotate"] = instance.get("auto_rotate") or {}
                 out_instances.append(entry)
             result[type_name] = out_instances
         return result, secrets_set

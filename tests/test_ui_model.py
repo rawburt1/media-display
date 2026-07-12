@@ -122,6 +122,14 @@ def test_theme_disabled_when_its_host_output_is_disabled(config_path):
     assert vinyl.enabled is False
 
 
+def test_theme_group_editor_is_appearance_component(config_path):
+    editor = _by_id(_components(config_path), "themes.auto_rotate")
+    assert editor.category == "appearance"
+    assert editor.component_type == "theme_group_editor"
+    field_names = {f.name for f in editor.essential_fields + editor.advanced_fields}
+    assert field_names == {"enabled", "interval_seconds"}
+
+
 def test_idle_source_is_media_component_without_test_support(config_path):
     idle = _by_id(_components(config_path), "idle.local")
     assert idle.category == "media"

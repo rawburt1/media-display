@@ -31,6 +31,7 @@ from mediainfo.config import (
     THEMES_CONFIG_TYPES,
     AlertConfig,
     AuthConfig,
+    AutoRotateConfig,
     CacheConfig,
     HistoryConfig,
     LibraryConfig,
@@ -71,6 +72,14 @@ _FILTER_DEFAULTS: Dict[str, Any] = {
 _LABEL_FIELD_NAME = "label"
 
 _KNOWN_MEDIA_TYPES = ["music", "movie", "episode"]
+
+# Media types selectable as a theme-group trigger condition (AutoRotate-
+# PresetConfig.when). Includes "idle" (nothing playing / idle wallpaper),
+# unlike _KNOWN_MEDIA_TYPES above - the content-filter picker that constant
+# feeds has no "idle" concept, so it gets its own list rather than mutating
+# that one. See ThemesOutput's _IDLE_MEDIA_TYPE_ALIAS for how "idle" maps
+# onto NowPlaying's actual internal "wallpaper" media_type at match time.
+_GROUP_TRIGGER_MEDIA_TYPES = _KNOWN_MEDIA_TYPES + ["idle"]
 
 # Categories whose type cards can be hidden from view (Media sources,
 # Displays & outputs, Artwork & metadata) - see ConfigStore.get_hidden_types().
@@ -813,10 +822,15 @@ def _build_schema() -> Dict[str, Any]:
     schema["themes"] = {
         name: _scalar_fields(cls, "themes", name) for name, cls in THEMES_CONFIG_TYPES.items()
     }
+    # AutoRotateConfig.enabled/interval_seconds - the "groups" (presets)
+    # dict itself isn't _scalar_fields-representable and is rendered by
+    # its own bespoke UI (see ui_builder._auto_rotate_component).
+    schema["auto_rotate"] = _scalar_fields(AutoRotateConfig)
     schema["filter_meta"] = {
         "media_types": _KNOWN_MEDIA_TYPES,
         "known_sources": sorted(SOURCE_CONFIG_TYPES.keys()),
     }
+    schema["auto_rotate_meta"] = {"media_types": _GROUP_TRIGGER_MEDIA_TYPES}
     schema["flat_sections"] = [{"key": key, "title": title} for key, title in _FLAT_SECTION_TITLES]
     schema["type_info"] = _TYPE_INFO
     schema["category_info"] = _CATEGORY_INFO

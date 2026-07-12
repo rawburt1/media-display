@@ -381,6 +381,45 @@ def _theme_components(
     return components
 
 
+def _auto_rotate_component(
+    schema_auto_rotate: List[dict], output_instances: Dict[str, List[dict]]
+) -> UiComponent:
+    """A single Appearance-page component for organizing enabled themes
+    into named groups (auto_rotate.presets), optionally shown only for a
+    given media type. `presets` itself isn't _scalar_fields-representable
+    (see config_schema._build_schema) so it isn't part of essential/
+    advanced fields here - the client renders it as its own bespoke
+    section, keyed off component_type == "theme_group_editor"."""
+    themes_instances = output_instances.get("themes") or [{}]
+    raw_auto_rotate: Dict[str, Any] = themes_instances[0].get("auto_rotate") or {}
+    local_values = {f["name"]: _value_with_default(raw_auto_rotate, f) for f in schema_auto_rotate}
+    essential, advanced = _build_fields(schema_auto_rotate, local_values, {})
+    config_path = "themes.auto_rotate"
+    return UiComponent(
+        id=config_path,
+        name="Theme groups",
+        category="appearance",
+        component_type="theme_group_editor",
+        description=(
+            "Organize enabled themes into named groups, optionally shown only "
+            "for a given media type, instead of always rotating through every "
+            "configured group."
+        ),
+        enabled=bool(local_values.get("enabled")),
+        configured=True,
+        status="enabled" if local_values.get("enabled") else "disabled",
+        health="unknown",
+        config_path=config_path,
+        supports_test=False,
+        supports_multiple=False,
+        requires_restart=False,
+        essential_fields=essential,
+        advanced_fields=advanced,
+        warnings=[],
+        actions=_default_actions(False, None),
+    )
+
+
 def _text_enricher_components(text_enrichers_raw: Dict[str, Any]) -> List[UiComponent]:
     components = []
     for type_name, cls in TEXT_ENRICHER_CONFIG_TYPES.items():
@@ -529,6 +568,7 @@ def build_components(
         schema.get("outputs", {}), output_instances, output_secrets_set, outputs_health
     )
     components += _theme_components(schema.get("themes", {}), output_instances)
+    components.append(_auto_rotate_component(schema.get("auto_rotate", []), output_instances))
     components += _flat_section_components(schema, values, text_enrichers_raw)
     return components
 

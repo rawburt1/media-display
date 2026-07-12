@@ -29,6 +29,7 @@ var CATEGORY_GROUPS = {
   ],
   appearance: [
     { type: 'theme', label: 'Themes' },
+    { type: 'theme_group_editor', label: 'Groups' },
   ],
   displays: [
     { type: 'output', label: 'Displays' },
@@ -101,6 +102,14 @@ var detailOutputsWorking = null;     // output/theme: full instance array (deep 
 var detailOutputType = null;         // output type name detailOutputsWorking belongs to
 var detailThemeName = null;          // set only for component_type "theme"
 var detailAdvancedOpen = false;
+// theme_group_editor only: available theme names + trigger media types for
+// the groups editor's multi-selects, fetched alongside /api/config (see
+// loadAutoRotateInstances) - not stored anywhere else in this file, since
+// this is the only view that needs schema data beyond a component's own
+// already-resolved essential_fields/advanced_fields.
+var detailAvailableThemeNames = [];
+var detailAvailableMediaTypes = [];
+var detailNewGroupName = '';         // theme_group_editor's "+ Add group" name input, kept across re-renders
 // A save's confirmation ("Saved - changes take effect...") is set on the
 // *current* #detail-save-status element, but the save handler immediately
 // triggers a refetch to show fresh server state (flips secret badges
@@ -135,6 +144,9 @@ function getFieldValue(field) {
   if (detailComponent.component_type === 'theme') {
     return detailOutputsWorking[0].themes[detailThemeName][field.name];
   }
+  if (detailComponent.component_type === 'theme_group_editor') {
+    return detailOutputsWorking[0].auto_rotate[field.name];
+  }
   return Object.prototype.hasOwnProperty.call(detailEdits, field.name) ? detailEdits[field.name] : field.value;
 }
 
@@ -144,6 +156,8 @@ function setFieldValue(field, value) {
     detailOutputsWorking[0][field.name] = value;
   } else if (detailComponent.component_type === 'theme') {
     detailOutputsWorking[0].themes[detailThemeName][field.name] = value;
+  } else if (detailComponent.component_type === 'theme_group_editor') {
+    detailOutputsWorking[0].auto_rotate[field.name] = value;
   } else {
     detailEdits[field.name] = value;
   }
@@ -277,6 +291,10 @@ function renderComponentDetailBody() {
   }
   html += '</div>';
 
+  if (c.component_type === 'theme_group_editor') {
+    html += renderGroupsEditor();
+  }
+
   if (!readOnly) {
     html += '<div class="action-row">';
     if (c.supports_test) {
@@ -299,6 +317,86 @@ function renderComponentDetailBody() {
     }
     detailPendingStatus = null;
   }
+}
+
+// theme_group_editor: auto_rotate.presets bespoke editor - a toggle-button
+// multi-select per group for both its themes and its `when` trigger media
+// types, adapted from app.html's renderOutputFilters()/toggleFilterMediaType()
+// pattern. Add/remove only (no rename) - all edits mutate
+// detailOutputsWorking[0].auto_rotate.presets directly, same
+// mutate-then-re-render convention as every other detail-page control.
+function renderGroupsEditor() {
+  var presets = detailOutputsWorking[0].auto_rotate.presets;
+  var names = Object.keys(presets);
+
+  function toggleBtns(active, allValues, onclickName, groupName) {
+    return allValues.map(function(v) {
+      var isActive = active.indexOf(v) !== -1;
+      return '<button type="button" class="btn small ' + (isActive ? '' : 'secondary') + '" '
+        + 'onclick="' + onclickName + '(\'' + esc(groupName) + '\',\'' + esc(v) + '\')">' + esc(v) + '</button>';
+    }).join('');
+  }
+
+  var html = '<div class="card" style="margin-top:14px;">';
+  if (!names.length) {
+    html += '<span class="field-help">No groups yet - every enabled theme shows at once.</span>';
+  }
+  names.forEach(function(name) {
+    var group = presets[name];
+    if (!group.themes) group.themes = [];
+    if (!group.when) group.when = [];
+    html += '<div class="field" style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;">';
+    html += '<div class="field-row"><label class="field-label">' + esc(name) + '</label>'
+      + '<div class="field-control"><button type="button" class="btn secondary small" '
+      + 'onclick="removeGroup(\'' + esc(name) + '\')">Remove group</button></div></div>';
+    html += '<div class="field-row"><label class="field-label">Themes</label><div class="field-control">'
+      + '<div class="row-inline">' + toggleBtns(group.themes, detailAvailableThemeNames, 'toggleGroupTheme', name) + '</div></div></div>';
+    html += '<div class="field-row"><label class="field-label">Show only for</label><div class="field-control">'
+      + '<div class="row-inline">' + toggleBtns(group.when, detailAvailableMediaTypes, 'toggleGroupWhen', name) + '</div>'
+      + '<div class="field-help">Empty = takes part in the timer-based rotation above instead of a specific media type.</div></div></div>';
+    html += '</div>';
+  });
+  html += '<div class="field-row" style="margin-top:12px;"><label class="field-label">New group</label>'
+    + '<div class="field-control">'
+    + '<input type="text" placeholder="Group name" value="' + esc(detailNewGroupName) + '" '
+    + 'oninput="detailNewGroupName = this.value">'
+    + ' <button type="button" class="btn small" onclick="addGroup()">Add group</button>'
+    + '</div></div>';
+  html += '</div>';
+  return html;
+}
+
+function toggleGroupTheme(groupName, themeName) {
+  var group = detailOutputsWorking[0].auto_rotate.presets[groupName];
+  var pos = group.themes.indexOf(themeName);
+  if (pos !== -1) group.themes.splice(pos, 1); else group.themes.push(themeName);
+  hasUnsavedComponentEdits = true;
+  renderComponentDetailBody();
+}
+
+function toggleGroupWhen(groupName, mediaType) {
+  var group = detailOutputsWorking[0].auto_rotate.presets[groupName];
+  var pos = group.when.indexOf(mediaType);
+  if (pos !== -1) group.when.splice(pos, 1); else group.when.push(mediaType);
+  hasUnsavedComponentEdits = true;
+  renderComponentDetailBody();
+}
+
+function addGroup() {
+  var name = (detailNewGroupName || '').trim();
+  if (!name) return;
+  var presets = detailOutputsWorking[0].auto_rotate.presets;
+  if (Object.prototype.hasOwnProperty.call(presets, name)) return;
+  presets[name] = { themes: [], when: [] };
+  detailNewGroupName = '';
+  hasUnsavedComponentEdits = true;
+  renderComponentDetailBody();
+}
+
+function removeGroup(groupName) {
+  delete detailOutputsWorking[0].auto_rotate.presets[groupName];
+  hasUnsavedComponentEdits = true;
+  renderComponentDetailBody();
 }
 
 function loadOutputInstances(c) {
@@ -324,6 +422,34 @@ function loadThemeInstances(c) {
   });
 }
 
+function loadAutoRotateInstances(c) {
+  return Promise.all([
+    fetch('/api/config').then(function(r) { return r.json(); }),
+    fetch('/api/schema').then(function(r) { return r.json(); }),
+  ]).then(function(results) {
+    var cfg = results[0], schema = results[1];
+    var instances = (cfg.outputs && cfg.outputs.themes) || [];
+    detailOutputType = 'themes';
+    detailOutputsWorking = JSON.parse(JSON.stringify(instances));
+    if (!detailOutputsWorking.length) detailOutputsWorking.push({});
+    if (!detailOutputsWorking[0].auto_rotate) detailOutputsWorking[0].auto_rotate = {};
+    if (!detailOutputsWorking[0].auto_rotate.presets) detailOutputsWorking[0].auto_rotate.presets = {};
+    // Normalize the legacy plain-list shape (a preset with no `when`,
+    // e.g. {"minimal": ["glow"]}) into the {themes, when} object shape
+    // uniformly, mirroring parse_presets() on the Python side - everything
+    // below assumes group.themes/group.when exist.
+    var presets = detailOutputsWorking[0].auto_rotate.presets;
+    Object.keys(presets).forEach(function(name) {
+      if (Array.isArray(presets[name])) {
+        presets[name] = { themes: presets[name], when: [] };
+      }
+    });
+    detailAvailableThemeNames = Object.keys(schema.themes || {});
+    detailAvailableMediaTypes = (schema.auto_rotate_meta || {}).media_types || [];
+    detailNewGroupName = '';
+  });
+}
+
 function fetchComponentDetail(id) {
   var el = document.getElementById('section-component');
   fetch('/api/ui/component/' + encodeURIComponent(id)).then(function(r) { return r.json(); }).then(function(c) {
@@ -337,6 +463,8 @@ function fetchComponentDetail(id) {
       loadOutputInstances(c).then(renderComponentDetailBody);
     } else if (c.component_type === 'theme') {
       loadThemeInstances(c).then(renderComponentDetailBody);
+    } else if (c.component_type === 'theme_group_editor') {
+      loadAutoRotateInstances(c).then(renderComponentDetailBody);
     } else {
       renderComponentDetailBody();
     }
@@ -373,7 +501,7 @@ function saveDetailComponent() {
   statusEl.className = '';
 
   var body;
-  if (c.component_type === 'output' || c.component_type === 'theme') {
+  if (c.component_type === 'output' || c.component_type === 'theme' || c.component_type === 'theme_group_editor') {
     var outputsPayload = {};
     outputsPayload[detailOutputType] = detailOutputsWorking;
     body = { outputs: outputsPayload };

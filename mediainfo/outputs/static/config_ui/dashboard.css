@@ -183,6 +183,10 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 /* -- Filter bar: chips + search (Fas 6, generalized to all card-grid
    pages in Fas 8) -- */
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+
+/* Toggle-button multi-select row (e.g. the theme-group editor's themes/
+   when pickers) - mirrors app.html's own .row-inline exactly. */
+.row-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .chip {
   background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
   border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;

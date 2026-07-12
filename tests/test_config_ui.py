@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mediainfo.config import Config, ConfigUiConfig
+from mediainfo.config import AutoRotatePresetConfig, Config, ConfigUiConfig
+from mediainfo.config.outputs import parse_presets
 from mediainfo.config_backup import backup_config_file, list_backups
 from mediainfo.outputs.config_ui import ConfigUiOutput, _restart_process
 
@@ -98,8 +99,11 @@ def test_schema_includes_all_categories(config_path):
     # posters/alerts/auth/logging/mediadata), the four per-type-registry
     # categories, "themes" (the individual Display Theme plugins nested
     # inside a "themes" output instance - see mediainfo/config/themes.py),
-    # plus filter_meta and the presentation-metadata keys the guided UI
-    # needs (flat_sections/type_info/category_info/enricher_groups).
+    # "auto_rotate" (AutoRotateConfig's own enabled/interval_seconds
+    # scalar fields - presets itself is bespoke UI, not schema-driven),
+    # plus filter_meta/auto_rotate_meta and the presentation-metadata keys
+    # the guided UI needs (flat_sections/type_info/category_info/
+    # enricher_groups).
     assert set(data.keys()) == {
         "general",
         "cache",
@@ -116,7 +120,9 @@ def test_schema_includes_all_categories(config_path):
         "enrichers",
         "idle",
         "themes",
+        "auto_rotate",
         "filter_meta",
+        "auto_rotate_meta",
         "flat_sections",
         "type_info",
         "category_info",
@@ -315,6 +321,42 @@ def test_get_config_themes_output_defaults_to_empty_dict(config_path):
     out = _output(config_path)
     data = out.app.test_client().get("/api/config").get_json()
     assert data["outputs"]["themes"][0]["themes"] == {}
+
+
+def test_get_config_themes_output_includes_its_nested_auto_rotate_dict(config_path):
+    # auto_rotate.presets can hold either shape (a plain list of theme
+    # names, or {"themes": [...], "when": [...]}) - same raw pass-through
+    # as `themes` above, both verbatim, unvalidated (parse_presets() does
+    # that at actual app startup).
+    config_path.write_text(
+        """
+outputs:
+  themes:
+    enabled: true
+    port: 8097
+    auto_rotate:
+      enabled: true
+      interval_seconds: 20
+      presets:
+        minimal:
+        - color_palette
+        music:
+          themes:
+          - vinyl
+          when:
+          - music
+"""
+    )
+    out = _output(config_path)
+    data = out.app.test_client().get("/api/config").get_json()
+    assert data["outputs"]["themes"][0]["auto_rotate"] == {
+        "enabled": True,
+        "interval_seconds": 20,
+        "presets": {
+            "minimal": ["color_palette"],
+            "music": {"themes": ["vinyl"], "when": ["music"]},
+        },
+    }
 
 
 def test_other_output_types_do_not_get_a_themes_key(config_path):
@@ -848,6 +890,42 @@ outputs:
     assert cfg.outputs["themes"][0].themes == {
         "color_palette": {"enabled": True, "swatch_count": 3, "swatch_position": "top"},
     }
+
+
+def test_save_form_round_trips_auto_rotate_on_existing_output_instance(config_path):
+    config_path.write_text(
+        """
+outputs:
+  themes:
+    - enabled: true
+      port: 8097
+      auto_rotate:
+        enabled: true
+        interval_seconds: 20
+        presets:
+          minimal:
+          - color_palette
+          music:
+            themes:
+            - vinyl
+            when: []
+"""
+    )
+    out = _output(config_path)
+    client = out.app.test_client()
+    get_data = client.get("/api/config").get_json()
+    instance = get_data["outputs"]["themes"][0]
+    instance["auto_rotate"]["presets"]["music"]["when"] = ["music"]
+
+    client.post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"themes": [instance]}},
+    )
+
+    cfg = Config.load(config_path)
+    presets = parse_presets(cfg.outputs["themes"][0].auto_rotate.presets)
+    assert presets["music"] == AutoRotatePresetConfig(themes=["vinyl"], when=["music"])
+    assert presets["minimal"] == AutoRotatePresetConfig(themes=["color_palette"], when=[])
 
 
 def test_save_form_emptying_all_instances_results_in_empty_list(config_path):
