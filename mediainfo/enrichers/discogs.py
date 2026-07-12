@@ -66,6 +66,8 @@ def _search(token: str, artist: str, album: str, result_type: str) -> Optional[s
 
 
 class DiscogsEnricher(ArtworkEnricher):
+    capabilities = frozenset({"library"})
+
     def __init__(self, config: DiscogsConfig, library: Optional[MusicLibrary] = None) -> None:
         self.config = config
         self.library = library

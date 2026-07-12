@@ -29,8 +29,12 @@ class ArtworkEnricher(ABC):
     # "not declared".
     config_class: Optional[type] = None
 
-    # Optional free-form feature flags - not consumed anywhere yet; a hook
-    # for future capability queries without another base-class change.
+    # Optional free-form feature flags. wiring.build_enrichers() reads
+    # "library"/"cache_dir"/"mediadata" off this to decide which extra
+    # constructor argument (if any) to pass - see the relevant enricher
+    # subclasses (e.g. FanartTvEnricher, AiArtworkEnricher,
+    # MediaDataArtworkEnricher) for examples. Empty (the default) means no
+    # extra argument.
     capabilities: frozenset = frozenset()
 
     @abstractmethod

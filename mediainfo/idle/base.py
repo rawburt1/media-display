@@ -34,8 +34,10 @@ class IdleWallpaperSource(ABC):
     # key alone. None (the default) means "not declared".
     config_class: Optional[type] = None
 
-    # Optional free-form feature flags - not consumed anywhere yet; a hook
-    # for future capability queries without another base-class change.
+    # Optional free-form feature flags. wiring.build_idle_source() reads
+    # "library" off this to decide whether to pass the shared MusicLibrary -
+    # see LibraryWallpaperSource. Empty (the default) means no extra
+    # argument.
     capabilities: frozenset = frozenset()
 
     # List of Transform objects applied to every picture from this source

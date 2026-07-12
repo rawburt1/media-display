@@ -146,31 +146,14 @@ IDLE_CLASSES: dict[str, Union[str, type]] = {
     "unsplash": "mediainfo.idle.unsplash.UnsplashWallpaperSource",
 }
 
-# Idle wallpaper sources that need the local MusicLibrary cache, by
-# registry key (not class - keeps the membership check below from forcing
-# a resolve()/import of every idle source just to build this set).
-LIBRARY_AWARE_IDLE_NAMES = {"library"}
-
-# Enrichers that look up music metadata by artist/album name and so can use
-# the local MusicLibrary cache to avoid repeating the same external lookup.
-LIBRARY_AWARE_ENRICHER_NAMES = {
-    "discogs",
-    "fanarttv",
-    "lastfm",
-    "library",
-    "musicbrainz",
-}
-
-# Enrichers that need a local directory to cache generated (rather than
-# downloaded) content into, by registry key - see wiring.build_enrichers().
-CACHE_AWARE_ENRICHER_NAMES = {"ai_artwork"}
-
-# Artwork/text enrichers that read the unified MediaDataStore cache (see
-# mediainfo/media_data_store.py), by registry key - wiring.py constructs one
-# shared MediaDataStore instance and injects it into whichever of these are
-# enabled instead of the CACHE_AWARE_ENRICHER_NAMES TextCache/ImageCache path.
-MEDIADATA_AWARE_ENRICHER_NAMES = {"mediadata"}
-MEDIADATA_AWARE_TEXT_ENRICHER_NAMES = {"mediadata"}
+# Which extra constructor argument (if any) wiring.build_enrichers() /
+# build_text_enrichers() / build_idle_source() must pass a plugin, beyond
+# its own config, is now self-declared on the class via `capabilities`
+# ("library", "cache_dir", "mediadata" - see ArtworkEnricher.capabilities)
+# instead of a hand-maintained by-registry-key set here (H3 in
+# docs/architecture-usability-review-2026-07.md) - a plugin that needs one
+# of these declares it on itself, so it can't drift out of sync with a
+# parallel list.
 
 # Config attributes to include per output type in the /health response.
 OUTPUT_DETAIL_FIELDS: dict = {

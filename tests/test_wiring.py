@@ -135,12 +135,10 @@ def test_build_enrichers_instantiates_enabled():
     enc_cfg.enabled = True
 
     fake_cls = MagicMock(return_value=MagicMock())
+    fake_cls.capabilities = frozenset()
     cfg = _minimal_config(enrichers={"fanarttv": enc_cfg})
 
-    with (
-        patch("mediainfo.registries.ENRICHER_CLASSES", {"fanarttv": fake_cls}),
-        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHER_NAMES", set()),
-    ):
+    with patch("mediainfo.registries.ENRICHER_CLASSES", {"fanarttv": fake_cls}):
         result = build_enrichers(cfg)
 
     fake_cls.assert_called_once_with(enc_cfg)
@@ -151,13 +149,11 @@ def test_build_enrichers_passes_library_to_library_aware_enrichers():
     enc_cfg = MagicMock()
     enc_cfg.enabled = True
     fake_cls = MagicMock(return_value=MagicMock())
+    fake_cls.capabilities = frozenset({"library"})
     fake_library = MagicMock()
     cfg = _minimal_config(enrichers={"fanarttv": enc_cfg})
 
-    with (
-        patch("mediainfo.registries.ENRICHER_CLASSES", {"fanarttv": fake_cls}),
-        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHER_NAMES", {"fanarttv"}),
-    ):
+    with patch("mediainfo.registries.ENRICHER_CLASSES", {"fanarttv": fake_cls}):
         result = build_enrichers(cfg, fake_library)
 
     fake_cls.assert_called_once_with(enc_cfg, fake_library)
@@ -168,13 +164,10 @@ def test_build_enrichers_passes_cache_dir_to_cache_aware_enrichers():
     enc_cfg = MagicMock()
     enc_cfg.enabled = True
     fake_cls = MagicMock(return_value=MagicMock())
+    fake_cls.capabilities = frozenset({"cache_dir"})
     cfg = _minimal_config(enrichers={"ai_artwork": enc_cfg})
 
-    with (
-        patch("mediainfo.registries.ENRICHER_CLASSES", {"ai_artwork": fake_cls}),
-        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHER_NAMES", set()),
-        patch("mediainfo.registries.CACHE_AWARE_ENRICHER_NAMES", {"ai_artwork"}),
-    ):
+    with patch("mediainfo.registries.ENRICHER_CLASSES", {"ai_artwork": fake_cls}):
         result = build_enrichers(cfg)
 
     args, _ = fake_cls.call_args
@@ -187,15 +180,11 @@ def test_build_enrichers_passes_mediadata_store_to_mediadata_aware_enrichers():
     enc_cfg = MagicMock()
     enc_cfg.enabled = True
     fake_cls = MagicMock(return_value=MagicMock())
+    fake_cls.capabilities = frozenset({"mediadata"})
     fake_store = MagicMock()
     cfg = _minimal_config(enrichers={"mediadata": enc_cfg})
 
-    with (
-        patch("mediainfo.registries.ENRICHER_CLASSES", {"mediadata": fake_cls}),
-        patch("mediainfo.registries.LIBRARY_AWARE_ENRICHER_NAMES", set()),
-        patch("mediainfo.registries.CACHE_AWARE_ENRICHER_NAMES", set()),
-        patch("mediainfo.registries.MEDIADATA_AWARE_ENRICHER_NAMES", {"mediadata"}),
-    ):
+    with patch("mediainfo.registries.ENRICHER_CLASSES", {"mediadata": fake_cls}):
         result = build_enrichers(cfg, mediadata_store=fake_store)
 
     fake_cls.assert_called_once_with(enc_cfg, fake_store)
@@ -423,13 +412,11 @@ def test_build_text_enrichers_passes_mediadata_store_to_mediadata_aware_enricher
     text_cfg = MagicMock()
     text_cfg.enabled = True
     fake_cls = MagicMock(return_value=MagicMock())
+    fake_cls.capabilities = frozenset({"mediadata"})
     fake_store = MagicMock()
     cfg = _minimal_config(text_enrichers={"mediadata": text_cfg})
 
-    with (
-        patch("mediainfo.registries.TEXT_ENRICHER_CLASSES", {"mediadata": fake_cls}),
-        patch("mediainfo.registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES", {"mediadata"}),
-    ):
+    with patch("mediainfo.registries.TEXT_ENRICHER_CLASSES", {"mediadata": fake_cls}):
         result = build_text_enrichers(cfg, mediadata_store=fake_store)
 
     fake_cls.assert_called_once_with(text_cfg, fake_store)
@@ -565,13 +552,11 @@ def test_build_idle_source_passes_library_to_library_aware_classes():
     idle_cfg = MagicMock()
     idle_cfg.enabled = True
     fake_cls = MagicMock(return_value=MagicMock())
+    fake_cls.capabilities = frozenset({"library"})
     fake_library = MagicMock()
     cfg = _minimal_config(idle={"library": idle_cfg})
 
-    with (
-        patch("mediainfo.registries.IDLE_CLASSES", {"library": fake_cls}),
-        patch("mediainfo.registries.LIBRARY_AWARE_IDLE_NAMES", {"library"}),
-    ):
+    with patch("mediainfo.registries.IDLE_CLASSES", {"library": fake_cls}):
         result = build_idle_source(cfg, fake_library)
 
     fake_cls.assert_called_once_with(idle_cfg, fake_library)

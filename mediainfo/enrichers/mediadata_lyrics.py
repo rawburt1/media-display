@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 
 class MediaDataLyricsEnricher(TextEnricher):
+    capabilities = frozenset({"mediadata"})
+
     def __init__(self, config: Any, store: Optional[MediaDataStore] = None):
         self.config = config
         self.store = store

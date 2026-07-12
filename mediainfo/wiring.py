@@ -72,11 +72,11 @@ def _enabled_credential(config: Config, name: str, attr: str) -> str:
 
 def build_mediadata_store(config: Config, cache: ImageCache) -> Optional[MediaDataStore]:
     """Construct the shared MediaDataStore instance used by both
-    MediaDataArtworkEnricher and MediaDataLyricsEnricher (see
-    registries.MEDIADATA_AWARE_ENRICHER_NAMES /
-    MEDIADATA_AWARE_TEXT_ENRICHER_NAMES), or None if neither plugin is
-    enabled - so a config that doesn't opt in never even touches disk
-    for this feature."""
+    MediaDataArtworkEnricher and MediaDataLyricsEnricher (both declare
+    `capabilities = frozenset({"mediadata"})` - see build_enrichers()/
+    build_text_enrichers() below), or None if neither plugin is enabled -
+    so a config that doesn't opt in never even touches disk for this
+    feature."""
     artwork_config = config.enrichers.get("mediadata")
     lyrics_config = config.text_enrichers.get("mediadata")
     if not (
@@ -106,11 +106,12 @@ def build_enrichers(
         if enricher_cls is None:
             logger.warning("Unknown enricher: %s", name)
             continue
-        if name in registries.LIBRARY_AWARE_ENRICHER_NAMES:
+        capabilities: frozenset = getattr(enricher_cls, "capabilities", frozenset())
+        if "library" in capabilities:
             enrichers.append(enricher_cls(enricher_config, library))
-        elif name in registries.CACHE_AWARE_ENRICHER_NAMES:
+        elif "cache_dir" in capabilities:
             enrichers.append(enricher_cls(enricher_config, Path(config.cache.dir) / "ai_artwork"))
-        elif name in registries.MEDIADATA_AWARE_ENRICHER_NAMES:
+        elif "mediadata" in capabilities:
             enrichers.append(enricher_cls(enricher_config, mediadata_store))
         else:
             enrichers.append(enricher_cls(enricher_config))
@@ -121,9 +122,9 @@ def build_text_enrichers(config: Config, mediadata_store: Optional[MediaDataStor
     """Build the configured text enrichers (lyrics, AI-generated text -
     see mediainfo/enrichers/text_base.py), each sharing one TextCache
     instance under cache.dir/text (same retention as artwork, mirroring
-    ImageCache's own idle/music subdirectories) - except "mediadata",
-    which reads the shared MediaDataStore instead (see
-    registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES)."""
+    ImageCache's own idle/music subdirectories) - except plugins declaring
+    `capabilities = frozenset({"mediadata"})` (e.g. MediaDataLyricsEnricher),
+    which read the shared MediaDataStore instead."""
     text_cache = TextCache(Path(config.cache.dir) / "text", max_age_days=config.cache.max_age_days)
     text_enrichers = []
     for name, text_enricher_config in config.text_enrichers.items():
@@ -133,7 +134,7 @@ def build_text_enrichers(config: Config, mediadata_store: Optional[MediaDataStor
         if text_enricher_cls is None:
             logger.warning("Unknown text enricher: %s", name)
             continue
-        if name in registries.MEDIADATA_AWARE_TEXT_ENRICHER_NAMES:
+        if "mediadata" in getattr(text_enricher_cls, "capabilities", frozenset()):
             text_enrichers.append(text_enricher_cls(text_enricher_config, mediadata_store))
         else:
             text_enrichers.append(text_enricher_cls(text_enricher_config, text_cache))
@@ -159,7 +160,7 @@ def build_idle_source(config: Config, library: Optional[MusicLibrary] = None):
         if idle_cls is None:
             logger.warning("Unknown idle wallpaper source: %s", name)
             continue
-        if name in registries.LIBRARY_AWARE_IDLE_NAMES:
+        if "library" in getattr(idle_cls, "capabilities", frozenset()):
             built[name] = idle_cls(idle_config, library)
         else:
             built[name] = idle_cls(idle_config)

@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 class LibraryEnricher(ArtworkEnricher):
+    capabilities = frozenset({"library"})
+
     def __init__(self, config=None, library: Optional[MusicLibrary] = None):
         self.config = config
         self.library = library

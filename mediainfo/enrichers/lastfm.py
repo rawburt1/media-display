@@ -29,6 +29,8 @@ _SIZE_PREFERENCE = ("mega", "extralarge", "large", "medium", "small")
 
 
 class LastFmEnricher(ArtworkEnricher):
+    capabilities = frozenset({"library"})
+
     def __init__(self, config: LastFmConfig, library: Optional[MusicLibrary] = None):
         self._api_key = config.api_key
         self.library = library

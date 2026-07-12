@@ -36,8 +36,10 @@ class TextEnricher(ABC):
     # default) means "not declared".
     config_class: Optional[type] = None
 
-    # Optional free-form feature flags - not consumed anywhere yet; a hook
-    # for future capability queries without another base-class change.
+    # Optional free-form feature flags. wiring.build_text_enrichers() reads
+    # "mediadata" off this to decide whether to inject the shared
+    # MediaDataStore instead of the default TextCache - see
+    # MediaDataLyricsEnricher. Empty (the default) means no extra argument.
     capabilities: frozenset = frozenset()
 
     @abstractmethod

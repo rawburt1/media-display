@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 class AiArtworkEnricher(ArtworkEnricher):
     name = "ai_artwork"
     config_class = AiArtworkConfig
+    capabilities = frozenset({"cache_dir"})
 
     def __init__(self, config: AiArtworkConfig, cache_dir: Union[str, Path]):
         self.config = config
