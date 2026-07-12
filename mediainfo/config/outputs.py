@@ -258,8 +258,6 @@ class ConfigUiConfig(_OutputFilterMixin):
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class FeedConfig(_OutputFilterMixin):
     enabled: bool = False
-    host: str = "0.0.0.0"
-    port: int = 8086
     # Feed channel title shown in podcast/RSS apps.
     title: str = "Now Playing"
 

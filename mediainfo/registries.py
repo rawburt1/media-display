@@ -71,7 +71,6 @@ OUTPUT_EXTRA_ARGS = {
         config.auth,
     ),
     "info": lambda config, config_path, cache: (config.auth,),
-    "feed": lambda config, config_path, cache: (config.auth,),
     "video": lambda config, config_path, cache: (config.auth,),
     # http_port, not config.auth like the others (nest_hub's blueprint
     # doesn't call install_auth itself anymore - see
@@ -164,7 +163,7 @@ IDLE_CLASSES: dict[str, Union[str, type]] = {
 # Config attributes to include per output type in the /health response.
 OUTPUT_DETAIL_FIELDS: dict = {
     "config": ["label", "port"],
-    "feed": ["label", "port"],
+    "feed": ["label", "title"],
     "folder": ["label", "dir"],
     "info": ["label", "port"],
     "mqtt": ["label", "host", "port", "topic"],

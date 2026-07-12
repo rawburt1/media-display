@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from xml.etree import ElementTree as ET
 
 import pytest
+from flask import Flask
 
 from mediainfo.config import FeedConfig
 from mediainfo.models import Artwork, NowPlaying
@@ -17,7 +18,7 @@ def _a(tag):
 
 
 def _config(**kwargs):
-    defaults = dict(enabled=True, host="127.0.0.1", port=8086, title="Now Playing")
+    defaults = dict(enabled=True, title="Now Playing")
     defaults.update(kwargs)
     return FeedConfig(**defaults)
 
@@ -41,13 +42,24 @@ def _episode(show="Breaking Bad", subtitle="S01E01 – Pilot"):
     return NowPlaying(source="kodi", media_type="episode", title=show, subtitle=subtitle, images=[])
 
 
-@pytest.fixture(autouse=True)
-def no_server(monkeypatch):
-    monkeypatch.setattr("threading.Thread.start", lambda self: None)
-
-
 def _output(**kwargs):
     return FeedOutput(_config(**kwargs))
+
+
+def _client(out, url_prefix=""):
+    """Register out's blueprint on a throwaway local Flask app and return
+    a test client against it - see tests/test_nest_hub.py for the
+    original harness this pattern was established from (H1, see
+    docs/architecture-usability-review-2026-07.md). Built as
+    Flask("mediainfo.outputs.feeds"), not Flask(__name__) (which would
+    resolve to this test module's own directory, which has no templates/
+    folder) - matches how the real SharedHttpServer finds
+    mediainfo/outputs/templates/ today, since every template-using output
+    module lives in that same package.
+    """
+    app = Flask("mediainfo.outputs.feeds")
+    app.register_blueprint(out.build_http_blueprint(url_prefix), url_prefix=url_prefix or None)
+    return app.test_client()
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +242,7 @@ def test_image_mime(url, expected):
 def test_rss_endpoint_returns_xml_with_correct_content_type():
     out = _output()
     out.on_new_item(_music(), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         resp = client.get("/rss")
     assert resp.status_code == 200
     assert "application/rss+xml" in resp.content_type
@@ -238,7 +250,7 @@ def test_rss_endpoint_returns_xml_with_correct_content_type():
 
 def test_rss_channel_title():
     out = _output(title="My Music Feed")
-    with out.app.test_client() as client:
+    with _client(out) as client:
         resp = client.get("/rss")
     root = ET.fromstring(resp.data)
     assert root.find("channel/title").text == "My Music Feed"
@@ -247,7 +259,7 @@ def test_rss_channel_title():
 def test_rss_item_title_and_description():
     out = _output()
     out.on_new_item(_music(), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/rss").data)
     item = root.find("channel/item")
     assert item.find("title").text == "Queen – Bohemian Rhapsody"
@@ -257,7 +269,7 @@ def test_rss_item_title_and_description():
 def test_rss_item_guid_present():
     out = _output()
     out.on_new_item(_music(), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/rss").data)
     guid = root.find("channel/item/guid")
     assert guid is not None
@@ -268,7 +280,7 @@ def test_rss_item_guid_present():
 def test_rss_item_pub_date_present():
     out = _output()
     out.on_new_item(_music(), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/rss").data)
     assert root.find("channel/item/pubDate").text
 
@@ -277,7 +289,7 @@ def test_rss_item_enclosure_when_image_present():
     art = Artwork(url="https://fanart.tv/cover.jpg", label="Cover")
     out = _output()
     out.on_new_item(_music(images=[art]), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/rss").data)
     enc = root.find("channel/item/enclosure")
     assert enc is not None
@@ -289,7 +301,7 @@ def test_rss_item_enclosure_when_image_present():
 def test_rss_no_enclosure_when_no_image():
     out = _output()
     out.on_new_item(_music(images=[]), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/rss").data)
     assert root.find("channel/item/enclosure") is None
 
@@ -298,7 +310,7 @@ def test_rss_only_shows_the_current_item():
     out = _output()
     out.on_new_item(_music(title="Song A", artist="Alpha"), MagicMock())
     out.on_new_item(_music(title="Song B", artist="Beta"), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/rss").data)
     items = root.findall("channel/item")
     assert len(items) == 1
@@ -307,7 +319,7 @@ def test_rss_only_shows_the_current_item():
 
 def test_rss_empty_feed_has_no_items():
     out = _output()
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/rss").data)
     assert root.findall("channel/item") == []
 
@@ -319,7 +331,7 @@ def test_rss_empty_feed_has_no_items():
 
 def test_atom_endpoint_returns_xml_with_correct_content_type():
     out = _output()
-    with out.app.test_client() as client:
+    with _client(out) as client:
         resp = client.get("/atom")
     assert resp.status_code == 200
     assert "application/atom+xml" in resp.content_type
@@ -327,23 +339,23 @@ def test_atom_endpoint_returns_xml_with_correct_content_type():
 
 def test_atom_feed_title():
     out = _output(title="My Stream")
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/atom").data)
     assert root.find(_a("title")).text == "My Stream"
 
 
 def test_atom_feed_has_id():
-    out = _output(port=8086)
-    with out.app.test_client() as client:
-        root = ET.fromstring(client.get("/atom").data)
+    out = _output()
+    with _client(out, url_prefix="/feed") as client:
+        root = ET.fromstring(client.get("/feed/atom").data)
     feed_id = root.find(_a("id")).text
-    assert "8086" in feed_id
+    assert feed_id == "urn:mediainfo:feed:/feed"
 
 
 def test_atom_entry_title_and_summary():
     out = _output()
     out.on_new_item(_music(), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/atom").data)
     entry = root.find(_a("entry"))
     assert entry.find(_a("title")).text == "Queen – Bohemian Rhapsody"
@@ -353,7 +365,7 @@ def test_atom_entry_title_and_summary():
 def test_atom_entry_id_and_updated():
     out = _output()
     out.on_new_item(_music(), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/atom").data)
     entry = root.find(_a("entry"))
     assert entry.find(_a("id")).text.startswith("urn:mediainfo:")
@@ -364,7 +376,7 @@ def test_atom_entry_enclosure_link():
     art = Artwork(url="https://fanart.tv/cover.png", label="Cover")
     out = _output()
     out.on_new_item(_music(images=[art]), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/atom").data)
     links = root.find(_a("entry")).findall(_a("link"))
     enclosures = [link for link in links if link.get("rel") == "enclosure"]
@@ -376,7 +388,7 @@ def test_atom_entry_enclosure_link():
 def test_atom_no_summary_when_description_empty():
     out = _output()
     out.on_new_item(_movie(), MagicMock())
-    with out.app.test_client() as client:
+    with _client(out) as client:
         root = ET.fromstring(client.get("/atom").data)
     assert root.find(_a("entry")).find(_a("summary")) is None
 
@@ -388,7 +400,7 @@ def test_atom_no_summary_when_description_empty():
 
 def test_index_page_links_to_both_feeds():
     out = _output()
-    with out.app.test_client() as client:
+    with _client(out) as client:
         resp = client.get("/")
     assert resp.status_code == 200
     body = resp.data.decode()

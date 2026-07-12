@@ -24,13 +24,12 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
-from flask import Flask, make_response, render_template, request
+from flask import Blueprint, make_response, render_template, request
 
 from mediainfo.cache import ImageCache
-from mediainfo.config import AuthConfig, FeedConfig
+from mediainfo.config import FeedConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
-from mediainfo.web_auth import install_auth
 
 logger = logging.getLogger(__name__)
 
@@ -64,13 +63,15 @@ class _Entry:
 class FeedOutput(Output):
     handles_images = False
 
-    def __init__(self, config: FeedConfig, auth_config: Optional[AuthConfig] = None):
+    def __init__(self, config: FeedConfig):
         self.config = config
-        self.auth_config = auth_config
         self._entries: List[_Entry] = []
         self._lock = threading.Lock()
-        self.app = self._build_app()
-        threading.Thread(target=self._run_server, daemon=True).start()
+        # Set by build_http_blueprint() once wiring.py has computed it -
+        # used as a stable per-instance identifier (see _build_atom()),
+        # replacing the old config.port-based one now that every instance
+        # no longer has its own port.
+        self._url_prefix = ""
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         pass
@@ -125,18 +126,15 @@ class FeedOutput(Output):
             return title, np.summary
         return np.title, np.subtitle
 
-    def _run_server(self) -> None:
-        logger.info("Starting feed server on %s:%s", self.config.host, self.config.port)
-        self.app.run(host=self.config.host, port=self.config.port, threaded=True)
+    def build_http_blueprint(self, url_prefix: str, sock=None) -> Blueprint:
+        self._url_prefix = url_prefix
+        bp = Blueprint("feed", __name__)
 
-    def _build_app(self) -> Flask:
-        app = Flask(__name__)
-
-        @app.get("/")
+        @bp.get("/")
         def index():
             return render_template("feeds/index.html")
 
-        @app.get("/rss")
+        @bp.get("/rss")
         def rss():
             with self._lock:
                 entries = list(self._entries)
@@ -144,7 +142,7 @@ class FeedOutput(Output):
             resp.content_type = "application/rss+xml; charset=utf-8"
             return resp
 
-        @app.get("/atom")
+        @bp.get("/atom")
         def atom():
             with self._lock:
                 entries = list(self._entries)
@@ -152,8 +150,7 @@ class FeedOutput(Output):
             resp.content_type = "application/atom+xml; charset=utf-8"
             return resp
 
-        install_auth(app, self.auth_config)
-        return app
+        return bp
 
     def _build_rss(self, entries: List[_Entry], base_url: str) -> str:
         rss = ET.Element("rss", version="2.0")
@@ -183,7 +180,7 @@ class FeedOutput(Output):
     def _build_atom(self, entries: List[_Entry], base_url: str) -> str:
         feed = ET.Element(_a("feed"))
         ET.SubElement(feed, _a("title")).text = self.config.title
-        ET.SubElement(feed, _a("id")).text = f"urn:mediainfo:feed:{self.config.port}"
+        ET.SubElement(feed, _a("id")).text = f"urn:mediainfo:feed:{self._url_prefix}"
         ET.SubElement(feed, _a("link"), href=base_url, rel="alternate")
         updated = (
             entries[0].published.isoformat()
