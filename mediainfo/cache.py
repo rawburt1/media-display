@@ -126,6 +126,17 @@ class ImageCache:
         response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=headers)
         response.raise_for_status()
 
+        if not response.content:
+            # A 200 with an empty body isn't a real image - if this were
+            # written to disk it'd become a permanent 0-byte cache entry
+            # (see _find_existing: any file matching the key is treated as
+            # a hit forever), so every future lookup would keep "finding"
+            # unreadable artwork instead of retrying the download.
+            logger.warning(
+                "Empty response downloading artwork %r - not caching", artwork.label or artwork.url
+            )
+            return None
+
         if not self._meets_minimum_size(response.content):
             logger.info(
                 "Skipped artwork %r - smaller than %dx%d",
@@ -209,6 +220,12 @@ class ImageCache:
         headers = {**_HEADERS, **artwork.headers} if artwork.headers else _HEADERS
         response = requests.get(artwork.url, timeout=10, auth=artwork.auth, headers=headers)
         response.raise_for_status()
+
+        if not response.content:
+            logger.warning(
+                "Empty response downloading artwork %r - not caching", artwork.label or artwork.url
+            )
+            return None
 
         if not self._meets_minimum_size(response.content):
             logger.info(

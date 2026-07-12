@@ -392,6 +392,41 @@ def test_unidentifiable_content_is_not_rejected_for_size(mock_get, tmp_path):
 
 
 @patch("mediainfo.cache.requests.get")
+def test_empty_response_is_not_cached(mock_get, tmp_path):
+    # A 200 with an empty body isn't a real image - if this got written to
+    # disk as a 0-byte file, _find_existing would treat it as a permanent
+    # cache hit and every future lookup would "find" unreadable artwork
+    # instead of retrying the download.
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b""
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    artwork = Artwork(url="http://example.com/empty.jpg")
+
+    assert cache.get_path(artwork) is None
+    assert list(tmp_path.rglob("*.jpg")) == []
+
+    # Not cached as a "hit" either, so a later attempt re-fetches.
+    assert cache.get_path(artwork) is None
+    assert mock_get.call_count == 2
+
+
+@patch("mediainfo.cache.requests.get")
+def test_download_temp_returns_none_for_empty_response(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b""
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    assert cache.download_temp(Artwork(url="http://example.com/empty.jpg")) is None
+
+
+@patch("mediainfo.cache.requests.get")
 def test_rejected_image_is_not_cached_so_a_retry_hits_network_again(mock_get, tmp_path):
     mock_response = MagicMock()
     mock_response.headers = {"Content-Type": "image/jpeg"}
