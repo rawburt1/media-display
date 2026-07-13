@@ -1491,6 +1491,17 @@ def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
     assert out._health_fn is health_provider
 
 
+def test_attach_wires_page_links(config_path):
+    from mediainfo.app_services import AppServices, PageLink
+
+    out = _output(config_path)
+    links = [PageLink(name="web", url_prefix="")]
+
+    out.attach(AppServices(page_links=links))
+
+    assert out._page_links == links
+
+
 def test_attach_with_no_commands_leaves_hitster_safe_handlers_none(config_path):
     # AppServices.commands defaults to None (e.g. a bare AppServices()) -
     # attach() must degrade gracefully, not raise, matching how the

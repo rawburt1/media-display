@@ -582,6 +582,83 @@ def test_build_dashboard_counts_activity_by_source_only():
 
 
 # ---------------------------------------------------------------------------
+# build_dashboard(): page_links quick-open actions
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_has_no_page_link_actions_when_none_are_live():
+    pipeline = UiPipeline(id="default", name="Default")
+    dashboard = build_dashboard([], pipeline, {}, None)
+    assert [a for a in dashboard.quick_actions if a.id.startswith("open_page_")] == []
+
+
+def test_dashboard_page_link_actions_use_friendly_labels_and_hrefs():
+    from mediainfo.app_services import PageLink
+
+    pipeline = UiPipeline(id="default", name="Default")
+    page_links = [
+        PageLink(name="web", url_prefix=""),
+        PageLink(name="themes", url_prefix="/themes"),
+    ]
+    dashboard = build_dashboard([], pipeline, {}, None, page_links)
+    page_actions = [a for a in dashboard.quick_actions if a.id.startswith("open_page_")]
+
+    by_id = {a.id: a for a in page_actions}
+    assert by_id["open_page_web_1"].label == "Now Playing Display"
+    # web's own url_prefix is "" (root-mounted) - rendered as "/", not ""
+    # (an empty href would just reload whatever page you're already on).
+    assert by_id["open_page_web_1"].href == "/"
+    assert by_id["open_page_themes_1"].label == "Themes Overlay"
+    assert by_id["open_page_themes_1"].href == "/themes"
+
+
+def test_dashboard_synthesizes_a_health_link_from_the_web_output():
+    from mediainfo.app_services import PageLink
+
+    pipeline = UiPipeline(id="default", name="Default")
+    page_links = [PageLink(name="web", url_prefix="")]
+    dashboard = build_dashboard([], pipeline, {}, None, page_links)
+
+    health_action = next(a for a in dashboard.quick_actions if a.id == "open_page_health")
+    assert health_action.label == "Health Dashboard"
+    assert health_action.href == "/health"
+
+
+def test_dashboard_has_no_health_link_when_web_output_is_disabled():
+    from mediainfo.app_services import PageLink
+
+    pipeline = UiPipeline(id="default", name="Default")
+    page_links = [PageLink(name="themes", url_prefix="/themes")]
+    dashboard = build_dashboard([], pipeline, {}, None, page_links)
+
+    assert [a for a in dashboard.quick_actions if a.id == "open_page_health"] == []
+
+
+def test_dashboard_disambiguates_multiple_instances_of_the_same_output_type():
+    from mediainfo.app_services import PageLink
+
+    pipeline = UiPipeline(id="default", name="Default")
+    page_links = [
+        PageLink(name="nest_hub", url_prefix="/nest_hub"),
+        PageLink(name="nest_hub", url_prefix="/nest_hub-bedroom"),
+    ]
+    dashboard = build_dashboard([], pipeline, {}, None, page_links)
+    page_actions = [a for a in dashboard.quick_actions if a.id.startswith("open_page_nest_hub")]
+
+    assert [a.label for a in page_actions] == ["Nest Hub Display", "Nest Hub Display (2)"]
+    assert [a.href for a in page_actions] == ["/nest_hub", "/nest_hub-bedroom"]
+
+
+def test_dashboard_own_url_prefix_is_applied_to_classic_shell_links():
+    pipeline = UiPipeline(id="default", name="Default")
+    dashboard = build_dashboard([], pipeline, {}, None, own_url_prefix="/config")
+    by_id = {a.id: a for a in dashboard.quick_actions}
+
+    assert by_id["configure_media"].href == "/config/form"
+    assert by_id["open_health"].href == "/config/dashboard"
+
+
+# ---------------------------------------------------------------------------
 # build_dashboard(): needs_setup (Fas 11)
 # ---------------------------------------------------------------------------
 

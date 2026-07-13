@@ -23,11 +23,24 @@ setters this replaces already treated None before.
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 from mediainfo.stores.history import PlaybackHistory
 from mediainfo.stores.media_data_store import MediaDataStore
+
+
+@dataclasses.dataclass(frozen=True)
+class PageLink:
+    """One live, HTTP-reachable top-level page - see
+    wiring.build_app_services()'s page_links, which the config UI's
+    dashboard (mediainfo.configui.ui_builder.build_dashboard) renders as
+    quick-open links. `name` is the output's own registry name (e.g.
+    "web", "themes") - not yet a human label, since deciding those is a
+    presentation concern the configui layer owns, not core wiring."""
+
+    name: str
+    url_prefix: str
 
 
 @dataclasses.dataclass
@@ -62,3 +75,6 @@ class AppServices:
     # Hitster-safe get/set, artwork refresh, and rotate-now - see
     # OrchestratorCommands above.
     commands: Optional[OrchestratorCommands] = None
+    # Every other live HTTP output's own top-level page, for the config
+    # UI dashboard's quick-open links - see PageLink above.
+    page_links: List[PageLink] = dataclasses.field(default_factory=list)

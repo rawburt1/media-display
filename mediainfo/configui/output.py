@@ -138,6 +138,9 @@ class ConfigUiOutput(Output):
         self._hitster_safe_get = None
         self._hitster_safe_set = None
         self._overrides: Optional[ArtworkOverrideStore] = None
+        # Every other live HTTP output's own top-level page, for the
+        # dashboard's quick-open links - see AppServices.page_links.
+        self._page_links: list = []
         # Set whenever a form save touches `outputs` (the one category that
         # needs a restart to take effect, since outputs are only
         # instantiated once at startup) - see the "Restart needed" banner
@@ -168,6 +171,12 @@ class ConfigUiOutput(Output):
         active-source summary."""
         self._health_fn = fn
 
+    def set_page_links(self, page_links: list) -> None:
+        """Register every other live HTTP output's own top-level page, so
+        the dashboard can render quick-open links to them - see
+        AppServices.page_links and ui_builder.build_dashboard()."""
+        self._page_links = page_links
+
     def attach(self, services: AppServices) -> None:
         commands = services.commands
         self.set_hitster_safe_handlers(
@@ -176,6 +185,7 @@ class ConfigUiOutput(Output):
         )
         self.set_artwork_overrides(services.overrides)
         self.set_health_provider(services.health_provider)
+        self.set_page_links(services.page_links)
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         pass
@@ -302,7 +312,14 @@ class ConfigUiOutput(Output):
         return (
             components,
             pipeline,
-            build_dashboard(components, pipeline, self._compute_overview(), health),
+            build_dashboard(
+                components,
+                pipeline,
+                self._compute_overview(),
+                health,
+                self._page_links,
+                self._url_prefix,
+            ),
         )
 
     # -- Apple TV pairing ---------------------------------------------

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from mediainfo.app_services import PageLink
 from mediainfo.config import (
     ENRICHER_CONFIG_TYPES,
     IDLE_CONFIG_TYPES,
@@ -44,6 +45,21 @@ from mediainfo.configui.ui_model import (
 # host) rather than a real display target - excluded from the Displays
 # category and from the pipeline's display_component_ids.
 _NON_DISPLAY_OUTPUT_TYPES = frozenset({"config", "themes"})
+
+# Human-readable labels for PageLink.name (AppServices.page_links) - a
+# presentation concern, so it lives here rather than in wiring.py (core).
+# Deliberately its own map rather than reusing config_schema._TYPE_INFO's
+# card labels ("Pixoo LED Display" etc.) - those describe the *output
+# type* for a settings card, this describes the *action* of opening its
+# page, which reads better as "Now Playing Display" than bare "Web".
+_PAGE_LINK_LABELS = {
+    "web": "Now Playing Display",
+    "themes": "Themes Overlay",
+    "info": "Info Display",
+    "feed": "RSS / Atom Feed",
+    "video": "Video Display",
+    "nest_hub": "Nest Hub Display",
+}
 
 # health.py's per-category status strings, normalized to ui_model's richer
 # UiComponent.status vocabulary. "warning" (Fas 10) is a pure addition -
@@ -606,11 +622,56 @@ def build_pipeline(components: List[UiComponent]) -> UiPipeline:
     )
 
 
+def _page_link_actions(page_links: List[PageLink]) -> List[UiAction]:
+    """One quick-open UiAction per live top-level page - see
+    AppServices.page_links. Ordered web (Now Playing) first, then a
+    synthetic Health entry (the real /health page lives on the web
+    output's own blueprint - see docs/health-api-reference.md - not a
+    registered output type of its own, so it isn't in page_links itself),
+    then the rest in page_links' own order. A second instance of the same
+    output type (e.g. two labelled nest_hub displays) is disambiguated by
+    appending its 1-based position among same-named links, mirroring how
+    health.py's own instance_index disambiguates multi-instance entries.
+    """
+    by_name: Dict[str, int] = {}
+    actions: List[UiAction] = []
+    web_prefix: Optional[str] = None
+    for link in page_links:
+        if link.name == "web":
+            web_prefix = link.url_prefix
+        label = _PAGE_LINK_LABELS.get(link.name, link.name)
+        count = by_name.get(link.name, 0) + 1
+        by_name[link.name] = count
+        if count > 1:
+            label = f"{label} ({count})"
+        actions.append(
+            UiAction(
+                id=f"open_page_{link.name}_{count}",
+                label=label,
+                kind="link",
+                href=link.url_prefix or "/",
+            )
+        )
+    if web_prefix is not None:
+        actions.insert(
+            1,
+            UiAction(
+                id="open_page_health",
+                label="Health Dashboard",
+                kind="link",
+                href=f"{web_prefix}/health",
+            ),
+        )
+    return actions
+
+
 def build_dashboard(
     components: List[UiComponent],
     pipeline: UiPipeline,
     overview: dict,
     health: Optional[dict],
+    page_links: Optional[List[PageLink]] = None,
+    own_url_prefix: str = "",
 ) -> UiDashboard:
     health = health or {}
     counts_by_status: Dict[str, int] = {}
@@ -641,33 +702,41 @@ def build_dashboard(
             )
         )
     quick_actions += [
-        UiAction(id="configure_media", label="Configure Media", kind="link", href="/form"),
+        UiAction(
+            id="configure_media",
+            label="Configure Media",
+            kind="link",
+            href=f"{own_url_prefix}/form",
+        ),
         UiAction(
             id="configure_metadata",
             label="Configure Metadata",
             kind="link",
-            href="/form",
+            href=f"{own_url_prefix}/form",
         ),
         UiAction(
             id="configure_appearance",
             label="Change Appearance",
             kind="link",
-            href="/form",
+            href=f"{own_url_prefix}/form",
         ),
         UiAction(
             id="configure_displays",
             label="Configure Displays",
             kind="link",
-            href="/form",
+            href=f"{own_url_prefix}/form",
         ),
-        UiAction(id="open_health", label="Open Health", kind="link", href="/dashboard"),
+        UiAction(
+            id="open_health", label="Open Health", kind="link", href=f"{own_url_prefix}/dashboard"
+        ),
         UiAction(
             id="open_classic_settings",
             label="Open Classic Settings",
             kind="link",
-            href="/form",
+            href=f"{own_url_prefix}/form",
         ),
     ]
+    quick_actions += _page_link_actions(page_links or [])
 
     return UiDashboard(
         status=overall_status,

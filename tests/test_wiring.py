@@ -8,8 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mediainfo.app_services import PageLink
 from mediainfo.stores.text_cache import TextCache
 from mediainfo.wiring import (
+    _collect_page_links,
     _compute_url_mount,
     attach_services,
     build_app_services,
@@ -185,6 +187,7 @@ def test_instantiate_outputs_registers_blueprint_on_shared_server():
     shared_server.register_blueprint.assert_called_once_with(
         fake_blueprint, url_prefix="/pixoo", name="pixoo"
     )
+    assert fake_instance.url_prefix == "/pixoo"
 
 
 def test_instantiate_outputs_skips_registration_when_blueprint_is_none():
@@ -224,6 +227,46 @@ def test_instantiate_outputs_without_shared_server_never_builds_blueprints():
         instantiate_outputs(cfg, Path("config.yaml"), MagicMock())
 
     fake_instance.build_http_blueprint.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _collect_page_links (config UI dashboard quick-open links)
+# ---------------------------------------------------------------------------
+
+
+class _FakeOutput:
+    def __init__(self, name, url_prefix=None):
+        self.name = name
+        self.url_prefix = url_prefix
+
+
+def test_collect_page_links_includes_only_outputs_with_a_url_prefix():
+    outputs = [
+        _FakeOutput("web", url_prefix=""),
+        _FakeOutput("pixoo", url_prefix=None),  # not HTTP-based
+        _FakeOutput("themes", url_prefix="/themes"),
+    ]
+
+    links = _collect_page_links(outputs)
+
+    assert links == [
+        PageLink(name="web", url_prefix=""),
+        PageLink(name="themes", url_prefix="/themes"),
+    ]
+
+
+def test_collect_page_links_empty_when_no_http_outputs():
+    outputs = [_FakeOutput("pixoo", url_prefix=None), _FakeOutput("mqtt", url_prefix=None)]
+    assert _collect_page_links(outputs) == []
+
+
+def test_collect_page_links_preserves_multiple_instances_of_the_same_type():
+    outputs = [
+        _FakeOutput("nest_hub", url_prefix="/nest_hub"),
+        _FakeOutput("nest_hub", url_prefix="/nest_hub-bedroom"),
+    ]
+    links = _collect_page_links(outputs)
+    assert [link.url_prefix for link in links] == ["/nest_hub", "/nest_hub-bedroom"]
 
 
 # ---------------------------------------------------------------------------
@@ -895,6 +938,38 @@ def test_build_app_services_populates_every_field():
     # payload shape is covered by test_health.py) - just confirm one was
     # actually built and closes over this orch/config/outputs.
     assert callable(services.health_provider)
+    assert services.page_links == []
+
+
+def test_build_app_services_collects_page_links_from_outputs():
+    orch = MagicMock()
+    orch.get_health.return_value = {
+        "active_source": None,
+        "source_last_polled_ago": {},
+        "output_errors": {},
+        "source_backoff_seconds": {},
+        "uptime_seconds": 0,
+        "poll_interval_seconds": 5,
+        "rotation_interval_seconds": 30,
+        "now_playing": None,
+        "idle_wallpapers_loaded": 0,
+        "hitster_safe": False,
+    }
+    orch.sources = []
+    orch.enrichers = []
+    orch.idle_source = None
+
+    cfg = MagicMock()
+    cfg.sources = {}
+    cfg.outputs = {}
+    cfg.enrichers = {}
+    cfg.idle = {}
+
+    outputs = [_FakeOutput("web", url_prefix=""), _FakeOutput("pixoo", url_prefix=None)]
+
+    services = build_app_services(orch, cfg, outputs, MagicMock(), MagicMock(), MagicMock())
+
+    assert services.page_links == [PageLink(name="web", url_prefix="")]
 
 
 def test_attach_services_calls_attach_on_every_output():

@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from mediainfo import registries
-from mediainfo.app_services import AppServices, OrchestratorCommands
+from mediainfo.app_services import AppServices, OrchestratorCommands, PageLink
 from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config
@@ -109,6 +109,7 @@ def instantiate_outputs(
                     shared_server.register_blueprint(
                         blueprint, url_prefix=url_prefix, name=blueprint_name
                     )
+                    output.url_prefix = url_prefix
             outputs.append(output)
             index += 1
     return outputs
@@ -332,6 +333,18 @@ def start_orchestrator(
     return orch
 
 
+def _collect_page_links(outputs: list) -> List[PageLink]:
+    """One PageLink per output instance that actually registered an HTTP
+    blueprint (Output.url_prefix is only set by instantiate_outputs() in
+    that case - see its own docstring) - used by the config UI dashboard's
+    quick-open links (AppServices.page_links)."""
+    return [
+        PageLink(name=output.name, url_prefix=output.url_prefix)
+        for output in outputs
+        if output.url_prefix is not None
+    ]
+
+
 def build_app_services(
     orch: Orchestrator,
     config: Config,
@@ -364,6 +377,7 @@ def build_app_services(
             request_artwork_refresh=orch.request_artwork_refresh,
             request_rotation_now=orch.request_rotation_now,
         ),
+        page_links=_collect_page_links(outputs),
     )
 
 

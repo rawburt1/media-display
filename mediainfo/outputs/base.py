@@ -62,6 +62,17 @@ class Output(ABC):
     # already drives dispatch there.
     root_mounted: bool = False
 
+    # Set by wiring.instantiate_outputs() once it's computed this
+    # instance's mount path (e.g. "/themes", "" for the root-mounted
+    # output) and actually registered a blueprint for it - None for a
+    # non-HTTP output (pixoo, mqtt, ...), or an HTTP output that hasn't
+    # been wired yet. A public counterpart to the private `self._url_prefix`
+    # several HTTP outputs already keep for their own internal use (e.g.
+    # building an absolute image URL) - this one is the single place
+    # something *outside* the output itself (see AppServices.page_links)
+    # can learn its mount path without relying on that private convention.
+    url_prefix: Optional[str] = None
+
     @abstractmethod
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         """Show new artwork."""
