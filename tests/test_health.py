@@ -2,8 +2,70 @@
 
 from unittest.mock import MagicMock, patch
 
-from mediainfo.health import config_detail_fields, make_health_provider
+from mediainfo.health import HEALTH_SCHEMA_VERSION, config_detail_fields, make_health_provider
 from mediainfo.status import AvailabilityReason
+
+
+# ---------------------------------------------------------------------------
+# Top-level schema (N8 - see docs/architecture-usability-review-2026-07.md
+# and docs/health-api-reference.md)
+# ---------------------------------------------------------------------------
+
+# Mirrors docs/health-api-reference.md's "Top-level fields" table exactly -
+# if this test fails after a genuine, deliberate payload change, update
+# both the doc and (if the change is breaking, per that doc's versioning
+# contract) HEALTH_SCHEMA_VERSION.
+_DOCUMENTED_TOP_LEVEL_FIELDS = {
+    "status",
+    "schema_version",
+    "uptime_seconds",
+    "poll_interval_seconds",
+    "rotation_interval_seconds",
+    "now_playing",
+    "hitster_safe",
+    "sources",
+    "outputs",
+    "enrichers",
+    "idle_sources",
+}
+
+
+def test_health_payload_top_level_shape_matches_the_documented_schema():
+    orch = MagicMock()
+    orch.sources = []
+    orch.enrichers = []
+    orch.idle_source = None
+    orch.get_health.return_value = {
+        "active_source": None,
+        "source_last_polled_ago": {},
+        "output_errors": {},
+        "source_backoff_seconds": {},
+        "source_failing_for_seconds": {},
+        "uptime_seconds": 0,
+        "poll_interval_seconds": 5,
+        "rotation_interval_seconds": 30,
+        "now_playing": None,
+        "idle_wallpapers_loaded": 0,
+        "hitster_safe": False,
+    }
+
+    cfg = MagicMock()
+    cfg.sources = {}
+    cfg.outputs = {}
+    cfg.enrichers = {}
+    cfg.idle = {}
+
+    with (
+        patch("mediainfo.registries.SOURCE_CLASSES", {}),
+        patch("mediainfo.registries.OUTPUT_CLASSES", {}),
+        patch("mediainfo.registries.ENRICHER_CLASSES", {}),
+        patch("mediainfo.registries.IDLE_CLASSES", {}),
+    ):
+        health = make_health_provider(orch, cfg, [])()
+
+    assert set(health) == _DOCUMENTED_TOP_LEVEL_FIELDS
+    assert health["schema_version"] == HEALTH_SCHEMA_VERSION
+    assert health["status"] == "ok"
 
 
 # ---------------------------------------------------------------------------

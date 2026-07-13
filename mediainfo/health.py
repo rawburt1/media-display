@@ -1,5 +1,20 @@
 """Builds the /health JSON payload: per-source/output/enricher/idle-source
 status, layered on top of Orchestrator.get_health()'s raw counters.
+
+This payload is a public, versioned API (N8 in
+docs/architecture-usability-review-2026-07.md) - it's polled by anything
+scraping /health directly (monitoring, HA, MQTT's health-state topic, see
+outputs/mqtt.py), and doubles as the new dashboard's own data source (see
+outputs/ui_builder.py, which reads sources/outputs/enrichers/idle_sources
+straight out of this dict rather than recomputing status itself). See
+docs/health-api-reference.md for the full field-by-field schema.
+
+Versioning contract, mirroring config_version's (see README.md):
+adding a new top-level or per-entry field is NOT a breaking change and
+does not bump HEALTH_SCHEMA_VERSION - consumers must already tolerate
+unknown keys. Removing or renaming a field documented in
+docs/health-api-reference.md, or changing its type/meaning, is breaking
+and must bump HEALTH_SCHEMA_VERSION.
 """
 
 from __future__ import annotations
@@ -13,6 +28,11 @@ from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.orchestrator import Orchestrator
 from mediainfo.outputs.config_schema import _is_secret
 from mediainfo.status import AvailabilityReason, Health, translate_availability
+
+# Bump only for a breaking change to a field documented in
+# docs/health-api-reference.md (removed/renamed/retyped) - see this
+# module's own docstring. Never bump for a purely additive change.
+HEALTH_SCHEMA_VERSION = 1
 
 
 def config_detail_fields(cfg: Any) -> dict:
@@ -244,6 +264,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
 
         return {
             "status": "ok",
+            "schema_version": HEALTH_SCHEMA_VERSION,
             "uptime_seconds": data["uptime_seconds"],
             "poll_interval_seconds": data["poll_interval_seconds"],
             "rotation_interval_seconds": data["rotation_interval_seconds"],

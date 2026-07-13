@@ -139,7 +139,10 @@ Currently implemented:
   and unused files are purged after `cache.max_age_days`)
 - `/health` endpoint (on the web output) reports uptime, the current
   now-playing item, and per-source/output/enricher status - JSON by default,
-  or an HTML dashboard when requested with `Accept: text/html`
+  or an HTML dashboard when requested with `Accept: text/html`. The JSON
+  payload is a versioned schema (`schema_version`) - see
+  `docs/health-api-reference.md` for the full field-by-field reference if
+  you're scripting against it.
 
 - **`mediadata`**: a unified, human-browsable on-disk cache
   (`mediainfo/media_data_store.py`) organizing artwork/lyrics/metadata as
