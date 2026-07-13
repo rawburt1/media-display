@@ -273,6 +273,16 @@ least one source and output are enabled.
 
 To update later: `git pull && pip install -r requirements.txt`.
 
+**Prefer a leaner install?** `pip install -r requirements.txt` installs every
+integration's dependency (OpenCV, pyatv, adb-shell, ...) whether you use it or
+not. `pip install -e .` instead installs only the core (Flask, Pillow, PyYAML,
+pydantic, ...) plus whichever integrations you actually want, via extras named
+after each source/output (`pip install -e .[appletv,sonos,pixoo-text-detection]`)
+or `pip install -e .[all]` to match the full `requirements.txt` install. A
+source/output whose dependency isn't installed is skipped with a clear log
+message at startup rather than crashing the app - see pyproject.toml for the
+full list of extras.
+
 ### Troubleshooting
 
 - **Nothing shows up / `/health` reports sources as `not_configured`**: a

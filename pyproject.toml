@@ -6,6 +6,58 @@ requires-python = ">=3.10"
 readme = "README.md"
 license = { file = "LICENSE" }
 
+# The packages every install needs regardless of which sources/outputs are
+# enabled. This list - and every optional-dependencies group below - is
+# kept in sync by hand with requirements.txt, which stays the source of
+# truth for Docker and the default `pip install -r requirements.txt`
+# manual-install path (see README.md); nothing here changes what those
+# install. `pip install -e .[all]` (or a subset of the extras below) is an
+# alternative, leaner path for anyone hand-installing outside Docker - see
+# docs/architecture-usability-review-2026-07.md's N3.
+dependencies = [
+    "requests~=2.34.2",
+    "Pillow~=12.2.0",
+    "PyYAML~=6.0.3",
+    "Flask~=3.1.3",
+    "flask-sock~=0.7.0",
+    "ruamel.yaml~=0.19.1",
+    "pydantic~=2.13.4",
+]
+
+[project.optional-dependencies]
+appletv = ["pyatv~=0.17.0"]
+shield = ["adb-shell~=0.4.4"]
+youtube = ["adb-shell~=0.4.4"]
+chromecast = ["pychromecast~=13.1.0"]
+nest_hub = ["pychromecast~=13.1.0"]
+sonos = ["soco~=0.31.1"]
+spotify = ["spotipy~=2.26.0"]
+mqtt = ["paho-mqtt~=2.1.0"]
+mpd = ["python-mpd2~=3.1.1"]
+homeassistant = ["websocket-client~=1.9.0"]
+# Only the Pixoo output's optional text-detection stage
+# (outputs.pixoo.text_detection_enabled) needs these - base Pixoo output
+# works fine without them (mediainfo/text_removal.py already imports both
+# lazily and no-ops if they're missing - see tests/test_pixoo.py).
+pixoo-text-detection = ["opencv-python-headless~=5.0.0", "numpy~=2.2.6"]
+# Lyrics word-cloud rendering (enrichers.mediadata.wordcloud.enabled, or
+# the Word Cloud display theme).
+wordcloud = ["wordcloud~=1.9.6"]
+# Matches requirements.txt: every optional package, all at once.
+all = [
+    "pyatv~=0.17.0",
+    "adb-shell~=0.4.4",
+    "pychromecast~=13.1.0",
+    "soco~=0.31.1",
+    "spotipy~=2.26.0",
+    "paho-mqtt~=2.1.0",
+    "python-mpd2~=3.1.1",
+    "websocket-client~=1.9.0",
+    "opencv-python-headless~=5.0.0",
+    "numpy~=2.2.6",
+    "wordcloud~=1.9.6",
+]
+
 [project.scripts]
 mediainfo = "mediainfo.__main__:main"
 
