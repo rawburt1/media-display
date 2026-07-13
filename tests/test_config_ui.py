@@ -1176,6 +1176,33 @@ def test_save_raw_rejects_malformed_source_section(config_path):
     assert config_path.read_text() == original
 
 
+def test_save_raw_surfaces_a_friendly_message_for_a_typo_d_field(config_path):
+    # M3 (docs/architecture-usability-review-2026-07.md): a typo'd field
+    # inside an otherwise-valid section must reach the browser as plain
+    # English, not a raw pydantic ValidationError string.
+    out = _output(config_path)
+    client = _client(out)
+    original = config_path.read_text()
+    resp = client.post(
+        "/api/config/raw",
+        json={"yaml": "sources:\n  kodi:\n    enabled: true\n    hos: 1.2.3.4\n"},
+    )
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "`kodi` doesn't have a setting called `hos` - did you mean `host`?"
+    assert "validation error for" not in data["error"]
+    assert config_path.read_text() == original
+
+
+def test_save_form_surfaces_a_friendly_message_for_a_typo_d_field(config_path):
+    out = _output(config_path)
+    client = _client(out)
+    resp = client.post("/api/config/form", json={"values": {"sources.kodi.hos": "1.2.3.4"}})
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "`kodi` doesn't have a setting called `hos` - did you mean `host`?"
+
+
 # ---------------------------------------------------------------------------
 # Config file download/upload (N2 - download is a real route; upload loads
 # the picked file into the existing raw YAML editor client-side, so it has

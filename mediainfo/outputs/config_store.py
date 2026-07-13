@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from mediainfo.config import OUTPUT_CONFIG_TYPES, Config
 from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
+from mediainfo.config_error_translator import friendly_config_error
 from mediainfo.web_auth import hash_password
 from mediainfo.outputs.config_schema import (
     _FLAT_SECTIONS,
@@ -181,7 +182,7 @@ class ConfigStore:
                 Config.from_dict(data)
             except Exception as exc:
                 logger.warning("Rejected hidden-types update: %s", exc)
-                return str(exc)
+                return friendly_config_error(exc)
 
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
             backup_config_file(self.config_path)
@@ -220,7 +221,7 @@ class ConfigStore:
                 Config.from_dict(data)
             except Exception as exc:
                 logger.warning("Rejected config form save: %s", exc)
-                return str(exc), False
+                return friendly_config_error(exc), False
 
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
             backup_config_file(self.config_path)
@@ -326,7 +327,7 @@ class ConfigStore:
             Config.from_dict(parsed)
         except Exception as exc:
             logger.warning("Rejected raw config save: %s", exc)
-            return str(exc), False
+            return friendly_config_error(exc), False
 
         with self._lock:
             self.config_path.parent.mkdir(parents=True, exist_ok=True)

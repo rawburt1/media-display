@@ -160,6 +160,33 @@ def test_prompts_for_username_when_none_configured_or_passed(tmp_path, monkeypat
     assert cfg.auth.username == "prompted-user"
 
 
+def test_refuses_to_write_surfaces_a_friendly_message_for_a_typo_d_field(config_path, capsys):
+    # M3 (docs/architecture-usability-review-2026-07.md): set-password
+    # validates the *whole* merged config, not just the auth section it
+    # changes - a pre-existing typo elsewhere must surface as plain
+    # English here too, not a raw pydantic ValidationError string.
+    text = config_path.read_text()
+    # Inject a typo'd field (of a real one, "label") into the existing
+    # pixoo block rather than appending a second top-level `outputs:`
+    # key, which ruamel.yaml rejects outright as a duplicate key before
+    # Config.from_dict() ever runs.
+    broken = text.replace(
+        "  pixoo:\n    enabled: true\n    ip: 192.168.1.32\n",
+        "  pixoo:\n    enabled: true\n    ip: 192.168.1.32\n    labell: x\n",
+        1,
+    )
+    assert broken != text
+    config_path.write_text(broken)
+
+    with pytest.raises(SystemExit) as exc:
+        _set_password_main(["--config", str(config_path), "--username", "admin", "--password", "x"])
+
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "`pixoo` doesn't have a setting called `labell` - did you mean `label`?" in err
+    assert "validation error for" not in err
+
+
 def test_refuses_to_write_when_resulting_config_invalid(config_path, monkeypatch, capsys):
     original_text = config_path.read_text()
 

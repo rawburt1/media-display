@@ -20,6 +20,7 @@ from typing import Optional
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config, LoggingConfig
 from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
+from mediainfo.config_error_translator import friendly_config_error
 from mediainfo.media_data_store import MediaDataStore
 from mediainfo.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
@@ -397,7 +398,7 @@ def _validate_config_main(argv: list) -> None:
         config = Config.load(args.config)
         validate_config(config)
     except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"ERROR: {friendly_config_error(exc)}", file=sys.stderr)
         sys.exit(1)
     finally:
         root.removeHandler(handler)
@@ -499,7 +500,10 @@ def _set_password_main(argv: list) -> None:
     try:
         Config.from_dict(data)
     except Exception as exc:
-        print(f"Error: refusing to save - config would be invalid: {exc}", file=sys.stderr)
+        print(
+            f"Error: refusing to save - config would be invalid: {friendly_config_error(exc)}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     backup_config_file(config_path)
@@ -609,7 +613,7 @@ def _restore_backup_main(argv: list) -> None:
         Config.load(config_path)
     except Exception as exc:
         print(
-            f"Warning: the restored config.yaml fails to load: {exc}\n"
+            f"Warning: the restored config.yaml fails to load: {friendly_config_error(exc)}\n"
             "Run this command again to restore a different (e.g. older) backup.",
             file=sys.stderr,
         )
