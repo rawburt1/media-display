@@ -2,3 +2,8 @@ ruff~=0.15.18
 mypy~=2.1.0
 pytest~=9.1.0
 pydantic~=2.13.4
+# Real-browser smoke suite for the config UI
+# (tests/test_config_ui_playwright_smoke.py) - needs `playwright install
+# chromium` too, which isn't a pip dependency; the suite skips itself if
+# that hasn't been run (see the file's own docstring).
+playwright~=1.61.0
