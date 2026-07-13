@@ -128,6 +128,7 @@ import logging
 import os
 import signal
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -550,6 +551,28 @@ class ConfigUiOutput(Output):
             if error:
                 return jsonify({"ok": False, "error": error}), 400
             return jsonify({"ok": True, "hidden_types": self._store.get_hidden_types()})
+
+        @bp.get("/api/config/download")
+        def download_config():
+            # Same file /api/config's raw_yaml field already reads, just
+            # served as an actual attachment instead of embedded in JSON -
+            # no new read/validation path. Secrets aren't masked here
+            # (unlike every other route) since this hands back the literal
+            # file a restore would need, credentials included - matches
+            # what the raw YAML editor's "load" side already does today.
+            if not self.config_path.exists():
+                return jsonify({"error": "config.yaml doesn't exist yet."}), 404
+            stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            return send_file(
+                # send_file() resolves a relative path against Flask's app
+                # root (mediainfo/outputs/), not the process cwd - unlike
+                # every other self.config_path use in this file, which are
+                # plain Python file I/O and don't have that gotcha.
+                self.config_path.resolve(),
+                as_attachment=True,
+                download_name=f"config-{stamp}.yaml",
+                mimetype="application/x-yaml",
+            )
 
         @bp.get("/api/config/backups")
         def list_config_backups():

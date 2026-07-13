@@ -1811,6 +1811,17 @@ function renderAdvanced() {
 
   html += '<h2 class="group-title">Logging</h2><div class="card">' + renderFieldGroup(schema.logging, scopeForSingle('logging'), 'logging') + '</div>';
 
+  html += '<h2 class="group-title">Config file</h2>'
+    + '<p class="field-help" style="margin:-4px 0 8px;">Download the current config.yaml (e.g. to keep '
+    + 'outside the automatic backups above, or move to another machine) - includes credentials, same as '
+    + 'this page itself. Uploading loads a file into the raw YAML editor below to review before saving; '
+    + 'it does not save automatically.</p>'
+    + '<div class="card"><div class="instance-actions">'
+    + '<a class="btn secondary" href="' + API_PREFIX + '/api/config/download">Download config.yaml</a>'
+    + '<button type="button" class="btn secondary" onclick="document.getElementById(\'config-upload-input\').click()">Upload config.yaml…</button>'
+    + '<input type="file" id="config-upload-input" accept=".yaml,.yml,text/yaml" style="display:none" onchange="loadConfigFileIntoRawEditor(this)">'
+    + '</div></div>';
+
   html += '<h2 class="group-title">Raw YAML editor</h2>'
     + '<div class="card">'
     + '<textarea id="raw-yaml" aria-label="Raw YAML configuration">' + esc(rawYaml) + '</textarea>'
@@ -1879,6 +1890,29 @@ function restoreConfigBackup(filename) {
     backupRestoreResult = { text: 'Request failed.', cls: 'err' };
     renderSection(currentSection);
   });
+}
+
+function loadConfigFileIntoRawEditor(inputEl) {
+  var file = inputEl.files && inputEl.files[0];
+  inputEl.value = ''; // allow re-selecting the same file later
+  if (!file) return;
+  var textarea = document.getElementById('raw-yaml');
+  if (textarea.value !== rawYaml && !confirm('Replace the raw YAML editor’s content with this file? Unsaved edits there will be lost.')) {
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function() {
+    textarea.value = String(reader.result || '');
+    var statusEl = document.getElementById('raw-status');
+    statusEl.textContent = 'Loaded ' + file.name + ' - review, then click “Save raw YAML” to apply it.';
+    statusEl.className = '';
+  };
+  reader.onerror = function() {
+    var statusEl = document.getElementById('raw-status');
+    statusEl.textContent = 'Could not read ' + file.name + '.';
+    statusEl.className = 'err';
+  };
+  reader.readAsText(file);
 }
 
 function saveRawYaml() {

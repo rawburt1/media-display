@@ -1174,6 +1174,55 @@ def test_save_raw_rejects_malformed_source_section(config_path):
 
 
 # ---------------------------------------------------------------------------
+# Config file download/upload (N2 - download is a real route; upload loads
+# the picked file into the existing raw YAML editor client-side, so it has
+# no dedicated save endpoint of its own - see /api/config/raw's tests)
+# ---------------------------------------------------------------------------
+
+
+def test_download_config_serves_the_file_as_an_attachment(config_path):
+    config_path.write_text("poll_interval_seconds: 7\n", encoding="utf-8")
+    out = _output(config_path)
+    client = _client(out)
+
+    resp = client.get("/api/config/download")
+
+    assert resp.status_code == 200
+    assert resp.data.decode("utf-8") == "poll_interval_seconds: 7\n"
+    assert "attachment" in resp.headers["Content-Disposition"]
+    assert "config-" in resp.headers["Content-Disposition"]
+
+
+def test_download_config_works_with_a_relative_config_path(tmp_path, monkeypatch):
+    # Regression test: send_file() resolves a relative path against Flask's
+    # app root (mediainfo/outputs/), not the process cwd, unlike every
+    # other self.config_path use in config_ui.py (plain Python file I/O) -
+    # caught live via Playwright against a real `python -m mediainfo
+    # --config config.yaml`-style relative path, which every existing test
+    # here happened not to exercise (pytest's tmp_path is always absolute).
+    monkeypatch.chdir(tmp_path)
+    relative_path = Path("config.yaml")
+    relative_path.write_text("poll_interval_seconds: 9\n", encoding="utf-8")
+
+    out = _output(relative_path)
+    client = _client(out)
+
+    resp = client.get("/api/config/download")
+
+    assert resp.status_code == 200
+    assert resp.data.decode("utf-8") == "poll_interval_seconds: 9\n"
+
+
+def test_download_config_404s_when_config_yaml_does_not_exist_yet(tmp_path):
+    out = _output(tmp_path / "config.yaml")
+    client = _client(out)
+
+    resp = client.get("/api/config/download")
+
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # Config backups (list + restore from the UI)
 # ---------------------------------------------------------------------------
 
