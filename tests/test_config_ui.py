@@ -204,6 +204,23 @@ def test_schema_includes_simple_list_fields(config_path):
     assert "enabled" in fields
 
 
+def test_schema_marks_known_value_list_fields_with_choices(config_path):
+    # transition_exclude is a simple list field with a fixed, known set of
+    # valid values - exposed as `choices` so the UI can render a
+    # toggle-button picker instead of a freeform one-item-per-line box.
+    out = _output(config_path)
+    data = _client(out).get("/api/schema").get_json()
+    field = next(f for f in data["outputs"]["web"] if f["name"] == "transition_exclude")
+    assert field["choices"] == ["fade", "slide-left", "slide-right", "slide-up", "slide-down", "zoom"]
+
+
+def test_schema_list_fields_without_known_values_have_no_choices(config_path):
+    out = _output(config_path)
+    data = _client(out).get("/api/schema").get_json()
+    field = next(f for f in data["sources"]["sonos"] if f["name"] == "speaker_ips")
+    assert "choices" not in field
+
+
 def test_schema_excludes_complex_list_typed_fields(config_path):
     # `transforms` is a list of differently-shaped objects, not a flat
     # list of strings - excluded from the form, only editable via the

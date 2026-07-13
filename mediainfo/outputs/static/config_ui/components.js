@@ -221,6 +221,49 @@ function renderUnsupportedWidgetField(field, value) {
     + '</div></div></div>';
 }
 
+// A flat list-of-strings field (see config_schema.py's _SIMPLE_LIST_FIELDS).
+// Two shapes, matching app.html's own two patterns for this: a known set of
+// values (field.choices, e.g. transition_exclude) gets a toggle-button row
+// (same pattern as the theme_group_editor's renderGroupsEditor() toggleBtns,
+// itself adapted from app.html's renderOutputFilters()); an open-ended list
+// (e.g. device_ips, one IP per line) gets a one-item-per-line textarea,
+// exactly app.html's listToTextarea()/textareaToList().
+function listToTextarea(value) {
+  return Array.isArray(value) ? value.join('\n') : '';
+}
+function textareaToList(text) {
+  return text.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+}
+function onListChoiceToggle(name, choiceValue) {
+  var field = findDetailField(name);
+  var items = (getFieldValue(field) || []).slice();
+  var idx = items.indexOf(choiceValue);
+  if (idx === -1) items.push(choiceValue); else items.splice(idx, 1);
+  onDetailFieldChange(name, items);
+}
+
+function renderListField(field, value) {
+  var items = Array.isArray(value) ? value : [];
+  var control;
+  if (field.choices) {
+    control = '<div class="row-inline">' + field.choices.map(function(ch) {
+      var active = items.indexOf(ch) !== -1;
+      return '<button type="button" class="btn small ' + (active ? '' : 'secondary') + '" '
+        + 'onclick="onListChoiceToggle(\'' + esc(field.name) + '\', \'' + esc(ch) + '\')">' + esc(ch) + '</button>';
+    }).join('') + '</div>';
+  } else {
+    control = '<textarea placeholder="One per line" '
+      + 'onchange="onDetailFieldChange(\'' + esc(field.name) + '\', textareaToList(this.value))">'
+      + esc(listToTextarea(items)) + '</textarea>';
+  }
+  var reqMark = field.required ? '<span class="req">*</span>' : '';
+  return '<div class="field"><div class="field-row">'
+    + '<label class="field-label">' + esc(field.label) + reqMark + '</label>'
+    + '<div class="field-control">' + control
+    + (field.help ? '<div class="field-help">' + esc(field.help) + '</div>' : '')
+    + '</div></div></div>';
+}
+
 function renderDetailField(field) {
   var value = getFieldValue(field);
 
@@ -234,13 +277,15 @@ function renderDetailField(field) {
   } else if (field.type === 'bool') {
     control = '<input type="checkbox" ' + (value ? 'checked' : '')
       + ' onchange="onDetailFieldChange(\'' + esc(field.name) + '\', this.checked)">';
+  } else if (field.widget === 'time_range' || field.widget === 'brightness_schedule') {
+    return renderUnsupportedWidgetField(field, value);
+  } else if (field.type === 'list') {
+    return renderListField(field, value);
   } else if (field.choices) {
     control = '<select onchange="onDetailFieldChange(\'' + esc(field.name) + '\', this.value)">'
       + field.choices.map(function(ch) {
         return '<option value="' + esc(ch) + '"' + (ch === value ? ' selected' : '') + '>' + esc(ch) + '</option>';
       }).join('') + '</select>';
-  } else if (field.widget === 'time_range' || field.widget === 'brightness_schedule' || field.type === 'list') {
-    return renderUnsupportedWidgetField(field, value);
   } else {
     var inputType = (field.type === 'int' || field.type === 'float') ? 'number' : 'text';
     var onchange = inputType === 'number'

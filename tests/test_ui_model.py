@@ -304,6 +304,15 @@ def test_no_component_leaks_a_secret_value(config_path):
                 assert f.value == ""
 
 
+def test_list_field_with_known_choices_carries_them_through(config_path):
+    # transition_exclude has a fixed set of valid values (config_schema.py's
+    # _ENUM_CHOICES) - the new shell renders these as a toggle-button picker
+    # instead of the freeform textarea used for e.g. speaker_ips.
+    web = _by_id(_components(config_path), "outputs.web")
+    field = next(f for f in web.essential_fields + web.advanced_fields if f.name == "transition_exclude")
+    assert field.choices == ["fade", "slide-left", "slide-right", "slide-up", "slide-down", "zoom"]
+
+
 def test_config_path_points_at_the_right_yaml_location(config_path):
     components = _components(config_path)
     assert _by_id(components, "sources.kodi").config_path == "sources.kodi"

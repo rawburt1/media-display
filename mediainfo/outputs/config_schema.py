@@ -559,6 +559,7 @@ _ENUM_CHOICES: Dict[str, List[str]] = {
     "contrast_boost": ["off", "low", "medium", "high"],
     "saturation_boost": ["off", "low", "medium", "high"],
     "text_removal_method": ["inpaint", "soft_fill", "crop_preference"],
+    "transition_exclude": ["fade", "slide-left", "slide-right", "slide-up", "slide-down", "zoom"],
 }
 
 # Generic help text shared by fields of the same name across many plugin
@@ -741,19 +742,21 @@ def _scalar_fields(
         if f.name in _FILTER_FIELD_NAMES or f.name == _LABEL_FIELD_NAME:
             continue
         if f.type == "list" and f.name in _SIMPLE_LIST_FIELDS:
-            fields.append(
-                {
-                    "name": f.name,
-                    "type": "list",
-                    "default": [],
-                    "secret": False,
-                    "label": _humanize(f.name),
-                    "help": _field_help(category, type_name, f.name),
-                    "essential": f.name in _ESSENTIAL_FIELD_NAMES,
-                    "required": False,
-                    "widget": _field_widget(f.name),
-                }
-            )
+            list_entry: Dict[str, Any] = {
+                "name": f.name,
+                "type": "list",
+                "default": [],
+                "secret": False,
+                "label": _humanize(f.name),
+                "help": _field_help(category, type_name, f.name),
+                "essential": f.name in _ESSENTIAL_FIELD_NAMES,
+                "required": False,
+                "widget": _field_widget(f.name),
+            }
+            list_choices = _ENUM_CHOICES.get(f.name)
+            if list_choices:
+                list_entry["choices"] = list_choices
+            fields.append(list_entry)
             continue
         if f.type not in ("bool", "int", "float", "str"):
             continue
