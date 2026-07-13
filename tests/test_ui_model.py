@@ -319,6 +319,12 @@ def test_time_range_widget_marker_carries_through(config_path):
     assert field.widget == "time_range"
 
 
+def test_brightness_schedule_widget_marker_carries_through(config_path):
+    pixoo = _by_id(_components(config_path), "outputs.pixoo")
+    field = next(f for f in pixoo.essential_fields + pixoo.advanced_fields if f.name == "brightness_schedule")
+    assert field.widget == "brightness_schedule"
+
+
 def test_config_path_points_at_the_right_yaml_location(config_path):
     components = _components(config_path)
     assert _by_id(components, "sources.kodi").config_path == "sources.kodi"

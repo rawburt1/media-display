@@ -204,6 +204,17 @@ def test_schema_includes_simple_list_fields(config_path):
     assert "enabled" in fields
 
 
+def test_schema_marks_brightness_schedule_with_its_own_widget(config_path):
+    # The new shell's client-side row editor (time/time/number, add/remove)
+    # keys off this widget marker - see components.js's
+    # renderBrightnessScheduleField().
+    out = _output(config_path)
+    data = _client(out).get("/api/schema").get_json()
+    field = next(f for f in data["outputs"]["pixoo"] if f["name"] == "brightness_schedule")
+    assert field["widget"] == "brightness_schedule"
+    assert field["type"] == "list"
+
+
 def test_schema_marks_screen_off_hours_with_time_range_widget(config_path):
     # The new shell's client-side time-range editor (two <input type="time">
     # + Clear) keys off this widget marker - see components.js's

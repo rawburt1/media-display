@@ -275,6 +275,72 @@ function renderTimeRangeField(field, value) {
     + '</div></div></div>';
 }
 
+// brightness_schedule: a list of "HH:MM-HH:MM=<level>" strings (first
+// matching window wins), e.g. pixoo/ulanzi's brightness_schedule. Ported
+// from app.html's renderBrightnessScheduleWidget()/onOutputScheduleRow()/
+// Add()/Remove() - but every edit re-renders through the same
+// onDetailFieldChange() path as every other widget here (app.html's
+// version mutates outputsData in place without re-rendering on a row-value
+// change, only on add/remove, to dodge exactly the "reset a field that's
+// still mid-edit" bug the time_range widget above hit; +Add here seeds a
+// new row with a complete, valid default (00:00-00:00=100) rather than a
+// blank one, so there's never an incomplete in-progress row for a re-render
+// to lose - the same dodge without the inconsistent re-render behavior).
+function scheduleRowsFromValue(value) {
+  return (value || []).map(function(s) {
+    var m = /^(\d{2}:\d{2})-(\d{2}:\d{2})=(\d+)$/.exec(s || '');
+    return m ? { start: m[1], end: m[2], level: m[3] } : { start: '', end: '', level: '' };
+  });
+}
+function scheduleRowsToValue(rows) {
+  return rows.filter(function(r) { return r.start && r.end && r.level !== ''; })
+    .map(function(r) { return r.start + '-' + r.end + '=' + r.level; });
+}
+function onDetailScheduleRowChange(name, index, part, rawValue) {
+  var field = findDetailField(name);
+  var rows = scheduleRowsFromValue(getFieldValue(field));
+  rows[index][part] = rawValue;
+  onDetailFieldChange(name, scheduleRowsToValue(rows));
+}
+function onDetailScheduleAdd(name) {
+  var field = findDetailField(name);
+  var items = (getFieldValue(field) || []).slice();
+  items.push('00:00-00:00=100');
+  onDetailFieldChange(name, items);
+}
+function onDetailScheduleRemove(name, index) {
+  var field = findDetailField(name);
+  var items = (getFieldValue(field) || []).slice();
+  items.splice(index, 1);
+  onDetailFieldChange(name, items);
+}
+
+function renderBrightnessScheduleField(field, value) {
+  var rows = scheduleRowsFromValue(value);
+  var body = rows.map(function(r, i) {
+    var fname = esc(field.name);
+    return '<div class="schedule-row">'
+      + '<input type="time" value="' + esc(r.start) + '" aria-label="Start time" '
+      + 'onchange="onDetailScheduleRowChange(\'' + fname + '\', ' + i + ', \'start\', this.value)">'
+      + '<span aria-hidden="true">to</span>'
+      + '<input type="time" value="' + esc(r.end) + '" aria-label="End time" '
+      + 'onchange="onDetailScheduleRowChange(\'' + fname + '\', ' + i + ', \'end\', this.value)">'
+      + '<span aria-hidden="true">brightness</span>'
+      + '<input type="number" min="0" value="' + esc(r.level) + '" aria-label="Brightness level" '
+      + 'onchange="onDetailScheduleRowChange(\'' + fname + '\', ' + i + ', \'level\', this.value)">'
+      + '<button type="button" class="link-btn" onclick="onDetailScheduleRemove(\'' + fname + '\', ' + i + ')">Remove</button>'
+      + '</div>';
+  }).join('');
+  var control = '<div class="schedule-rows">' + body
+    + '<button type="button" class="btn secondary small" onclick="onDetailScheduleAdd(\'' + esc(field.name) + '\')">+ Add time window</button>'
+    + '</div>';
+  return '<div class="field"><div class="field-row">'
+    + '<label class="field-label">' + esc(field.label) + '</label>'
+    + '<div class="field-control">' + control
+    + (field.help ? '<div class="field-help">' + esc(field.help) + '</div>' : '')
+    + '</div></div></div>';
+}
+
 function renderListField(field, value) {
   var items = Array.isArray(value) ? value : [];
   var control;
@@ -313,7 +379,7 @@ function renderDetailField(field) {
   } else if (field.widget === 'time_range') {
     return renderTimeRangeField(field, value);
   } else if (field.widget === 'brightness_schedule') {
-    return renderUnsupportedWidgetField(field, value);
+    return renderBrightnessScheduleField(field, value);
   } else if (field.type === 'list') {
     return renderListField(field, value);
   } else if (field.choices) {
