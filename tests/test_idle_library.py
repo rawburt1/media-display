@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from mediainfo.config import LibraryIdleConfig
 from mediainfo.idle.library import LibraryWallpaperSource
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 
 def _library(tmp_path):

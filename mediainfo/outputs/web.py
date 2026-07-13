@@ -52,7 +52,7 @@ from mediainfo.outputs.websocket_push import (
     register_websocket_route,
     send_to_one,
 )
-from mediainfo.transforms import parse_pipeline
+from mediainfo.imaging.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
 

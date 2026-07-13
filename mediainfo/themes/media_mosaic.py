@@ -25,7 +25,7 @@ from PIL import Image, ImageOps
 
 from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.config.themes import MediaMosaicConfig
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.themes.base import DisplayTheme, ThemeClientAssets, ThemeRenderResult
 

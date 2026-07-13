@@ -41,7 +41,7 @@ from typing import List, Tuple
 from PIL import Image
 from wordcloud import STOPWORDS, ImageColorGenerator, WordCloud
 
-from mediainfo.colors import dominant_colors
+from mediainfo.imaging.colors import dominant_colors
 
 _TIMESTAMP_RE = re.compile(r"^\[\d+:\d+(?:\.\d+)?\]\s*")
 

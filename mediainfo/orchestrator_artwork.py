@@ -17,15 +17,15 @@ import random
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from mediainfo.artwork_overrides import ArtworkOverrideStore
+from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import CacheTier, ImageCache
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.enrichers.text_base import TextEnricher
-from mediainfo.history import PlaybackHistory
+from mediainfo.stores.history import PlaybackHistory
 from mediainfo.models import NowPlaying
 from mediainfo.orchestrator_state import _RotationState, _RouteGroup
 from mediainfo.outputs.base import Output
-from mediainfo.poster_store import PosterStore
+from mediainfo.stores.poster_store import PosterStore
 
 logger = logging.getLogger(__name__)
 

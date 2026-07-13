@@ -621,7 +621,7 @@ def test_index_page_excludes_configured_transitions():
 
 
 def _history_store(tmp_path):
-    from mediainfo.history import PlaybackHistory
+    from mediainfo.stores.history import PlaybackHistory
 
     return PlaybackHistory(str(tmp_path / "history.db"))
 

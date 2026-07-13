@@ -31,7 +31,7 @@ import requests
 from mediainfo.config import OllamaTextConfig
 from mediainfo.enrichers.text_base import TextEnricher
 from mediainfo.models import NowPlaying
-from mediainfo.text_cache import TextCache
+from mediainfo.stores.text_cache import TextCache
 
 logger = logging.getLogger(__name__)
 

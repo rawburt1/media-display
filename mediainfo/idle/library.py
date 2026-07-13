@@ -1,7 +1,7 @@
 """Local music library idle wallpaper source.
 
 Shows cover art from random albums in the local music library (see
-mediainfo.musiclibrary - populated via `python -m mediainfo import-lidarr`)
+mediainfo.stores.musiclibrary - populated via `python -m mediainfo import-lidarr`)
 on outputs while nothing is currently playing.
 
 Cover art URLs are cached as a library claim per album (the Cover Art
@@ -18,7 +18,7 @@ from mediainfo.config import LibraryIdleConfig
 from mediainfo.enrichers.musicbrainz import fetch_front_cover
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import Artwork
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 logger = logging.getLogger(__name__)
 

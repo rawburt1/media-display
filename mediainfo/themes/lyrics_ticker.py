@@ -35,7 +35,7 @@ from typing import List, Optional, Tuple
 
 from mediainfo.cache import ImageCache
 from mediainfo.config.themes import LyricsTickerConfig
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.themes.base import DisplayTheme, ThemeClientAssets, ThemeRenderResult
 

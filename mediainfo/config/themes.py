@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class ColorPaletteConfig:
     # Extracts the current artwork's dominant colors (see
-    # mediainfo.colors.dominant_colors) and shows them as a strip of
+    # mediainfo.imaging.colors.dominant_colors) and shows them as a strip of
     # swatches - see mediainfo/themes/color_palette.py. Media-type-
     # agnostic: works for album art, movie posters, or TV episode art
     # alike, since it only needs the resolved artwork image.
@@ -58,7 +58,7 @@ class WordCloudConfig:
     # lyrics for music (reusing MediaDataStore.get_track_wordcloud, the
     # same cached word cloud the web output can already show - see
     # mediainfo/media_data_store.py), or the plot summary for movies/TV
-    # (mediainfo.lyrics_wordcloud.generate() directly, since there's no
+    # (mediainfo.imaging.lyrics_wordcloud.generate() directly, since there's no
     # per-item lyrics-shaped cache for that) - see
     # mediainfo/themes/word_cloud.py.
     enabled: bool = False

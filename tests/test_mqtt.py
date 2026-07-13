@@ -648,7 +648,7 @@ def test_unknown_field_raises_validation_error():
 
 def test_schema_reports_plain_int_defaults_not_field_info():
     from mediainfo.config import MqttConfig
-    from mediainfo.outputs.config_schema import _scalar_fields
+    from mediainfo.configui.config_schema import _scalar_fields
 
     fields = {f["name"]: f for f in _scalar_fields(MqttConfig, "outputs", "mqtt")}
     assert fields["port"]["default"] == 1883

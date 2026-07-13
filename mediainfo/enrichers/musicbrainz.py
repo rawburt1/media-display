@@ -18,7 +18,7 @@ import requests
 from mediainfo.config import MusicBrainzConfig
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.models import Artwork, NowPlaying
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 logger = logging.getLogger(__name__)
 

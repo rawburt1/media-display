@@ -4,7 +4,7 @@ never purged by design and mediadata/ grows per artist/album forever -
 unbounded disk growth on small devices (a Pi) is the likeliest way this
 app dies after two years."
 
-Both mediainfo.cache.ImageCache's music tier and mediainfo.media_data_store
+Both mediainfo.cache.ImageCache's music tier and mediainfo.stores.media_data_store
 .MediaDataStore keep content that's deliberately *not* purged by age (a
 frequently-replayed album shouldn't be re-fetched every 30 days the way a
 movie poster is) - but "never purged by age" still needs a backstop once

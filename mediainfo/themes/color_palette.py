@@ -22,9 +22,9 @@ from typing import Optional
 from PIL import Image
 
 from mediainfo.cache import ImageCache
-from mediainfo.colors import dominant_colors, to_hex
+from mediainfo.imaging.colors import dominant_colors, to_hex
 from mediainfo.config.themes import ColorPaletteConfig
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.themes.base import DisplayTheme, ThemeClientAssets, ThemeRenderResult
 

@@ -3,7 +3,7 @@
 from pathlib import Path
 from urllib.parse import urlparse
 
-from mediainfo.artwork_overrides import ArtworkOverrideStore
+from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
 
 def _path_for(artwork) -> Path:

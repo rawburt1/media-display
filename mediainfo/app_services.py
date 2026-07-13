@@ -25,9 +25,9 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable, Optional
 
-from mediainfo.artwork_overrides import ArtworkOverrideStore
-from mediainfo.history import PlaybackHistory
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
+from mediainfo.stores.history import PlaybackHistory
+from mediainfo.stores.media_data_store import MediaDataStore
 
 
 @dataclasses.dataclass

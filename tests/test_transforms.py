@@ -2,7 +2,7 @@
 
 from PIL import Image
 
-from mediainfo.transforms import (
+from mediainfo.imaging.transforms import (
     Blur,
     Brightness,
     Contrast,

@@ -656,7 +656,7 @@ def test_new_item_calls_on_new_item_with_full_image_list():
 
 
 def test_override_replaces_enriched_images():
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     enriched = Artwork(url="https://example.com/enriched.jpg", label="Enriched")
     now_playing = NowPlaying(
@@ -690,7 +690,7 @@ def test_override_replaces_enriched_images():
 
 
 def test_no_override_match_leaves_enriched_images_untouched():
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     enriched = Artwork(url="https://example.com/enriched.jpg", label="Enriched")
     now_playing = NowPlaying(
@@ -742,7 +742,7 @@ def test_no_overrides_store_is_a_no_op():
 
 
 def test_override_lookup_error_is_caught_and_does_not_block_display():
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     artwork = Artwork(url="https://example.com/poster.jpg", label="Poster")
     now_playing = NowPlaying(source="kodi", media_type="movie", title="Inception", images=[artwork])

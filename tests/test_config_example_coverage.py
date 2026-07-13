@@ -37,7 +37,7 @@ from mediainfo.config import (
     SOURCE_CONFIG_TYPES,
     TEXT_ENRICHER_CONFIG_TYPES,
 )
-from mediainfo.outputs import config_schema
+from mediainfo.configui import config_schema
 
 CONFIG_EXAMPLE = Path(__file__).resolve().parents[1] / "config.example.yaml"
 

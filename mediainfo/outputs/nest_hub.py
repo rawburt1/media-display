@@ -24,7 +24,7 @@ from flask import Blueprint, send_file
 from mediainfo.config import NestHubConfig
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
-from mediainfo.transforms import parse_pipeline
+from mediainfo.imaging.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
 

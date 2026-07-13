@@ -4,7 +4,7 @@ GlowConfig.
 
 The first theme that's genuinely both halves of the client-vs-server
 split (see mediainfo/themes/base.py): prepare() computes the glow's color
-once per resolved image (reusing mediainfo.colors.dominant_colors, the
+once per resolved image (reusing mediainfo.imaging.colors.dominant_colors, the
 same extraction Color Palette uses) and pushes it as plain data, cheap
 enough to not need baking/caching - but the glow itself (fade-in, and the
 slow pulse) is a pure CSS animation running entirely client-side, no
@@ -21,9 +21,9 @@ from typing import Optional
 from PIL import Image
 
 from mediainfo.cache import ImageCache
-from mediainfo.colors import dominant_colors, to_hex
+from mediainfo.imaging.colors import dominant_colors, to_hex
 from mediainfo.config.themes import GlowConfig
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.themes.base import DisplayTheme, ThemeClientAssets, ThemeRenderResult
 

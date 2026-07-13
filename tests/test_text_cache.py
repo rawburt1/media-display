@@ -3,7 +3,7 @@
 import os
 import time
 
-from mediainfo.text_cache import TextCache
+from mediainfo.stores.text_cache import TextCache
 
 
 def test_get_returns_none_for_missing_entry(tmp_path):

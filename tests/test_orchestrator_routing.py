@@ -451,7 +451,7 @@ def test_schedule_tick_error_does_not_break_the_tick():
 
 
 def test_history_records_each_new_item_once(tmp_path):
-    from mediainfo.history import PlaybackHistory
+    from mediainfo.stores.history import PlaybackHistory
 
     store = PlaybackHistory(str(tmp_path / "history.db"))
     kodi = _Source("kodi", _movie(source="kodi"))
@@ -475,7 +475,7 @@ def test_history_records_each_new_item_once(tmp_path):
 
 
 def test_history_not_recorded_when_group_rebinds_running_item(tmp_path):
-    from mediainfo.history import PlaybackHistory
+    from mediainfo.stores.history import PlaybackHistory
 
     store = PlaybackHistory(str(tmp_path / "history.db"))
     kodi = _Source("kodi", _movie(source="kodi"))

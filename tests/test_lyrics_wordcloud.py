@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from mediainfo.colors import dominant_colors
-from mediainfo.lyrics_wordcloud import (
+from mediainfo.imaging.colors import dominant_colors
+from mediainfo.imaging.lyrics_wordcloud import (
     _palette_color_func,
     generate,
     strip_lrc_timestamps,

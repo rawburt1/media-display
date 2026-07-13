@@ -108,7 +108,7 @@ class MediaDataStore:
         # Guards read-modify-write of a single item's metadata.json - cheap
         # insurance against a lost update if this store is ever called
         # concurrently (matches the pattern already used by
-        # mediainfo.artwork_overrides.ArtworkOverrideStore).
+        # mediainfo.stores.artwork_overrides.ArtworkOverrideStore).
         self._lock = threading.Lock()
         # Used by _download_bytes() to actually fetch resolved artwork URLs
         # (reusing ImageCache's existing minimum-size filtering, JPEG
@@ -952,7 +952,7 @@ class MediaDataStore:
         pulls in) is imported lazily here rather than at module level,
         since most installs never exercise this path (off by default -
         see MediaDataWordcloudConfig)."""
-        from mediainfo.lyrics_wordcloud import generate as generate_wordcloud
+        from mediainfo.imaging.lyrics_wordcloud import generate as generate_wordcloud
 
         try:
             with tempfile.TemporaryDirectory() as tmp_dir:

@@ -21,8 +21,8 @@ from mediainfo.cache import ImageCache
 from mediainfo.config import Config, LoggingConfig
 from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
 from mediainfo.config_error_translator import friendly_config_error
-from mediainfo.media_data_store import MediaDataStore
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.media_data_store import MediaDataStore
+from mediainfo.stores.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
 from mediainfo.outputs.http_server import SharedHttpServer
 from mediainfo.reload_plan import ReloadPlan, compute_reload_plan

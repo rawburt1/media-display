@@ -16,7 +16,7 @@ import requests
 from mediainfo.config import ArtsWallpaperConfig
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import Artwork
-from mediainfo.transforms import parse_pipeline
+from mediainfo.imaging.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
 

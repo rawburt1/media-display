@@ -10,7 +10,7 @@ kinds of consumer:
   Assistant, a dashboard you build yourself).
 - `outputs/mqtt.py`, which republishes a derived `ON`/`OFF` problem flag to
   `{topic}/health/state`.
-- The config UI's new dashboard (`outputs/ui_builder.py`), which reads
+- The config UI's new dashboard (`configui/ui_builder.py`), which reads
   this same data to render per-component status cards - it does not
   recompute status itself.
 

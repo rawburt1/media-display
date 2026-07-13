@@ -20,12 +20,12 @@ import time
 from typing import List, Optional
 
 from mediainfo.alerting import AlertManager
-from mediainfo.artwork_overrides import ArtworkOverrideStore
+from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import AlertConfig
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.enrichers.text_base import TextEnricher
-from mediainfo.history import PlaybackHistory
+from mediainfo.stores.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.models import NowPlaying
 from mediainfo.orchestrator_artwork import _DEFAULT_ENRICHMENT_DEADLINE_SECONDS, _ArtworkPipeline
@@ -35,7 +35,7 @@ from mediainfo.orchestrator_polling import _SourcePoller
 from mediainfo.orchestrator_routing import _RoutingEngine
 from mediainfo.orchestrator_state import _RouteGroup, _strip_parenthetical
 from mediainfo.outputs.base import Output
-from mediainfo.poster_store import PosterStore
+from mediainfo.stores.poster_store import PosterStore
 from mediainfo.sources.base import MediaSource
 
 logger = logging.getLogger(__name__)

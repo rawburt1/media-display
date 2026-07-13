@@ -279,7 +279,7 @@ class ImageCache:
         if not transforms:
             return original_path
 
-        from mediainfo.transforms import pipeline_cache_key
+        from mediainfo.imaging.transforms import pipeline_cache_key
 
         base_dir = original_path.parent
         key = f"{original_path.stem}_{pipeline_cache_key(transforms)}"

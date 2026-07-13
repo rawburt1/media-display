@@ -494,8 +494,8 @@ things to fill in:
   from the source/output/enricher/idle config dataclasses, so a new plugin
   type gets a card with no UI code to write - only a friendly label/
   description/help text needs adding (see `_TYPE_INFO`/`_FIELD_HELP` in
-  `mediainfo/outputs/config_ui.py`) for it to read well, and it still works
-  without those.
+  `mediainfo/configui/config_schema.py`) for it to read well, and it still
+  works without those.
   - **Overview** is the everyday home page: current health, what's
     playing, enabled-item counts, and a "needs attention" list (an enabled
     source missing from priority, a plugin missing a required setting, an

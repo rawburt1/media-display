@@ -37,7 +37,7 @@ import pytest
 from mediainfo.__main__ import _build_cache, _start_and_wire
 from mediainfo.config import Config
 from mediainfo.models import NowPlaying
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 from mediainfo.outputs.http_server import SharedHttpServer
 from mediainfo.sources.base import MediaSource
 from mediainfo.wiring import (

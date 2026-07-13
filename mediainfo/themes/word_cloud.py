@@ -12,7 +12,7 @@ Two branches, by media type:
     lyrics to actually be fetchable/cached for the playing track; produces
     nothing otherwise (no lyrics found, MediaDataStore not configured).
   - movie/episode: no per-item lyrics-shaped cache exists for a plot
-    summary, so this calls mediainfo.lyrics_wordcloud.generate() directly
+    summary, so this calls mediainfo.imaging.lyrics_wordcloud.generate() directly
     against NowPlaying.summary (already populated by the Wikipedia
     enricher when configured), baking the result via
     ImageCache.get_derived_path the same way Blurred Background does -
@@ -32,8 +32,8 @@ from PIL import Image
 
 from mediainfo.cache import ImageCache
 from mediainfo.config.themes import WordCloudConfig
-from mediainfo.lyrics_wordcloud import generate as generate_wordcloud
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.imaging.lyrics_wordcloud import generate as generate_wordcloud
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.themes.base import DisplayTheme, ThemeClientAssets, ThemeRenderResult
 

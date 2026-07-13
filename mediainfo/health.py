@@ -26,7 +26,7 @@ from mediainfo import registries
 from mediainfo.config import Config
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
 from mediainfo.orchestrator import Orchestrator
-from mediainfo.outputs.config_schema import _is_secret
+from mediainfo.configui.config_schema import _is_secret
 from mediainfo.status import AvailabilityReason, Health, translate_availability
 
 # Bump only for a breaking change to a field documented in

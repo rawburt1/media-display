@@ -16,7 +16,7 @@ import logging
 
 import requests
 
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 logger = logging.getLogger(__name__)
 

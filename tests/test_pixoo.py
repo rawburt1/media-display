@@ -66,7 +66,7 @@ def _save_image(path: Path, width=600, height=600, color=(200, 100, 50)) -> Path
 # A real subprocess, not an in-process sys.modules/builtins.__import__
 # patch: by the time this test file's own top-level `from
 # mediainfo.outputs.pixoo import PixooOutput` has run, both
-# mediainfo.outputs.pixoo and mediainfo.text_removal are already cached in
+# mediainfo.outputs.pixoo and mediainfo.imaging.text_removal are already cached in
 # sys.modules, so patching __import__ afterward wouldn't force a real
 # re-import - only a fresh interpreter that's never imported them proves
 # the module-level import path itself doesn't need cv2/numpy.
@@ -318,7 +318,7 @@ def test_led_derivative_is_cached_as_png_alongside_original(tmp_path):
 
 
 def _passthrough_prepare(image, **kwargs):
-    from mediainfo.led_image import prepare_led_image as real_prepare_led_image
+    from mediainfo.imaging.led_image import prepare_led_image as real_prepare_led_image
 
     return real_prepare_led_image(image, **kwargs)
 
@@ -360,7 +360,7 @@ def test_text_detection_disabled_by_default_does_not_call_detector(tmp_path):
 
     with (
         patch.object(output, "_post"),
-        patch("mediainfo.text_removal.detect_text_regions") as mock_detect,
+        patch("mediainfo.imaging.text_removal.detect_text_regions") as mock_detect,
     ):
         output.update(_now_playing(), _artwork(), img_path)
 

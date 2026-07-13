@@ -4,7 +4,7 @@ import sqlite3
 import time
 from unittest.mock import MagicMock
 
-from mediainfo.musiclibrary import MusicLibrary, normalize
+from mediainfo.stores.musiclibrary import MusicLibrary, normalize
 
 
 def _library(tmp_path, max_age_days=30):

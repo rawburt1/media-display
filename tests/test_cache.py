@@ -215,7 +215,7 @@ def test_get_transformed_path_for_idle_image_stays_in_idle_dir(mock_get, tmp_pat
     cache = ImageCache(tmp_path)
     original_path = cache.get_path(Artwork(url="http://example.com/wallpaper.jpg"), tier="idle")
 
-    from mediainfo.transforms import Resize
+    from mediainfo.imaging.transforms import Resize
 
     transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])
 
@@ -366,7 +366,7 @@ def test_get_transformed_path_for_music_image_stays_in_music_dir(mock_get, tmp_p
     cache = ImageCache(tmp_path)
     original_path = cache.get_path(Artwork(url="http://example.com/album.jpg"), tier="music")
 
-    from mediainfo.transforms import Resize
+    from mediainfo.imaging.transforms import Resize
 
     transformed_path = cache.get_transformed_path(original_path, [Resize(width=5, height=5)])
 

@@ -5,7 +5,7 @@ from unittest.mock import patch
 from mediainfo.config import MusicBrainzConfig
 from mediainfo.enrichers.musicbrainz import MusicBrainzEnricher, resolve_release_group_ids
 from mediainfo.models import Artwork, NowPlaying
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 
 def _config():

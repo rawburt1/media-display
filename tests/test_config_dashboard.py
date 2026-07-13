@@ -12,7 +12,7 @@ based check here - see config_dashboard.py's module docstring for why).
 
 from unittest.mock import MagicMock, patch
 
-from mediainfo.outputs.config_dashboard import (
+from mediainfo.configui.config_dashboard import (
     test_enricher as check_enricher,
     test_output as check_output,
     test_source as check_source,
@@ -113,7 +113,7 @@ def test_enricher_construction_exception_is_caught():
 
 
 def test_output_pixoo_reachable():
-    with patch("mediainfo.outputs.config_dashboard._tcp_check", return_value=(True, "ok")) as m:
+    with patch("mediainfo.configui.config_dashboard._tcp_check", return_value=(True, "ok")) as m:
         ok, message = check_output("pixoo", {"type": "pixoo", "ip": "192.168.1.32"})
     assert ok is True
     m.assert_called_once_with("192.168.1.32", 80)
@@ -126,13 +126,13 @@ def test_output_pixoo_missing_address():
 
 
 def test_output_nest_hub_uses_cast_port_default():
-    with patch("mediainfo.outputs.config_dashboard._tcp_check", return_value=(True, "ok")) as m:
+    with patch("mediainfo.configui.config_dashboard._tcp_check", return_value=(True, "ok")) as m:
         check_output("nest_hub", {"type": "nest_hub", "device_ip": "192.168.1.41"})
     m.assert_called_once_with("192.168.1.41", 8009)
 
 
 def test_output_mqtt_uses_host_and_port():
-    with patch("mediainfo.outputs.config_dashboard._tcp_check", return_value=(True, "ok")) as m:
+    with patch("mediainfo.configui.config_dashboard._tcp_check", return_value=(True, "ok")) as m:
         check_output("mqtt", {"type": "mqtt", "host": "broker.local", "port": 1883})
     m.assert_called_once_with("broker.local", 1883)
 
@@ -171,7 +171,7 @@ def test_output_unknown_type():
 
 
 def test_output_exception_is_caught():
-    with patch("mediainfo.outputs.config_dashboard._tcp_check", side_effect=RuntimeError("boom")):
+    with patch("mediainfo.configui.config_dashboard._tcp_check", side_effect=RuntimeError("boom")):
         ok, message = check_output("pixoo", {"type": "pixoo", "ip": "1.2.3.4"})
     assert ok is False
     assert "boom" in message
@@ -183,7 +183,7 @@ def test_output_exception_is_caught():
 
 
 def test_tcp_check_success():
-    from mediainfo.outputs.config_dashboard import _tcp_check
+    from mediainfo.configui.config_dashboard import _tcp_check
 
     with patch("socket.create_connection") as mock_conn:
         mock_conn.return_value.__enter__ = MagicMock()
@@ -195,7 +195,7 @@ def test_tcp_check_success():
 
 
 def test_tcp_check_failure():
-    from mediainfo.outputs.config_dashboard import _tcp_check
+    from mediainfo.configui.config_dashboard import _tcp_check
 
     with patch("socket.create_connection", side_effect=OSError("refused")):
         ok, message = _tcp_check("192.168.1.1", 80)

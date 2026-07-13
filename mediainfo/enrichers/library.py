@@ -21,7 +21,7 @@ from typing import Optional, Tuple
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.enrichers.musicbrainz import fetch_front_cover
 from mediainfo.models import Artwork, NowPlaying
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 from mediainfo.config import LibraryEnricherConfig
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generates docs/config-reference.md from the config dataclasses' own
-structured schema data (mediainfo/outputs/config_schema.py) - the exact
+structured schema data (mediainfo/configui/config_schema.py) - the exact
 same data that drives the config UI's guided form (see H5 in
 docs/architecture-usability-review-2026-07.md), so this reference can
 never drift from what fields actually exist, their types, defaults, and
@@ -28,7 +28,7 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from mediainfo.outputs import config_schema, ui_builder  # noqa: E402
+from mediainfo.configui import config_schema, ui_builder  # noqa: E402
 
 OUTPUT_PATH = Path(__file__).resolve().parents[1] / "docs" / "config-reference.md"
 

@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from mediainfo.history import PlaybackHistory
+from mediainfo.stores.history import PlaybackHistory
 from mediainfo.models import Artwork, NowPlaying
 
 
@@ -23,7 +23,7 @@ def _item(title="Aja", subtitle="Steely Dan", source="sonos", media_type="music"
 
 def test_record_and_list_newest_first(tmp_path):
     store = _store(tmp_path)
-    with patch("mediainfo.history.time.time", side_effect=[1000.0, 2000.0]):
+    with patch("mediainfo.stores.history.time.time", side_effect=[1000.0, 2000.0]):
         store.record(_item(title="First"))
         store.record(_item(title="Second"))
 
@@ -60,7 +60,7 @@ def test_entry_without_artwork(tmp_path):
 
 def test_repeat_within_dedupe_window_is_skipped(tmp_path):
     store = _store(tmp_path, dedupe_window_seconds=600)
-    with patch("mediainfo.history.time.time", side_effect=[1000.0, 1300.0, 2000.0]):
+    with patch("mediainfo.stores.history.time.time", side_effect=[1000.0, 1300.0, 2000.0]):
         store.record(_item())
         store.record(_item())  # 300s later: same item, skipped
         store.record(_item())  # 1000s later: logged again (genuine replay)
@@ -70,7 +70,7 @@ def test_repeat_within_dedupe_window_is_skipped(tmp_path):
 
 def test_different_item_within_window_is_logged(tmp_path):
     store = _store(tmp_path, dedupe_window_seconds=600)
-    with patch("mediainfo.history.time.time", side_effect=[1000.0, 1010.0]):
+    with patch("mediainfo.stores.history.time.time", side_effect=[1000.0, 1010.0]):
         store.record(_item(title="One"))
         store.record(_item(title="Two"))
 
@@ -80,7 +80,7 @@ def test_different_item_within_window_is_logged(tmp_path):
 def test_prunes_oldest_beyond_max_entries(tmp_path):
     store = _store(tmp_path, max_entries=3, dedupe_window_seconds=0)
     times = iter(float(i) for i in range(1000, 1010))
-    with patch("mediainfo.history.time.time", lambda: next(times)):
+    with patch("mediainfo.stores.history.time.time", lambda: next(times)):
         for i in range(5):
             store.record(_item(title=f"Song {i}"))
 

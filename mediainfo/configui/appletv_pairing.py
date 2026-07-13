@@ -26,7 +26,7 @@ from typing import Any, Callable, Optional
 
 from mediainfo.config import Config
 from mediainfo.config_backup import backup_config_file
-from mediainfo.outputs.config_yaml_io import _dump_config, _read_config
+from mediainfo.configui.config_yaml_io import _dump_config, _read_config
 
 logger = logging.getLogger(__name__)
 

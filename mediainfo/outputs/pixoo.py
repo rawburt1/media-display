@@ -18,15 +18,15 @@ from PIL import Image
 from mediainfo.cache import ImageCache
 from mediainfo.config import PixooConfig
 from mediainfo.display_schedule import DisplaySchedule, ScheduledDisplay
-from mediainfo.led_image import prepare_led_image
+from mediainfo.imaging.led_image import prepare_led_image
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
-from mediainfo.text_removal import maybe_remove_text
-from mediainfo.transforms import parse_pipeline
+from mediainfo.imaging.text_removal import maybe_remove_text
+from mediainfo.imaging.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
 
-# Bump when mediainfo.led_image's pipeline logic changes in a way that
+# Bump when mediainfo.imaging.led_image's pipeline logic changes in a way that
 # should invalidate previously cached derivatives, even though none of the
 # user-facing settings below changed.
 _LED_PIPELINE_VERSION = 1

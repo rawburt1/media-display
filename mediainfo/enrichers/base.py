@@ -50,7 +50,7 @@ class ArtworkEnricher(ABC):
         """Optional connectivity check for the config UI's "test
         connection" button. Default: not implemented here - today this is
         instead dispatched by name in
-        mediainfo/outputs/config_dashboard.py (test_enricher()); migrating
+        mediainfo/configui/config_dashboard.py (test_enricher()); migrating
         an individual plugin's test logic to this method is a reasonable
         future increment, one plugin at a time, rather than all at once.
         """

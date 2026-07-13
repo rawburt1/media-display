@@ -317,7 +317,7 @@ def _crop_avoiding_regions(
     with `avoid_boxes`. A no-op (falls back to the normal crop_strategy
     behaviour) for square images, which have no slack to work with.
     """
-    from mediainfo.led_image import _crop_square
+    from mediainfo.imaging.led_image import _crop_square
 
     w, h = image.size
     if w == h or not avoid_boxes:

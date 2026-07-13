@@ -14,7 +14,7 @@ from flask.testing import FlaskClient
 from mediainfo.config import AutoRotatePresetConfig, Config, ConfigUiConfig
 from mediainfo.config.outputs import parse_presets
 from mediainfo.config_backup import backup_config_file, list_backups
-from mediainfo.outputs.config_ui import ConfigUiOutput, _restart_process
+from mediainfo.configui.output import ConfigUiOutput, _restart_process
 from mediainfo.web_auth import verify_password
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
@@ -1387,7 +1387,7 @@ def test_restore_backup_warns_but_still_restores_when_result_fails_to_validate(
 # ---------------------------------------------------------------------------
 
 
-@patch("mediainfo.outputs.config_ui.threading.Timer")
+@patch("mediainfo.configui.output.threading.Timer")
 def test_restart_endpoint_schedules_restart_without_blocking(mock_timer_cls, config_path):
     out = _output(config_path)
     client = _client(out)
@@ -1401,7 +1401,7 @@ def test_restart_endpoint_schedules_restart_without_blocking(mock_timer_cls, con
     mock_timer_cls.return_value.start.assert_called_once()
 
 
-@patch("mediainfo.outputs.config_ui.os.kill")
+@patch("mediainfo.configui.output.os.kill")
 def test_restart_process_sends_sigterm_to_self(mock_kill):
     _restart_process()
 
@@ -1460,7 +1460,7 @@ def test_hitster_safe_button_present_on_form_and_dashboard_pages(config_path):
 
 def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
     from mediainfo.app_services import AppServices, OrchestratorCommands
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
 
@@ -2049,7 +2049,7 @@ def test_api_status_returns_health_provider_data(config_path):
 
 def test_api_test_source_route_dispatches(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    with patch("mediainfo.outputs.config_ui.test_source", return_value=(True, "ok")) as mock_test:
+    with patch("mediainfo.configui.output.test_source", return_value=(True, "ok")) as mock_test:
         resp = _client(out).post("/api/test/source/kodi")
 
     assert resp.get_json() == {"ok": True, "message": "ok"}
@@ -2059,9 +2059,7 @@ def test_api_test_source_route_dispatches(config_path):
 
 def test_api_test_enricher_route_dispatches(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    with patch(
-        "mediainfo.outputs.config_ui.test_enricher", return_value=(False, "no")
-    ) as mock_test:
+    with patch("mediainfo.configui.output.test_enricher", return_value=(False, "no")) as mock_test:
         resp = _client(out).post("/api/test/enricher/thetvdb")
 
     assert resp.get_json() == {"ok": False, "message": "no"}
@@ -2072,7 +2070,7 @@ def test_api_test_enricher_route_dispatches(config_path):
 def test_api_test_output_route_dispatches(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     with patch(
-        "mediainfo.outputs.config_ui.test_output", return_value=(True, "reached")
+        "mediainfo.configui.output.test_output", return_value=(True, "reached")
     ) as mock_test:
         resp = _client(out).post(
             "/api/test/output",
@@ -2086,7 +2084,7 @@ def test_api_test_output_route_dispatches(config_path):
 def test_api_test_output_route_handles_missing_body(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     with patch(
-        "mediainfo.outputs.config_ui.test_output",
+        "mediainfo.configui.output.test_output",
         return_value=(False, "No connection test"),
     ):
         resp = _client(out).post("/api/test/output")
@@ -2114,7 +2112,7 @@ def test_overrides_list_reports_disabled_when_no_store_registered(config_path):
 
 
 def test_overrides_list_empty_when_enabled(config_path, tmp_path):
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
@@ -2127,7 +2125,7 @@ def test_overrides_list_empty_when_enabled(config_path, tmp_path):
 def test_overrides_add_then_list(config_path, tmp_path):
     import io
 
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
@@ -2152,7 +2150,7 @@ def test_overrides_add_then_list(config_path, tmp_path):
 def test_overrides_add_without_title_is_rejected(config_path, tmp_path):
     import io
 
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
@@ -2168,7 +2166,7 @@ def test_overrides_add_without_title_is_rejected(config_path, tmp_path):
 
 
 def test_overrides_add_without_file_is_rejected(config_path, tmp_path):
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
@@ -2199,7 +2197,7 @@ def test_overrides_add_when_disabled_returns_503(config_path):
 def test_overrides_remove(config_path, tmp_path):
     import io
 
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
@@ -2227,7 +2225,7 @@ def test_overrides_remove_when_disabled_returns_503(config_path):
 def test_overrides_image_served(config_path, tmp_path):
     import io
 
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))
@@ -2248,7 +2246,7 @@ def test_overrides_image_served(config_path, tmp_path):
 
 
 def test_overrides_image_rejects_path_traversal(config_path, tmp_path):
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
     out.set_artwork_overrides(ArtworkOverrideStore(str(tmp_path / "overrides")))

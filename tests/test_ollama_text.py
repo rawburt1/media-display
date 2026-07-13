@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from mediainfo.config import OllamaTextConfig
 from mediainfo.enrichers.ollama_text import OllamaTextEnricher
 from mediainfo.models import NowPlaying
-from mediainfo.text_cache import TextCache
+from mediainfo.stores.text_cache import TextCache
 
 
 def _config(**kwargs):

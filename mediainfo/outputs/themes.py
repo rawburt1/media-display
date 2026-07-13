@@ -39,7 +39,7 @@ from mediainfo.cache import ImageCache
 from mediainfo.config import AutoRotatePresetConfig, ThemesConfig
 from mediainfo.config.outputs import parse_presets
 from mediainfo.config.themes import parse_themes
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
@@ -50,7 +50,7 @@ from mediainfo.outputs.websocket_push import (
 )
 from mediainfo.registries import get_theme_class
 from mediainfo.themes.base import DisplayTheme
-from mediainfo.transforms import parse_pipeline
+from mediainfo.imaging.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
 

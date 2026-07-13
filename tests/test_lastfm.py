@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from mediainfo.config import LastFmConfig
 from mediainfo.enrichers.lastfm import LastFmEnricher, _PLACEHOLDER_HASH
 from mediainfo.models import Artwork, NowPlaying
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 
 def _config(api_key="TEST_KEY"):

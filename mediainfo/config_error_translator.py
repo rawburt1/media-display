@@ -42,7 +42,7 @@ from mediainfo.config import (
     TEXT_ENRICHER_CONFIG_TYPES,
     THEMES_CONFIG_TYPES,
 )
-from mediainfo.outputs.config_schema import _FLAT_SECTIONS
+from mediainfo.configui.config_schema import _FLAT_SECTIONS
 
 
 def _class_name_maps() -> tuple[dict[str, str], dict[str, type]]:

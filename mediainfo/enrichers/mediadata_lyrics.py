@@ -22,7 +22,7 @@ import logging
 from typing import Any, Optional
 
 from mediainfo.enrichers.text_base import TextEnricher
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import NowPlaying
 from mediainfo.config import MediaDataLyricsEnricherConfig
 

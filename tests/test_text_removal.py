@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from mediainfo.text_removal import (
+from mediainfo.imaging.text_removal import (
     TextRegion,
     _crop_avoiding_regions,
     _decode_predictions,
@@ -133,7 +133,7 @@ def test_inpaint_falls_back_to_soft_fill_when_cv2_unavailable():
     region = TextRegion(
         box=(40, 40, 60, 60), confidence=0.9, area_fraction=0.04, classification="small"
     )
-    with patch("mediainfo.text_removal._import_cv2", return_value=None):
+    with patch("mediainfo.imaging.text_removal._import_cv2", return_value=None):
         result = remove_text(img, [region], method="inpaint", margin_ratio=0.0)
     assert result.getpixel((50, 50)) != (255, 255, 255)
 
@@ -148,7 +148,7 @@ def test_detect_returns_empty_without_model_path():
 
 
 def test_detect_returns_empty_when_cv2_unavailable():
-    with patch("mediainfo.text_removal._import_cv2", return_value=None):
+    with patch("mediainfo.imaging.text_removal._import_cv2", return_value=None):
         assert detect_text_regions(_gradient_image(), model_path="/some/model.pb") == []
 
 
@@ -263,7 +263,7 @@ def test_disabled_returns_image_unchanged_with_no_decision():
 
 def test_enabled_with_no_regions_returns_decision_with_empty_regions():
     img = _gradient_image()
-    with patch("mediainfo.text_removal.detect_text_regions", return_value=[]):
+    with patch("mediainfo.imaging.text_removal.detect_text_regions", return_value=[]):
         result, decision = maybe_remove_text(img, target_size=16, enabled=True, model_path="/x.pb")
     assert result is img
     assert decision["regions"] == []
@@ -276,7 +276,7 @@ def test_small_text_is_removed_when_configured():
         for y in range(20, 40):
             img.putpixel((x, y), (255, 255, 255))
     region = TextRegion(box=(20, 20, 40, 40), confidence=0.9, area_fraction=0.01)
-    with patch("mediainfo.text_removal.detect_text_regions", return_value=[region]):
+    with patch("mediainfo.imaging.text_removal.detect_text_regions", return_value=[region]):
         result, decision = maybe_remove_text(
             img, target_size=64, enabled=True, model_path="/x.pb", remove_small_text=True
         )
@@ -290,7 +290,7 @@ def test_small_text_is_kept_when_remove_small_text_is_false():
         for y in range(20, 40):
             img.putpixel((x, y), (255, 255, 255))
     region = TextRegion(box=(20, 20, 40, 40), confidence=0.9, area_fraction=0.01)
-    with patch("mediainfo.text_removal.detect_text_regions", return_value=[region]):
+    with patch("mediainfo.imaging.text_removal.detect_text_regions", return_value=[region]):
         result, decision = maybe_remove_text(
             img, target_size=64, enabled=True, model_path="/x.pb", remove_small_text=False
         )
@@ -306,7 +306,7 @@ def test_illegible_large_logo_is_removed():
         for y in range(20, 60):
             img.putpixel((x, y), (200, 200, 200))
     region = TextRegion(box=(20, 20, 100, 60), confidence=0.9, area_fraction=0.08)
-    with patch("mediainfo.text_removal.detect_text_regions", return_value=[region]):
+    with patch("mediainfo.imaging.text_removal.detect_text_regions", return_value=[region]):
         result, decision = maybe_remove_text(
             img, target_size=64, enabled=True, model_path="/x.pb", preserve_large_logos=True
         )
@@ -317,7 +317,7 @@ def test_illegible_large_logo_is_removed():
 def test_legible_large_logo_is_retained():
     img = _gradient_image(200, 200)
     region = TextRegion(box=(20, 20, 150, 150), confidence=0.9, area_fraction=0.08)
-    with patch("mediainfo.text_removal.detect_text_regions", return_value=[region]):
+    with patch("mediainfo.imaging.text_removal.detect_text_regions", return_value=[region]):
         result, decision = maybe_remove_text(
             img, target_size=64, enabled=True, model_path="/x.pb", preserve_large_logos=True
         )
@@ -329,7 +329,7 @@ def test_legible_large_logo_is_retained():
 def test_uncertain_region_is_left_alone():
     img = _gradient_image(200, 200)
     region = TextRegion(box=(0, 0, 190, 190), confidence=0.9, area_fraction=0.90)
-    with patch("mediainfo.text_removal.detect_text_regions", return_value=[region]):
+    with patch("mediainfo.imaging.text_removal.detect_text_regions", return_value=[region]):
         result, decision = maybe_remove_text(img, target_size=64, enabled=True, model_path="/x.pb")
     assert decision["removed_count"] == 0
     assert decision["logos_retained"] == 0
@@ -339,7 +339,7 @@ def test_uncertain_region_is_left_alone():
 def test_crop_preference_method_crops_instead_of_editing_pixels():
     img = Image.new("RGB", (100, 200), (1, 2, 3))
     region = TextRegion(box=(0, 0, 100, 40), confidence=0.9, area_fraction=0.02)
-    with patch("mediainfo.text_removal.detect_text_regions", return_value=[region]):
+    with patch("mediainfo.imaging.text_removal.detect_text_regions", return_value=[region]):
         result, decision = maybe_remove_text(
             img, target_size=16, enabled=True, model_path="/x.pb", removal_method="crop_preference"
         )
@@ -349,7 +349,7 @@ def test_crop_preference_method_crops_instead_of_editing_pixels():
 
 def test_decision_record_includes_version_and_method():
     img = _gradient_image()
-    with patch("mediainfo.text_removal.detect_text_regions", return_value=[]):
+    with patch("mediainfo.imaging.text_removal.detect_text_regions", return_value=[]):
         _, decision = maybe_remove_text(
             img, target_size=16, enabled=True, model_path="/x.pb", removal_method="inpaint"
         )

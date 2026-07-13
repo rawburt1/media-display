@@ -11,7 +11,7 @@ import pytest
 from flask import Flask
 
 from mediainfo.config import ConfigUiConfig
-from mediainfo.outputs.config_ui import ConfigUiOutput
+from mediainfo.configui.output import ConfigUiOutput
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 

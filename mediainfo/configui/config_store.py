@@ -21,7 +21,7 @@ from mediainfo.config import OUTPUT_CONFIG_TYPES, Config
 from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
 from mediainfo.config_error_translator import friendly_config_error
 from mediainfo.web_auth import hash_password
-from mediainfo.outputs.config_schema import (
+from mediainfo.configui.config_schema import (
     _FLAT_SECTIONS,
     _GENERAL_FIELDS,
     _HIDDEN_TYPE_CATEGORIES,
@@ -33,7 +33,7 @@ from mediainfo.outputs.config_schema import (
     _scalar_fields,
     _validate_filter_fields,
 )
-from mediainfo.outputs.config_yaml_io import _dump_config, _read_config, _yaml
+from mediainfo.configui.config_yaml_io import _dump_config, _read_config, _yaml
 
 logger = logging.getLogger(__name__)
 

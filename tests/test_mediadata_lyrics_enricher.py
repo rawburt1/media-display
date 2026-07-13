@@ -3,7 +3,7 @@
 from unittest.mock import Mock
 
 from mediainfo.enrichers.mediadata_lyrics import MediaDataLyricsEnricher
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import NowPlaying
 
 

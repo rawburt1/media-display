@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from mediainfo.lidarr_import import import_from_lidarr
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 
 def _response(json_data):

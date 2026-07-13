@@ -11,7 +11,7 @@ from mediainfo.config import FanartTvConfig
 from mediainfo.enrichers.base import ArtworkEnricher
 from mediainfo.enrichers.musicbrainz import resolve_release_group_ids
 from mediainfo.models import Artwork, NowPlaying
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 logger = logging.getLogger(__name__)
 

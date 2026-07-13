@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import MediaDataConfig, MediaDataRefreshConfig
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 
 
 def _store(
@@ -483,7 +483,7 @@ def test_get_movie_fanart_uses_a_separate_file_from_poster(tmp_path):
 
 def test_fetch_movie_artwork_no_tmdb_key_returns_none(tmp_path):
     store = _store(tmp_path)  # no tmdb_api_key configured
-    with patch("mediainfo.media_data_store.tmdb.find_movie") as find_movie:
+    with patch("mediainfo.stores.media_data_store.tmdb.find_movie") as find_movie:
         result = store._fetch_movie_artwork("Alien", 1979, "poster")
 
     find_movie.assert_not_called()
@@ -709,7 +709,7 @@ def test_fetch_artist_photo_no_lastfm_key_skips_fallback(mock_get, tmp_path):
     )
 
     store = _store(tmp_path, lastfm_api_key="")  # blank - Last.fm never even attempted
-    with patch("mediainfo.media_data_store.lastfm.fetch_artist_image") as fetch_artist_image:
+    with patch("mediainfo.stores.media_data_store.lastfm.fetch_artist_image") as fetch_artist_image:
         result = store._fetch_artist_photo("Led Zeppelin")
 
     fetch_artist_image.assert_not_called()
@@ -719,7 +719,7 @@ def test_fetch_artist_photo_no_lastfm_key_skips_fallback(mock_get, tmp_path):
 def test_fetch_artist_photo_without_cache_configured_returns_none(tmp_path):
     store = _store(tmp_path)  # no cache= passed
     with patch(
-        "mediainfo.media_data_store.wikipedia.lookup",
+        "mediainfo.stores.media_data_store.wikipedia.lookup",
         return_value=("bio", "https://example.com/x.jpg"),
     ):
         result = store._fetch_artist_photo("Led Zeppelin")
@@ -734,7 +734,7 @@ def test_fetch_artist_photo_downloads_real_bytes(tmp_path):
 
     with (
         patch(
-            "mediainfo.media_data_store.wikipedia.lookup",
+            "mediainfo.stores.media_data_store.wikipedia.lookup",
             return_value=("bio", "https://example.com/x.jpg"),
         ),
         patch.object(store._cache, "download_temp", return_value=downloaded),
@@ -806,7 +806,7 @@ def test_fetch_album_artwork_no_discogs_token_skips_fallback(mock_get, mock_head
     mock_get.return_value.json.return_value = {"release-groups": []}
 
     store = _store(tmp_path, discogs_token="")  # blank - Discogs never even attempted
-    with patch("mediainfo.media_data_store.discogs.find_cover") as find_cover:
+    with patch("mediainfo.stores.media_data_store.discogs.find_cover") as find_cover:
         result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "albumart")
 
     find_cover.assert_not_called()
@@ -815,7 +815,9 @@ def test_fetch_album_artwork_no_discogs_token_skips_fallback(mock_get, mock_head
 
 def test_fetch_album_artwork_fanart_kind_is_never_fetched(tmp_path):
     store = _store(tmp_path, discogs_token="test-token")
-    with patch("mediainfo.media_data_store.musicbrainz.resolve_release_group_ids") as resolve:
+    with patch(
+        "mediainfo.stores.media_data_store.musicbrainz.resolve_release_group_ids"
+    ) as resolve:
         result = store._fetch_album_artwork("Led Zeppelin", "Houses of the Holy", 1973, "fanart")
 
     resolve.assert_not_called()  # no source even attempted for "fanart"
@@ -826,11 +828,11 @@ def test_fetch_album_artwork_without_cache_configured_returns_none(tmp_path):
     store = _store(tmp_path)  # no cache= passed
     with (
         patch(
-            "mediainfo.media_data_store.musicbrainz.resolve_release_group_ids",
+            "mediainfo.stores.media_data_store.musicbrainz.resolve_release_group_ids",
             return_value=("a", "rg-1"),
         ),
         patch(
-            "mediainfo.media_data_store.musicbrainz.fetch_front_cover",
+            "mediainfo.stores.media_data_store.musicbrainz.fetch_front_cover",
             return_value="https://example.com/x.jpg",
         ),
     ):
@@ -846,11 +848,11 @@ def test_fetch_album_artwork_downloads_real_bytes(tmp_path):
 
     with (
         patch(
-            "mediainfo.media_data_store.musicbrainz.resolve_release_group_ids",
+            "mediainfo.stores.media_data_store.musicbrainz.resolve_release_group_ids",
             return_value=("a", "rg-1"),
         ),
         patch(
-            "mediainfo.media_data_store.musicbrainz.fetch_front_cover",
+            "mediainfo.stores.media_data_store.musicbrainz.fetch_front_cover",
             return_value="https://example.com/x.jpg",
         ),
         patch.object(ImageCache, "download_temp", return_value=downloaded),
@@ -874,7 +876,9 @@ def test_fetch_movie_artwork_via_tmdb(tmp_path):
     movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
 
     with (
-        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie) as find_movie,
+        patch(
+            "mediainfo.stores.media_data_store.tmdb.find_movie", return_value=movie
+        ) as find_movie,
         patch.object(ImageCache, "download_temp", return_value=None) as download_temp,
     ):
         result = store._fetch_movie_artwork("The Matrix", 1999, "poster")
@@ -889,7 +893,7 @@ def test_fetch_movie_fanart_via_tmdb_uses_backdrop(tmp_path):
     movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
 
     with (
-        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie),
+        patch("mediainfo.stores.media_data_store.tmdb.find_movie", return_value=movie),
         patch.object(ImageCache, "download_temp", return_value=None) as download_temp,
     ):
         store._fetch_movie_artwork("The Matrix", 1999, "fanart")
@@ -905,7 +909,9 @@ def test_movie_poster_and_fanart_share_one_tmdb_search(tmp_path):
     movie = {"id": 603, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
 
     with (
-        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie) as find_movie,
+        patch(
+            "mediainfo.stores.media_data_store.tmdb.find_movie", return_value=movie
+        ) as find_movie,
         patch.object(ImageCache, "download_temp", return_value=None),
     ):
         store.get_movie_poster("The Matrix", 1999)
@@ -925,8 +931,10 @@ def test_fetch_movie_artwork_falls_back_to_fanarttv(tmp_path):
     fanarttv_data = {"movieposter": [{"url": "https://fanart.example/poster.jpg", "likes": "5"}]}
 
     with (
-        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie),
-        patch("mediainfo.media_data_store.fanarttv.fetch", return_value=fanarttv_data) as fetch,
+        patch("mediainfo.stores.media_data_store.tmdb.find_movie", return_value=movie),
+        patch(
+            "mediainfo.stores.media_data_store.fanarttv.fetch", return_value=fanarttv_data
+        ) as fetch,
         patch.object(ImageCache, "download_temp", return_value=None) as download_temp,
     ):
         store._fetch_movie_artwork("The Matrix", 1999, "poster")
@@ -940,8 +948,8 @@ def test_fetch_movie_artwork_no_fanarttv_key_skips_fallback(tmp_path):
     movie = {"id": 603, "poster_path": None, "backdrop_path": None}
 
     with (
-        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=movie),
-        patch("mediainfo.media_data_store.fanarttv.fetch") as fetch,
+        patch("mediainfo.stores.media_data_store.tmdb.find_movie", return_value=movie),
+        patch("mediainfo.stores.media_data_store.fanarttv.fetch") as fetch,
     ):
         result = store._fetch_movie_artwork("The Matrix", 1999, "poster")
 
@@ -955,8 +963,8 @@ def test_fetch_movie_artwork_no_tmdb_match_skips_fanarttv(tmp_path):
     store = _store(tmp_path, tmdb_api_key="tmdb-key", fanarttv_api_key="fanarttv-key")
 
     with (
-        patch("mediainfo.media_data_store.tmdb.find_movie", return_value=None),
-        patch("mediainfo.media_data_store.fanarttv.fetch") as fetch,
+        patch("mediainfo.stores.media_data_store.tmdb.find_movie", return_value=None),
+        patch("mediainfo.stores.media_data_store.fanarttv.fetch") as fetch,
     ):
         result = store._fetch_movie_artwork("Unknown Movie", None, "poster")
 
@@ -969,7 +977,7 @@ def test_fetch_series_artwork_via_tmdb(tmp_path):
     show = {"id": 1399, "poster_path": "/poster.jpg", "backdrop_path": "/backdrop.jpg"}
 
     with (
-        patch("mediainfo.media_data_store.tmdb.find_tv", return_value=show) as find_tv,
+        patch("mediainfo.stores.media_data_store.tmdb.find_tv", return_value=show) as find_tv,
         patch.object(ImageCache, "download_temp", return_value=None) as download_temp,
     ):
         result = store._fetch_series_artwork("Game of Thrones", None, "poster")
@@ -981,7 +989,7 @@ def test_fetch_series_artwork_via_tmdb(tmp_path):
 
 def test_fetch_series_artwork_no_tmdb_key_returns_none(tmp_path):
     store = _store(tmp_path)  # no tmdb_api_key configured
-    with patch("mediainfo.media_data_store.tmdb.find_tv") as find_tv:
+    with patch("mediainfo.stores.media_data_store.tmdb.find_tv") as find_tv:
         result = store._fetch_series_artwork("Game of Thrones", None, "poster")
 
     find_tv.assert_not_called()
@@ -990,7 +998,7 @@ def test_fetch_series_artwork_no_tmdb_key_returns_none(tmp_path):
 
 def test_fetch_series_artwork_no_match_returns_none(tmp_path):
     store = _store(tmp_path, tmdb_api_key="tmdb-key")
-    with patch("mediainfo.media_data_store.tmdb.find_tv", return_value=None):
+    with patch("mediainfo.stores.media_data_store.tmdb.find_tv", return_value=None):
         result = store._fetch_series_artwork("Unknown Show", None, "poster")
 
     assert result is None
@@ -1003,8 +1011,8 @@ def test_fetch_series_artwork_never_uses_fanarttv(tmp_path):
     show = {"id": 1399, "poster_path": None, "backdrop_path": None}
 
     with (
-        patch("mediainfo.media_data_store.tmdb.find_tv", return_value=show),
-        patch("mediainfo.media_data_store.fanarttv.fetch") as fetch,
+        patch("mediainfo.stores.media_data_store.tmdb.find_tv", return_value=show),
+        patch("mediainfo.stores.media_data_store.fanarttv.fetch") as fetch,
     ):
         result = store._fetch_series_artwork("Game of Thrones", None, "poster")
 
@@ -1378,7 +1386,7 @@ def test_refresh_track_wordcloud_returns_false_without_lyrics(tmp_path):
 
 
 def test_render_wordcloud_real_implementation(tmp_path):
-    """Exercises the real mediainfo.lyrics_wordcloud.generate() call (no
+    """Exercises the real mediainfo.imaging.lyrics_wordcloud.generate() call (no
     network involved - unlike the other _fetch_*'s "real implementation"
     tests, there's no external boundary to mock here)."""
     from PIL import Image
@@ -1562,7 +1570,7 @@ def test_maybe_evict_by_size_never_raises(tmp_path, caplog):
 
     store = _store(tmp_path, max_disk_mb=1)
     with patch.object(store, "evict_by_size", side_effect=RuntimeError("boom")):
-        with caplog.at_level(logging.ERROR, logger="mediainfo.media_data_store"):
+        with caplog.at_level(logging.ERROR, logger="mediainfo.stores.media_data_store"):
             store.maybe_evict_by_size()  # must not raise
 
     assert any("eviction failed" in r.message for r in caplog.records)

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from mediainfo.enrichers.library import LibraryEnricher
 from mediainfo.models import NowPlaying
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 
 def _library(tmp_path):

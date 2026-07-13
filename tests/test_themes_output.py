@@ -785,7 +785,7 @@ def test_real_themes_page_has_valid_script_no_stray_placeholder_text(tmp_path):
 
 
 def test_real_word_cloud_theme_end_to_end_music(tmp_path):
-    from mediainfo.media_data_store import MediaDataStore
+    from mediainfo.stores.media_data_store import MediaDataStore
 
     wc_path = tmp_path / "wc.png"
     wc_path.write_bytes(b"fake-wordcloud-png")
@@ -1267,7 +1267,7 @@ def test_theme_image_urls_get_the_computed_prefix_nested_case(tmp_path):
 
 
 def test_real_artist_spotlight_theme_end_to_end_music(tmp_path):
-    from mediainfo.media_data_store import MediaDataStore
+    from mediainfo.stores.media_data_store import MediaDataStore
 
     photo_path = tmp_path / "artist.jpg"
     photo_path.write_bytes(b"fake-photo")
@@ -1302,7 +1302,7 @@ def test_real_artist_spotlight_theme_end_to_end_music(tmp_path):
 
 
 def test_real_artist_spotlight_theme_end_to_end_no_photo_reported_on_health(tmp_path):
-    from mediainfo.media_data_store import MediaDataStore
+    from mediainfo.stores.media_data_store import MediaDataStore
 
     media_data = MagicMock(spec=MediaDataStore)
     media_data.get_artist_photo.return_value = None
@@ -1330,7 +1330,7 @@ def test_real_artist_spotlight_theme_end_to_end_no_photo_reported_on_health(tmp_
 
 def test_attach_wires_media_data_store():
     from mediainfo.app_services import AppServices
-    from mediainfo.media_data_store import MediaDataStore
+    from mediainfo.stores.media_data_store import MediaDataStore
 
     out = _output()
     media_data = MagicMock(spec=MediaDataStore)

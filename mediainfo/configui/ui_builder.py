@@ -30,8 +30,8 @@ from mediainfo.config import (
     TEXT_ENRICHER_CONFIG_TYPES,
     THEMES_CONFIG_TYPES,
 )
-from mediainfo.outputs import config_schema
-from mediainfo.outputs.ui_model import (
+from mediainfo.configui import config_schema
+from mediainfo.configui.ui_model import (
     UiAction,
     UiComponent,
     UiDashboard,

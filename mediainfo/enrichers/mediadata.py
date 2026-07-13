@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from mediainfo.enrichers.base import ArtworkEnricher
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.config import MediaDataArtworkEnricherConfig
 

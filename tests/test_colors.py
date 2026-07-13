@@ -1,6 +1,6 @@
 from PIL import Image
 
-from mediainfo.colors import dominant_colors, to_hex
+from mediainfo.imaging.colors import dominant_colors, to_hex
 
 
 def _half_and_half_image(width: int = 64, height: int = 64) -> Image.Image:

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mediainfo.text_cache import TextCache
+from mediainfo.stores.text_cache import TextCache
 from mediainfo.wiring import (
     _compute_url_mount,
     attach_services,
@@ -837,7 +837,7 @@ def test_build_artwork_overrides_returns_none_when_disabled():
 
 
 def test_build_artwork_overrides_returns_store_when_enabled(tmp_path):
-    from mediainfo.artwork_overrides import ArtworkOverrideStore
+    from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 
     cfg = MagicMock()
     cfg.overrides.enabled = True

@@ -102,7 +102,7 @@ class ArtsWallpaperConfig:
     # lets "arts" have its own look (e.g. a different crop strategy or
     # color treatment) independent of other idle sources/outputs. Same
     # pipeline syntax as an output's own `transforms:` (see
-    # mediainfo.transforms.parse_pipeline) - list-typed, so edited via the
+    # mediainfo.imaging.transforms.parse_pipeline) - list-typed, so edited via the
     # Advanced raw-YAML editor like every other transforms field.
     transforms: list = dataclasses.field(default_factory=list)
 

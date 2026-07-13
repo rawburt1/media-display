@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PIL import Image
 
-from mediainfo.led_image import _crop_square, prepare_led_image
+from mediainfo.imaging.led_image import _crop_square, prepare_led_image
 
 
 def _solid_image(width=600, height=600, color=(200, 100, 50)):

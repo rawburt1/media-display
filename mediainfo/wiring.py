@@ -12,20 +12,20 @@ from typing import Any, Optional
 
 from mediainfo import registries
 from mediainfo.app_services import AppServices, OrchestratorCommands
-from mediainfo.artwork_overrides import ArtworkOverrideStore
+from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config
 from mediainfo.health import make_health_provider
-from mediainfo.history import PlaybackHistory
+from mediainfo.stores.history import PlaybackHistory
 from mediainfo.idle.base import IdleWallpaperSource
 from mediainfo.idle.composite import CompositeIdleWallpaperSource
-from mediainfo.media_data_store import MediaDataStore
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.media_data_store import MediaDataStore
+from mediainfo.stores.musiclibrary import MusicLibrary
 from mediainfo.orchestrator import Orchestrator
 from mediainfo.outputs.base import Output
 from mediainfo.outputs.http_server import SharedHttpServer
-from mediainfo.poster_store import PosterStore
-from mediainfo.text_cache import TextCache
+from mediainfo.stores.poster_store import PosterStore
+from mediainfo.stores.text_cache import TextCache
 
 logger = logging.getLogger(__name__)
 

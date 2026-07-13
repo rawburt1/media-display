@@ -19,7 +19,7 @@ import time
 from typing import Callable, Dict, List, Optional
 
 from mediainfo.cache import ImageCache
-from mediainfo.history import PlaybackHistory
+from mediainfo.stores.history import PlaybackHistory
 from mediainfo.models import NowPlaying
 from mediainfo.orchestrator_artwork import _ArtworkPipeline
 from mediainfo.orchestrator_idle import _IdleBatchManager

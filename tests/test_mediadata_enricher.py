@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 from mediainfo.config import MediaDataArtworkEnricherConfig, MediaDataWordcloudConfig
 from mediainfo.enrichers.mediadata import MediaDataArtworkEnricher
-from mediainfo.media_data_store import MediaDataStore
+from mediainfo.stores.media_data_store import MediaDataStore
 from mediainfo.models import Artwork, NowPlaying
 
 

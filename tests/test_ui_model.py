@@ -11,10 +11,10 @@ import pytest
 from flask import Flask
 
 from mediainfo.config import ConfigUiConfig
-from mediainfo.outputs.config_schema import _build_schema
-from mediainfo.outputs.config_ui import ConfigUiOutput
-from mediainfo.outputs.ui_builder import build_components, build_dashboard
-from mediainfo.outputs.ui_model import UiComponent, UiPipeline
+from mediainfo.configui.config_schema import _build_schema
+from mediainfo.configui.output import ConfigUiOutput
+from mediainfo.configui.ui_builder import build_components, build_dashboard
+from mediainfo.configui.ui_model import UiComponent, UiPipeline
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 

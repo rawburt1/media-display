@@ -7,7 +7,7 @@ import pytest
 
 from mediainfo.config import ArtsWallpaperConfig
 from mediainfo.idle.arts import ArtsWallpaperSource
-from mediainfo.transforms import Grayscale
+from mediainfo.imaging.transforms import Grayscale
 
 
 def _source(**kwargs) -> ArtsWallpaperSource:

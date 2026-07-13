@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from mediainfo.config import DiscogsConfig
 from mediainfo.enrichers.discogs import DiscogsEnricher, _is_real_image
 from mediainfo.models import Artwork, NowPlaying
-from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.stores.musiclibrary import MusicLibrary
 
 
 def _enricher(**kwargs) -> DiscogsEnricher:
