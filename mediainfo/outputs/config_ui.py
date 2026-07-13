@@ -11,110 +11,24 @@ and saving config.yaml), and appletv_pairing.py (the Apple TV pairing
 wizard) - plus the tiny config_yaml_io.py shared by the latter two.
 
 "/" serves the new Dashboard shell (templates/config_ui/dashboard.html,
-static/config_ui/dashboard.{js,css} - see _dashboard_shell() below): a
-lighter SPA that renders Dashboard/Pipeline itself and otherwise links
-straight into the classic shell for Media/Metadata/Appearance/Displays/
-Library/Health/Advanced (those in-shell pages don't exist yet - see
-docs/gui-redesign-phase0-inventory.md for the phased plan). The classic
-shell (templates/config_ui/app.html) still exists unchanged, reachable via
-/form (or "Advanced" in the new nav): one Flask-rendered shell with a
-sidebar nav and vanilla-JS client-side routing across nine sections
-(Overview, Media sources, Displays & outputs, Artwork & metadata, Idle
-screen, Automation & schedules, Library & overrides, System status,
-Advanced configuration). library.html and overrides.html remain their own
-full pages, linked from the classic shell's "Library & overrides" section.
-Neither shell has a build step - just the templates/static files as
-shipped. `ui: dashboard` keeps "/" on the classic health-grid unchanged,
-for anyone who already set that preference (see index() below).
+static/config_ui/dashboard.{js,css} - see _dashboard_shell() below); "/form"
+(or "Advanced" in the new nav) serves the classic shell
+(templates/config_ui/app.html), still unchanged while the phased IA
+migration is in progress (docs/gui-redesign-phase0-inventory.md). The form
+is generated from the registered source/output/enricher/idle config
+dataclasses, so any config type added there automatically gets a card.
+Secrets never reach the browser in cleartext; saving always validates via
+Config.from_dict() before writing; `outputs`/`auth` changes need a restart
+(see _restart_required) while everything else hot-reloads.
 
-The form is generated from the registered source/output/enricher/idle
-config dataclasses (mediainfo.config.SOURCE_CONFIG_TYPES etc.), so any
-config type added there automatically gets a card - no UI code to update.
-Only scalar fields (bool/int/float/str) are editable in the guided UI; list
-fields (transforms, blacklist) are left to the "Advanced" raw-YAML editor,
-except flat lists of strings (blacklist, speaker_ips, ...) and the
-brightness_schedule/screen_off_hours time-window fields, which get their
-own small structured widgets client-side (see _field_widget()).
-
-_build_schema() also carries UI-only presentation metadata alongside each
-field - friendly label, help text, "essential vs advanced", "required for
-this plugin to work", and (for a few known enum-like fields) a fixed list
-of choices - so the client never needs to know Python dataclass internals
-to render a sensible form. This is presentation only; _scalar_fields()'s
-actual value handling is unchanged from before this metadata existed.
-
-Outputs (the only category that supports multiple instances of the same
-type, e.g. two `ulanzi` displays) get "+ Add" / duplicate / remove
-controls, and an optional cosmetic `label` field (see
-_OutputFilterMixin.label in mediainfo/config/outputs.py) so instances can
-be told apart by name instead of just "#1"/"#2". Instances can only be
-appended or removed from the end - not reordered or removed from the
-middle - so that non-form fields like `transforms` on existing instances
-stay attached to the right one; saving always overlays posted fields onto
-the *existing* instance at each position rather than replacing it
-outright, so transforms etc. on instances you don't touch survive.
-
-Saving always validates the result with Config.from_dict() before writing
-anything to disk - both the guided form and the Advanced raw editor go
-through this same check, so neither can ever write invalid YAML. The
-running process's existing config-file hot-reload (see
-mediainfo/__main__.py) picks up the change within a couple of seconds - no
-restart needed, EXCEPT for `outputs`, which are only instantiated once at
-startup and need a restart to pick up added/removed/reconfigured
-instances (see _restart_required below).
-
-Secret fields (api_key, password, token, ...) are never sent to the
-browser in cleartext: /api/config blanks their value and reports whether
-one is currently set via a separate `secrets_set` map, and the client only
-ever POSTs a secret field back if the user actually typed a new value -
-see the "Configured / Replace" UI in app.html. Leaving a secret field
-untouched in the browser is indistinguishable, on the wire, from never
-having included that key at all, and the save path already only overlays
-whatever keys are present in the POST body - so an untouched secret is
-never overwritten.
-
-`self._restart_required` is set whenever a save touches `outputs` (the
-one category that can't hot-reload) or `auth` (every Flask-based output's
-HTTP Basic Auth check closes over the AuthConfig instance from process
-startup - see install_auth() in mediainfo/outputs/http_server.py's
-SharedHttpServer - so a changed password doesn't take effect until the
-process actually restarts), and cleared
-when /api/restart is called - it's surfaced via /api/overview so the
-Overview page can show a "Restart needed" banner. This is a coarse flag
-(any outputs/auth save sets it, even a no-op resubmission) rather than a
-real diff - simpler, and errs towards nagging rather than missing a real
-restart-required change. If you're locked out and can't reach this page
-at all, `python -m mediainfo set-password` (see __main__.py) resets
-auth.username/auth.password directly in config.yaml from the command
-line - same restart caveat applies.
-
-Known cosmetic limitation: when a brand-new instance is appended to an
-output type that already has trailing comments after its last existing
-instance (e.g. a comment block introducing the next output type), ruamel.yaml
-can render the new instance's YAML *before* that comment instead of after
-it - visually confusing, but the data itself is unaffected (it still parses
-into the same list, in the same order). Re-saving via the "Advanced" raw
-editor lets you tidy up the formatting by hand if it bothers you.
+For the full rationale behind these choices - the two-shell split, why the
+form is schema-driven, the secret-handling wire protocol, restart-required
+semantics, and the append-only multi-instance ordering constraint - see
+docs/adr/0001-config-ui-two-shell-migration-and-request-lifecycle.md.
 
 This output has write access to config.yaml, including any credentials in
 it, with no authentication of its own - see SECURITY.md before exposing it
 beyond a trusted local network.
-
-The page also has a "Restart" button, since changes to `outputs` (added/
-removed/reconfigured instances) need a process restart to take effect -
-unlike sources/enrichers/idle sources, outputs are only instantiated once
-at startup (see mediainfo/__main__.py) and aren't recreated by the config
-hot-reload. It works by sending SIGTERM to this process - the same signal
-SIGTERM/Ctrl-C/`docker stop` already trigger, so it shuts down via the
-existing graceful-shutdown path. Whether it actually comes back up depends
-on a process supervisor restarting it: the documented `docker-compose.yml`
-(restart: unless-stopped) does this automatically; running the process
-directly with no supervisor does not - it'll just exit.
-
-The page can also pair an Apple TV (the same pyatv-based flow as
-`python -m mediainfo auth appletv`, see __main__.py), without needing
-shell/docker-exec access - see appletv_pairing.py (AppleTvPairingManager)
-for the pairing wizard itself.
 """
 
 from __future__ import annotations
