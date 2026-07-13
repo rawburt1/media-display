@@ -54,8 +54,51 @@ def _save_image(path: Path, width=600, height=600, color=(200, 100, 50)) -> Path
 
 
 # ---------------------------------------------------------------------------
-# _save_preview
+# Optional dependency: opencv-python-headless/numpy (N3 - see
+# docs/architecture-usability-review-2026-07.md) are only needed by the
+# text-detection stage (mediainfo/text_removal.py's _import_cv2(), lazy and
+# already gated behind text_detection_enabled/model_path) - base Pixoo
+# output must work fine without either installed. Locks in behavior that
+# was already correct (verified by hand before N3's M0/M2), guarding
+# against a future eager `import cv2`/`import numpy` creeping into
+# pixoo.py or text_removal.py's module level.
+#
+# A real subprocess, not an in-process sys.modules/builtins.__import__
+# patch: by the time this test file's own top-level `from
+# mediainfo.outputs.pixoo import PixooOutput` has run, both
+# mediainfo.outputs.pixoo and mediainfo.text_removal are already cached in
+# sys.modules, so patching __import__ afterward wouldn't force a real
+# re-import - only a fresh interpreter that's never imported them proves
+# the module-level import path itself doesn't need cv2/numpy.
 # ---------------------------------------------------------------------------
+
+
+def test_pixoo_output_importable_and_constructible_without_opencv_or_numpy():
+    import subprocess
+    import sys
+
+    script = (
+        "import sys, importlib.abc, importlib.machinery\n"
+        "class _Blocker(importlib.abc.MetaPathFinder):\n"
+        "    def find_spec(self, name, path, target=None):\n"
+        "        if name in ('cv2', 'numpy'):\n"
+        "            raise ImportError(f'simulated missing {name}')\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, _Blocker())\n"
+        "from mediainfo.outputs.pixoo import PixooOutput\n"
+        "from mediainfo.config import PixooConfig\n"
+        "from mediainfo.cache import ImageCache\n"
+        "import tempfile\n"
+        "cfg = PixooConfig(enabled=True, ip='192.168.1.32', text_detection_enabled=False)\n"
+        "out = PixooOutput(cfg, ImageCache(tempfile.mkdtemp()))\n"
+        "assert out is not None\n"
+        "print('OK')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=30
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK" in result.stdout
 
 
 def test_save_preview_writes_512x512_png(tmp_path):
