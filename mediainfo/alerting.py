@@ -28,6 +28,7 @@ class AlertManager:
         self.config = config
         self._last_alerted_outputs: Dict[int, float] = {}
         self._last_alerted_sources: Dict[str, float] = {}
+        self._last_alerted_watchdog: Dict[str, float] = {}
 
     def check(
         self,
@@ -54,6 +55,34 @@ class AlertManager:
         source_labels = {name: name for name in source_error_since}
         self._check_category(
             self._last_alerted_sources, source_error_since, source_labels, now, "source"
+        )
+
+    def check_watchdog(self, stalled_since: Optional[float], now: float) -> None:
+        """Fire the same webhook (kind="watchdog") once the orchestrator's
+        poll loop has been continuously stalled for at least
+        error_threshold_seconds - reusing _check_category's threshold/
+        repeat-interval/recovery-reset gating rather than a separate config
+        knob, so "how long before alerting" and "a fresh stall re-alerts
+        promptly" both mean the same thing everywhere.
+
+        stalled_since: time.monotonic() the poll loop's last known-good
+        heartbeat happened, but only while it's currently considered stale
+        (see Orchestrator._watchdog_stale_seconds) - None whenever it's
+        currently healthy (including before the very first tick), so a
+        stall that recovers and later stalls again alerts on its own fresh
+        threshold rather than being suppressed by the old repeat window
+        (matching _check_category's forget-on-recovery behavior for
+        sources/outputs).
+        """
+        if not self.config.enabled or not self.config.webhook_url:
+            return
+        error_since = {"orchestrator": stalled_since} if stalled_since is not None else {}
+        self._check_category(
+            self._last_alerted_watchdog,
+            error_since,
+            {"orchestrator": "orchestrator poll loop"},
+            now,
+            "watchdog",
         )
 
     def _check_category(

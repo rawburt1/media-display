@@ -43,6 +43,7 @@ identifies this document's version. The rule mirrors config.yaml's
 | `status` | string | `"ok"` once the orchestrator has started; `"starting"` briefly during boot, before the very first tick. |
 | `schema_version` | integer | This document's version - see above. |
 | `uptime_seconds` | number | Seconds since the orchestrator started. |
+| `seconds_since_last_tick` | number \| null | Seconds since the poll loop last completed an iteration (successfully or otherwise - see below). `null` before the very first tick. A large or ever-growing value means the poll loop is stuck or dead - nothing is being polled, enriched, or pushed to outputs, even though the process itself is still running. |
 | `poll_interval_seconds` | number | Current `poll_interval_seconds` config value. |
 | `rotation_interval_seconds` | number | Current `rotation_interval_seconds` config value. |
 | `now_playing` | object \| null | The current highest-priority bound item (pre-routing global winner - see `output_now_playing`-style per-output binding on each `outputs[]` entry for per-output routing setups). `null` when nothing is playing. Shape: `{"source", "media_type", "title", "subtitle", "images": [string, ...]}`. |
@@ -103,6 +104,25 @@ When more than one idle source is enabled, exactly one supplies any given
 batch (see `mediainfo/idle/composite.py`); `wallpapers_loaded` reports the
 shared current-batch size under every enabled source's name regardless of
 which one actually supplied it.
+
+## Watchdog: detecting a stuck or dead poll loop
+
+`seconds_since_last_tick` above is fed by a heartbeat `Orchestrator._run()`
+records after every iteration (successful or not - a tick that raised and
+was caught still counts as "the loop is alive"). If `_tick()` itself hangs
+(e.g. a device call with no timeout), that heartbeat is simply never
+recorded again, so the value keeps growing - `/health` polled from outside
+the process is the only way to notice this, since a hung `_run()` thread
+can't report its own hang.
+
+A second daemon thread (`Orchestrator._supervise`), independent of the
+poll loop itself, periodically checks this value. Once it's stale enough
+(scaled off `poll_interval_seconds`, with a floor), it logs a `CRITICAL`
+line and calls `AlertManager.check_watchdog()` - the same webhook, and the
+same `error_threshold_seconds`/`repeat_interval_seconds`/recovery-reset
+behavior (see `mediainfo/alerting.py`), used for a persistently failing
+source or output, just with `kind: "watchdog"` in the payload instead of
+`"source"`/`"output"`.
 
 ## Regenerating / verifying this document
 

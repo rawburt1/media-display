@@ -48,6 +48,13 @@ _CACHE_PURGE_INTERVAL_SECONDS = 24 * 60 * 60
 # that needs to react within a single poll interval.
 _ALERT_CHECK_INTERVAL_SECONDS = 60
 
+# How often the watchdog supervisor thread (see _supervise) checks whether
+# the poll loop is still ticking. Deliberately its own thread rather than a
+# check inside _tick() itself - a hung _tick() call never returns control
+# to _run() to run any check of its own, so only a genuinely separate
+# thread can notice a stuck/dead poll loop from the outside.
+_WATCHDOG_CHECK_INTERVAL_SECONDS = 30
+
 # Default for the nothing_playing_grace_seconds constructor param below
 # (overridable via Config.nothing_playing_grace_seconds) - how long to
 # tolerate a source reporting "nothing playing" before actually switching
@@ -121,6 +128,13 @@ class Orchestrator:
         self._rotate_now_requested = threading.Event()
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
+        self._watchdog_thread = threading.Thread(target=self._supervise, daemon=True)
+        # How stale seconds_since_last_tick must get before the watchdog
+        # logs a CRITICAL line - scaled off poll_interval_seconds (so a
+        # fast-polling setup gets a tighter alarm) with a floor, so a very
+        # short poll interval doesn't make the watchdog trigger-happy over
+        # a single slow tick.
+        self._watchdog_stale_seconds = max(poll_interval_seconds * 6, 60)
         self._health = _HealthTracker()
         self._poller = _SourcePoller(
             health=self._health,
@@ -198,12 +212,14 @@ class Orchestrator:
 
     def start(self) -> None:
         self._thread.start()
+        self._watchdog_thread.start()
 
     def stop(self) -> None:
         self._stop_event.set()
 
     def join(self) -> None:
         self._thread.join()
+        self._watchdog_thread.join()
 
     def _run(self) -> None:
         while not self._stop_event.is_set():
@@ -211,7 +227,42 @@ class Orchestrator:
                 self._tick()
             except Exception:
                 logger.exception("Unexpected error in orchestrator loop")
+            # Recorded after _tick() returns (successfully or via the
+            # except above) rather than before it runs, so staleness
+            # genuinely means "one full iteration hasn't completed in this
+            # long" - if _tick() itself hangs (e.g. a device call with no
+            # timeout), this line is simply never reached again, which is
+            # exactly the condition _supervise() needs to detect.
+            self._health.record_tick(time.monotonic())
             self._stop_event.wait(self.poll_interval_seconds)
+
+    def _supervise(self) -> None:
+        """Runs on its own daemon thread for the orchestrator's whole
+        lifetime, independent of _run() - see _WATCHDOG_CHECK_INTERVAL_SECONDS
+        and _watchdog_stale_seconds. This is the "thread supervisor" from
+        M7 in docs/architecture-usability-review-2026-07.md: nothing inside
+        _run()/_tick() can notice its own thread being stuck or dead, so
+        only a genuinely separate thread can.
+        """
+        check_interval = min(_WATCHDOG_CHECK_INTERVAL_SECONDS, self._watchdog_stale_seconds)
+        while not self._stop_event.wait(check_interval):
+            self._check_watchdog()
+
+    def _check_watchdog(self) -> None:
+        now = time.monotonic()
+        last_tick_at = self._health.last_tick_at
+        if last_tick_at is None:
+            return  # hasn't completed its first tick yet - not stale, just starting
+        stale_for = now - last_tick_at
+        is_stale = stale_for >= self._watchdog_stale_seconds
+        if is_stale:
+            logger.critical(
+                "Orchestrator poll loop hasn't completed a tick in %.0fs (expected every "
+                "%.0fs) - it may be stuck or dead",
+                stale_for,
+                self.poll_interval_seconds,
+            )
+        self._alerts.check_watchdog(last_tick_at if is_stale else None, now)
 
     def _tick(self) -> None:
         self._maybe_purge_cache()

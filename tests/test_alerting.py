@@ -188,3 +188,75 @@ def test_multiple_sources_alerted_independently(mock_post):
     assert mock_post.call_count == 1
     _, kwargs = mock_post.call_args
     assert kwargs["json"]["source"] == "vinyl"
+
+
+# ---------------------------------------------------------------------------
+# check_watchdog (M7 - a stalled/dead orchestrator poll loop)
+# ---------------------------------------------------------------------------
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_watchdog_does_nothing_when_disabled(mock_post):
+    manager = AlertManager(_config(enabled=False))
+    manager.check_watchdog(700.0, now=1000.0)
+    mock_post.assert_not_called()
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_watchdog_does_nothing_before_first_tick(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300))
+    manager.check_watchdog(None, now=1000.0)
+    mock_post.assert_not_called()
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_watchdog_does_not_alert_before_threshold(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300))
+    manager.check_watchdog(800.0, now=1000.0)  # only stale 200s
+    mock_post.assert_not_called()
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_watchdog_alerts_once_threshold_elapsed(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300))
+    manager.check_watchdog(700.0, now=1000.0)  # stale 300s
+
+    mock_post.assert_called_once()
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"]["watchdog"] == "orchestrator poll loop"
+    assert kwargs["json"]["duration_seconds"] == 300.0
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_watchdog_does_not_repeat_alert_within_repeat_interval(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300, repeat_interval_seconds=3600))
+    manager.check_watchdog(700.0, now=1000.0)
+    manager.check_watchdog(700.0, now=2000.0)  # still stale, well within repeat window
+
+    mock_post.assert_called_once()
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_watchdog_recovery_lets_a_fresh_stall_alert_on_its_own_threshold(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300, repeat_interval_seconds=3600))
+    manager.check_watchdog(700.0, now=1000.0)
+    assert mock_post.call_count == 1
+
+    manager.check_watchdog(None, now=1100.0)  # recovered - a fresh heartbeat came in
+    mock_post.reset_mock()
+
+    # Stalls again shortly after recovery - alerts again on its own fresh
+    # threshold, not suppressed by the old repeat window.
+    manager.check_watchdog(1100.0, now=1100.0 + 300)
+    assert mock_post.call_count == 1
+
+
+@patch("mediainfo.alerting.requests.post")
+def test_watchdog_and_output_alerting_are_independent(mock_post):
+    manager = AlertManager(_config(error_threshold_seconds=300))
+    manager.check({0: "pixoo"}, {0: 700.0}, now=1000.0)
+    manager.check_watchdog(700.0, now=1000.0)
+
+    assert mock_post.call_count == 2
+    kinds = {call.kwargs["json"]["kind"] for call in mock_post.call_args_list}
+    assert kinds == {"output", "watchdog"}

@@ -148,9 +148,15 @@ function row(name, status, detail, errMsg){
 
 function render(d){
   var hasErr = (d.outputs||[]).some(function(o){ return o.status === 'error'; });
-  var overall = hasErr ? 'degraded' : 'healthy';
+  // Same staleness scale as the watchdog thread itself (see
+  // Orchestrator._watchdog_stale_seconds in mediainfo/orchestrator.py) -
+  // poll loop hasn't ticked in a while even though this page itself is
+  // still reachable, which points at the poll loop being stuck or dead.
+  var pollLoopStale = d.seconds_since_last_tick != null
+    && d.seconds_since_last_tick > Math.max((d.poll_interval_seconds||5) * 6, 60);
+  var overall = (hasErr || pollLoopStale) ? 'degraded' : 'healthy';
   var pill = document.getElementById('pill');
-  pill.textContent = overall;
+  pill.textContent = pollLoopStale ? 'stalled' : overall;
   pill.className = 'pill ' + overall;
   document.getElementById('uptime').textContent = 'up ' + fmtUp(d.uptime_seconds||0);
 

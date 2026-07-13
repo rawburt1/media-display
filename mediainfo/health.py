@@ -266,6 +266,7 @@ def make_health_provider(orch: Orchestrator, config: Config, outputs: list):
             "status": "ok",
             "schema_version": HEALTH_SCHEMA_VERSION,
             "uptime_seconds": data["uptime_seconds"],
+            "seconds_since_last_tick": data["seconds_since_last_tick"],
             "poll_interval_seconds": data["poll_interval_seconds"],
             "rotation_interval_seconds": data["rotation_interval_seconds"],
             "now_playing": data["now_playing"],

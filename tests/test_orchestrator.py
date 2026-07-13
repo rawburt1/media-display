@@ -1568,6 +1568,77 @@ def test_get_health_includes_hitster_safe_state():
 
 
 # ---------------------------------------------------------------------------
+# Watchdog: tick heartbeat, seconds_since_last_tick, thread supervisor (M7)
+# ---------------------------------------------------------------------------
+
+
+def test_get_health_seconds_since_last_tick_none_before_first_heartbeat():
+    orch = _health_orchestrator()
+    assert orch.get_health()["seconds_since_last_tick"] is None
+
+
+def test_get_health_seconds_since_last_tick_after_heartbeat():
+    orch = _health_orchestrator()
+    orch._health.record_tick(time.monotonic())
+    seconds = orch.get_health()["seconds_since_last_tick"]
+    assert seconds is not None
+    assert seconds >= 0
+
+
+def test_run_records_a_heartbeat_after_each_iteration():
+    # _run() itself (not _tick()) is what records the heartbeat, since a
+    # tick that raises should still count as "the loop is alive" - _tick
+    # is mocked out here (and stops the loop as its own side effect, so
+    # this runs exactly one iteration) to isolate _run()'s own bookkeeping.
+    orch = _health_orchestrator()
+    orch._tick = MagicMock(side_effect=orch._stop_event.set)
+    orch._run()
+    assert orch._health.last_tick_at is not None
+
+
+def test_check_watchdog_does_nothing_before_first_tick(caplog):
+    orch = _health_orchestrator()
+    with patch.object(orch._alerts, "check_watchdog") as mock_check:
+        orch._check_watchdog()
+    mock_check.assert_not_called()
+    assert "stuck or dead" not in caplog.text
+
+
+def test_check_watchdog_is_quiet_when_recently_ticked(caplog):
+    orch = _health_orchestrator()
+    orch._health.record_tick(time.monotonic())
+    with caplog.at_level("CRITICAL"), patch.object(orch._alerts, "check_watchdog") as mock_check:
+        orch._check_watchdog()
+    assert "stuck or dead" not in caplog.text
+    args, _ = mock_check.call_args
+    assert args[0] is None  # not currently stale, so nothing to alert on
+
+
+def test_check_watchdog_logs_critical_when_stale(caplog):
+    orch = _health_orchestrator()
+    stale_since = time.monotonic() - orch._watchdog_stale_seconds - 5
+    orch._health.record_tick(stale_since)
+    with caplog.at_level("CRITICAL"), patch.object(orch._alerts, "check_watchdog") as mock_check:
+        orch._check_watchdog()
+    assert "stuck or dead" in caplog.text
+    args, _ = mock_check.call_args
+    assert args[0] == stale_since  # passes the stall's start time, not None
+
+
+def test_start_and_stop_run_both_threads_and_join_cleanly():
+    orch = _health_orchestrator()
+    orch.start()
+    try:
+        assert orch._thread.is_alive()
+        assert orch._watchdog_thread.is_alive()
+    finally:
+        orch.stop()
+        orch.join()
+    assert not orch._thread.is_alive()
+    assert not orch._watchdog_thread.is_alive()
+
+
+# ---------------------------------------------------------------------------
 # orchestrator_state.classify() (pure decision logic, no mocked outputs)
 # ---------------------------------------------------------------------------
 

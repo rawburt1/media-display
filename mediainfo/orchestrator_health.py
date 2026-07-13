@@ -23,6 +23,13 @@ class _HealthTracker:
     def __init__(self) -> None:
         self.start_time = time.monotonic()
         self.active_source_name: Optional[str] = None
+        # When the poll loop last completed one full iteration (including
+        # its own error handling) - None until the very first one. Read by
+        # a separate supervisor thread (Orchestrator._supervise) that has
+        # no other way to notice a stuck/dead poll loop, since a hung
+        # _tick() call never returns control to _run() to update anything
+        # itself. See seconds_since_last_tick in /health.
+        self.last_tick_at: Optional[float] = None
         self.source_polled: Dict[str, float] = {}
         self.source_backoff: Dict[str, _BackoffState] = {}
         # When the current (still-ongoing) failure streak for a source
@@ -37,6 +44,9 @@ class _HealthTracker:
         # continuously failing rather than just the most recent failure.
         # Used by alerting.AlertManager. Cleared on recovery.
         self.output_error_since: Dict[int, float] = {}
+
+    def record_tick(self, now: float) -> None:
+        self.last_tick_at = now
 
     def record_poll(self, name: str, now: float) -> None:
         self.source_polled[name] = now
@@ -63,6 +73,9 @@ class _HealthTracker:
     def as_dict(self, now: float) -> dict:
         return {
             "uptime_seconds": round(now - self.start_time, 1),
+            "seconds_since_last_tick": (
+                round(now - self.last_tick_at, 1) if self.last_tick_at is not None else None
+            ),
             "active_source": self.active_source_name,
             "source_last_polled_ago": {
                 name: round(now - ts, 1) for name, ts in self.source_polled.items()
