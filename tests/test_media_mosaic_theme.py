@@ -1,5 +1,7 @@
 """Tests for the Media Mosaic theme (mediainfo/themes/media_mosaic.py)."""
 
+from unittest.mock import patch
+
 from PIL import Image
 
 from mediainfo.cache import ImageCache
@@ -150,12 +152,17 @@ def test_reuses_cache_on_repeat_call(tmp_path):
     config = MediaMosaicConfig()
 
     result1 = theme.prepare(now_playing, None, paths[0], cache, None, config)
-    mtime1 = result1.derived_image_path.stat().st_mtime_ns
-    result2 = theme.prepare(now_playing, None, paths[0], cache, None, config)
-    mtime2 = result2.derived_image_path.stat().st_mtime_ns
 
+    # A repeat call must reuse the cached file rather than rebuilding it -
+    # proven directly by spying on the expensive build step, not by mtime
+    # equality: ImageCache now bumps mtime on every cache hit too (M2 in
+    # docs/architecture-usability-review-2026-07.md - needed for its
+    # size-capped LRU eviction to evict by real last-use, not last-build).
+    with patch.object(MediaMosaicTheme, "_build_mosaic") as mock_build:
+        result2 = theme.prepare(now_playing, None, paths[0], cache, None, config)
+
+    mock_build.assert_not_called()
     assert result1.derived_image_path == result2.derived_image_path
-    assert mtime1 == mtime2
 
 
 def test_highlights_the_current_tile(tmp_path):

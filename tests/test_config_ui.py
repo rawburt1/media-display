@@ -174,11 +174,11 @@ def test_schema_includes_all_categories(config_path):
     }
 
 
-def test_schema_mediadata_section_has_its_two_scalar_fields(config_path):
+def test_schema_mediadata_section_has_its_scalar_fields(config_path):
     out = _output(config_path)
     data = _client(out).get("/api/schema").get_json()
     field_names = {f["name"] for f in data["mediadata"]}
-    assert field_names == {"path", "cache_first"}
+    assert field_names == {"path", "cache_first", "max_disk_mb"}
 
 
 def test_form_saves_history_section(config_path):

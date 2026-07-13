@@ -19,6 +19,17 @@ def _song(**kwargs):
     return NowPlaying(**defaults)
 
 
+def test_enrich_triggers_size_capped_eviction_check():
+    # M2 - see docs/architecture-usability-review-2026-07.md: called on
+    # every enrich() (even non-music), self-gated inside MediaDataStore.
+    store = Mock(spec=MediaDataStore)
+    store.get_track_lyrics.return_value = None
+
+    MediaDataLyricsEnricher(config=object(), store=store).enrich(_song())
+
+    store.maybe_evict_by_size.assert_called_once_with()
+
+
 def test_sets_lyrics_on_hit():
     store = Mock(spec=MediaDataStore)
     store.get_track_lyrics.return_value = "[00:01.00] Hello, is there anybody in there?"

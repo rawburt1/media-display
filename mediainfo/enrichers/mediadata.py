@@ -51,6 +51,11 @@ class MediaDataArtworkEnricher(ArtworkEnricher):
         if store is None:
             return
 
+        # Self-gated to once every 24h - cheap to call on every track
+        # change (M2 in docs/architecture-usability-review-2026-07.md).
+        # Never raises - see maybe_evict_by_size()'s own docstring.
+        store.maybe_evict_by_size()
+
         try:
             if now_playing.media_type == "music":
                 self._enrich_music(now_playing, store)

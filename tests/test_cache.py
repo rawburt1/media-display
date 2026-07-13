@@ -278,6 +278,77 @@ def test_music_dir_created_on_init(tmp_path):
     assert cache.music_dir.is_dir()
 
 
+# ---------------------------------------------------------------------------
+# Music-tier size cap (M2 - see docs/architecture-usability-review-2026-07.md)
+# ---------------------------------------------------------------------------
+
+
+def _music_file(cache: ImageCache, name: str, size_bytes: int, age_seconds: float):
+    path = cache.music_dir / name
+    path.write_bytes(b"x" * size_bytes)
+    when = time.time() - age_seconds
+    os.utime(path, (when, when))
+    return path
+
+
+def test_evicts_least_recently_used_music_files_once_over_the_cap(tmp_path):
+    cache = ImageCache(tmp_path)
+    # Override the byte cap directly - max_music_mb's MB granularity is
+    # too coarse to express a useful cap against these tiny test files.
+    cache.max_music_bytes = 150
+
+    old = _music_file(cache, "old.jpg", 100, age_seconds=1000)
+    new = _music_file(cache, "new.jpg", 100, age_seconds=1)
+
+    cache.purge_expired()
+
+    assert not old.exists()
+    assert new.exists()
+
+
+def test_music_files_under_the_cap_are_all_kept(tmp_path):
+    cache = ImageCache(tmp_path, max_music_mb=1)  # 1 MB cap
+    a = _music_file(cache, "a.jpg", 100, age_seconds=1000)
+    b = _music_file(cache, "b.jpg", 100, age_seconds=1)
+
+    cache.purge_expired()
+
+    assert a.exists()
+    assert b.exists()
+
+
+def test_max_music_mb_zero_disables_the_cap(tmp_path):
+    cache = ImageCache(tmp_path, max_music_mb=0)
+    assert cache.max_music_bytes is None
+
+    huge = _music_file(cache, "huge.jpg", 10_000, age_seconds=100_000)
+    cache.purge_expired()
+
+    assert huge.exists()
+
+
+@patch("mediainfo.cache.requests.get")
+def test_get_path_cache_hit_bumps_mtime(mock_get, tmp_path):
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Type": "image/jpeg"}
+    mock_response.content = b"fake-image-bytes"
+    mock_response.raise_for_status = MagicMock()
+    mock_get.return_value = mock_response
+
+    cache = ImageCache(tmp_path)
+    artwork = Artwork(url="http://example.com/art.jpg")
+    path = cache.get_path(artwork)
+    assert path is not None
+
+    old_time = time.time() - 100_000
+    os.utime(path, (old_time, old_time))
+
+    cache.get_path(artwork)  # cache hit - mock_get not called again
+
+    assert path.stat().st_mtime > old_time
+    mock_get.assert_called_once()
+
+
 @patch("mediainfo.cache.requests.get")
 def test_get_transformed_path_for_music_image_stays_in_music_dir(mock_get, tmp_path):
     import io

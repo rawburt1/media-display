@@ -1,6 +1,8 @@
 """Tests for the Blurred Background theme
 (mediainfo/themes/blurred_background.py)."""
 
+from unittest.mock import patch
+
 from PIL import Image
 
 from mediainfo.cache import ImageCache
@@ -97,13 +99,17 @@ def test_prepare_reuses_cache_on_repeat_call(tmp_path):
     config = BlurredBackgroundConfig()
 
     result1 = theme.prepare(_now_playing(), _artwork(), img_path, cache, None, config)
-    mtime1 = result1.derived_image_path.stat().st_mtime_ns
 
-    result2 = theme.prepare(_now_playing(), _artwork(), img_path, cache, None, config)
-    mtime2 = result2.derived_image_path.stat().st_mtime_ns
+    # A repeat call must reuse the cached file rather than rebuilding it -
+    # proven directly by spying on the expensive build step, not by mtime
+    # equality: ImageCache now bumps mtime on every cache hit too (M2 in
+    # docs/architecture-usability-review-2026-07.md - needed for its
+    # size-capped LRU eviction to evict by real last-use, not last-build).
+    with patch.object(BlurredBackgroundTheme, "_build") as mock_build:
+        result2 = theme.prepare(_now_playing(), _artwork(), img_path, cache, None, config)
 
+    mock_build.assert_not_called()
     assert result1.derived_image_path == result2.derived_image_path
-    assert mtime1 == mtime2  # not rewritten - a real cache hit, not a rebuild
 
 
 def test_prepare_different_settings_produce_different_files(tmp_path):

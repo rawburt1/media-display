@@ -2,6 +2,7 @@
 wired into the live app for album art, movie/series posters+fanart, and
 lyrics - see the module's own docstring."""
 
+import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -1424,3 +1425,160 @@ def test_media_data_config_unknown_field_raises_validation_error():
 def test_media_data_config_accepts_nested_refresh_config():
     cfg = MediaDataConfig(refresh=MediaDataRefreshConfig(movies_days=7))
     assert cfg.refresh.movies_days == 7
+
+
+# ---------------------------------------------------------------------------
+# Size-capped eviction (M2 - see docs/architecture-usability-review-2026-07.md)
+# ---------------------------------------------------------------------------
+
+
+def _write_item(dir_path, size_bytes: int, age_seconds: float, filename="poster.jpg"):
+    dir_path.mkdir(parents=True, exist_ok=True)
+    path = dir_path / filename
+    path.write_bytes(b"x" * size_bytes)
+    when = time.time() - age_seconds
+    os.utime(path, (when, when))
+    return path
+
+
+def test_evict_by_size_does_nothing_under_the_cap(tmp_path):
+    store = _store(tmp_path, max_disk_mb=100)
+    movie_dir = store.movie_dir("Alien", 1979)
+    _write_item(movie_dir, 100, age_seconds=1000)
+
+    store.evict_by_size()
+
+    assert movie_dir.exists()
+
+
+def test_evict_by_size_removes_the_least_recently_used_item_first(tmp_path):
+    store = _store(tmp_path)
+    # Override the byte cap directly - max_disk_mb's MB granularity is too
+    # coarse to express a useful cap against these tiny test files (see
+    # test_cache.py's matching max_music_bytes pattern).
+    store.max_disk_bytes = 150
+
+    old_movie = store.movie_dir("Old Movie", 2000)
+    new_movie = store.movie_dir("New Movie", 2020)
+    _write_item(old_movie, 100, age_seconds=1000)
+    _write_item(new_movie, 100, age_seconds=1)
+
+    store.evict_by_size()
+
+    assert not old_movie.exists()
+    assert new_movie.exists()
+
+
+def test_evict_by_size_deletes_the_whole_item_directory_not_just_one_file(tmp_path):
+    store = _store(tmp_path)
+    store.max_disk_bytes = 50
+
+    movie_dir = store.movie_dir("Alien", 1979)
+    _write_item(movie_dir, 40, age_seconds=1000, filename="poster.jpg")
+    _write_item(movie_dir, 40, age_seconds=1000, filename="fanart.jpg")
+    (movie_dir / "metadata.json").write_text("{}")
+
+    store.evict_by_size()
+
+    assert not movie_dir.exists()
+
+
+def test_evict_by_size_zero_disables_the_cap(tmp_path):
+    store = _store(tmp_path, max_disk_mb=0)
+    movie_dir = store.movie_dir("Alien", 1979)
+    _write_item(movie_dir, 10_000, age_seconds=1_000_000)
+
+    store.evict_by_size()
+
+    assert movie_dir.exists()
+
+
+def test_evict_by_size_treats_each_album_as_its_own_unit_separate_from_the_artist(tmp_path):
+    store = _store(tmp_path)
+    store.max_disk_bytes = 150
+
+    artist_dir = store.root / "music" / "Boards of Canada"
+    old_album = store.album_dir("Boards of Canada", "Old Album", 1998)
+    new_album = store.album_dir("Boards of Canada", "New Album", 2020)
+    _write_item(artist_dir, 100, age_seconds=1000, filename="artist.jpg")
+    _write_item(old_album, 100, age_seconds=2000, filename="albumart.jpg")
+    _write_item(new_album, 100, age_seconds=1, filename="albumart.jpg")
+
+    store.evict_by_size()
+
+    # old_album (oldest) and the artist-level unit both go before enough
+    # space is freed; new_album is the most recently used and survives.
+    assert not old_album.exists()
+    assert not (artist_dir / "artist.jpg").exists()
+    assert new_album.exists()
+
+
+def test_evict_by_size_evicting_artist_level_files_does_not_touch_album_subdirs(tmp_path):
+    store = _store(tmp_path)
+
+    artist_dir = store.root / "music" / "Boards of Canada"
+    album_dir = store.album_dir("Boards of Canada", "Music Has the Right to Children", 1998)
+    _write_item(artist_dir, 100, age_seconds=1_000_000, filename="artist.jpg")
+    _write_item(album_dir, 100, age_seconds=1, filename="albumart.jpg")
+
+    # Cap small enough that only the (much older) artist-level unit needs
+    # evicting to get under it.
+    store.max_disk_bytes = 150
+
+    store.evict_by_size()
+
+    assert not (artist_dir / "artist.jpg").exists()
+    assert (album_dir / "albumart.jpg").exists()
+
+
+def test_evict_by_size_prunes_the_artist_dir_once_fully_empty(tmp_path):
+    store = _store(tmp_path)
+
+    artist_dir = store.root / "music" / "Solo Artist"
+    _write_item(artist_dir, 100, age_seconds=1_000_000, filename="artist.jpg")
+
+    # Force eviction of everything regardless of cap, to exercise the
+    # empty-artist-dir cleanup specifically.
+    store.max_disk_bytes = 1
+    store.evict_by_size()
+
+    assert not artist_dir.exists()
+
+
+def test_maybe_evict_by_size_is_self_gated(tmp_path):
+    store = _store(tmp_path, max_disk_mb=1)
+    movie_dir = store.movie_dir("Alien", 1979)
+    _write_item(movie_dir, 10_000, age_seconds=1_000_000)
+
+    with patch.object(store, "evict_by_size") as mock_evict:
+        store.maybe_evict_by_size()
+        store.maybe_evict_by_size()
+
+    mock_evict.assert_called_once()
+
+
+def test_maybe_evict_by_size_never_raises(tmp_path, caplog):
+    import logging
+
+    store = _store(tmp_path, max_disk_mb=1)
+    with patch.object(store, "evict_by_size", side_effect=RuntimeError("boom")):
+        with caplog.at_level(logging.ERROR, logger="mediainfo.media_data_store"):
+            store.maybe_evict_by_size()  # must not raise
+
+    assert any("eviction failed" in r.message for r in caplog.records)
+
+
+def test_resolve_content_cache_hit_bumps_mtime(tmp_path):
+    store = _store(tmp_path)
+    item_dir = store.movie_dir("Alien", 1979)
+    _seed_stale_entry(store, item_dir, "poster.jpg", "poster", days_old=1)  # fresh, not stale
+    path = item_dir / "poster.jpg"
+    old_time = time.time() - 100_000
+    os.utime(path, (old_time, old_time))
+    fetch_fn = MagicMock()
+
+    result = store._resolve_artwork(item_dir, "poster.jpg", "poster", 180, fetch_fn)
+
+    fetch_fn.assert_not_called()  # a pure cache hit - not stale
+    assert result == path
+    assert path.stat().st_mtime > old_time

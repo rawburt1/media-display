@@ -67,6 +67,14 @@ class CacheConfig:
     # deliberate choice, not a downloaded fallback.
     min_width: int = 640
     min_height: int = 480
+    # Music artwork (album art, artist photos) is never purged by age (see
+    # mediainfo.cache.ImageCache's music_dir) - re-fetching the same
+    # handful of albums/artists every time they're replayed isn't worth
+    # it. Still bounded by total size to avoid unbounded disk growth on a
+    # small device over years: once this is exceeded, the
+    # least-recently-used files are evicted first. Set to 0 to disable the
+    # cap entirely (the old unbounded behavior).
+    max_music_mb: int = 500
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
@@ -145,9 +153,9 @@ class MediaDataRefreshConfig:
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
 class MediaDataConfig:
-    # Foundation for a future unified on-disk artwork/lyrics/metadata cache
-    # (see mediainfo/media_data_store.py) - not yet wired into the running
-    # app; nothing reads this config today.
+    # Unified on-disk artwork/lyrics/metadata cache (see
+    # mediainfo/media_data_store.py), read by the opt-in
+    # enrichers.mediadata / text_enrichers.mediadata plugins.
     path: str = "./mediadata"
     # Whether to prefer the local cache over an external re-check - True
     # (the default) means cached content is served immediately even when
@@ -155,3 +163,12 @@ class MediaDataConfig:
     # afterwards rather than blocking the caller.
     cache_first: bool = True
     refresh: MediaDataRefreshConfig = dataclasses.field(default_factory=MediaDataRefreshConfig)
+    # Total size cap across the whole store, in MB - like
+    # cache.max_music_mb, content here isn't purged by age (a movie's
+    # poster doesn't go stale the way idle wallpapers do), so this is the
+    # backstop against unbounded growth on a small device as a library
+    # grows over years (M2 in docs/architecture-usability-review-2026-07.md).
+    # Once exceeded, whole least-recently-used items (a movie/series/
+    # artist/album's entire folder) are evicted first. Set to 0 to disable
+    # the cap entirely.
+    max_disk_mb: int = 2000

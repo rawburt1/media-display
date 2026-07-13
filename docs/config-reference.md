@@ -26,6 +26,7 @@ For a narrative, worked-example config with prose explanations and cross-referen
 | `idle_max_age_hours` | int | `48` |  |  |  |
 | `min_width` | int | `640` |  |  |  |
 | `min_height` | int | `480` |  |  |  |
+| `max_music_mb` | int | `500` |  |  |  |
 
 ## Playback History
 
@@ -89,6 +90,7 @@ For a narrative, worked-example config with prose explanations and cross-referen
 |---|---|---|---|---|---|
 | `path` | str | `'./mediadata'` |  |  |  |
 | `cache_first` | bool | `True` |  |  |  |
+| `max_disk_mb` | int | `2000` |  |  |  |
 
 ## Media sources
 

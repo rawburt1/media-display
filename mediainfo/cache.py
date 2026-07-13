@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import requests
 from PIL import Image, UnidentifiedImageError
 
+from mediainfo.disk_eviction import EvictionUnit, evict_by_size
 from mediainfo.models import Artwork
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,12 @@ _HEADERS = {"User-Agent": "mediainfo/1.0 (+https://github.com/rawburt1/media-dis
 # min_height params (configurable via CacheConfig.min_width/min_height).
 _DEFAULT_MIN_WIDTH = 400
 _DEFAULT_MIN_HEIGHT = 400
+
+# Default cap for the "music" tier (never purged by age - see
+# ImageCache.__init__'s music_dir comment) - a few thousand cached album
+# art + artist photo images, generous for a typical home library while
+# still bounded (M2 in docs/architecture-usability-review-2026-07.md).
+_DEFAULT_MAX_MUSIC_MB = 500
 
 
 def flatten_transparency(img: Image.Image, background: str = "white") -> Image.Image:
@@ -71,6 +78,7 @@ class ImageCache:
         idle_max_age_hours: int = 48,
         min_width: int = _DEFAULT_MIN_WIDTH,
         min_height: int = _DEFAULT_MIN_HEIGHT,
+        max_music_mb: Optional[int] = _DEFAULT_MAX_MUSIC_MB,
     ):
         # Resolve to an absolute path: Flask's send_file() resolves relative
         # paths against the app module's directory, not the cwd, so a
@@ -85,15 +93,19 @@ class ImageCache:
         self.idle_dir = self.cache_dir / "idle"
         self.idle_dir.mkdir(parents=True, exist_ok=True)
         # Music artwork (album art, artist photos) lives here instead and is
-        # never purged - re-fetching the same handful of albums/artists
-        # every time they're replayed isn't worth it the way it is for the
-        # much larger, ever-changing set of movie/TV posters and fanart.
+        # never purged *by age* - re-fetching the same handful of albums/
+        # artists every time they're replayed isn't worth it the way it is
+        # for the much larger, ever-changing set of movie/TV posters and
+        # fanart. It's still bounded by total size (see
+        # _evict_music_by_size/max_music_mb) - a slowly-growing library on
+        # a small device (a Pi) would otherwise fill the disk over years.
         self.music_dir = self.cache_dir / "music"
         self.music_dir.mkdir(parents=True, exist_ok=True)
         self.max_age_seconds = max_age_days * 86400
         self.idle_max_age_seconds = idle_max_age_hours * 3600
         self.min_width = min_width
         self.min_height = min_height
+        self.max_music_bytes = max_music_mb * 1024 * 1024 if max_music_mb else None
         self._tier_dirs: Dict[CacheTier, Path] = {
             "default": self.cache_dir,
             "idle": self.idle_dir,
@@ -120,6 +132,14 @@ class ImageCache:
         key = hashlib.sha256(artwork.url.encode("utf-8")).hexdigest()
         existing = self._find_existing(key, base_dir)
         if existing is not None:
+            # Bump mtime on every hit, not just on a fresh download - the
+            # "music" tier's size-capped eviction (see _evict_music_by_size)
+            # needs a real last-used signal to evict correctly, and this
+            # also makes the "still in regular use" mtime-refresh
+            # purge_expired()'s own docstring already promises for the
+            # other tiers actually true (M2 in
+            # docs/architecture-usability-review-2026-07.md).
+            existing.touch()
             return existing
 
         headers = {**_HEADERS, **artwork.headers} if artwork.headers else _HEADERS
@@ -305,6 +325,7 @@ class ImageCache:
         key = f"{original_path.stem}_{cache_key}"
         existing = self._find_existing(key, base_dir)
         if existing is not None:
+            existing.touch()  # see get_path()'s matching comment
             return existing
 
         result = build(Image.open(original_path))
@@ -324,10 +345,13 @@ class ImageCache:
         in regular use is re-fetched on its next access, which refreshes its
         mtime, so this only ever removes genuinely stale files.
 
-        music_dir is deliberately not purged here - see its docstring above.
+        music_dir is deliberately not age-purged here - see its docstring
+        above - but is still swept for a total-size cap (see
+        _evict_music_by_size).
         """
         self._purge_dir(self.cache_dir, self.max_age_seconds)
         self._purge_dir(self.idle_dir, self.idle_max_age_seconds)
+        self._evict_music_by_size()
 
     @staticmethod
     def _purge_dir(dir_path: Path, max_age_seconds: float) -> None:
@@ -336,3 +360,23 @@ class ImageCache:
             if path.is_file() and path.stat().st_mtime < cutoff:
                 path.unlink()
                 logger.info("Purged expired cached artwork %s", path.name)
+
+    def _evict_music_by_size(self) -> None:
+        """Size-capped LRU eviction for music_dir (M2 in
+        docs/architecture-usability-review-2026-07.md) - a backstop against
+        unbounded growth, independent of (and much coarser-grained than)
+        the age-based purge every other tier gets, since music content is
+        deliberately kept regardless of age. No-op if max_music_bytes is
+        None (max_music_mb: 0/null in config - uncapped, the old
+        "never purged" behavior).
+        """
+        if self.max_music_bytes is None:
+            return
+        units = [
+            EvictionUnit(path=path, last_used=path.stat().st_mtime, size_bytes=path.stat().st_size)
+            for path in self.music_dir.iterdir()
+            if path.is_file()
+        ]
+        deleted = evict_by_size(units, self.max_music_bytes, delete=lambda p: p.unlink())
+        for path in deleted:
+            logger.info("Evicted least-recently-used music artwork %s (size cap)", path.name)

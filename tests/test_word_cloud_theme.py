@@ -1,6 +1,6 @@
 """Tests for the Word Cloud theme (mediainfo/themes/word_cloud.py)."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from PIL import Image
 
@@ -165,12 +165,17 @@ def test_movie_reuses_cache_on_repeat_call(tmp_path):
     theme = WordCloudTheme()
 
     result1 = theme.prepare(_movie(), _artwork(), img_path, cache, None, WordCloudConfig())
-    mtime1 = result1.derived_image_path.stat().st_mtime_ns
-    result2 = theme.prepare(_movie(), _artwork(), img_path, cache, None, WordCloudConfig())
-    mtime2 = result2.derived_image_path.stat().st_mtime_ns
 
+    # A repeat call must reuse the cached file rather than rebuilding it -
+    # proven directly by spying on the expensive build step, not by mtime
+    # equality: ImageCache now bumps mtime on every cache hit too (M2 in
+    # docs/architecture-usability-review-2026-07.md - needed for its
+    # size-capped LRU eviction to evict by real last-use, not last-build).
+    with patch.object(WordCloudTheme, "_build_summary") as mock_build:
+        result2 = theme.prepare(_movie(), _artwork(), img_path, cache, None, WordCloudConfig())
+
+    mock_build.assert_not_called()
     assert result1.derived_image_path == result2.derived_image_path
-    assert mtime1 == mtime2
 
 
 def test_movie_different_summary_produces_different_file(tmp_path):

@@ -205,6 +205,7 @@ def _build_cache(config: Config) -> ImageCache:
         idle_max_age_hours=config.cache.idle_max_age_hours,
         min_width=config.cache.min_width,
         min_height=config.cache.min_height,
+        max_music_mb=config.cache.max_music_mb or None,
     )
 
 

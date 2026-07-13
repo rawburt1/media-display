@@ -1211,6 +1211,14 @@ cache:
   # fallback.
   min_width: 640
   min_height: 480
+  # Music artwork (album art, artist photos - stored under <dir>/music)
+  # is never purged by age - re-fetching the same handful of albums/
+  # artists every time they're replayed isn't worth it. Still bounded by
+  # total size so a slowly-growing library doesn't fill the disk on a
+  # small device (a Pi) over years: once this is exceeded, the
+  # least-recently-used files are evicted first. Set to 0 to disable the
+  # cap entirely (the old unbounded behavior).
+  max_music_mb: 500
 
 # Unified, human-browsable artwork/lyrics/metadata cache
 # (mediainfo/media_data_store.py) that organizes content as
@@ -1233,6 +1241,13 @@ mediadata:
     music_days: 365
     # (Lyrics are never auto-refreshed by age - only fetched once if
     # missing, or via an explicit manual refresh.)
+  # Total size cap across the whole store, in MB - like cache.max_music_mb
+  # above, content here isn't purged by age (a movie's poster doesn't go
+  # stale the way idle wallpapers do), so this is the backstop against
+  # unbounded growth as a library grows over years. Once exceeded, whole
+  # least-recently-used items (a movie/series/artist/album's entire
+  # folder) are evicted first. Set to 0 to disable the cap entirely.
+  max_disk_mb: 2000
 
 # Local SQLite database of artist/album/track metadata (MusicBrainz ids,
 # cached cover art URLs, artist photos) - queried before the musicbrainz,

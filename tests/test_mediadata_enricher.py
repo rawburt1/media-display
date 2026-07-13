@@ -40,6 +40,18 @@ def _episode(**kwargs):
     return NowPlaying(**defaults)
 
 
+def test_enrich_triggers_size_capped_eviction_check(tmp_path):
+    # M2 - see docs/architecture-usability-review-2026-07.md: called on
+    # every enrich(), self-gated inside MediaDataStore itself.
+    store = Mock(spec=MediaDataStore)
+    store.get_artist_photo.return_value = None
+    store.get_album_art.return_value = None
+
+    MediaDataArtworkEnricher(config=_config(), store=store).enrich(_song())
+
+    store.maybe_evict_by_size.assert_called_once_with()
+
+
 def test_adds_album_art_on_hit(tmp_path):
     store = Mock(spec=MediaDataStore)
     store.get_artist_photo.return_value = None

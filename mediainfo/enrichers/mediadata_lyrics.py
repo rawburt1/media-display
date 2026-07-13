@@ -39,7 +39,15 @@ class MediaDataLyricsEnricher(TextEnricher):
         self.store = store
 
     def enrich(self, now_playing: NowPlaying) -> None:
-        if self.store is None or now_playing.media_type != "music":
+        if self.store is None:
+            return
+
+        # Self-gated to once every 24h - cheap to call on every track
+        # change (M2 in docs/architecture-usability-review-2026-07.md).
+        # Never raises - see maybe_evict_by_size()'s own docstring.
+        self.store.maybe_evict_by_size()
+
+        if now_playing.media_type != "music":
             return
 
         artist, title, album = now_playing.subtitle, now_playing.title, now_playing.album

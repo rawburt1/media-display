@@ -33,18 +33,22 @@ see docs/adr/0002-media-data-store-layout.md.
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import re
+import shutil
 import tempfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from mediainfo.cache import ImageCache
 from mediainfo.config import MediaDataConfig
+from mediainfo.disk_eviction import EvictionUnit
+from mediainfo.disk_eviction import evict_by_size as _evict_by_size
 from mediainfo.enrichers import discogs, fanarttv, lastfm, lrclib, musicbrainz, tmdb, wikipedia
 from mediainfo.models import Artwork
 
@@ -73,6 +77,12 @@ _LOOKUP_CACHE_SECONDS = 30
 # characters too) even though this runs on Linux, since the resulting
 # folder names are meant to be portable/human-browsable.
 _UNSAFE_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+# How often maybe_evict_by_size() actually walks the store's directory
+# tree - called opportunistically from the mediadata enrichers' enrich()
+# (once per track change), so this keeps it from re-walking a
+# possibly-large tree on every single track change.
+_EVICTION_CHECK_INTERVAL_SECONDS = 24 * 60 * 60
 
 
 def _sanitize(name: str) -> str:
@@ -135,6 +145,9 @@ class MediaDataStore:
         # against starting a second background fetch for the same file
         # while one is already running.
         self._refresh_in_progress: set = set()
+        # self-gates maybe_evict_by_size() - see _EVICTION_CHECK_INTERVAL_SECONDS.
+        self._last_eviction_check: Optional[float] = None
+        self.max_disk_bytes = config.max_disk_mb * 1024 * 1024 if config.max_disk_mb else None
 
     # -- path builders -----------------------------------------------------
 
@@ -247,6 +260,11 @@ class MediaDataStore:
 
             if path.exists():
                 if not force:
+                    # Bump mtime on every serve, not just a fresh fetch -
+                    # evict_by_size()'s LRU eviction needs a real
+                    # last-used signal (M2 in
+                    # docs/architecture-usability-review-2026-07.md).
+                    path.touch()
                     if not self.config.refresh.enabled:
                         return path
                     if not self._is_stale(entry or {}, max_age_days):
@@ -971,3 +989,137 @@ class MediaDataStore:
             merged = {**new_metadata, **old_metadata}
             self._write_metadata(new_dir, merged)
             old_dir.rmdir()
+
+    # -- size-capped eviction (M2) --------------------------------------
+
+    def maybe_evict_by_size(self) -> None:
+        """evict_by_size(), at most once every
+        _EVICTION_CHECK_INTERVAL_SECONDS - cheap self-gating so callers
+        (the mediadata enrichers' enrich(), invoked on every track change)
+        can call this unconditionally without re-walking the whole store's
+        directory tree on every single track change.
+
+        Never raises - a permissions error or similar deleting one item
+        must not also break that tick's real artwork/lyrics lookup for
+        the enricher calling this, matching this project's "one broken
+        thing never breaks the rest of the pipeline" convention.
+        """
+        now = time.monotonic()
+        if (
+            self._last_eviction_check is not None
+            and now - self._last_eviction_check < _EVICTION_CHECK_INTERVAL_SECONDS
+        ):
+            return
+        self._last_eviction_check = now
+        try:
+            self.evict_by_size()
+        except Exception:
+            logger.exception("MediaDataStore: size-capped eviction failed")
+
+    def evict_by_size(self) -> None:
+        """Size-capped LRU eviction across the whole store (M2 in
+        docs/architecture-usability-review-2026-07.md) - a backstop
+        against unbounded growth, independent of the per-media-type
+        refresh policy (which governs when content is re-checked, not
+        whether old content is ever removed at all). No-op if
+        config.max_disk_mb is 0 (uncapped).
+
+        Eviction units are whole item directories, not individual files:
+        movies/{Title} ({Year})/, series/{Title} ({Year})/, each
+        music/{Artist}/{Album} ({Year})/, and music/{Artist}/'s own direct
+        files (artist photo + metadata.json - excluding its Album
+        subdirectories, which are their own separate units). Deleting a
+        whole unit at once keeps metadata.json in sync with the artwork/
+        lyrics files it describes; deleting individual files within a
+        unit would leave stale metadata.json entries pointing at files
+        that no longer exist. "Last used" per unit is the newest mtime
+        among its files - _resolve_content() bumps a file's mtime on
+        every serve, not just a fresh fetch, so this reflects actual use,
+        not merely how recently something happened to be re-checked.
+        """
+        if self.max_disk_bytes is None:
+            return
+        units, delete_fns = self._eviction_units()
+        deleted = _evict_by_size(units, self.max_disk_bytes, delete=lambda p: delete_fns[p]())
+        for path in deleted:
+            logger.info("Evicted least-recently-used mediadata item %s (size cap)", path)
+        self._prune_empty_artist_dirs()
+
+    def _eviction_units(self) -> Tuple[List[EvictionUnit], Dict[Path, Callable[[], None]]]:
+        units: List[EvictionUnit] = []
+        delete_fns: Dict[Path, Callable[[], None]] = {}
+
+        for top in ("movies", "series"):
+            top_dir = self.root / top
+            if not top_dir.is_dir():
+                continue
+            for item_dir in top_dir.iterdir():
+                if not item_dir.is_dir():
+                    continue
+                unit = self._unit_for_dir(item_dir, recursive=True)
+                if unit is not None:
+                    units.append(unit)
+                    delete_fns[item_dir] = functools.partial(shutil.rmtree, item_dir)
+
+        music_dir = self.root / "music"
+        if music_dir.is_dir():
+            for artist_dir in music_dir.iterdir():
+                if not artist_dir.is_dir():
+                    continue
+                artist_unit = self._unit_for_dir(artist_dir, recursive=False)
+                if artist_unit is not None:
+                    units.append(artist_unit)
+                    delete_fns[artist_dir] = functools.partial(
+                        self._delete_direct_files, artist_dir
+                    )
+                for album_dir in artist_dir.iterdir():
+                    if not album_dir.is_dir():
+                        continue
+                    album_unit = self._unit_for_dir(album_dir, recursive=True)
+                    if album_unit is not None:
+                        units.append(album_unit)
+                        delete_fns[album_dir] = functools.partial(shutil.rmtree, album_dir)
+
+        return units, delete_fns
+
+    @staticmethod
+    def _unit_for_dir(item_dir: Path, recursive: bool) -> Optional[EvictionUnit]:
+        """One EvictionUnit covering every file directly in item_dir - or,
+        if recursive, in its subdirectories too. recursive=False is only
+        used for music/{Artist}/ itself, whose Album subdirectories are
+        their own separate units (see _eviction_units) and must not be
+        counted here. Returns None for a directory with no files of its
+        own (nothing to evict as this unit - e.g. an artist dir that's
+        just a container for Album subdirectories)."""
+        files = item_dir.rglob("*") if recursive else item_dir.iterdir()
+        total_size = 0
+        last_used = 0.0
+        for f in files:
+            if not f.is_file():
+                continue
+            stat = f.stat()
+            total_size += stat.st_size
+            last_used = max(last_used, stat.st_mtime)
+        if last_used == 0.0:
+            return None
+        return EvictionUnit(path=item_dir, last_used=last_used, size_bytes=total_size)
+
+    @staticmethod
+    def _delete_direct_files(dir_path: Path) -> None:
+        for f in dir_path.iterdir():
+            if f.is_file():
+                f.unlink()
+
+    def _prune_empty_artist_dirs(self) -> None:
+        """Remove music/{Artist}/ directories left empty after eviction -
+        e.g. once both its own artist-level files and every Album
+        subdirectory have been evicted. Cosmetic only (an empty directory
+        costs negligible disk space); never touches movies/series, whose
+        item directories are already leaf units with nothing left to
+        prune once evicted."""
+        music_dir = self.root / "music"
+        if not music_dir.is_dir():
+            return
+        for artist_dir in music_dir.iterdir():
+            if artist_dir.is_dir() and not any(artist_dir.iterdir()):
+                artist_dir.rmdir()
