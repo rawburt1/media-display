@@ -763,6 +763,43 @@ outputs:
     assert cfg.outputs["web"][0].transition_exclude == ["zoom", "fade"]
 
 
+def test_save_form_sets_priority_lists(config_path):
+    # The new shell's Pipeline section's "Timing & priority" panel (H5 M5)
+    # saves through the same /api/config/form "values" path as any other
+    # general.* field - no dedicated save path needed.
+    config_path.write_text(
+        """
+priority:
+- kodi
+- plex
+sources:
+  kodi:
+    enabled: true
+    host: 1.2.3.4
+  plex:
+    enabled: true
+    host: 5.6.7.8
+    token: abc
+"""
+    )
+    out = _output(config_path)
+    client = _client(out)
+    client.post(
+        "/api/config/form",
+        json={
+            "values": {
+                "general.priority": ["plex", "kodi"],
+                "general.idle_priority": ["local"],
+            },
+            "outputs": {},
+        },
+    )
+
+    cfg = Config.load(config_path)
+    assert cfg.priority == ["plex", "kodi"]
+    assert cfg.idle_priority == ["local"]
+
+
 def test_save_form_sets_filter_fields_on_output_instance(config_path):
     # The new shell's "Content filters" block (H5 M3) posts these through
     # the same /api/config/form endpoint as every other output field - no

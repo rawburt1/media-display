@@ -317,10 +317,31 @@ function renderPipeline() {
   }
   var pipeline = pipelineData[0] || {};
   var html = '<h1>Pipeline</h1>'
-    + '<p class="lede">What’s currently enabled at each stage of the media flow - read-only for now, reordering is a future phase.</p>';
+    + '<p class="lede">What’s currently enabled at each stage of the media flow.</p>';
   html += '<div class="card"><div class="pipeline-grid">' + PIPELINE_STAGES.map(function(stage) {
     return pipelineStage(stage.label, pipeline[stage.key] || []);
   }).join('') + '</div></div>';
+
+  if (priorityWorking) {
+    html += '<h2 class="group-title">Timing &amp; priority</h2>';
+    html += renderPriorityList(
+      'source', 'general.priority',
+      'Source priority',
+      'When more than one source is active at once, the highest one in this list wins. A source you enable above but don’t add here is simply never used.',
+      'sources'
+    );
+    html += renderPriorityList(
+      'idle_source', 'general.idle_priority',
+      'Idle screen priority',
+      'When nothing is playing, the highest enabled idle source in this list is shown.',
+      'idle sources'
+    );
+    html += '<div class="action-row">'
+      + '<button type="button" class="btn secondary" onclick="discardPriorityEdits()">Discard</button>'
+      + '<button type="button" class="btn" onclick="savePriorityLists()">Save</button>'
+      + '</div>'
+      + '<div id="priority-save-status" style="margin-top:8px;font-size:12.5px;"></div>';
+  }
 
   var idleIds = componentsData
     .filter(function(c) { return c.component_type === 'idle_source' && c.enabled; })
@@ -338,6 +359,153 @@ function fetchPipeline() {
     pipelineData = data;
     if (currentSection === 'pipeline') renderPipeline();
   }).catch(function() {});
+}
+
+// ---------------------------------------------------------------------
+// Pipeline section: source/idle priority reordering (H5 M5) - the one
+// piece of Pipeline that's actually editable. There's no single
+// component id to hang this off (it's two top-level config.yaml keys,
+// not one plugin's settings), so it gets its own small save/discard pair
+// instead of components.js's per-component one - but saves through the
+// exact same /api/config/form "values" path
+// ({"general.priority": [...], "general.idle_priority": [...]}), and
+// reuses the same hasUnsavedComponentEdits dirty flag so navigating away
+// or closing the tab mid-edit is guarded the same way a component
+// detail page's edits are.
+// ---------------------------------------------------------------------
+var priorityWorking = null; // {"general.priority": [...], "general.idle_priority": [...]} once loaded
+
+function fetchPriorityLists() {
+  if (hasUnsavedComponentEdits) return Promise.resolve(); // don't clobber an in-progress edit on a poll tick
+  return apiFetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+    var values = cfg.values || {};
+    priorityWorking = {
+      'general.priority': values['general.priority'] || [],
+      'general.idle_priority': values['general.idle_priority'] || [],
+    };
+  }).catch(function() {});
+}
+
+function priorityAllNames(componentType) {
+  return componentsData.filter(function(c) { return c.component_type === componentType; })
+    .map(function(c) { return c.id.split('.')[1]; });
+}
+
+function priorityComponent(componentType, name) {
+  return componentsById[(componentType === 'source' ? 'sources.' : 'idle.') + name];
+}
+
+var _priorityDragName = null;
+function priorityDragStart(name) { _priorityDragName = name; }
+function priorityDragOver(e) { e.preventDefault(); }
+function priorityDrop(e, key, targetName) {
+  e.preventDefault();
+  if (!_priorityDragName || _priorityDragName === targetName) return;
+  var list = priorityWorking[key];
+  var from = list.indexOf(_priorityDragName);
+  var to = list.indexOf(targetName);
+  _priorityDragName = null;
+  if (from === -1 || to === -1) return;
+  list.splice(from, 1);
+  list.splice(to, 0, _priorityDragName);
+  hasUnsavedComponentEdits = true;
+  renderPipeline();
+}
+function priorityMove(key, name, delta) {
+  var list = priorityWorking[key];
+  var i = list.indexOf(name);
+  var j = i + delta;
+  if (i === -1 || j < 0 || j >= list.length) return;
+  list.splice(i, 1);
+  list.splice(j, 0, name);
+  hasUnsavedComponentEdits = true;
+  renderPipeline();
+}
+function priorityRemove(key, name) {
+  priorityWorking[key] = priorityWorking[key].filter(function(n) { return n !== name; });
+  hasUnsavedComponentEdits = true;
+  renderPipeline();
+}
+function priorityAdd(key, name) {
+  if (priorityWorking[key].indexOf(name) === -1) priorityWorking[key].push(name);
+  hasUnsavedComponentEdits = true;
+  renderPipeline();
+}
+
+function renderPriorityList(componentType, key, title, help, noun) {
+  var allNames = priorityAllNames(componentType);
+  var order = priorityWorking[key].filter(function(n) { return allNames.indexOf(n) !== -1; });
+  var missing = allNames.filter(function(n) {
+    var c = priorityComponent(componentType, n);
+    return order.indexOf(n) === -1 && c && c.enabled;
+  });
+
+  var html = '<div class="card"><h2 class="heading-sm">' + esc(title) + '</h2>'
+    + '<p class="field-help" style="margin:6px 0 12px;">' + esc(help) + '</p>';
+
+  if (!order.length) {
+    html += '<p class="field-help">No enabled ' + esc(noun) + ' are in priority order yet.</p>';
+  } else {
+    html += '<ul class="order-list">' + order.map(function(name, i) {
+      var c = priorityComponent(componentType, name);
+      var label = c ? c.name : name;
+      return '<li class="order-item" draggable="true" '
+        + 'ondragstart="priorityDragStart(\'' + esc(name) + '\')" ondragover="priorityDragOver(event)" '
+        + 'ondrop="priorityDrop(event,\'' + key + '\',\'' + esc(name) + '\')">'
+        + '<span class="grip" aria-hidden="true">☰</span>'
+        + '<span class="name">' + (i + 1) + '. ' + esc(label) + '</span>'
+        + '<button type="button" aria-label="Move up" onclick="priorityMove(\'' + key + '\',\'' + esc(name) + '\',-1)"' + (i === 0 ? ' disabled' : '') + '>↑</button>'
+        + '<button type="button" aria-label="Move down" onclick="priorityMove(\'' + key + '\',\'' + esc(name) + '\',1)"' + (i === order.length - 1 ? ' disabled' : '') + '>↓</button>'
+        + '<button type="button" aria-label="Remove from priority" onclick="priorityRemove(\'' + key + '\',\'' + esc(name) + '\')">Remove</button>'
+        + '</li>';
+    }).join('') + '</ul>';
+  }
+
+  if (missing.length) {
+    html += '<div class="missing-priority">' + missing.map(function(name) {
+      var c = priorityComponent(componentType, name);
+      var label = c ? c.name : name;
+      return esc(label) + ' is enabled but not in priority - '
+        + '<button type="button" class="link-btn" onclick="priorityAdd(\'' + key + '\',\'' + esc(name) + '\')">add it</button>';
+    }).join('<br>') + '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function savePriorityLists() {
+  var statusEl = document.getElementById('priority-save-status');
+  statusEl.textContent = 'Saving…';
+  statusEl.className = '';
+  apiFetch('/api/config/form', {
+    method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
+    body: JSON.stringify({ values: priorityWorking }),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) {
+      statusEl.textContent = d.error || 'Save failed.';
+      statusEl.className = 'err';
+      return;
+    }
+    hasUnsavedComponentEdits = false;
+    fetchDashboard();
+    fetchPriorityLists().then(renderPipeline).then(function() {
+      var freshStatusEl = document.getElementById('priority-save-status');
+      if (freshStatusEl) {
+        freshStatusEl.textContent = 'Saved - changes take effect within a few seconds.';
+        freshStatusEl.className = 'ok';
+      }
+    });
+  }).catch(function() {
+    statusEl.textContent = 'Request failed.';
+    statusEl.className = 'err';
+  });
+}
+
+function discardPriorityEdits() {
+  if (!confirm('Discard unsaved changes?')) return;
+  hasUnsavedComponentEdits = false;
+  fetchPriorityLists().then(renderPipeline);
 }
 
 function fetchComponents() {
@@ -372,11 +540,11 @@ function fetchComponents() {
 // ---------------------------------------------------------------------
 setInterval(function() {
   fetchDashboard();
-  if (currentSection === 'pipeline') { fetchPipeline(); fetchComponents(); }
+  if (currentSection === 'pipeline') { fetchPipeline(); fetchComponents(); fetchPriorityLists().then(renderPipeline); }
   else if (currentSection === 'health' || currentSection === 'library' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
 }, 15000);
 
-Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents()]).then(function() {
+Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents(), fetchPriorityLists()]).then(function() {
   // First-run wizard (Fas 11): a bare initial load (no hash at all - not a
   // bookmark, not back/forward navigation) with nothing configured yet goes
   // straight into the wizard instead of the empty Dashboard. needs_setup is

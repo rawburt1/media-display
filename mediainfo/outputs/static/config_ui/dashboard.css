@@ -158,6 +158,23 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 .pipeline-idle-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .pipeline-idle-row .pipeline-card { flex: 0 1 200px; margin-bottom: 0; }
 
+/* -- priority reorder widget (H5 M5) -- */
+.heading-sm { font-size: 13px; font-weight: 700; color: var(--bright); margin: 0; }
+.order-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.order-item {
+  display: flex; align-items: center; gap: 8px; background: var(--chip-bg);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; cursor: grab;
+}
+.order-item .grip { color: var(--muted); }
+.order-item .name { flex: 1; font-weight: 600; color: var(--bright); font-size: 13px; }
+.order-item button {
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); padding: 3px 8px; cursor: pointer; font-size: 12px;
+}
+.order-item button:hover { border-color: var(--accent); }
+.order-item button:disabled { opacity: 0.4; cursor: default; }
+.missing-priority { margin-top: 10px; font-size: 12px; color: var(--warn); }
+
 .test-result { font-size: 11.5px; font-family: var(--font-mono); margin-top: 8px;
                padding: 7px 10px; border-radius: 6px; background: var(--mono-bg);
                color: #9fb3cc; white-space: pre-wrap; word-break: break-word; display: none; }
