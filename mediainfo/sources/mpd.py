@@ -92,7 +92,7 @@ class MpdSource(MediaSource):
                 duration_seconds=float(duration) if duration is not None else None,
             )
         except Exception:
-            logger.exception("MPD source error")
+            self.log_poll_error(logger, "MPD source error")
             self.last_poll_failed = True
             return None
         finally:

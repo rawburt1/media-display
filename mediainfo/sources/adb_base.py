@@ -61,7 +61,7 @@ class AdbNowPlayingSource(MediaSource):
         try:
             dump = self._shell("dumpsys media_session")
         except Exception:
-            logger.exception("%s source error", self.name)
+            self.log_poll_error(logger, "%s source error", self.name)
             self.last_poll_failed = True
             return None
         return self._parse_dump(dump)

@@ -60,7 +60,7 @@ class _MediaServerSource(MediaSource):
                 return self._parse_item(item)
             return None
         except Exception:
-            logger.exception("%s source error", self.name)
+            self.log_poll_error(logger, "%s source error", self.name)
             self.last_poll_failed = True
             return None
 

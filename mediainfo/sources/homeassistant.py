@@ -89,7 +89,7 @@ class HomeAssistantSource(MediaSource):
                 )
                 app.run_forever(ping_interval=20)
             except Exception:
-                logger.exception("Home Assistant source: WebSocket connection error")
+                self.log_poll_error(logger, "Home Assistant source: WebSocket connection error")
             with self._lock:
                 self._connected = False
             time.sleep(_RECONNECT_DELAY_SECONDS)
@@ -118,6 +118,12 @@ class HomeAssistantSource(MediaSource):
             with self._lock:
                 self._connected = True
                 self._auth_failed = False
+            # This source reconnects on its own thread/cadence rather than
+            # via _SourcePoller's per-tick last_poll_failed check (see
+            # _run_forever), so log_poll_error's failure streak has to be
+            # reset here instead - the moment the connection is actually
+            # back, not just "backed off long enough to retry".
+            self.note_poll_recovered()
             self._subscribe(ws)
         elif msg_type == "auth_invalid":
             logger.error(

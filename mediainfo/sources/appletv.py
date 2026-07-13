@@ -85,7 +85,7 @@ class AppleTvSource(MediaSource):
         try:
             return future.result(timeout=15)
         except Exception:
-            logger.exception("Apple TV source error")
+            self.log_poll_error(logger, "Apple TV source error")
             self.last_poll_failed = True
             return None
 
@@ -189,10 +189,10 @@ class AppleTvSource(MediaSource):
             self._atv = await pyatv.connect(conf, self._loop)
             logger.info("Apple TV: connected to %s", conf.name)
         except _AUTH_EXCEPTIONS:
-            logger.exception("Apple TV: authentication failed for %s", self._config.host)
+            self.log_poll_error(logger, "Apple TV: authentication failed for %s", self._config.host)
             self.availability_reason = AvailabilityReason.AUTH_FAILED
         except Exception as exc:
-            logger.exception("Apple TV: failed to connect to %s", self._config.host)
+            self.log_poll_error(logger, "Apple TV: failed to connect to %s", self._config.host)
             self.availability_reason = classify_connection_exception(exc)
 
     async def _disconnect(self) -> None:

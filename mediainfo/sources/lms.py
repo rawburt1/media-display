@@ -71,7 +71,7 @@ class LmsSource(MediaSource):
                 duration_seconds=float(duration) if duration is not None else None,
             )
         except Exception:
-            logger.exception("Logitech Media Server source error")
+            self.log_poll_error(logger, "Logitech Media Server source error")
             self.last_poll_failed = True
             return None
 

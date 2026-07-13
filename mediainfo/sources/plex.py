@@ -117,6 +117,6 @@ class PlexSource(MediaSource):
                 year=item.get("year") if media_type == "movie" else None,
             )
         except Exception:
-            logger.exception("Plex source error")
+            self.log_poll_error(logger, "Plex source error")
             self.last_poll_failed = True
             return None

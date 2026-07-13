@@ -52,7 +52,7 @@ class SonosSource(MediaSource):
             self.availability_reason = AvailabilityReason.IDLE
             return None
         except Exception as exc:
-            logger.exception("Sonos source error")
+            self.log_poll_error(logger, "Sonos source error")
             self.last_poll_failed = True
             self.availability_reason = classify_connection_exception(exc)
             return None

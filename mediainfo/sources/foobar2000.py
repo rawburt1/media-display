@@ -100,6 +100,6 @@ class Foobar2000Source(MediaSource):
                 duration_seconds=float(duration) if duration is not None else None,
             )
         except Exception:
-            logger.exception("foobar2000 source error")
+            self.log_poll_error(logger, "foobar2000 source error")
             self.last_poll_failed = True
             return None

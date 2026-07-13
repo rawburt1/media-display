@@ -1,5 +1,6 @@
 """Tests for Orchestrator idle wallpaper handling."""
 
+import logging
 import time
 from unittest.mock import MagicMock, patch
 
@@ -8,6 +9,7 @@ import pytest
 from mediainfo.cache import ImageCache
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.orchestrator import _DEFAULT_NOTHING_PLAYING_GRACE_SECONDS, Orchestrator
+from mediainfo.sources.base import MediaSource
 
 
 class _FakeSource:
@@ -1432,6 +1434,68 @@ def test_successful_poll_clears_backoff():
         orch._poll_sources()
 
         assert "failing" not in orch._health.source_backoff
+
+
+def test_successful_poll_without_note_poll_recovered_method_does_not_raise():
+    # _FailingSource is duck-typed, not a MediaSource subclass, so it has
+    # no note_poll_recovered method at all - _SourcePoller's getattr(...,
+    # None) fallback (M8) must tolerate that rather than raising.
+    source = _FailingSource()
+    clock = _FakeClock()
+    with patch("mediainfo.orchestrator.time.monotonic", clock):
+        orch = _orchestrator_with_sources([source])
+        orch._poll_sources()
+        clock.now += orch._health.source_backoff["failing"].delay + 1
+        source.fail = False
+        orch._poll_sources()  # must not raise
+
+
+class _MediaSourceBackedFailingSource(MediaSource):
+    """Like _FailingSource, but a real MediaSource subclass - exercises
+    log_poll_error/note_poll_recovered through the same code real sources
+    use (M8), rather than just the duck-typed getattr fallback."""
+
+    name = "failing"
+
+    def __init__(self, log: logging.Logger):
+        self.fail = True
+        self.last_poll_failed = False
+        self._log = log
+
+    def get_now_playing(self):
+        self.last_poll_failed = self.fail
+        if self.fail:
+            try:
+                raise RuntimeError("device unreachable")
+            except RuntimeError:
+                self.log_poll_error(self._log, "failing source error")
+        return None
+
+
+def test_successful_poll_resets_the_source_log_poll_error_streak(caplog):
+    log = logging.getLogger("test.failing_source")
+    source = _MediaSourceBackedFailingSource(log)
+    clock = _FakeClock()
+    with (
+        patch("mediainfo.orchestrator.time.monotonic", clock),
+        caplog.at_level(logging.DEBUG, logger="test.failing_source"),
+    ):
+        orch = _orchestrator_with_sources([source])
+
+        orch._poll_sources()  # first failure - ERROR
+        clock.now += orch._health.source_backoff["failing"].delay + 1
+        orch._poll_sources()  # still failing - would be DEBUG without a reset
+
+        source.fail = False
+        clock.now += orch._health.source_backoff["failing"].delay + 1
+        orch._poll_sources()  # recovers - resets the streak
+
+        source.fail = True
+        clock.now += 1  # not backed off yet (last poll succeeded, cleared it)
+        orch._poll_sources()  # a fresh outage - ERROR again, not DEBUG
+
+    levels = [r.levelno for r in caplog.records if r.name == "test.failing_source"]
+    assert levels == [logging.ERROR, logging.DEBUG, logging.ERROR]
 
 
 def test_idle_source_without_last_poll_failed_is_never_backed_off():

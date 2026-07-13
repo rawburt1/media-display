@@ -66,7 +66,7 @@ class MopidySource(MediaSource):
                 duration_seconds=duration_ms / 1000 if duration_ms is not None else None,
             )
         except Exception:
-            logger.exception("Mopidy source error")
+            self.log_poll_error(logger, "Mopidy source error")
             self.last_poll_failed = True
             return None
 

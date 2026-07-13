@@ -34,7 +34,7 @@ class VinylSource(MediaSource):
             response.raise_for_status()
             data = response.json()
         except Exception:
-            logger.exception("Vinyl source error")
+            self.log_poll_error(logger, "Vinyl source error")
             self.last_poll_failed = True
             return None
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
@@ -61,6 +62,32 @@ class MediaSource(ABC):
         default) means nothing extra to report.
         """
         return None
+
+    def log_poll_error(self, log: logging.Logger, msg: str, *args: object) -> None:
+        """Call from an except block instead of log.exception() directly,
+        wherever a poll failure that sets last_poll_failed gets logged -
+        logs the first failure in a streak at ERROR (with traceback), then
+        downgrades repeats to DEBUG (still with the traceback, so it's
+        still there for anyone who turns DEBUG logging on) until
+        note_poll_recovered() is called. Otherwise an offline device
+        produces one ERROR-with-traceback per backoff retry for as long as
+        it stays offline - could be hours (M8 in
+        docs/architecture-usability-review-2026-07.md).
+        """
+        self._consecutive_poll_failures = getattr(self, "_consecutive_poll_failures", 0) + 1
+        level = logging.ERROR if self._consecutive_poll_failures == 1 else logging.DEBUG
+        log.log(level, msg, *args, exc_info=True)
+
+    def note_poll_recovered(self) -> None:
+        """Reset the failure streak log_poll_error tracks, so the next
+        failure (a fresh outage, not a continuation of the old one) logs
+        at ERROR again instead of staying downgraded to DEBUG forever.
+        Called by _SourcePoller after every poll that isn't currently
+        failing - a source with its own separate reconnect loop (see
+        HomeAssistantSource) calls this itself instead, at its own
+        "connected again" checkpoint.
+        """
+        self._consecutive_poll_failures = 0
 
     def test_connection(self) -> Tuple[bool, str]:
         """Connectivity check for the config UI's "test connection"

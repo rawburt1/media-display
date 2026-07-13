@@ -162,7 +162,7 @@ class KodiSource(MediaSource):
                 duration_seconds=duration_seconds,
             )
         except requests.exceptions.HTTPError as exc:
-            logger.exception("Kodi source error")
+            self.log_poll_error(logger, "Kodi source error")
             self.last_poll_failed = True
             status = exc.response.status_code if exc.response is not None else None
             self.availability_reason = (
@@ -172,7 +172,7 @@ class KodiSource(MediaSource):
             )
             return None
         except Exception as exc:
-            logger.exception("Kodi source error")
+            self.log_poll_error(logger, "Kodi source error")
             self.last_poll_failed = True
             self.availability_reason = classify_connection_exception(exc)
             return None

@@ -85,8 +85,17 @@ class _SourcePoller:
 
             if getattr(source, "last_poll_failed", False):
                 self._health.record_backoff(name, self._next_backoff(backoff, now), now)
-            elif backoff is not None:
-                self._health.clear_backoff(name)
+            else:
+                if backoff is not None:
+                    self._health.clear_backoff(name)
+                # Reset MediaSource.log_poll_error's failure streak (M8) so
+                # a fresh outage later logs at ERROR again rather than
+                # staying downgraded to DEBUG - harmless no-op for sources
+                # that never called log_poll_error, and for duck-typed
+                # test doubles without the method at all.
+                note_recovered = getattr(source, "note_poll_recovered", None)
+                if note_recovered is not None:
+                    note_recovered()
 
             if result is None:
                 continue
