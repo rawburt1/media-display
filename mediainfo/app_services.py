@@ -31,6 +31,25 @@ from mediainfo.media_data_store import MediaDataStore
 
 
 @dataclasses.dataclass
+class OrchestratorCommands:
+    """The orchestrator's cross-thread control commands (H2 in
+    docs/architecture-usability-review-2026-07.md), grouped into one
+    handle instead of four loose AppServices fields - "already a de-facto
+    command bus of threading.Events" per that review (see
+    Orchestrator._hitster_safe_lock/_refresh_artwork_requested/
+    _rotate_now_requested). Every field is a bound method off the running
+    Orchestrator, safe to call from any thread (see each method's own
+    docstring on Orchestrator) - this only narrows *which* methods an
+    output can reach, not how they behave.
+    """
+
+    get_hitster_safe: Callable[[], bool]
+    set_hitster_safe: Callable[[bool], None]
+    request_artwork_refresh: Callable[[], None]
+    request_rotation_now: Callable[[], None]
+
+
+@dataclasses.dataclass
 class AppServices:
     # Returns the /health JSON dict - see health.make_health_provider().
     health_provider: Optional[Callable[[], dict]] = None
@@ -40,12 +59,6 @@ class AppServices:
     mediadata_store: Optional[MediaDataStore] = None
     # Manual per-title artwork pin store (see artwork_overrides.py).
     overrides: Optional[ArtworkOverrideStore] = None
-    # Orchestrator.get_hitster_safe/set_hitster_safe - read/toggle
-    # "Hitster-safe" mode (suppress music titles on every display).
-    get_hitster_safe: Optional[Callable[[], bool]] = None
-    set_hitster_safe: Optional[Callable[[bool], None]] = None
-    # Orchestrator.request_artwork_refresh/request_rotation_now - ask the
-    # next poll tick to re-enrich/re-push the current item, or immediately
-    # advance every output's rotation.
-    request_artwork_refresh: Optional[Callable[[], None]] = None
-    request_rotation_now: Optional[Callable[[], None]] = None
+    # Hitster-safe get/set, artwork refresh, and rotate-now - see
+    # OrchestratorCommands above.
+    commands: Optional[OrchestratorCommands] = None

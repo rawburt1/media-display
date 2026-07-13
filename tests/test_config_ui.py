@@ -1429,7 +1429,7 @@ def test_hitster_safe_button_present_on_form_and_dashboard_pages(config_path):
 
 
 def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
-    from mediainfo.app_services import AppServices
+    from mediainfo.app_services import AppServices, OrchestratorCommands
     from mediainfo.artwork_overrides import ArtworkOverrideStore
 
     out = _output(config_path)
@@ -1445,8 +1445,12 @@ def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
 
     out.attach(
         AppServices(
-            get_hitster_safe=get_fn,
-            set_hitster_safe=set_fn,
+            commands=OrchestratorCommands(
+                get_hitster_safe=get_fn,
+                set_hitster_safe=set_fn,
+                request_artwork_refresh=MagicMock(),
+                request_rotation_now=MagicMock(),
+            ),
             overrides=overrides,
             health_provider=health_provider,
         )
@@ -1455,6 +1459,20 @@ def test_attach_wires_hitster_safe_overrides_and_health(config_path, tmp_path):
     assert _client(out).get("/api/hitster-safe").get_json() == {"enabled": True}
     assert out._overrides is overrides
     assert out._health_fn is health_provider
+
+
+def test_attach_with_no_commands_leaves_hitster_safe_handlers_none(config_path):
+    # AppServices.commands defaults to None (e.g. a bare AppServices()) -
+    # attach() must degrade gracefully, not raise, matching how the
+    # individual get_hitster_safe/set_hitster_safe fields it replaced
+    # already defaulted to None independently.
+    from mediainfo.app_services import AppServices
+
+    out = _output(config_path)
+    out.attach(AppServices())
+
+    assert out._hitster_safe_get is None
+    assert out._hitster_safe_set is None
 
 
 # ---------------------------------------------------------------------------

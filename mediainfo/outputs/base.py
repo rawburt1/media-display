@@ -111,12 +111,13 @@ class Output(ABC):
         """Called once, after the orchestrator (and therefore every
         AppServices field) exists - see wiring.attach_services(). Pull
         whatever fields this output cares about (health_provider, history,
-        mediadata_store, overrides, get_hitster_safe/set_hitster_safe,
-        request_artwork_refresh/request_rotation_now) and ignore the rest.
-        Called again, with a fresh AppServices, on every config hot-reload -
-        implementations should simply overwrite their own state each time,
-        the same as a plain setter would. Default: do nothing, for outputs
-        that need none of this.
+        mediadata_store, overrides, commands - see
+        app_services.OrchestratorCommands for the hitster-safe/artwork-
+        refresh/rotate-now handle) and ignore the rest. Called again, with
+        a fresh AppServices, on every config hot-reload - implementations
+        should simply overwrite their own state each time, the same as a
+        plain setter would. Default: do nothing, for outputs that need
+        none of this.
         """
 
     def reload(self, config: Any) -> None:

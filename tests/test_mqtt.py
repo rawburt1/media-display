@@ -467,7 +467,7 @@ def test_message_on_unrecognized_topic_is_ignored(MockClient):
 
 @patch("mediainfo.outputs.mqtt.mqtt.Client")
 def test_attach_wires_health_hitster_safe_and_command_handlers(MockClient):
-    from mediainfo.app_services import AppServices
+    from mediainfo.app_services import AppServices, OrchestratorCommands
 
     output = MqttOutput(_config(ha_discovery=True))
 
@@ -481,10 +481,12 @@ def test_attach_wires_health_hitster_safe_and_command_handlers(MockClient):
     output.attach(
         AppServices(
             health_provider=health_provider,
-            get_hitster_safe=lambda: True,
-            set_hitster_safe=set_fn,
-            request_artwork_refresh=refresh_fn,
-            request_rotation_now=rotate_fn,
+            commands=OrchestratorCommands(
+                get_hitster_safe=lambda: True,
+                set_hitster_safe=set_fn,
+                request_artwork_refresh=refresh_fn,
+                request_rotation_now=rotate_fn,
+            ),
         )
     )
 
@@ -494,6 +496,23 @@ def test_attach_wires_health_hitster_safe_and_command_handlers(MockClient):
     set_fn.assert_called_once_with(False)
     assert output._refresh_artwork_fn is refresh_fn
     assert output._rotate_now_fn is rotate_fn
+
+
+@patch("mediainfo.outputs.mqtt.mqtt.Client")
+def test_attach_with_no_commands_leaves_command_handlers_none(MockClient):
+    # AppServices.commands defaults to None - attach() must degrade
+    # gracefully rather than raise (see the OrchestratorCommands handle
+    # this replaced four independently-defaultable AppServices fields
+    # with).
+    from mediainfo.app_services import AppServices
+
+    output = MqttOutput(_config(ha_discovery=True))
+    output.attach(AppServices())
+
+    assert output._hitster_safe_get is None
+    assert output._hitster_safe_set is None
+    assert output._refresh_artwork_fn is None
+    assert output._rotate_now_fn is None
 
 
 # ---------------------------------------------------------------------------

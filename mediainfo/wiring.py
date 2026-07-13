@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from mediainfo import registries
-from mediainfo.app_services import AppServices
+from mediainfo.app_services import AppServices, OrchestratorCommands
 from mediainfo.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config
@@ -358,10 +358,12 @@ def build_app_services(
         history=history,
         mediadata_store=mediadata_store,
         overrides=overrides,
-        get_hitster_safe=orch.get_hitster_safe,
-        set_hitster_safe=orch.set_hitster_safe,
-        request_artwork_refresh=orch.request_artwork_refresh,
-        request_rotation_now=orch.request_rotation_now,
+        commands=OrchestratorCommands(
+            get_hitster_safe=orch.get_hitster_safe,
+            set_hitster_safe=orch.set_hitster_safe,
+            request_artwork_refresh=orch.request_artwork_refresh,
+            request_rotation_now=orch.request_rotation_now,
+        ),
     )
 
 

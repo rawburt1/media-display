@@ -129,10 +129,14 @@ class MqttOutput(Output):
         self._rotate_now_fn = fn
 
     def attach(self, services: AppServices) -> None:
+        commands = services.commands
         self.set_health_provider(services.health_provider)
-        self.set_hitster_safe_handlers(services.get_hitster_safe, services.set_hitster_safe)
-        self.set_refresh_artwork_handler(services.request_artwork_refresh)
-        self.set_rotate_now_handler(services.request_rotation_now)
+        self.set_hitster_safe_handlers(
+            commands.get_hitster_safe if commands else None,
+            commands.set_hitster_safe if commands else None,
+        )
+        self.set_refresh_artwork_handler(commands.request_artwork_refresh if commands else None)
+        self.set_rotate_now_handler(commands.request_rotation_now if commands else None)
 
     @property
     def _availability_topic(self) -> str:

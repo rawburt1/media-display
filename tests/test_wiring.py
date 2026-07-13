@@ -886,10 +886,11 @@ def test_build_app_services_populates_every_field():
     assert services.history is history
     assert services.overrides is overrides
     assert services.mediadata_store is mediadata_store
-    assert services.get_hitster_safe is orch.get_hitster_safe
-    assert services.set_hitster_safe is orch.set_hitster_safe
-    assert services.request_artwork_refresh is orch.request_artwork_refresh
-    assert services.request_rotation_now is orch.request_rotation_now
+    assert services.commands is not None
+    assert services.commands.get_hitster_safe is orch.get_hitster_safe
+    assert services.commands.set_hitster_safe is orch.set_hitster_safe
+    assert services.commands.request_artwork_refresh is orch.request_artwork_refresh
+    assert services.commands.request_rotation_now is orch.request_rotation_now
     # health_provider is built by health.make_health_provider() (its own
     # payload shape is covered by test_health.py) - just confirm one was
     # actually built and closes over this orch/config/outputs.
