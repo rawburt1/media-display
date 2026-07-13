@@ -339,12 +339,12 @@ def _output_components(
                 essential_fields=essential,
                 advanced_fields=advanced,
                 filter_fields=filter_fields,
-                warnings=_warnings_for(enabled, missing, health_entry)
-                + (
-                    [f"{len(instances)} instances configured - showing the first"]
-                    if len(instances) > 1
-                    else []
-                ),
+                # A multi-instance type's extra instances used to be
+                # invisible from here ("showing the first" warning) - the
+                # detail page now has an instance picker (H5 M6), so
+                # nothing to warn about; the picker itself already shows
+                # "N instances configured" via its tab row.
+                warnings=_warnings_for(enabled, missing, health_entry),
                 actions=_default_actions(True, "/api/test/output"),
             )
         )

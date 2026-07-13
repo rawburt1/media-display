@@ -98,6 +98,33 @@ def test_output_plumbing_types_are_excluded(config_path):
     assert "outputs.themes" not in ids
 
 
+def test_output_component_supports_multiple(config_path):
+    # The new shell's instance picker (H5 M6) only renders for components
+    # with this flag set - confirm it's still true rather than silently
+    # regressing.
+    web = _by_id(_components(config_path), "outputs.web")
+    assert web.supports_multiple is True
+
+
+def test_multi_instance_output_has_no_stale_showing_the_first_warning(config_path):
+    # Pre-M6, a second+ instance was invisible from the new shell entirely,
+    # flagged with a "showing the first" warning. The instance picker (H5
+    # M6) makes every instance reachable, so that warning is gone now -
+    # confirm it doesn't linger.
+    config_path.write_text(
+        """
+outputs:
+  folder:
+    - enabled: true
+      dir: ./artwork
+    - enabled: true
+      dir: ./artwork2
+"""
+    )
+    folder = _by_id(_components(config_path), "outputs.folder")
+    assert not any("showing the first" in w for w in folder.warnings)
+
+
 def test_enricher_is_metadata_component(config_path):
     musicbrainz = _by_id(_components(config_path), "enrichers.musicbrainz")
     assert musicbrainz.category == "metadata"

@@ -97,6 +97,7 @@ var detailEdits = {};                // non-output/theme: fieldName -> new value
 var detailReplacingSecret = {};      // fieldName -> true while its "Replace" input is open
 var detailOutputsWorking = null;     // output/theme: full instance array (deep copy) for the owning output type
 var detailOutputType = null;         // output type name detailOutputsWorking belongs to
+var detailInstanceIndex = 0;         // output only: which detailOutputsWorking[] entry is shown/edited (see the instance picker in renderComponentDetailBody())
 var detailThemeName = null;          // set only for component_type "theme"
 var detailAdvancedOpen = false;
 var detailFiltersOpen = false;
@@ -137,7 +138,8 @@ function findDetailField(name) {
 
 function getFieldValue(field) {
   if (detailComponent.component_type === 'output') {
-    return detailOutputsWorking[0] ? detailOutputsWorking[0][field.name] : field.value;
+    var instance = detailOutputsWorking[detailInstanceIndex];
+    return instance ? instance[field.name] : field.value;
   }
   if (detailComponent.component_type === 'theme') {
     return detailOutputsWorking[0].themes[detailThemeName][field.name];
@@ -151,7 +153,7 @@ function getFieldValue(field) {
 function setFieldValue(field, value) {
   hasUnsavedComponentEdits = true;
   if (detailComponent.component_type === 'output') {
-    detailOutputsWorking[0][field.name] = value;
+    detailOutputsWorking[detailInstanceIndex][field.name] = value;
   } else if (detailComponent.component_type === 'theme') {
     detailOutputsWorking[0].themes[detailThemeName][field.name] = value;
   } else if (detailComponent.component_type === 'theme_group_editor') {
@@ -406,6 +408,10 @@ function renderComponentDetailBody() {
       + '</ul>';
   }
 
+  if (c.component_type === 'output' && c.supports_multiple && detailOutputsWorking) {
+    html += renderInstancePicker(c);
+  }
+
   html += '<div class="card" style="margin-top:14px;">';
   html += (c.essential_fields || []).map(renderDetailField).join('');
   if (c.advanced_fields && c.advanced_fields.length) {
@@ -538,7 +544,76 @@ function loadOutputInstances(c) {
     detailOutputType = typeName;
     detailOutputsWorking = JSON.parse(JSON.stringify(instances));
     if (!detailOutputsWorking.length) detailOutputsWorking.push({});
+    // Clamp rather than reset to 0 - renderComponentDetail() already resets
+    // this to 0 when navigating to a *different* component; a post-save
+    // reload (fetchComponentDetail() called directly, same component)
+    // should keep showing whichever instance the save was for.
+    detailInstanceIndex = Math.max(0, Math.min(detailInstanceIndex, detailOutputsWorking.length - 1));
   });
+}
+
+// Multi-instance outputs (H5 M6, e.g. two `ulanzi` or `folder` entries in
+// config.yaml) - ported from app.html's blankOutputInstance()/
+// addOutputInstance()/duplicateOutputInstance()/removeOutputInstance().
+// Every essential_fields/advanced_fields/filter_fields entry already
+// carries its own schema default (see config_schema.py's _scalar_fields()/
+// _output_filter_fields()), so a blank instance is built generically from
+// whatever fields this component's schema says it has, rather than a
+// hand-maintained per-type list.
+function blankOutputInstance(c) {
+  var blank = {};
+  (c.essential_fields || []).concat(c.advanced_fields || []).concat(c.filter_fields || [])
+    .forEach(function(f) { blank[f.name] = f.default; });
+  return blank;
+}
+
+function addOutputInstance() {
+  detailOutputsWorking.push(blankOutputInstance(detailComponent));
+  detailInstanceIndex = detailOutputsWorking.length - 1;
+  hasUnsavedComponentEdits = true;
+  renderComponentDetailBody();
+}
+
+function duplicateOutputInstance() {
+  var copy = JSON.parse(JSON.stringify(detailOutputsWorking[detailInstanceIndex]));
+  copy.label = copy.label ? copy.label + ' (copy)' : '';
+  detailOutputsWorking.push(copy);
+  detailInstanceIndex = detailOutputsWorking.length - 1;
+  hasUnsavedComponentEdits = true;
+  renderComponentDetailBody();
+}
+
+function removeOutputInstance() {
+  var name = detailOutputsWorking[detailInstanceIndex].label || ('instance #' + (detailInstanceIndex + 1));
+  if (!confirm('Remove this ' + esc(detailComponent.name) + ' ' + name + '? This needs a restart to take effect.')) return;
+  detailOutputsWorking.splice(detailInstanceIndex, 1);
+  if (!detailOutputsWorking.length) detailOutputsWorking.push(blankOutputInstance(detailComponent));
+  detailInstanceIndex = Math.max(0, Math.min(detailInstanceIndex, detailOutputsWorking.length - 1));
+  hasUnsavedComponentEdits = true;
+  renderComponentDetailBody();
+}
+
+function selectOutputInstance(idx) {
+  detailInstanceIndex = idx;
+  renderComponentDetailBody();
+}
+
+function renderInstancePicker(c) {
+  var tabs = detailOutputsWorking.map(function(inst, i) {
+    var label = inst.label || ('Instance #' + (i + 1));
+    return '<button type="button" class="btn small ' + (i === detailInstanceIndex ? '' : 'secondary') + '" '
+      + 'onclick="selectOutputInstance(' + i + ')">' + esc(label) + '</button>';
+  }).join('');
+  return '<div class="card" style="margin-top:14px;">'
+    + '<div class="row-inline">' + tabs
+    + '<button type="button" class="btn secondary small" onclick="addOutputInstance()">+ Add another</button>'
+    + '</div>'
+    + '<div class="action-row" style="margin-top:10px;">'
+    + '<button type="button" class="btn secondary" onclick="duplicateOutputInstance()">Duplicate this instance</button>'
+    + (detailOutputsWorking.length > 1
+      ? '<button type="button" class="btn secondary" onclick="removeOutputInstance()">Remove this instance</button>'
+      : '')
+    + '</div></div>';
 }
 
 function loadThemeInstances(c) {
@@ -616,6 +691,7 @@ function renderComponentDetail(id) {
     detailReplacingSecret = {};
     detailOutputsWorking = null;
     detailOutputType = null;
+    detailInstanceIndex = 0;
     detailThemeName = null;
     detailAdvancedOpen = false;
     hasUnsavedComponentEdits = false;
