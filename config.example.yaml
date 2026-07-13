@@ -223,6 +223,23 @@ sources:
     port: 32400
     token: YOUR_PLEX_TOKEN
 
+  # Emby Media Server.
+  # API key from Emby's web UI: Dashboard → Advanced → API Keys → New API Key.
+  emby:
+    enabled: true
+    host: 192.168.1.23
+    port: 8096
+    api_key: YOUR_EMBY_API_KEY
+
+  # Jellyfin Media Server - the same Sessions API as Emby above (both share
+  # the MediaBrowser lineage), so this uses an identical shape.
+  # API key from Jellyfin's web UI: Dashboard → Advanced → API Keys → New API Key.
+  jellyfin:
+    enabled: true
+    host: 192.168.1.24
+    port: 8096
+    api_key: YOUR_JELLYFIN_API_KEY
+
   # Android TV "now playing" session (Nvidia Shield, Chromecast, etc.).
   # Reads the system-level media session, so it catches Spotify, YouTube
   # Music, SVT Play, Netflix, and anything else running on the device —
@@ -504,6 +521,10 @@ outputs:
     enabled: true
     ip: 192.168.1.32
     size: 64        # 64 for Pixoo64 (default), 16 for Pixoo 16×16
+    # preview_path: ./pixoo_preview.png  # save a 512x512 preview of the
+    #   final LED-prepped image here after each update - handy for visual
+    #   QA of the crop/palette/dithering settings below without needing
+    #   the physical device in front of you. Off by default.
 
   # LED-preparation settings (optional) — how artwork is cropped, enhanced,
   # and reduced to a small palette before being sent to the display. Shown
@@ -644,6 +665,10 @@ outputs:
     app_name: now_playing        # AWTRIX3 custom app slot name
     username: ""                 # HTTP basic auth (leave blank if not set)
     password: ""
+    # screen_off_hours: "23:00-07:00"   # see "Display power/brightness
+    # brightness_schedule:               # scheduling" above - same two
+    #   - "07:00-20:00=200"              # fields as pixoo's example there,
+    #   - "20:00-23:00=60"               # just AWTRIX3's 0-255 brightness range
 
   # Multiple Ulanzi clocks — kitchen and office:
   # ulanzi:
@@ -1046,6 +1071,13 @@ enrichers:
   musicbrainz:
     enabled: true
 
+  # Discogs — another source of album cover art for music, alongside
+  # fanart.tv/MusicBrainz above. Personal access token from
+  # https://www.discogs.com/settings/developers
+  discogs:
+    enabled: true
+    token: YOUR_DISCOGS_TOKEN
+
   # Lidarr — other albums/songs by the playing artist (NowPlaying.discography)
   # and album art, matched against your own Lidarr library. Get the api_key
   # from Lidarr's Settings → General → Security. Distinct from
@@ -1103,6 +1135,19 @@ enrichers:
     width: 512
     height: 512
     timeout_seconds: 120
+
+  # Audio fingerprinting — confirms exactly which track is playing via the
+  # companion vinyl_recognizer service's fingerprint matching (see
+  # `sources.vinyl` above), for cases where the recognized title/artist
+  # alone is ambiguous. Same host/port as `sources.vinyl`, since both talk
+  # to the same vinyl_recognizer instance.
+  fingerprint:
+    enabled: true
+    host: 192.168.1.40
+    port: 8091
+    # Ignore a fingerprint match older than this many seconds - it likely
+    # belongs to a track that's no longer playing.
+    max_age_seconds: 120
 
 
 # ---------------------------------------------------------------------------

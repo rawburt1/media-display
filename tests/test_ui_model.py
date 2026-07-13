@@ -77,9 +77,12 @@ def test_enabled_source_is_media_component(config_path):
 
 
 def test_disabled_source_has_disabled_status(config_path):
-    # emby has no section at all in config.example.yaml (every source that
-    # *is* listed there is enabled: true), so it falls back to its
-    # (disabled) default.
+    # A source with no section at all in config.yaml falls back to its
+    # (disabled) default - N1 made every registered source type present in
+    # config.example.yaml (see tests/test_config_example_coverage.py), so
+    # this needs its own minimal config rather than relying on one of them
+    # being incidentally absent.
+    config_path.write_text("sources:\n  kodi:\n    enabled: true\n", encoding="utf-8")
     emby = _by_id(_components(config_path), "sources.emby")
     assert emby.enabled is False
     assert emby.status == "disabled"
@@ -208,9 +211,14 @@ def test_enabled_component_missing_required_field_needs_configuration(
 
 
 def test_disabled_component_with_missing_fields_has_no_warning(config_path):
-    # emby is not configured (enabled=False by default) and is missing its
-    # required host/api_key - that must not surface as a warning, since
-    # it's off by design (matches _compute_overview's existing semantics).
+    # A source that's not configured (enabled=False by default) and is
+    # missing its required host/api_key must not surface as a warning,
+    # since it's off by design (matches _compute_overview's existing
+    # semantics). Custom minimal config, not config.example.yaml - N1 made
+    # every registered source type present there (see
+    # tests/test_config_example_coverage.py), so nothing in it is both
+    # disabled and missing required fields anymore.
+    config_path.write_text("sources:\n  kodi:\n    enabled: true\n", encoding="utf-8")
     emby = _by_id(_components(config_path), "sources.emby")
     assert emby.enabled is False
     assert emby.status == "disabled"
@@ -453,6 +461,13 @@ def test_api_ui_pipelines_returns_one_default_pipeline(config_path):
 
 
 def test_pipeline_buckets_only_enabled_components(config_path):
+    # emby is enabled in config.example.yaml as of N1 (see
+    # tests/test_config_example_coverage.py), so a disabled-source check
+    # needs its own minimal config instead.
+    config_path.write_text(
+        "sources:\n  kodi:\n    enabled: true\noutputs:\n  web:\n    enabled: true\n",
+        encoding="utf-8",
+    )
     out = _output(config_path)
     data = _client(out).get("/api/ui/pipelines").get_json()[0]
     assert "sources.kodi" in data["media_component_ids"]

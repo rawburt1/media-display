@@ -86,8 +86,10 @@ def test_build_sources_from_example_config(example_config):
 
 def test_build_enrichers_from_example_config(example_config):
     enrichers = wiring.build_enrichers(example_config)
-    # Every enabled enricher in config.example.yaml.
-    assert len(enrichers) == 12
+    # Every enabled enricher in config.example.yaml (14 since N1 added
+    # discogs/fingerprint, previously undocumented - see
+    # tests/test_config_example_coverage.py).
+    assert len(enrichers) == 14
 
 
 def test_build_idle_source_from_example_config(example_config):

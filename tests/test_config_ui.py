@@ -339,8 +339,11 @@ def test_get_config_returns_raw_yaml(config_path):
 def test_get_config_uses_defaults_for_unconfigured_type(config_path):
     out = _output(config_path)
     data = _client(out).get("/api/config").get_json()
-    # discogs is not present in config.example.yaml
-    assert data["values"]["enrichers.discogs.enabled"] is False
+    # ai_artwork is present in config.example.yaml but enabled: false (off
+    # by default - every other field there already matches its class
+    # default too, so this exercises the same "defaults" path a genuinely
+    # absent section would).
+    assert data["values"]["enrichers.ai_artwork.enabled"] is False
 
 
 # ---------------------------------------------------------------------------
