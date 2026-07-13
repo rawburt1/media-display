@@ -28,6 +28,7 @@ from mediainfo.config import (
     IDLE_CONFIG_TYPES,
     OUTPUT_CONFIG_TYPES,
     SOURCE_CONFIG_TYPES,
+    TEXT_ENRICHER_CONFIG_TYPES,
     THEMES_CONFIG_TYPES,
     AlertConfig,
     AuthConfig,
@@ -90,6 +91,7 @@ _SINGLE_INSTANCE_CATEGORIES: Dict[str, Dict[str, type]] = {
     "sources": SOURCE_CONFIG_TYPES,
     "enrichers": ENRICHER_CONFIG_TYPES,
     "idle": IDLE_CONFIG_TYPES,
+    "text_enrichers": TEXT_ENRICHER_CONFIG_TYPES,
 }
 
 _GENERAL_FIELDS = [

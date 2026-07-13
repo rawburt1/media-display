@@ -136,14 +136,16 @@ def test_schema_includes_all_categories(config_path):
     out = _output(config_path)
     data = _client(out).get("/api/schema").get_json()
     # One key per _FLAT_SECTIONS entry (cache/history/library/overrides/
-    # posters/alerts/auth/logging/mediadata), the four per-type-registry
-    # categories, "themes" (the individual Display Theme plugins nested
-    # inside a "themes" output instance - see mediainfo/config/themes.py),
-    # "auto_rotate" (AutoRotateConfig's own enabled/interval_seconds
-    # scalar fields - presets itself is bespoke UI, not schema-driven),
-    # plus filter_meta/auto_rotate_meta and the presentation-metadata keys
-    # the guided UI needs (flat_sections/type_info/category_info/
-    # enricher_groups).
+    # posters/alerts/auth/logging/mediadata), the five per-type-registry
+    # categories (sources/outputs/enrichers/idle/text_enrichers -
+    # text_enrichers joined _SINGLE_INSTANCE_CATEGORIES in H5 M4, so the
+    # new shell's component editor can save it, not just read it), "themes"
+    # (the individual Display Theme plugins nested inside a "themes" output
+    # instance - see mediainfo/config/themes.py), "auto_rotate"
+    # (AutoRotateConfig's own enabled/interval_seconds scalar fields -
+    # presets itself is bespoke UI, not schema-driven), plus filter_meta/
+    # auto_rotate_meta and the presentation-metadata keys the guided UI
+    # needs (flat_sections/type_info/category_info/enricher_groups).
     assert set(data.keys()) == {
         "general",
         "cache",
@@ -159,6 +161,7 @@ def test_schema_includes_all_categories(config_path):
         "outputs",
         "enrichers",
         "idle",
+        "text_enrichers",
         "themes",
         "auto_rotate",
         "filter_meta",

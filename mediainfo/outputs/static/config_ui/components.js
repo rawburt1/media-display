@@ -47,10 +47,7 @@ function hueForId(id) {
 }
 
 function componentCard(c) {
-  var readOnly = c.component_type === 'text_enricher';
-  var badge = readOnly
-    ? '<span class="badge b-unknown">View only</span>'
-    : '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>';
+  var badge = '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>';
   var warning = c.warnings && c.warnings.length ? '<div class="warning">' + esc(c.warnings[0]) + '</div>' : '';
   var accent = '';
   var cardClass = 'component-card';
@@ -203,14 +200,6 @@ function fieldValueDisplay(field, value) {
   if (field.secret) return field.secret_set ? '••••••••' : '(not set)';
   if (Array.isArray(value)) return value.length ? value.join(', ') : '(none)';
   return value == null || value === '' ? '(not set)' : String(value);
-}
-
-function renderStaticField(field, value) {
-  return '<div class="field"><div class="field-row">'
-    + '<label class="field-label">' + esc(field.label) + '</label>'
-    + '<div class="field-control"><div class="readonly-field">' + esc(fieldValueDisplay(field, value)) + '</div>'
-    + (field.help ? '<div class="field-help">' + esc(field.help) + '</div>' : '')
-    + '</div></div></div>';
 }
 
 function renderUnsupportedWidgetField(field, value) {
@@ -367,10 +356,6 @@ function renderListField(field, value) {
 function renderDetailField(field) {
   var value = getFieldValue(field);
 
-  if (detailComponent.component_type === 'text_enricher') {
-    return renderStaticField(field, value);
-  }
-
   var control;
   if (field.secret) {
     control = renderSecretField(field, value);
@@ -408,7 +393,6 @@ function renderComponentDetailBody() {
   var el = document.getElementById('section-component');
   var c = detailComponent;
   var sectionName = CATEGORY_TO_SECTION[c.category] || 'dashboard';
-  var readOnly = c.component_type === 'text_enricher';
 
   var html = wizardBannerHtml();
   html += '<a class="back-link" href="#' + esc(sectionName) + '">← Back to ' + esc(SECTION_TITLES[sectionName] || 'list') + '</a>';
@@ -420,12 +404,6 @@ function renderComponentDetailBody() {
     html += '<ul class="warning-list" style="margin-top:12px;">'
       + c.warnings.map(function(w) { return '<li class="warning-item">' + esc(w) + '</li>'; }).join('')
       + '</ul>';
-  }
-
-  if (readOnly) {
-    html += '<div class="card" style="margin-top:14px;"><span class="field-help">'
-      + 'This component is view-only in the new dashboard for now - '
-      + '<a href="' + esc(classicHrefFor(c)) + '">edit it via Advanced → raw YAML</a>.</span></div>';
   }
 
   html += '<div class="card" style="margin-top:14px;">';
@@ -451,17 +429,15 @@ function renderComponentDetailBody() {
     html += renderGroupsEditor();
   }
 
-  if (!readOnly) {
-    html += '<div class="action-row">';
-    if (c.supports_test) {
-      html += '<button type="button" class="btn secondary" id="detail-test-btn" onclick="runDetailTest()">Test connection</button>';
-    }
-    html += '<button type="button" class="btn secondary" onclick="discardDetailEdits()">Discard</button>';
-    html += '<button type="button" class="btn" onclick="saveDetailComponent()">Save</button>';
-    html += '</div>';
-    html += '<div class="test-result" id="detail-test-result"></div>';
-    html += '<div id="detail-save-status" style="margin-top:8px;font-size:12.5px;"></div>';
+  html += '<div class="action-row">';
+  if (c.supports_test) {
+    html += '<button type="button" class="btn secondary" id="detail-test-btn" onclick="runDetailTest()">Test connection</button>';
   }
+  html += '<button type="button" class="btn secondary" onclick="discardDetailEdits()">Discard</button>';
+  html += '<button type="button" class="btn" onclick="saveDetailComponent()">Save</button>';
+  html += '</div>';
+  html += '<div class="test-result" id="detail-test-result"></div>';
+  html += '<div id="detail-save-status" style="margin-top:8px;font-size:12.5px;"></div>';
 
   el.innerHTML = html;
 
