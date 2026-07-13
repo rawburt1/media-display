@@ -785,6 +785,118 @@ def _scalar_fields(
     return fields
 
 
+def _output_filter_fields() -> List[Dict[str, Any]]:
+    """The _OutputFilterMixin fields (see _FILTER_FIELD_NAMES above) as
+    their own field list - the same shape _scalar_fields() produces, but
+    built by hand since these aren't walked from a dataclass here (every
+    output config's copy is identical, mixin-inherited). _scalar_fields()
+    itself still excludes these by name for the old shell, which renders
+    them via its own bespoke "Content filters" section (app.html's
+    renderOutputFilters()) - this is what gives the new shell an
+    equivalent data source (see ui_builder.py's _output_components()).
+
+    One deliberate simplification versus app.html: no allow/deny "mode"
+    toggle. app.html shows one of allow_media_types/deny_media_types (and
+    allow_sources/deny_sources) at a time, selected by a mode button, with
+    its own client-only state to track which mode is selected before
+    either list has anything in it. Showing both lists directly instead
+    needs no such state, and is no less safe: config_store.py's
+    _validate_filter_fields() already rejects a value present in both the
+    allow and deny list for the same field with a clear error, so nothing
+    new needs validating here.
+    """
+    return [
+        {
+            "name": "allow_media_types",
+            "type": "list",
+            "default": [],
+            "secret": False,
+            "label": "Only show media types",
+            "help": "Leave empty to show every media type.",
+            "essential": False,
+            "required": False,
+            "widget": None,
+            "choices": _KNOWN_MEDIA_TYPES,
+        },
+        {
+            "name": "deny_media_types",
+            "type": "list",
+            "default": [],
+            "secret": False,
+            "label": "Never show media types",
+            "help": "Leave empty to not block any media type.",
+            "essential": False,
+            "required": False,
+            "widget": None,
+            "choices": _KNOWN_MEDIA_TYPES,
+        },
+        {
+            "name": "allow_sources",
+            "type": "list",
+            "default": [],
+            "secret": False,
+            "label": "Only show sources",
+            "help": "Leave empty to show every source.",
+            "essential": False,
+            "required": False,
+            "widget": None,
+            "choices": sorted(SOURCE_CONFIG_TYPES.keys()),
+        },
+        {
+            "name": "deny_sources",
+            "type": "list",
+            "default": [],
+            "secret": False,
+            "label": "Never show sources",
+            "help": "Leave empty to not block any source.",
+            "essential": False,
+            "required": False,
+            "widget": None,
+            "choices": sorted(SOURCE_CONFIG_TYPES.keys()),
+        },
+        {
+            "name": "idle_when_filtered",
+            "type": "bool",
+            "default": False,
+            "secret": False,
+            "label": "Go idle when filtered out",
+            "help": (
+                "When on, this display switches to its idle screen instead of just "
+                "freezing on the last item, whenever the rules above block what's "
+                "currently playing."
+            ),
+            "essential": False,
+            "required": False,
+            "widget": None,
+        },
+        {
+            "name": "active_hours",
+            "type": "str",
+            "default": "",
+            "secret": False,
+            "label": "Active hours",
+            "help": (
+                "Example: 08:00 to 22:00 keeps this display active only during the "
+                "day. Leave both empty for always-on."
+            ),
+            "essential": False,
+            "required": False,
+            "widget": "time_range",
+        },
+        {
+            "name": "label",
+            "type": "str",
+            "default": "",
+            "secret": False,
+            "label": "Display name",
+            "help": 'Optional - shown instead of "Instance #2" etc. when there\'s more than one of this type.',
+            "essential": False,
+            "required": False,
+            "widget": None,
+        },
+    ]
+
+
 def _general_field_schema() -> List[Dict[str, Any]]:
     fields = []
     for name, field_type, default in _GENERAL_FIELDS:

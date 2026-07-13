@@ -308,6 +308,14 @@ def _output_components(
         instance = instances[0]
         local_secrets = _local_map(output_secrets_set, f"outputs.{type_name}.0.")
         essential, advanced = _build_fields(fields, instance, local_secrets)
+        # _output_filter_fields() are none of them secret and all essential=
+        # False (see its own docstring) - _build_fields()'s essential/
+        # advanced split is irrelevant here, so both halves are combined
+        # into one filter_fields list instead.
+        filter_essential, filter_advanced = _build_fields(
+            config_schema._output_filter_fields(), instance, {}
+        )
+        filter_fields = filter_essential + filter_advanced
         enabled = bool(instance.get("enabled"))
         missing = _missing_required_fields(fields, instance, local_secrets)
         health_entry = health_by_type.get(type_name)
@@ -330,6 +338,7 @@ def _output_components(
                 requires_restart=True,  # output changes are what trip the global restart flag - see UiDashboard.restart_required for the live signal
                 essential_fields=essential,
                 advanced_fields=advanced,
+                filter_fields=filter_fields,
                 warnings=_warnings_for(enabled, missing, health_entry)
                 + (
                     [f"{len(instances)} instances configured - showing the first"]

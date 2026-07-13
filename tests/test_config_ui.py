@@ -232,7 +232,14 @@ def test_schema_marks_known_value_list_fields_with_choices(config_path):
     out = _output(config_path)
     data = _client(out).get("/api/schema").get_json()
     field = next(f for f in data["outputs"]["web"] if f["name"] == "transition_exclude")
-    assert field["choices"] == ["fade", "slide-left", "slide-right", "slide-up", "slide-down", "zoom"]
+    assert field["choices"] == [
+        "fade",
+        "slide-left",
+        "slide-right",
+        "slide-up",
+        "slide-down",
+        "zoom",
+    ]
 
 
 def test_schema_list_fields_without_known_values_have_no_choices(config_path):
@@ -751,6 +758,47 @@ outputs:
 
     cfg = Config.load(config_path)
     assert cfg.outputs["web"][0].transition_exclude == ["zoom", "fade"]
+
+
+def test_save_form_sets_filter_fields_on_output_instance(config_path):
+    # The new shell's "Content filters" block (H5 M3) posts these through
+    # the same /api/config/form endpoint as every other output field - no
+    # dedicated save path needed.
+    config_path.write_text(
+        """
+outputs:
+  web:
+    - enabled: true
+"""
+    )
+    out = _output(config_path)
+    client = _client(out)
+    client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {
+                "web": [
+                    {
+                        "enabled": True,
+                        "allow_media_types": ["music"],
+                        "allow_sources": ["sonos"],
+                        "idle_when_filtered": True,
+                        "active_hours": "08:00-22:00",
+                        "label": "Living room",
+                    },
+                ],
+            },
+        },
+    )
+
+    cfg = Config.load(config_path)
+    web = cfg.outputs["web"][0]
+    assert web.allow_media_types == ["music"]
+    assert web.allow_sources == ["sonos"]
+    assert web.idle_when_filtered is True
+    assert web.active_hours == "08:00-22:00"
+    assert web.label == "Living room"
 
 
 def test_save_form_updates_existing_output_instances(config_path):

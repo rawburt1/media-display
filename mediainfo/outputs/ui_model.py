@@ -72,6 +72,14 @@ class UiComponent:
     requires_restart: bool
     essential_fields: List[UiField] = dataclasses.field(default_factory=list)
     advanced_fields: List[UiField] = dataclasses.field(default_factory=list)
+    # _OutputFilterMixin fields (allow/deny media types & sources,
+    # idle_when_filtered, active_hours, label) - only populated for output
+    # components (see ui_builder._output_components()). Kept separate from
+    # essential/advanced_fields so the detail page can render them as their
+    # own "Content filters" block, matching the classic shell's app.html
+    # (renderOutputFilters()) rather than mixing them in with the plugin's
+    # own settings.
+    filter_fields: List[UiField] = dataclasses.field(default_factory=list)
     warnings: List[str] = dataclasses.field(default_factory=list)
     actions: List[UiAction] = dataclasses.field(default_factory=list)
     # What the device is doing right now (Fas 10) - independent of

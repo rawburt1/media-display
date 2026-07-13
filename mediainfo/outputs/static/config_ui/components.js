@@ -102,6 +102,7 @@ var detailOutputsWorking = null;     // output/theme: full instance array (deep 
 var detailOutputType = null;         // output type name detailOutputsWorking belongs to
 var detailThemeName = null;          // set only for component_type "theme"
 var detailAdvancedOpen = false;
+var detailFiltersOpen = false;
 // theme_group_editor only: available theme names + trigger media types for
 // the groups editor's multi-selects, fetched alongside /api/config (see
 // loadAutoRotateInstances) - not stored anywhere else in this file, since
@@ -436,6 +437,15 @@ function renderComponentDetailBody() {
       + '</details>';
   }
   html += '</div>';
+
+  if (c.filter_fields && c.filter_fields.length) {
+    html += '<div class="card" style="margin-top:14px;">'
+      + '<details class="advanced-toggle"' + (detailFiltersOpen ? ' open' : '') + ' ontoggle="detailFiltersOpen = this.open">'
+      + '<summary>Content filters</summary>'
+      + '<p class="field-help">Limit what this display shows - e.g. only music, or never a specific source.</p>'
+      + c.filter_fields.map(renderDetailField).join('')
+      + '</details></div>';
+  }
 
   if (c.component_type === 'theme_group_editor') {
     html += renderGroupsEditor();

@@ -309,20 +309,65 @@ def test_list_field_with_known_choices_carries_them_through(config_path):
     # _ENUM_CHOICES) - the new shell renders these as a toggle-button picker
     # instead of the freeform textarea used for e.g. speaker_ips.
     web = _by_id(_components(config_path), "outputs.web")
-    field = next(f for f in web.essential_fields + web.advanced_fields if f.name == "transition_exclude")
+    field = next(
+        f for f in web.essential_fields + web.advanced_fields if f.name == "transition_exclude"
+    )
     assert field.choices == ["fade", "slide-left", "slide-right", "slide-up", "slide-down", "zoom"]
 
 
 def test_time_range_widget_marker_carries_through(config_path):
     pixoo = _by_id(_components(config_path), "outputs.pixoo")
-    field = next(f for f in pixoo.essential_fields + pixoo.advanced_fields if f.name == "screen_off_hours")
+    field = next(
+        f for f in pixoo.essential_fields + pixoo.advanced_fields if f.name == "screen_off_hours"
+    )
     assert field.widget == "time_range"
 
 
 def test_brightness_schedule_widget_marker_carries_through(config_path):
     pixoo = _by_id(_components(config_path), "outputs.pixoo")
-    field = next(f for f in pixoo.essential_fields + pixoo.advanced_fields if f.name == "brightness_schedule")
+    field = next(
+        f for f in pixoo.essential_fields + pixoo.advanced_fields if f.name == "brightness_schedule"
+    )
     assert field.widget == "brightness_schedule"
+
+
+# ---------------------------------------------------------------------------
+# filter_fields: _OutputFilterMixin fields as their own block (H5 M3)
+# ---------------------------------------------------------------------------
+
+
+def test_output_component_has_filter_fields(config_path):
+    pixoo = _by_id(_components(config_path), "outputs.pixoo")
+    names = {f.name for f in pixoo.filter_fields}
+    assert names == {
+        "allow_media_types",
+        "deny_media_types",
+        "allow_sources",
+        "deny_sources",
+        "idle_when_filtered",
+        "active_hours",
+        "label",
+    }
+
+
+def test_filter_field_choices_and_widgets(config_path):
+    pixoo = _by_id(_components(config_path), "outputs.pixoo")
+    by_name = {f.name: f for f in pixoo.filter_fields}
+    assert by_name["allow_media_types"].choices == ["music", "movie", "episode"]
+    assert by_name["allow_sources"].choices == sorted(by_name["allow_sources"].choices)
+    assert "sonos" in by_name["allow_sources"].choices
+    assert by_name["active_hours"].widget == "time_range"
+    assert by_name["idle_when_filtered"].type == "bool"
+    assert by_name["label"].type == "str"
+
+
+def test_non_output_components_have_no_filter_fields(config_path):
+    # Sources/enrichers/themes don't have _OutputFilterMixin at all. config/
+    # themes outputs don't get a component at all (see
+    # test_output_plumbing_types_are_excluded above), so they're not
+    # re-checked here.
+    kodi = _by_id(_components(config_path), "sources.kodi")
+    assert kodi.filter_fields == []
 
 
 def test_config_path_points_at_the_right_yaml_location(config_path):
