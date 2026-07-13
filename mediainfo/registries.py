@@ -18,7 +18,10 @@ of an error (see tests/test_registries.py).
 from __future__ import annotations
 
 import importlib
+import logging
 from typing import Optional, Union
+
+logger = logging.getLogger(__name__)
 
 SOURCE_CLASSES: dict[str, Union[str, type]] = {
     "appletv": "mediainfo.sources.appletv.AppleTvSource",
@@ -180,11 +183,32 @@ OUTPUT_DETAIL_FIELDS: dict = {
 }
 
 
-def resolve(path: str) -> type:
+def resolve(path: str) -> Optional[type]:
     """Import and return the class at a dotted path, e.g.
-    "mediainfo.sources.kodi.KodiSource"."""
+    "mediainfo.sources.kodi.KodiSource" - or None (logged) if that plugin's
+    own dependency isn't installed (see N3 in
+    docs/architecture-usability-review-2026-07.md: most requirements.txt
+    packages are also available as pyproject.toml extras for a leaner
+    install, e.g. `pip install mediainfo[appletv]` instead of the full
+    `-r requirements.txt`). Every get_*_class() below funnels through this
+    one function, so a missing dependency is skipped the same way an
+    unknown plugin name already is - see wiring.py's build_sources() etc.,
+    which treat a None return as "log and move on", not "crash the whole
+    boot sequence" - rather than duplicating that handling per call site.
+    """
     module_path, _, class_name = path.rpartition(".")
-    module = importlib.import_module(module_path)
+    try:
+        module = importlib.import_module(module_path)
+    except ImportError as exc:
+        logger.error(
+            "Could not load %s (%s): %s. Install its dependency (see "
+            "requirements.txt, or `pip install mediainfo[extra]` - see "
+            "pyproject.toml's optional-dependencies) or remove it from config.yaml.",
+            class_name,
+            path,
+            exc,
+        )
+        return None
     return getattr(module, class_name)
 
 

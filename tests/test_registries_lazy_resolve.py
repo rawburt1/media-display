@@ -2,6 +2,7 @@
 are dotted import-path strings, resolved (and only imported) on first use.
 """
 
+import importlib
 from unittest.mock import patch
 
 from mediainfo import registries
@@ -70,3 +71,63 @@ def test_all_enricher_registry_entries_resolve_without_error():
 def test_all_idle_registry_entries_resolve_without_error():
     for name in registries.IDLE_CLASSES:
         assert registries.get_idle_class(name) is not None
+
+
+# ---------------------------------------------------------------------------
+# resolve() must skip a plugin whose own dependency isn't installed, not
+# crash the whole registry lookup (N3 - see
+# docs/architecture-usability-review-2026-07.md; missing dependencies must
+# not crash the app, CLAUDE.md §2).
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_returns_none_and_logs_when_the_module_cannot_be_imported(caplog):
+    with patch(
+        "mediainfo.registries.importlib.import_module",
+        side_effect=ModuleNotFoundError("No module named 'pyatv'"),
+    ):
+        cls = registries.resolve("mediainfo.sources.appletv.AppleTvSource")
+
+    assert cls is None
+    assert "AppleTvSource" in caplog.text
+    assert "pyatv" in caplog.text
+
+
+def test_get_source_class_returns_none_when_its_dependency_is_missing():
+    with patch(
+        "mediainfo.registries.importlib.import_module",
+        side_effect=ModuleNotFoundError("No module named 'pyatv'"),
+    ):
+        assert registries.get_source_class("appletv") is None
+
+
+def test_get_output_class_returns_none_when_its_dependency_is_missing():
+    with patch(
+        "mediainfo.registries.importlib.import_module",
+        side_effect=ModuleNotFoundError("No module named 'pychromecast'"),
+    ):
+        assert registries.get_output_class("nest_hub") is None
+
+
+def test_build_sources_skips_a_source_with_a_missing_dependency_but_keeps_the_rest():
+    from pathlib import Path
+
+    from mediainfo import wiring
+    from mediainfo.config import Config
+
+    config = Config.load(Path(__file__).resolve().parents[1] / "config.example.yaml")
+    config.priority = ["appletv", "kodi"]
+
+    real_import_module = importlib.import_module
+
+    def fake_import(name, *args, **kwargs):
+        if name == "mediainfo.sources.appletv":
+            raise ModuleNotFoundError("No module named 'pyatv'")
+        return real_import_module(name, *args, **kwargs)
+
+    with patch("mediainfo.registries.importlib.import_module", side_effect=fake_import):
+        sources = wiring.build_sources(config)
+
+    names = {s.name for s in sources}
+    assert "appletv" not in names
+    assert "kodi" in names
