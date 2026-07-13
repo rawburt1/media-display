@@ -32,6 +32,9 @@ class AuthConfig:
     # fully trust, ...).
     enabled: bool = False
     username: str = ""
+    # Stored hashed (see mediainfo.web_auth.hash_password) - set via
+    # `python -m mediainfo set-password` or the config UI, which hash it
+    # for you; there's no way to write a valid value here by hand.
     password: str = ""
 
 

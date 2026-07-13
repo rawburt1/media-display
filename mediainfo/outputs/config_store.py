@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from mediainfo.config import OUTPUT_CONFIG_TYPES, Config
 from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
+from mediainfo.web_auth import hash_password
 from mediainfo.outputs.config_schema import (
     _FLAT_SECTIONS,
     _GENERAL_FIELDS,
@@ -257,6 +258,16 @@ class ConfigStore:
                 continue
 
             if len(parts) == 2 and parts[0] in _FLAT_SECTIONS:
+                if key == "auth.password":
+                    # Every write path hashes before persisting (M1 in
+                    # docs/architecture-usability-review-2026-07.md) -
+                    # config.yaml never gets a plaintext password from
+                    # here, matching set-password's own behavior. Only
+                    # reached when the client actually posted a new value
+                    # (see this method's own docstring: an untouched
+                    # secret field is simply absent from `values`), so
+                    # this never re-hashes the existing stored hash.
+                    value = hash_password(value)
                 section = data.setdefault(parts[0], {})
                 section[parts[1]] = value
                 continue

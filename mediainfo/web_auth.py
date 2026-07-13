@@ -37,10 +37,12 @@ identical to a legitimate one:
 
 from __future__ import annotations
 
+import hmac
 import ipaddress
 from typing import Optional
 
 from flask import Flask, Response, request
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from mediainfo.config import AuthConfig
 
@@ -61,6 +63,32 @@ _LOOPBACK_NETWORKS = [
 _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 _CSRF_HEADER_NAME = "X-Requested-With"
 _CSRF_HEADER_VALUE = "XMLHttpRequest"
+
+
+def hash_password(plaintext: str) -> str:
+    """Hash *plaintext* for storage in config.yaml's auth.password (M1 in
+    docs/architecture-usability-review-2026-07.md) - every write path
+    (set-password, the config UI's save, and the config_version 2->3
+    migration for existing installs) must call this rather than writing a
+    plaintext password to disk. Uses werkzeug's own salted-hash format
+    (already a transitive Flask dependency, no new package needed)."""
+    return generate_password_hash(plaintext)
+
+
+def verify_password(plaintext: str, stored_hash: str) -> bool:
+    """True if *plaintext* matches *stored_hash* (see hash_password()).
+
+    Constant-time (werkzeug's check_password_hash uses hmac.compare_digest
+    internally) and never raises - an empty or malformed stored_hash (e.g.
+    auth.password's default "", never set) simply returns False, same as
+    "no credential configured yet" always should.
+    """
+    if not stored_hash:
+        return False
+    try:
+        return check_password_hash(stored_hash, plaintext)
+    except ValueError:
+        return False
 
 
 def _host_without_port(host_header: str) -> str:
@@ -132,7 +160,11 @@ def install_auth(app: Flask, config: Optional[AuthConfig]) -> None:
         if is_private_address(request.remote_addr):
             return None
         auth = request.authorization
-        if auth and auth.username == config.username and auth.password == config.password:
+        if (
+            auth
+            and hmac.compare_digest(auth.username, config.username)
+            and verify_password(auth.password, config.password)
+        ):
             return None
         return Response(
             "Authentication required",

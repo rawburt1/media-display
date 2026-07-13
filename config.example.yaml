@@ -18,7 +18,7 @@
 # wild today is implicitly version 1. Only ever bump this yourself if a
 # future changelog entry tells you to; mediainfo migrates old versions
 # forward automatically.
-config_version: 2
+config_version: 3
 
 # ---------------------------------------------------------------------------
 # Polling
@@ -1371,6 +1371,21 @@ logging:
 # (port-forwarding, a reverse proxy, a VPN you don't fully trust, ...) and
 # want anything reaching them from outside that range to need a login.
 # Applies to all of those outputs at once (one shared username/password).
+#
+# `password` is stored hashed, not plaintext - don't hand-type a password
+# here (there's no way to write a valid hash by hand). Set it with
+# `python -m mediainfo set-password --config config.yaml` or the config
+# UI's Advanced section instead; either one hashes it for you. A
+# config_version 2 file with a plaintext password here is transparently
+# upgraded in memory on load, but the file on disk keeps the plaintext
+# password until you next save it one of those two ways.
+#
+# HTTP Basic Auth sends credentials Base64-encoded, not encrypted, on
+# every request - anyone able to observe the traffic between a client and
+# this app can trivially recover them. If you're exposing these outputs
+# beyond a network you fully trust, put a TLS-terminating reverse proxy
+# (Caddy, nginx, Traefik, ...) in front of this app rather than relying on
+# auth.enabled alone over plain HTTP - see SECURITY.md.
 
 auth:
   enabled: false

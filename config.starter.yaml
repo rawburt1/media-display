@@ -10,7 +10,7 @@
 # option, each with its own comments on what it needs and where to get any
 # API key - copy whatever sections you need from it into this file.
 
-config_version: 2
+config_version: 3
 
 # Every output below shares one HTTP server, defaulting to 0.0.0.0:8090 (all
 # network interfaces, required to reach it from another machine or from

@@ -94,6 +94,50 @@ Flask-based output:
   (e.g. a LAN DNS name or a VPN domain) is not currently allowlisted and will be
   rejected** - if you need that, open an issue.
 
+## HTTP Basic Auth: hashed at rest, plaintext on the wire without TLS
+
+`auth.password` is stored hashed in `config.yaml` (as of `config_version: 3`
+- see README.md), not plaintext - set it via `python -m mediainfo
+set-password` or the config UI, both of which hash it for you. An older
+config file with a plaintext password is transparently upgraded in memory
+the moment it's loaded, so the running process never compares a submitted
+password against plaintext even before the file itself is next resaved.
+
+That protects the credential *at rest*. It does **not** protect it in
+transit: HTTP Basic Auth sends `username:password` Base64-encoded (not
+encrypted) on every single request - trivially reversible by anyone able
+to observe the traffic between a client and this app (a shared coffee-shop
+Wi-Fi, an untrusted hop on the public internet, a compromised router,
+...). `auth.enabled: true` over plain HTTP stops casual/opportunistic
+access to a URL, but does not protect the password itself once real
+network observation is in play.
+
+**If you're exposing any of these outputs beyond a network you fully
+trust, put a TLS-terminating reverse proxy in front of this app** rather
+than relying on `auth.enabled` alone over plain HTTP. This app has no
+built-in TLS support (see H1's rationale for using `werkzeug.serving`,
+not a production TLS-capable server, in
+`mediainfo/outputs/http_server.py`) - terminating TLS is explicitly a
+reverse proxy's job here. Any of the common options work the same way:
+the proxy holds the certificate and speaks HTTPS to the outside world,
+then forwards plain HTTP to this app's `http.host`/`http.port` (or, more
+simply, to `127.0.0.1` if the proxy runs on the same machine). A minimal
+Caddy example (automatic HTTPS via Let's Encrypt):
+
+```
+mediainfo.example.com {
+    reverse_proxy 127.0.0.1:8090
+}
+```
+
+nginx or Traefik work equivalently - point them at whichever host/port
+`http:` in `config.yaml` is bound to, and terminate TLS in front of it.
+Set `http.host: 127.0.0.1` on this app once a reverse proxy is the only
+thing meant to reach it directly. Note the Host-allowlist guard mentioned
+above: a reverse-proxy setup using a real hostname currently gets
+rejected by this app's own `_require_trusted_host` check - open an issue
+if you need that combination.
+
 ## Keeping credentials out of config.yaml
 
 Any string value in config.yaml can reference an environment variable:
@@ -120,4 +164,5 @@ These settings apply to every Flask-based output at once (`web`, `config`,
 |---|---|---|
 | `http.host: 127.0.0.1` | This machine only (Docker: unreachable even from the host - the published port can't reach a loopback-only bind inside the container) | Development, or "never touch this from another device" |
 | `http.host: 0.0.0.0`, no `auth` (shipped default) | Entire LAN (no login) | Fully trusted home network |
-| `http.host: 0.0.0.0`, `auth.enabled: true` | LAN (login required); public IPs challenge all | Shared/untrusted LAN, or exposing beyond LAN via port-forward/reverse proxy |
+| `http.host: 0.0.0.0`, `auth.enabled: true` | LAN (login required); public IPs challenge all | Shared/untrusted LAN, or exposing beyond LAN via port-forward/reverse proxy over plain HTTP (login required, but the password itself isn't protected in transit - see above) |
+| `http.host: 127.0.0.1`, `auth.enabled: true`, behind a TLS-terminating reverse proxy | Wherever the proxy is reachable from (LAN, VPN, public internet) - login required, password protected in transit | Exposing beyond your LAN for real (see the reverse-proxy section above) |

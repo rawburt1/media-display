@@ -7,6 +7,7 @@ import pytest
 
 from mediainfo.__main__ import _set_password_main
 from mediainfo.config import Config
+from mediainfo.web_auth import verify_password
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 
@@ -32,7 +33,8 @@ def test_sets_username_and_password_noninteractively(config_path):
 
     cfg = Config.load(config_path)
     assert cfg.auth.username == "admin"
-    assert cfg.auth.password == "hunter2"
+    assert cfg.auth.password != "hunter2"  # stored hashed, not plaintext
+    assert verify_password("hunter2", cfg.auth.password)
 
 
 def test_does_not_enable_auth_by_default(config_path):
@@ -90,7 +92,8 @@ def test_reusing_existing_username_when_omitted(config_path):
 
     cfg = Config.load(config_path)
     assert cfg.auth.username == "admin"
-    assert cfg.auth.password == "second"
+    assert verify_password("second", cfg.auth.password)
+    assert not verify_password("first", cfg.auth.password)
 
 
 def test_preserves_comments_and_other_config(config_path):
@@ -128,7 +131,7 @@ def test_prompts_when_password_omitted(config_path, monkeypatch):
     _set_password_main(["--config", str(config_path), "--username", "admin"])
 
     cfg = Config.load(config_path)
-    assert cfg.auth.password == "prompted-secret"
+    assert verify_password("prompted-secret", cfg.auth.password)
 
 
 def test_mismatched_confirmation_exits_without_saving(config_path, monkeypatch, capsys):

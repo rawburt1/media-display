@@ -11,6 +11,9 @@ rename, and existing config.yaml files keep working unchanged.
 v1 -> v2 (see _migrate_v1_to_v2) is the first real migration: H1's HTTP
 server consolidation removed every Flask-based output's own host/port
 fields in favor of one shared config.http.
+
+v2 -> v3 (see _migrate_v2_to_v3): M1's auth.password is now stored hashed,
+not plaintext.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from typing import Any, Callable, Dict
 
 logger = logging.getLogger(__name__)
 
-CURRENT_CONFIG_VERSION = 2
+CURRENT_CONFIG_VERSION = 3
 
 # Per output type, which of its own fields config_version 2 drops now that
 # every Flask-based output shares one HTTP server (Config.http) instead of
@@ -102,12 +105,46 @@ def _migrate_v1_to_v2(raw: Dict[str, Any]) -> Dict[str, Any]:
     return raw
 
 
+def _migrate_v2_to_v3(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """M1 (docs/architecture-usability-review-2026-07.md): auth.password is
+    now stored hashed (see mediainfo.web_auth.hash_password/verify_password),
+    not plaintext - hash whatever plaintext value config_version 2 left
+    there, so the in-memory Config this process runs with is never compared
+    with a plaintext `==` again, even before config.yaml itself is next
+    resaved (this migration - like v1->v2 - only ever changes the raw dict
+    in memory; nothing here writes config.yaml back to disk, matching how
+    every other load-time migration in this file already behaves. Run
+    `python -m mediainfo set-password` once, or re-save via the config UI's
+    Advanced section, to also rewrite the file on disk with the hash).
+
+    A deferred import (rather than a module-level one) avoids a circular
+    import: mediainfo.web_auth imports mediainfo.config (for AuthConfig),
+    and this module is imported *by* mediainfo.config.__init__ itself - by
+    the time this function actually runs (from Config.load()/from_dict(),
+    well after mediainfo.config has finished initializing), the cycle is
+    no longer a problem.
+    """
+    raw = dict(raw)
+    auth = raw.get("auth")
+    if not isinstance(auth, dict):
+        return raw
+    password = auth.get("password")
+    if not password:
+        return raw
+
+    from mediainfo.web_auth import hash_password
+
+    raw["auth"] = {**auth, "password": hash_password(password)}
+    return raw
+
+
 # Maps "version N" -> a function that takes a raw config dict written at
 # version N and returns the equivalent dict at version N+1. Keep entries in
 # order; migrate_config() walks them starting from whatever version the
 # file declares (or 1, if it declares none).
 _MIGRATIONS: Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     1: _migrate_v1_to_v2,
+    2: _migrate_v2_to_v3,
 }
 
 

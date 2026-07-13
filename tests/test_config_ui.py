@@ -15,6 +15,7 @@ from mediainfo.config import AutoRotatePresetConfig, Config, ConfigUiConfig
 from mediainfo.config.outputs import parse_presets
 from mediainfo.config_backup import backup_config_file, list_backups
 from mediainfo.outputs.config_ui import ConfigUiOutput, _restart_process
+from mediainfo.web_auth import verify_password
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[1] / "config.example.yaml"
 
@@ -614,7 +615,9 @@ def test_save_form_requires_restart_for_auth_change(config_path):
     resp = client.post("/api/config/form", json={"values": {"auth.password": "new-secret"}})
 
     assert resp.get_json() == {"ok": True, "restart_required": True}
-    assert Config.load(config_path).auth.password == "new-secret"
+    stored = Config.load(config_path).auth.password
+    assert stored != "new-secret"  # stored hashed, not plaintext
+    assert verify_password("new-secret", stored)
 
 
 def test_save_form_no_restart_required_when_auth_untouched(config_path):

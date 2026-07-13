@@ -333,13 +333,17 @@ itself starts out as a copy of `config.starter.yaml` (just the config UI and
 a few harmless local outputs, no sources), not the full example file. Key
 things to fill in:
 
-- **`config_version`**: schema version of the file, currently `2`. Safe to
+- **`config_version`**: schema version of the file, currently `3`. Safe to
   leave out entirely (an absent version is treated as `1` and migrated
   forward automatically, e.g. dropping the per-output `host`/`port` keys
-  `config_version: 2` removed) - it exists so a future field rename can
-  transparently upgrade old config.yaml files instead of rejecting them at
-  startup. You should never need to set this by hand; just don't remove it
-  if a future upgrade adds/bumps it.
+  `config_version: 2` removed, and `config_version: 3` hashing a plaintext
+  `auth.password`) - it exists so a future field rename can transparently
+  upgrade old config.yaml files instead of rejecting them at startup. You
+  should never need to set this by hand; just don't remove it if a future
+  upgrade adds/bumps it. Note that migration only happens in memory on
+  load - it doesn't rewrite config.yaml itself, so an old file keeps
+  working (and keeps its old on-disk shape) until you next save it via the
+  config UI or `set-password`.
 - **`priority`**: ordered list of source names. When more than one source
   is active at once, the first one in this list wins. A source that's
   `enabled: true` but missing from this list is never actually polled -
@@ -810,11 +814,17 @@ things to fill in:
   ranges need `username`/`password` - so your own LAN keeps working with
   no login prompt either way. Turn this on if you're exposing one of
   these outputs beyond your LAN (port-forwarding, a reverse proxy, a VPN
-  you don't fully trust, ...). One shared username/password applies to
-  all of them. See SECURITY.md for more on this. Changing `auth` (from
-  the config UI's "Advanced configuration" page, or by hand) needs a
-  restart to take effect - every Flask-based output's login check is only
-  set up once, at startup.
+  you don't fully trust, ...) - and put a TLS-terminating reverse proxy in
+  front of this app when you do, since Basic Auth sends credentials
+  Base64-encoded, not encrypted, on every request (see SECURITY.md). One
+  shared username/password applies to all of them. Changing `auth` (from
+  the config UI's "Advanced configuration" page, or `set-password` below)
+  needs a restart to take effect - every Flask-based output's login check
+  is only set up once, at startup.
+
+  `password` is stored hashed - set it via the config UI or `set-password`
+  below, not by hand-editing config.yaml (there's no way to write a valid
+  hash yourself).
 
   #### Resetting the config UI password
 

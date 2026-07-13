@@ -424,7 +424,10 @@ def _set_password_main(argv: list) -> None:
     Preserves comments/formatting (ruamel.yaml, like the config UI's own
     save path) and validates the result with Config.from_dict() before
     writing anything - same guarantee as every other way of editing
-    config.yaml in this codebase.
+    config.yaml in this codebase. The password is hashed (see
+    mediainfo.web_auth.hash_password) before it's written - config.yaml
+    never holds a plaintext password after this command runs, even if it
+    did before (M1 in docs/architecture-usability-review-2026-07.md).
 
     auth.enabled is left untouched unless --enable is passed, so running
     this to merely change an existing password can't accidentally turn
@@ -485,8 +488,10 @@ def _set_password_main(argv: list) -> None:
         print("Error: a password is required.", file=sys.stderr)
         sys.exit(1)
 
+    from mediainfo.web_auth import hash_password
+
     auth["username"] = username
-    auth["password"] = password
+    auth["password"] = hash_password(password)
     if args.enable:
         auth["enabled"] = True
 

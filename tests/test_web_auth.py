@@ -5,9 +5,11 @@ from flask import Flask
 from mediainfo.config import AuthConfig
 from mediainfo.web_auth import (
     _host_without_port,
+    hash_password,
     install_auth,
     is_loopback_address,
     is_private_address,
+    verify_password,
 )
 
 
@@ -61,6 +63,39 @@ def test_ipv6_zone_id_is_stripped_before_parsing():
 
 
 # ---------------------------------------------------------------------------
+# hash_password / verify_password (M1 - see
+# docs/architecture-usability-review-2026-07.md)
+# ---------------------------------------------------------------------------
+
+
+def test_hash_password_does_not_return_the_plaintext():
+    assert hash_password("hunter2") != "hunter2"
+
+
+def test_verify_password_accepts_the_correct_plaintext():
+    assert verify_password("hunter2", hash_password("hunter2"))
+
+
+def test_verify_password_rejects_the_wrong_plaintext():
+    assert not verify_password("wrong", hash_password("hunter2"))
+
+
+def test_verify_password_rejects_an_empty_stored_hash():
+    # auth.password's own default - "no credential configured yet" must
+    # never accidentally match anything, including an empty guess.
+    assert not verify_password("", "")
+    assert not verify_password("hunter2", "")
+
+
+def test_verify_password_rejects_a_malformed_stored_hash_without_raising():
+    assert not verify_password("hunter2", "not-a-real-hash")
+
+
+def test_hash_password_is_salted_so_the_same_password_hashes_differently():
+    assert hash_password("hunter2") != hash_password("hunter2")
+
+
+# ---------------------------------------------------------------------------
 # install_auth
 # ---------------------------------------------------------------------------
 
@@ -97,14 +132,14 @@ def test_none_config_allows_any_request():
 
 
 def test_private_address_is_never_challenged():
-    app = _app(AuthConfig(enabled=True, username="u", password="p"))
+    app = _app(AuthConfig(enabled=True, username="u", password=hash_password("p")))
     client = app.test_client()
     resp = client.get("/secret", environ_overrides={"REMOTE_ADDR": "192.168.1.5"})
     assert resp.status_code == 200
 
 
 def test_public_address_without_credentials_is_rejected():
-    app = _app(AuthConfig(enabled=True, username="u", password="p"))
+    app = _app(AuthConfig(enabled=True, username="u", password=hash_password("p")))
     client = app.test_client()
     resp = client.get("/secret", environ_overrides={"REMOTE_ADDR": "8.8.8.8"})
     assert resp.status_code == 401
@@ -112,7 +147,7 @@ def test_public_address_without_credentials_is_rejected():
 
 
 def test_public_address_with_correct_credentials_is_allowed():
-    app = _app(AuthConfig(enabled=True, username="u", password="p"))
+    app = _app(AuthConfig(enabled=True, username="u", password=hash_password("p")))
     client = app.test_client()
     resp = client.get(
         "/secret",
@@ -123,7 +158,7 @@ def test_public_address_with_correct_credentials_is_allowed():
 
 
 def test_public_address_with_wrong_credentials_is_rejected():
-    app = _app(AuthConfig(enabled=True, username="u", password="p"))
+    app = _app(AuthConfig(enabled=True, username="u", password=hash_password("p")))
     client = app.test_client()
     resp = client.get(
         "/secret",

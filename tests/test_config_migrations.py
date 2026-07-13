@@ -166,6 +166,44 @@ def test_v1_to_v2_leaves_unrelated_output_types_untouched():
     assert result["outputs"]["pixoo"] == {"enabled": True, "device_ip": "1.2.3.4"}
 
 
+# ---------------------------------------------------------------------------
+# v2 -> v3: auth.password hashed at rest (M1)
+# ---------------------------------------------------------------------------
+
+
+def test_v2_to_v3_hashes_a_plaintext_password():
+    from mediainfo.web_auth import verify_password
+
+    raw = {"config_version": 2, "auth": {"enabled": True, "username": "u", "password": "hunter2"}}
+    result = migrate_config(raw)
+
+    hashed = result["auth"]["password"]
+    assert hashed != "hunter2"
+    assert verify_password("hunter2", hashed)
+    assert result["config_version"] == CURRENT_CONFIG_VERSION
+
+
+def test_v2_to_v3_tolerates_missing_or_non_dict_auth():
+    assert migrate_config({"config_version": 2})["config_version"] == CURRENT_CONFIG_VERSION
+    assert migrate_config({"config_version": 2, "auth": "not-a-dict"})["auth"] == "not-a-dict"
+
+
+def test_v2_to_v3_leaves_an_empty_password_untouched():
+    raw = {"config_version": 2, "auth": {"enabled": False, "username": "", "password": ""}}
+    result = migrate_config(raw)
+    assert result["auth"]["password"] == ""
+
+
+def test_v2_to_v3_leaves_other_auth_fields_untouched():
+    raw = {
+        "config_version": 2,
+        "auth": {"enabled": True, "username": "someone", "password": "hunter2"},
+    }
+    result = migrate_config(raw)
+    assert result["auth"]["enabled"] is True
+    assert result["auth"]["username"] == "someone"
+
+
 def test_from_dict_applies_migrations_before_building_config(monkeypatch):
     from mediainfo.config import Config
 
