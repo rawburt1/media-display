@@ -242,6 +242,39 @@ function onListChoiceToggle(name, choiceValue) {
   onDetailFieldChange(name, items);
 }
 
+// "HH:MM-HH:MM" fields (active_hours, screen_off_hours) - two <input
+// type="time"> plus Clear, adapted from app.html's time-range control.
+// Unlike app.html's onTimeRangeChange() (which joins start/end unconditionally,
+// so filling one side while the other is still blank saves/re-renders as ""
+// and visibly wipes out what was just typed - reproduced live while building
+// this), a change with exactly one side filled is treated as "still editing"
+// and skipped rather than saved: setting a fresh range means filling start
+// then end, and the first of those two changes must not clobber it. Only
+// "both filled" (a complete range) or "both blank" (fully cleared) commit.
+function onDetailTimeRangeChange(name, containerEl) {
+  var start = containerEl.querySelector('[data-part="start"]').value;
+  var end = containerEl.querySelector('[data-part="end"]').value;
+  if (Boolean(start) !== Boolean(end)) return;
+  onDetailFieldChange(name, (start && end) ? (start + '-' + end) : '');
+}
+
+function renderTimeRangeField(field, value) {
+  var parts = (value || '').split('-');
+  var start = parts[0] || '', end = parts[1] || '';
+  var onchange = "onDetailTimeRangeChange('" + esc(field.name) + "', this.parentElement)";
+  var control = '<div class="time-range-row">'
+    + '<input type="time" value="' + esc(start) + '" aria-label="' + esc(field.label) + ' start time" data-part="start" onchange="' + onchange + '">'
+    + '<span aria-hidden="true">to</span>'
+    + '<input type="time" value="' + esc(end) + '" aria-label="' + esc(field.label) + ' end time" data-part="end" onchange="' + onchange + '">'
+    + '<button type="button" class="link-btn" onclick="onDetailFieldChange(\'' + esc(field.name) + '\', \'\')">Clear</button>'
+    + '</div>';
+  return '<div class="field"><div class="field-row">'
+    + '<label class="field-label">' + esc(field.label) + '</label>'
+    + '<div class="field-control">' + control
+    + (field.help ? '<div class="field-help">' + esc(field.help) + '</div>' : '')
+    + '</div></div></div>';
+}
+
 function renderListField(field, value) {
   var items = Array.isArray(value) ? value : [];
   var control;
@@ -277,7 +310,9 @@ function renderDetailField(field) {
   } else if (field.type === 'bool') {
     control = '<input type="checkbox" ' + (value ? 'checked' : '')
       + ' onchange="onDetailFieldChange(\'' + esc(field.name) + '\', this.checked)">';
-  } else if (field.widget === 'time_range' || field.widget === 'brightness_schedule') {
+  } else if (field.widget === 'time_range') {
+    return renderTimeRangeField(field, value);
+  } else if (field.widget === 'brightness_schedule') {
     return renderUnsupportedWidgetField(field, value);
   } else if (field.type === 'list') {
     return renderListField(field, value);

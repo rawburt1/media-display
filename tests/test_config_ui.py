@@ -204,6 +204,16 @@ def test_schema_includes_simple_list_fields(config_path):
     assert "enabled" in fields
 
 
+def test_schema_marks_screen_off_hours_with_time_range_widget(config_path):
+    # The new shell's client-side time-range editor (two <input type="time">
+    # + Clear) keys off this widget marker - see components.js's
+    # renderTimeRangeField().
+    out = _output(config_path)
+    data = _client(out).get("/api/schema").get_json()
+    field = next(f for f in data["outputs"]["pixoo"] if f["name"] == "screen_off_hours")
+    assert field["widget"] == "time_range"
+
+
 def test_schema_marks_known_value_list_fields_with_choices(config_path):
     # transition_exclude is a simple list field with a fixed, known set of
     # valid values - exposed as `choices` so the UI can render a

@@ -250,6 +250,13 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 .field-control textarea { min-height: 64px; font-family: inherit; resize: vertical; }
 .field-control input[type=checkbox] { width: 17px; height: 17px; }
 .field-control input[type=file] { font-size: 12.5px; color: var(--muted); }
+.time-range-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.time-range-row input[type=time] { width: auto; }
+.link-btn {
+  background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 600;
+  cursor: pointer; padding: 0;
+}
+.link-btn:hover { text-decoration: underline; }
 .secret-box { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .secret-badge { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
 .secret-badge.set { background: var(--badge-ok-bg); color: var(--ok); }
