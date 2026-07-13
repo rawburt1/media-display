@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from mediainfo import registries
 from mediainfo.app_services import AppServices
@@ -266,6 +266,14 @@ def build_history(config: Config) -> Optional[PlaybackHistory]:
     )
 
 
+# Sentinel distinguishing "caller didn't pass this" from "caller passed
+# an explicit value" for start_orchestrator()'s pre-built-collaborator
+# params below - unlike the other params here, None is a legitimate built
+# value for mediadata_store/idle_source (e.g. no idle providers enabled),
+# so it can't double as "please build one".
+_UNSET = object()
+
+
 def start_orchestrator(
     config: Config,
     outputs: list,
@@ -274,25 +282,43 @@ def start_orchestrator(
     overrides: Optional[ArtworkOverrideStore] = None,
     poster_store: Optional[PosterStore] = None,
     history: Optional[PlaybackHistory] = None,
-    mediadata_store: Optional[MediaDataStore] = None,
+    mediadata_store: Any = _UNSET,
+    sources: Any = _UNSET,
+    enrichers: Any = _UNSET,
+    text_enrichers: Any = _UNSET,
+    idle_source: Any = _UNSET,
 ) -> Orchestrator:
-    # Callers that already need the store themselves (e.g. _start_and_wire,
-    # to also put it in the AppServices built for attach_services()) build
-    # it once and pass it in here instead of leaving this to build a
-    # second, separate instance of it - build_mediadata_store() is called
-    # only if one wasn't already supplied, so existing callers that don't
-    # care about this are unaffected.
-    if mediadata_store is None:
+    """Build (unless already supplied) every collaborator the Orchestrator
+    needs and start it.
+
+    sources/enrichers/text_enrichers/idle_source/mediadata_store each
+    default to building fresh from *config*, exactly as before this
+    docstring existed - the only caller that passes any of them explicitly
+    is __main__.py's _start_and_wire(), on a config hot-reload, to reuse
+    whatever collaborator N7's ReloadPlan (see mediainfo/reload_plan.py)
+    says didn't need rebuilding, instead of tearing down and reconnecting
+    every source/enricher/idle provider on every reload regardless of what
+    actually changed.
+    """
+    if mediadata_store is _UNSET:
         mediadata_store = build_mediadata_store(config, cache)
+    if sources is _UNSET:
+        sources = build_sources(config)
+    if enrichers is _UNSET:
+        enrichers = build_enrichers(config, library, mediadata_store)
+    if text_enrichers is _UNSET:
+        text_enrichers = build_text_enrichers(config, mediadata_store)
+    if idle_source is _UNSET:
+        idle_source = build_idle_source(config, library)
     orch = Orchestrator(
-        sources=build_sources(config),
-        enrichers=build_enrichers(config, library, mediadata_store),
-        text_enrichers=build_text_enrichers(config, mediadata_store),
+        sources=sources,
+        enrichers=enrichers,
+        text_enrichers=text_enrichers,
         outputs=outputs,
         cache=cache,
         poll_interval_seconds=config.poll_interval_seconds,
         rotation_interval_seconds=config.rotation_interval_seconds,
-        idle_source=build_idle_source(config, library),
+        idle_source=idle_source,
         backoff_initial_seconds=config.backoff_initial_seconds,
         backoff_max_seconds=config.backoff_max_seconds,
         nothing_playing_grace_seconds=config.nothing_playing_grace_seconds,

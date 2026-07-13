@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import logging
 import signal
 import sys
@@ -19,16 +20,23 @@ from typing import Optional
 from mediainfo.cache import ImageCache
 from mediainfo.config import Config, LoggingConfig
 from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
+from mediainfo.media_data_store import MediaDataStore
 from mediainfo.musiclibrary import MusicLibrary
+from mediainfo.orchestrator import Orchestrator
 from mediainfo.outputs.http_server import SharedHttpServer
+from mediainfo.reload_plan import ReloadPlan, compute_reload_plan
 from mediainfo.validation import validate_config
 from mediainfo.wiring import (
     attach_services,
     build_app_services,
     build_artwork_overrides,
+    build_enrichers,
     build_history,
+    build_idle_source,
     build_mediadata_store,
     build_poster_store,
+    build_sources,
+    build_text_enrichers,
     instantiate_outputs,
     start_orchestrator,
 )
@@ -103,7 +111,7 @@ def main() -> None:
     overrides = build_artwork_overrides(config)
     poster_store = build_poster_store(config)
     history = build_history(config)
-    orch = _start_and_wire(config, outputs, cache, library, overrides, poster_store, history)
+    state = _start_and_wire(config, outputs, cache, library, overrides, poster_store, history)
 
     try:
         # Main loop: sleep until a stop signal or a config-file change.
@@ -123,36 +131,45 @@ def main() -> None:
 
             _warn_output_changes(config, new_config)
             validate_config(new_config)
-            library_config_changed = new_config.library != config.library
-            overrides_config_changed = new_config.overrides != config.overrides
-            posters_config_changed = new_config.posters != config.posters
-            history_config_changed = new_config.history != config.history
+            # N7 (see docs/architecture-usability-review-2026-07.md): only
+            # rebuild the subsystems the plan says actually depend on
+            # something that changed - see mediainfo/reload_plan.py. A
+            # reload that only touched e.g. history.max_entries no longer
+            # reconnects every source or restarts the poll loop.
+            plan = compute_reload_plan(config, new_config)
             config = new_config
 
-            orch.stop()
-            orch.join()
-            cache = _build_cache(config)
-            if library_config_changed:
+            if plan.cache_dirty:
+                cache = _build_cache(config)
+            if plan.library_dirty:
                 library.close()
                 library = MusicLibrary(
                     config.library.db_path, max_age_days=config.library.max_age_days
                 )
-            if overrides_config_changed:
+            if plan.overrides_dirty:
                 overrides = build_artwork_overrides(config)
-            if posters_config_changed:
+            if plan.posters_dirty:
                 poster_store = build_poster_store(config)
-            if history_config_changed:
+            if plan.history_dirty:
                 if history is not None:
                     history.close()
                 history = build_history(config)
-            orch = _start_and_wire(
-                config, outputs, cache, library, overrides, poster_store, history
+            state = _start_and_wire(
+                config,
+                outputs,
+                cache,
+                library,
+                overrides,
+                poster_store,
+                history,
+                previous=state,
+                plan=plan,
             )
             logger.info("Config reloaded successfully")
     finally:
         logger.info("Shutting down ...")
-        orch.stop()
-        orch.join()
+        state.orch.stop()
+        state.orch.join()
         _shutdown_outputs(outputs)
         shared_server.stop()
         library.close()
@@ -191,6 +208,21 @@ def _build_cache(config: Config) -> ImageCache:
     )
 
 
+@dataclasses.dataclass
+class _Subsystems:
+    """Everything _start_and_wire() built (or reused) on the most recent
+    boot/reload - carried forward as `previous` into the next reload so
+    compute_reload_plan()'s ReloadPlan can be honored: whatever it says
+    isn't dirty gets handed straight back out instead of rebuilt."""
+
+    orch: Orchestrator
+    sources: list
+    enrichers: list
+    text_enrichers: list
+    idle_source: object
+    mediadata_store: Optional[MediaDataStore]
+
+
 def _start_and_wire(
     config: Config,
     outputs: list,
@@ -199,25 +231,81 @@ def _start_and_wire(
     overrides,
     poster_store=None,
     history=None,
-):
+    previous: Optional[_Subsystems] = None,
+    plan: Optional[ReloadPlan] = None,
+) -> _Subsystems:
+    """Build (or reuse) the orchestrator's collaborators and (re)start it.
+
+    On first boot (`previous`/`plan` both None) everything is built fresh -
+    unchanged from before N7. On a config-file hot-reload, `plan` (see
+    mediainfo/reload_plan.py) says which of sources/enrichers/
+    text_enrichers/idle_source/mediadata_store actually need rebuilding;
+    reusing an already-connected source or already-loaded enricher across
+    a reload that didn't touch its config avoids the reconnect/reload
+    work, and - more importantly - avoids restarting the orchestrator
+    thread at all when nothing it depends on changed (see
+    plan.orchestrator_dirty).
+    """
     # Built once here (rather than left to start_orchestrator's own
     # internal default) so the same instance can also go into the
     # AppServices built below, instead of each ending up with its own
     # separate MediaDataStore.
-    mediadata_store = build_mediadata_store(config, cache)
-    orch = start_orchestrator(
-        config,
-        outputs,
-        cache,
-        library,
-        overrides,
-        poster_store,
-        history,
-        mediadata_store,
-    )
+    if previous is not None and plan is not None and not plan.mediadata_store_dirty:
+        mediadata_store = previous.mediadata_store
+    else:
+        mediadata_store = build_mediadata_store(config, cache)
+
+    if previous is not None and plan is not None and not plan.sources_dirty:
+        sources = previous.sources
+    else:
+        sources = build_sources(config)
+
+    if previous is not None and plan is not None and not plan.enrichers_dirty:
+        enrichers = previous.enrichers
+    else:
+        enrichers = build_enrichers(config, library, mediadata_store)
+
+    if previous is not None and plan is not None and not plan.text_enrichers_dirty:
+        text_enrichers = previous.text_enrichers
+    else:
+        text_enrichers = build_text_enrichers(config, mediadata_store)
+
+    if previous is not None and plan is not None and not plan.idle_dirty:
+        idle_source = previous.idle_source
+    else:
+        idle_source = build_idle_source(config, library)
+
+    if previous is not None and plan is not None and not plan.orchestrator_dirty:
+        orch = previous.orch
+    else:
+        if previous is not None:
+            previous.orch.stop()
+            previous.orch.join()
+        orch = start_orchestrator(
+            config,
+            outputs,
+            cache,
+            library,
+            overrides,
+            poster_store,
+            history,
+            mediadata_store,
+            sources=sources,
+            enrichers=enrichers,
+            text_enrichers=text_enrichers,
+            idle_source=idle_source,
+        )
+
     services = build_app_services(orch, config, outputs, history, overrides, mediadata_store)
     attach_services(outputs, services)
-    return orch
+    return _Subsystems(
+        orch=orch,
+        sources=sources,
+        enrichers=enrichers,
+        text_enrichers=text_enrichers,
+        idle_source=idle_source,
+        mediadata_store=mediadata_store,
+    )
 
 
 def _file_mtime(path: Path) -> Optional[float]:

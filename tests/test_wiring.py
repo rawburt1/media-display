@@ -755,6 +755,76 @@ def test_start_orchestrator_uses_supplied_mediadata_store_instead_of_building_on
     build_fn.assert_not_called()
 
 
+def test_start_orchestrator_uses_supplied_mediadata_store_even_when_none():
+    # None is a legitimate *built* value (no mediadata plugin enabled) -
+    # explicitly passing it must not be mistaken for "not supplied,
+    # please build one" (see the _UNSET sentinel this distinguishes from).
+    cfg = _minimal_config(
+        priority=[],
+        sources={},
+        enrichers={},
+        idle={},
+        poll_interval_seconds=5,
+        rotation_interval_seconds=30,
+    )
+
+    with (
+        patch("mediainfo.wiring.Orchestrator", return_value=MagicMock()),
+        patch("mediainfo.wiring.build_mediadata_store") as build_fn,
+    ):
+        start_orchestrator(cfg, [], MagicMock(), mediadata_store=None)
+
+    build_fn.assert_not_called()
+
+
+def test_start_orchestrator_reuses_supplied_sources_enrichers_text_enrichers_idle_source():
+    # N7 (see docs/architecture-usability-review-2026-07.md): a config
+    # hot-reload that only touched an unrelated section should be able to
+    # hand back the *same* already-connected collaborators instead of
+    # forcing a rebuild - this is the pass-through __main__.py's
+    # _start_and_wire() relies on.
+    cfg = _minimal_config(
+        priority=[],
+        sources={},
+        enrichers={},
+        idle={},
+        poll_interval_seconds=5,
+        rotation_interval_seconds=30,
+    )
+    sentinel_sources = [MagicMock(name="reused-source")]
+    sentinel_enrichers = [MagicMock(name="reused-enricher")]
+    sentinel_text_enrichers = [MagicMock(name="reused-text-enricher")]
+    sentinel_idle_source = MagicMock(name="reused-idle-source")
+
+    with (
+        patch("mediainfo.wiring.Orchestrator", return_value=MagicMock()) as mock_cls,
+        patch("mediainfo.wiring.build_sources") as build_sources_fn,
+        patch("mediainfo.wiring.build_enrichers") as build_enrichers_fn,
+        patch("mediainfo.wiring.build_text_enrichers") as build_text_enrichers_fn,
+        patch("mediainfo.wiring.build_idle_source") as build_idle_source_fn,
+        patch("mediainfo.wiring.build_mediadata_store", return_value=None),
+    ):
+        start_orchestrator(
+            cfg,
+            [],
+            MagicMock(),
+            sources=sentinel_sources,
+            enrichers=sentinel_enrichers,
+            text_enrichers=sentinel_text_enrichers,
+            idle_source=sentinel_idle_source,
+        )
+
+    build_sources_fn.assert_not_called()
+    build_enrichers_fn.assert_not_called()
+    build_text_enrichers_fn.assert_not_called()
+    build_idle_source_fn.assert_not_called()
+    _, kwargs = mock_cls.call_args
+    assert kwargs["sources"] is sentinel_sources
+    assert kwargs["enrichers"] is sentinel_enrichers
+    assert kwargs["text_enrichers"] is sentinel_text_enrichers
+    assert kwargs["idle_source"] is sentinel_idle_source
+
+
 # ---------------------------------------------------------------------------
 # build_artwork_overrides
 # ---------------------------------------------------------------------------
