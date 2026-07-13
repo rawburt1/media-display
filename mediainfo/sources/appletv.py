@@ -65,6 +65,7 @@ def _map_media_type(media_type: object) -> str:
 
 
 class AppleTvSource(MediaSource):
+    config_class = AppleTvConfig
     name = "appletv"
 
     def __init__(self, config: AppleTvConfig):

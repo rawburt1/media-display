@@ -42,6 +42,7 @@ from __future__ import annotations
 import re
 from typing import Optional, Tuple
 
+from mediainfo.config import YoutubeConfig
 from mediainfo.models import NowPlaying
 from mediainfo.sources.adb_base import (
     ACTIVE_RE,
@@ -103,6 +104,7 @@ _TRAILING_QUALIFIER_RE = re.compile(
 
 
 class YoutubeSource(AdbNowPlayingSource):
+    config_class = YoutubeConfig
     name = "youtube"
 
     def _parse_dump(self, dump: str) -> Optional[NowPlaying]:

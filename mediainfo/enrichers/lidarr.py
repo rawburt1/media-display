@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class LidarrEnricher(ArrEnricher):
+    name = "lidarr"
+    config_class = LidarrConfig
     _STATUS_PATH = "/api/v1/system/status"
 
     def __init__(self, config: LidarrConfig):

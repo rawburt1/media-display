@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class LibraryWallpaperSource(IdleWallpaperSource):
+    config_class = LibraryIdleConfig
     name = "library"
     capabilities = frozenset({"library"})
 

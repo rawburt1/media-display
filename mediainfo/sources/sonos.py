@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class SonosSource(MediaSource):
+    config_class = SonosConfig
     name = "sonos"
 
     def __init__(self, config: SonosConfig):

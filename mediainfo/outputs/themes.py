@@ -83,6 +83,9 @@ def _prefix_image_urls(value: Any, prefix: str) -> Any:
 
 
 class ThemesOutput(Output):
+    name = "themes"
+    config_class = ThemesConfig
+
     def __init__(
         self,
         config: ThemesConfig,

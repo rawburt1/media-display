@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
+from mediainfo.config import ShieldConfig
 from mediainfo.models import NowPlaying
 from mediainfo.sources.adb_base import (
     ACTIVE_RE,
@@ -38,6 +39,7 @@ _VIDEO_PACKAGES = {
 
 
 class ShieldSource(AdbNowPlayingSource):
+    config_class = ShieldConfig
     name = "shield"
 
     def _parse_dump(self, dump: str) -> Optional[NowPlaying]:

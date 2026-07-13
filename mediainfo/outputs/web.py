@@ -75,6 +75,8 @@ class _ClientRotation:
 
 
 class WebOutput(Output):
+    name = "web"
+    config_class = WebConfig
     # Unlike Pixoo/Nest Hub/etc., the browser page has room (and enough
     # resolution) to show a lyrics word-cloud image legibly - the only
     # output that opts into Artwork.is_wordcloud images (see

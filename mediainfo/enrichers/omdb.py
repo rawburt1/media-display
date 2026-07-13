@@ -27,6 +27,9 @@ _BASE_URL = "https://www.omdbapi.com/"
 
 
 class OmdbEnricher(ArtworkEnricher):
+    name = "omdb"
+    config_class = OmdbConfig
+
     def __init__(self, config: OmdbConfig):
         self.config = config
         # Cache misses too (None), keyed by imdb id or (media_type, title, year).

@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class SonarrEnricher(ArrEnricher):
+    name = "sonarr"
+    config_class = SonarrConfig
+
     def __init__(self, config: SonarrConfig):
         super().__init__(config)
 

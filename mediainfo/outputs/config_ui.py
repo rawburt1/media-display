@@ -96,6 +96,8 @@ def _restart_process() -> None:
 
 
 class ConfigUiOutput(Output):
+    name = "config"
+    config_class = ConfigUiConfig
     handles_images = False
 
     def __init__(

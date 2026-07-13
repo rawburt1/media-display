@@ -55,6 +55,9 @@ _SONARR_CACHE_TTL = 3600  # seconds
 
 
 class SvtEnricher(ArtworkEnricher):
+    name = "svt"
+    config_class = SvtConfig
+
     def __init__(self, config: SvtConfig):
         self.config = config
         # title -> (image_url, original_title), cached per process run

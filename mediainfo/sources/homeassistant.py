@@ -55,6 +55,7 @@ _RECONNECT_DELAY_SECONDS = 5
 
 
 class HomeAssistantSource(MediaSource):
+    config_class = HomeAssistantConfig
     name = "homeassistant"
 
     def __init__(self, config: HomeAssistantConfig):

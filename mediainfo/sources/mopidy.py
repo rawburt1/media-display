@@ -27,6 +27,7 @@ _ACTIVE_STATES = {"playing"}
 
 
 class MopidySource(MediaSource):
+    config_class = MopidyConfig
     name = "mopidy"
 
     def __init__(self, config: MopidyConfig):

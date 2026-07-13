@@ -24,11 +24,14 @@ from typing import Any, Optional
 from mediainfo.enrichers.text_base import TextEnricher
 from mediainfo.media_data_store import MediaDataStore
 from mediainfo.models import NowPlaying
+from mediainfo.config import MediaDataLyricsEnricherConfig
 
 logger = logging.getLogger(__name__)
 
 
 class MediaDataLyricsEnricher(TextEnricher):
+    name = "mediadata"
+    config_class = MediaDataLyricsEnricherConfig
     capabilities = frozenset({"mediadata"})
 
     def __init__(self, config: Any, store: Optional[MediaDataStore] = None):

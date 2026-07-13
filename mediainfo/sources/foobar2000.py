@@ -35,6 +35,7 @@ _COLUMNS = "%artist%,%album%,%title%"
 
 
 class Foobar2000Source(MediaSource):
+    config_class = Foobar2000Config
     name = "foobar2000"
 
     def __init__(self, config: Foobar2000Config):

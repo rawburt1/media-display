@@ -109,6 +109,8 @@ def _query_musicbrainz(artist: str, album: str) -> Optional[Tuple[str, str]]:
 
 
 class MusicBrainzEnricher(ArtworkEnricher):
+    name = "musicbrainz"
+    config_class = MusicBrainzConfig
     capabilities = frozenset({"library"})
 
     def __init__(self, config: MusicBrainzConfig, library: Optional[MusicLibrary] = None):

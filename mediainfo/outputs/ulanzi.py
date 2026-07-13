@@ -94,6 +94,8 @@ def _strip_version_info(title: str) -> str:
 
 
 class UlanziOutput(Output):
+    name = "ulanzi"
+    config_class = UlanziConfig
     handles_images = False  # text only; idle wallpaper images are not sent here
 
     def __init__(self, config: UlanziConfig):

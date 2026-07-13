@@ -73,6 +73,8 @@ _STATE_REPUBLISH_INTERVAL_SECONDS = 60
 
 
 class MqttOutput(Output):
+    name = "mqtt"
+    config_class = MqttConfig
     handles_images = False
 
     def __init__(self, config: MqttConfig):

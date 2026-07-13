@@ -42,6 +42,9 @@ _CONNECT_TIMEOUT_SECONDS = 10
 
 
 class NestHubOutput(Output):
+    name = "nest_hub"
+    config_class = NestHubConfig
+
     def __init__(self, config: NestHubConfig, http_port: int = 8090):
         self.config = config
         # The shared HTTP server's port (see mediainfo/outputs/http_server.py)

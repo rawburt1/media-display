@@ -44,6 +44,9 @@ _EPISODE_SUBTITLE_RE = re.compile(r"^\s*\d+\.\s*(.+)$")
 
 
 class TheTvDbEnricher(ArtworkEnricher):
+    name = "thetvdb"
+    config_class = TheTvDbConfig
+
     def __init__(self, config: TheTvDbConfig):
         self.config = config
         self._token: Optional[str] = None

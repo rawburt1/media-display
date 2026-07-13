@@ -152,6 +152,9 @@ def _round(value) -> Optional[float]:
 
 
 class TmdbEnricher(ArtworkEnricher):
+    name = "tmdb"
+    config_class = TmdbConfig
+
     def __init__(self, config: TmdbConfig):
         self.config = config
         # Cache misses too (None), keyed by (media_type, tmdb id or title).

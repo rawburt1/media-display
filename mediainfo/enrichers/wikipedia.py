@@ -38,6 +38,9 @@ _CacheEntry = Optional[Tuple[str, Optional[str]]]
 
 
 class WikipediaEnricher(ArtworkEnricher):
+    name = "wikipedia"
+    config_class = WikipediaConfig
+
     def __init__(self, config: WikipediaConfig):
         self.config = config
         self._cache: Dict[str, _CacheEntry] = {}

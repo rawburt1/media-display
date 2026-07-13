@@ -46,6 +46,7 @@ _ACTIVE_STATES = {"playing"}
 
 
 class BrowserSource(MediaSource):
+    config_class = BrowserConfig
     name = "browser"
 
     def __init__(self, config: BrowserConfig):

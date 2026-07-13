@@ -23,6 +23,7 @@ _RANDOM_PHOTO_URL = "https://api.unsplash.com/photos/random"
 
 
 class UnsplashWallpaperSource(IdleWallpaperSource):
+    config_class = UnsplashWallpaperConfig
     name = "unsplash"
 
     def __init__(self, config: UnsplashWallpaperConfig):

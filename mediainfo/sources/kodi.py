@@ -54,6 +54,7 @@ def _time_to_seconds(value: Optional[dict]) -> Optional[float]:
 
 
 class KodiSource(MediaSource):
+    config_class = KodiConfig
     name = "kodi"
 
     def __init__(self, config: KodiConfig):

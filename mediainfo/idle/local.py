@@ -31,6 +31,7 @@ _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
 
 
 class LocalWallpaperSource(IdleWallpaperSource):
+    config_class = LocalWallpaperConfig
     name = "local"
 
     def __init__(self, config: LocalWallpaperConfig):

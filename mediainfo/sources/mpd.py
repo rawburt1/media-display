@@ -43,6 +43,7 @@ def _art_cache_path(uri: str) -> Path:
 
 
 class MpdSource(MediaSource):
+    config_class = MpdConfig
     name = "mpd"
 
     def __init__(self, config: MpdConfig):

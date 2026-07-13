@@ -40,6 +40,8 @@ def _make_video_source(config: VideoOutputConfig) -> VideoSource:
 
 
 class VideoOutput(Output):
+    name = "video"
+    config_class = VideoOutputConfig
     # Manages its own idle video content; idle Unsplash wallpapers are not
     # routed here (see _show_idle_image_for_output in orchestrator).
     handles_images = False

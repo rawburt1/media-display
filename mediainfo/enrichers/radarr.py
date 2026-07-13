@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class RadarrEnricher(ArrEnricher):
+    name = "radarr"
+    config_class = RadarrConfig
+
     def __init__(self, config: RadarrConfig):
         super().__init__(config)
 

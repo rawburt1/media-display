@@ -31,6 +31,7 @@ _STATUS_TAGS = "tags:aldcK"
 
 
 class LmsSource(MediaSource):
+    config_class = LmsConfig
     name = "lms"
 
     def __init__(self, config: LmsConfig):

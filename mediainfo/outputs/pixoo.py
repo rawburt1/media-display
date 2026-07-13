@@ -33,6 +33,8 @@ _LED_PIPELINE_VERSION = 1
 
 
 class PixooOutput(Output):
+    name = "pixoo"
+    config_class = PixooConfig
     # The LED matrix is too small/low-fidelity to make an unrelated artist
     # bio photo (Wikipedia, Last.fm) worth showing — only show album art.
     music_album_art_only = True

@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 
 class FingerprintEnricher(ArtworkEnricher):
+    name = "fingerprint"
+    config_class = FingerprintConfig
+
     def __init__(self, config: FingerprintConfig):
         self.config = config
         self._url = f"http://{config.host}:{config.port}/now-playing"

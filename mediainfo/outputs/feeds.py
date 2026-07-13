@@ -61,6 +61,8 @@ class _Entry:
 
 
 class FeedOutput(Output):
+    name = "feed"
+    config_class = FeedConfig
     handles_images = False
 
     def __init__(self, config: FeedConfig):

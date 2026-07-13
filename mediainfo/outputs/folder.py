@@ -29,6 +29,9 @@ class FolderOutput(Output):
     fetched; it's cleared only when no idle wallpapers are available.
     """
 
+    name = "folder"
+    config_class = FolderConfig
+
     def __init__(self, config: FolderConfig):
         self.config = config
         self.dir = Path(config.dir)

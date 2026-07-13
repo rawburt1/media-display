@@ -30,6 +30,7 @@ _SEARCH_URL = "https://api.pexels.com/v1/search"
 
 
 class PexelsWallpaperSource(IdleWallpaperSource):
+    config_class = PexelsWallpaperConfig
     name = "pexels"
 
     def __init__(self, config: PexelsWallpaperConfig):

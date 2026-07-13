@@ -22,6 +22,7 @@ _CONNECT_TIMEOUT_SECONDS = 5
 
 
 class ChromecastSource(MediaSource):
+    config_class = ChromecastConfig
     name = "chromecast"
 
     def __init__(self, config: ChromecastConfig):

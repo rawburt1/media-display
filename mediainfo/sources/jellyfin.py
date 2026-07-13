@@ -196,6 +196,7 @@ class _MediaServerSource(MediaSource):
 
 
 class JellyfinSource(_MediaServerSource):
+    config_class = JellyfinConfig
     name = "jellyfin"
 
     def __init__(self, config: JellyfinConfig) -> None:
@@ -203,6 +204,7 @@ class JellyfinSource(_MediaServerSource):
 
 
 class EmbySource(_MediaServerSource):
+    config_class = EmbyConfig
     name = "emby"
 
     def __init__(self, config: EmbyConfig) -> None:

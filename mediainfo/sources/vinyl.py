@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class VinylSource(MediaSource):
+    config_class = VinylConfig
     name = "vinyl"
 
     def __init__(self, config: VinylConfig):

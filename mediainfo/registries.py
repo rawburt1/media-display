@@ -13,6 +13,17 @@ mediainfo/config/, where the matching `*_CONFIG_TYPES` dict lives) -
 keep both registries' keys in sync, since a key present in one but not
 the other silently produces a "not configured"/"unknown" plugin instead
 of an error (see tests/test_registries.py).
+
+Every plugin class also self-declares its own `name` (registry key) and
+`config_class` (its *_CONFIG_TYPES entry) - see e.g. MediaSource.name/
+config_class. This is deliberately *not* used to build the dicts below
+(that would mean eagerly importing every plugin module just to read its
+class attributes, defeating the lazy-resolution point above); instead
+tests/test_registries.py resolves each class once at test time and
+cross-checks it against the registry entry it's filed under, so a
+registry key silently pointing at the wrong class (or a stale/renamed
+self-declared name) fails a test instead of drifting unnoticed (H3 in
+docs/architecture-usability-review-2026-07.md).
 """
 
 from __future__ import annotations

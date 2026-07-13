@@ -34,6 +34,7 @@ _IMAGE_HEADERS = {"Referer": "https://www.artic.edu/"}
 
 
 class ArtsWallpaperSource(IdleWallpaperSource):
+    config_class = ArtsWallpaperConfig
     name = "arts"
 
     def __init__(self, config: ArtsWallpaperConfig):

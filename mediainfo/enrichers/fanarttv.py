@@ -43,6 +43,8 @@ def best_url(entries: Optional[Iterable[dict]]) -> Optional[str]:
 
 
 class FanartTvEnricher(ArtworkEnricher):
+    name = "fanarttv"
+    config_class = FanartTvConfig
     capabilities = frozenset({"library"})
 
     def __init__(self, config: FanartTvConfig, library: Optional[MusicLibrary] = None):

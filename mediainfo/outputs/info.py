@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 
 class InfoOutput(Output):
+    name = "info"
+    config_class = InfoConfig
+
     def __init__(self, config: InfoConfig):
         self.config = config
         self.transform_pipeline = parse_pipeline(config.transforms)

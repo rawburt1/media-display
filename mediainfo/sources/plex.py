@@ -38,6 +38,7 @@ def _parse_guids(item: dict) -> dict:
 
 
 class PlexSource(MediaSource):
+    config_class = PlexConfig
     name = "plex"
 
     def __init__(self, config: PlexConfig):

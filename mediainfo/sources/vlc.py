@@ -24,6 +24,7 @@ _ACTIVE_STATES = {"playing"}
 
 
 class VlcSource(MediaSource):
+    config_class = VlcConfig
     name = "vlc"
 
     def __init__(self, config: VlcConfig):

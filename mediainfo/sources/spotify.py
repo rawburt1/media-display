@@ -23,6 +23,7 @@ SCOPE = "user-read-playback-state"
 
 
 class SpotifySource(MediaSource):
+    config_class = SpotifyConfig
     name = "spotify"
 
     def __init__(self, config: SpotifyConfig):
