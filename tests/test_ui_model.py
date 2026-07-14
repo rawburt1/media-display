@@ -654,8 +654,15 @@ def test_dashboard_own_url_prefix_is_applied_to_classic_shell_links():
     dashboard = build_dashboard([], pipeline, {}, None, own_url_prefix="/config")
     by_id = {a.id: a for a in dashboard.quick_actions}
 
-    assert by_id["configure_media"].href == "/config/form"
-    assert by_id["open_health"].href == "/config/dashboard"
+    # Media/Metadata/Appearance/Displays/Health now have their own in-shell
+    # sections, so their quick actions are bare hash fragments (no
+    # own_url_prefix) rather than links out to the classic shell.
+    assert by_id["configure_media"].href == "#media"
+    assert by_id["configure_metadata"].href == "#metadata"
+    assert by_id["configure_appearance"].href == "#appearance"
+    assert by_id["configure_displays"].href == "#displays"
+    assert by_id["open_health"].href == "#health"
+    assert by_id["open_classic_settings"].href == "/config/form"
 
 
 # ---------------------------------------------------------------------------

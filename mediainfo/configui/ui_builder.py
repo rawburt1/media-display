@@ -701,34 +701,23 @@ def build_dashboard(
                 href="/api/restart",
             )
         )
+    # These are bare in-shell hash fragments, not own_url_prefix-qualified
+    # paths: Media/Metadata/Appearance/Displays/Health each got their own
+    # dashboard.js section once the redesign reached them, so a quick
+    # action can jump straight there instead of out to the classic shell's
+    # Overview page (which is all a bare "/form" link ever landed on).
     quick_actions += [
+        UiAction(id="configure_media", label="Configure Media", kind="link", href="#media"),
         UiAction(
-            id="configure_media",
-            label="Configure Media",
-            kind="link",
-            href=f"{own_url_prefix}/form",
+            id="configure_metadata", label="Configure Metadata", kind="link", href="#metadata"
         ),
         UiAction(
-            id="configure_metadata",
-            label="Configure Metadata",
-            kind="link",
-            href=f"{own_url_prefix}/form",
+            id="configure_appearance", label="Change Appearance", kind="link", href="#appearance"
         ),
         UiAction(
-            id="configure_appearance",
-            label="Change Appearance",
-            kind="link",
-            href=f"{own_url_prefix}/form",
+            id="configure_displays", label="Configure Displays", kind="link", href="#displays"
         ),
-        UiAction(
-            id="configure_displays",
-            label="Configure Displays",
-            kind="link",
-            href=f"{own_url_prefix}/form",
-        ),
-        UiAction(
-            id="open_health", label="Open Health", kind="link", href=f"{own_url_prefix}/dashboard"
-        ),
+        UiAction(id="open_health", label="Open Health", kind="link", href="#health"),
         UiAction(
             id="open_classic_settings",
             label="Open Classic Settings",
