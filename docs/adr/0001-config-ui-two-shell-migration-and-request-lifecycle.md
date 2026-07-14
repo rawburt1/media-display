@@ -6,6 +6,15 @@ Accepted. Extracted from `mediainfo/outputs/config_ui.py`'s module
 docstring during N6 (see `docs/architecture-usability-review-2026-07.md`);
 no behavior changed.
 
+**Update:** H5 (the same review) has since finished the phased migration
+this ADR's "Decision" section describes as mid-flight - the classic shell
+(`templates/config_ui/app.html`) is gone, `/form`/`/dashboard` are now
+compatibility redirects/aliases into the single Dashboard shell, and
+Advanced (raw YAML editor, config backups, auth/logging/general settings,
+Apple TV pairing, Pixoo LED preview, Hitster-safe) lives in-shell. The
+"Two shells, mid-migration" paragraph below is kept as a historical record
+of that decision, not a description of the current state.
+
 ## Context
 
 The config UI (`ConfigUiOutput`, `mediainfo/outputs/config_ui.py`) lets a
@@ -116,8 +125,9 @@ the Advanced raw editor lets a user tidy the formatting up by hand.
   widget is built for it (see `docs/architecture-usability-review-2026-07.md`'s
   M-phase list, and the "Follow-up: outputs.themes has no new-shell
   settings surface" tracked task for a live example).
-- The mid-migration two-shell state is deliberate but temporary; H5 in the
-  architecture review tracks finishing it into a single nav.
+- The mid-migration two-shell state was deliberate but temporary; H5 in the
+  architecture review has since finished it into a single nav (see the
+  Status section's Update note above).
 - `restart_required`'s coarseness means a user may occasionally see a
   "restart needed" banner for a resubmission that didn't actually change
   anything — accepted as the safer failure mode over silently missing a

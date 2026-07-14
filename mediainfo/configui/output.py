@@ -10,21 +10,24 @@ schema generation and per-output filter helpers), config_store.py (reading
 and saving config.yaml), and appletv_pairing.py (the Apple TV pairing
 wizard) - plus the tiny config_yaml_io.py shared by the latter two.
 
-"/" serves the new Dashboard shell (templates/config_ui/dashboard.html,
-static/config_ui/dashboard.{js,css} - see _dashboard_shell() below); "/form"
-(or "Advanced" in the new nav) serves the classic shell
-(templates/config_ui/app.html), still unchanged while the phased IA
-migration is in progress (docs/gui-redesign-phase0-inventory.md). The form
-is generated from the registered source/output/enricher/idle config
-dataclasses, so any config type added there automatically gets a card.
-Secrets never reach the browser in cleartext; saving always validates via
-Config.from_dict() before writing; `outputs`/`auth` changes need a restart
-(see _restart_required) while everything else hot-reloads.
+"/" serves the single Dashboard shell (templates/config_ui/dashboard.html,
+static/config_ui/dashboard.{js,css,components.js,advanced.js} - see
+_dashboard_shell() below), including its in-shell "Advanced" section (raw
+YAML editor, config backups/download, and the auth/logging/general
+settings cards). H5 (docs/architecture-usability-review-2026-07.md)
+finished the two-shell migration ADR 0001 describes - the older classic
+shell (templates/config_ui/app.html) is gone. The guided form is generated
+from the registered source/output/enricher/idle config dataclasses, so any
+config type added there automatically gets a card. Secrets never reach the
+browser in cleartext; saving always validates via Config.from_dict() before
+writing; `outputs`/`auth` changes need a restart (see _restart_required)
+while everything else hot-reloads.
 
-For the full rationale behind these choices - the two-shell split, why the
-form is schema-driven, the secret-handling wire protocol, restart-required
-semantics, and the append-only multi-instance ordering constraint - see
-docs/adr/0001-config-ui-two-shell-migration-and-request-lifecycle.md.
+For the full rationale behind these choices - why the form is schema-
+driven, the secret-handling wire protocol, restart-required semantics, and
+the append-only multi-instance ordering constraint - see
+docs/adr/0001-config-ui-two-shell-migration-and-request-lifecycle.md (the
+two-shell part of that ADR is now historical).
 
 This output has write access to config.yaml, including any credentials in
 it, with no authentication of its own - see SECURITY.md before exposing it
@@ -46,7 +49,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from flask import Blueprint, jsonify, render_template, request, send_file
+from flask import Blueprint, jsonify, redirect, render_template, request, send_file
 from PIL import Image, UnidentifiedImageError
 
 import mediainfo.outputs
@@ -318,7 +321,6 @@ class ConfigUiOutput(Output):
                 self._compute_overview(),
                 health,
                 self._page_links,
-                self._url_prefix,
             ),
         )
 
@@ -347,7 +349,7 @@ class ConfigUiOutput(Output):
 
     def _show_auth_warning(self) -> bool:
         """Whether the config form should show its auth-warning banner (see
-        templates/config_ui/app.html): shown to any non-loopback caller
+        templates/config_ui/dashboard.html): shown to any non-loopback caller
         when auth is off, because the config form has read+write access to
         config.yaml including all stored credentials.
         """
@@ -372,14 +374,6 @@ class ConfigUiOutput(Output):
             static_url_path="/static",
         )
 
-        def _shell(initial_section: str):
-            return render_template(
-                "config_ui/app.html",
-                show_auth_warning=self._show_auth_warning(),
-                initial_section=initial_section,
-                url_prefix=url_prefix,
-            )
-
         def _dashboard_shell():
             return render_template(
                 "config_ui/dashboard.html",
@@ -389,30 +383,23 @@ class ConfigUiOutput(Output):
 
         @bp.get("/")
         def index():
-            # `ui: dashboard` keeps landing on the classic health-grid,
-            # unchanged - anyone who already opted into that view keeps
-            # seeing exactly what they see today. Everyone else (the
-            # default) now lands on the new Dashboard shell - see
-            # docs/gui-redesign-phase0-inventory.md §3 for the naming
-            # history and mediainfo/outputs/templates/config_ui/
-            # dashboard.html for the new shell itself.
-            if self.config.ui == "dashboard":
-                return _shell("status")
+            # H5 (docs/architecture-usability-review-2026-07.md) finished
+            # the two-shell migration from ADR 0001: the classic app.html
+            # shell is gone, so this is now the only shell regardless of
+            # `ui` - that field is kept only so existing config.yaml files
+            # that set it don't fail to load.
             return _dashboard_shell()
 
-        # Both entry points are always reachable on every instance,
-        # regardless of `ui` - only the *default* section shown at "/"
-        # differs. This lets a dashboard-default instance still reach the
-        # editable sections (and vice versa) without running a second
-        # output instance. Both render the same single-page shell; only
-        # the initially-selected nav section differs.
+        # /form and /dashboard predate the single-shell nav (ADR 0001) -
+        # kept as redirects so anyone with either bookmarked still lands
+        # somewhere useful instead of a 404.
         @bp.get("/form")
         def form_page():
-            return _shell("overview")
+            return redirect(f"{url_prefix}/#advanced")
 
         @bp.get("/dashboard")
         def dashboard_page():
-            return _shell("status")
+            return _dashboard_shell()
 
         @bp.get("/api/schema")
         def schema():
@@ -736,7 +723,8 @@ class ConfigUiOutput(Output):
             JSON string alongside the file, not read from config.yaml), so
             changing a setting and previewing doesn't require saving first.
             Returns the original/cropped/final/final-upscaled stages as
-            base64 PNGs for app.html's Pixoo instance card - see
+            base64 PNGs for the pixoo output's detail page (see
+            static/config_ui/components.js's renderPixooPreview()) - see
             mediainfo.imaging.led_image.prepare_led_image's docstring for what each
             pipeline stage represents.
             """

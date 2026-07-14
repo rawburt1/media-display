@@ -262,11 +262,24 @@ def test_collect_page_links_empty_when_no_http_outputs():
 
 def test_collect_page_links_preserves_multiple_instances_of_the_same_type():
     outputs = [
-        _FakeOutput("nest_hub", url_prefix="/nest_hub"),
-        _FakeOutput("nest_hub", url_prefix="/nest_hub-bedroom"),
+        _FakeOutput("themes", url_prefix="/themes"),
+        _FakeOutput("themes", url_prefix="/themes-bedroom"),
     ]
     links = _collect_page_links(outputs)
-    assert [link.url_prefix for link in links] == ["/nest_hub", "/nest_hub-bedroom"]
+    assert [link.url_prefix for link in links] == ["/themes", "/themes-bedroom"]
+
+
+def test_collect_page_links_excludes_nest_hub():
+    # nest_hub's blueprint only serves /image/current for its own
+    # Chromecast receiver - there's no human-browsable page at its bare
+    # url_prefix, so it must not become a dashboard quick-open link (it
+    # would 404).
+    outputs = [
+        _FakeOutput("nest_hub", url_prefix="/nest_hub"),
+        _FakeOutput("web", url_prefix=""),
+    ]
+    links = _collect_page_links(outputs)
+    assert [link.name for link in links] == ["web"]
 
 
 # ---------------------------------------------------------------------------

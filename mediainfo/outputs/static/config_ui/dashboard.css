@@ -1,10 +1,9 @@
-/* Dashboard shell (Fas 2-5 of the GUI redesign). "Midnight Slate" (Fas 5):
-   a cool blue-grey palette (not navy, not pure black/white) plus Space
-   Grotesk (headings/numerals) + Inter (body) + JetBrains Mono (test/
-   status output) - approved via a standalone preview artifact before
-   being wired in here, see docs/gui-redesign-phase0-inventory.md. The
-   classic shell (app.html) is untouched and keeps its own system-font
-   stack - this palette/typography is scoped to this shell only. */
+/* Dashboard shell (Fas 2-5 of the GUI redesign, now the only shell - see
+   ADR 0001/H5). "Midnight Slate" (Fas 5): a cool blue-grey palette (not
+   navy, not pure black/white) plus Space Grotesk (headings/numerals) +
+   Inter (body) + JetBrains Mono (test/status output) - approved via a
+   standalone preview artifact before being wired in here, see
+   docs/gui-redesign-phase0-inventory.md. */
 :root {
   --bg: #0b0e14; --panel: #12161f; --border: #232838; --text: #c3cad9; --bright: #f0f3fa;
   --muted: #8a93ab; --muted2: #5c6478; --accent: #2563eb; --accent-hover: #1d4ed8; --accent2: #7c3aed;
@@ -54,7 +53,6 @@ p.lede { color: var(--muted); font-size: 13px; max-width: 72ch; margin: 4px 0 18
 }
 #nav button:hover, #nav a.nav-link:hover { background: var(--chip-bg); color: var(--bright); }
 #nav button.active { background: var(--accent); color: #fff; }
-.nav-hint { font-size: 10.5px; color: var(--muted2); padding: 0 10px; margin: -4px 0 4px; }
 .sidebar-footer { display: flex; flex-direction: column; gap: 6px; }
 .sidebar-footer button {
   background: var(--chip-bg); border: 1px solid var(--border); color: var(--text);
@@ -183,6 +181,19 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 .test-result.fail { color: #f87171; }
 #detail-save-status.ok { color: var(--ok); }
 #detail-save-status.err { color: var(--danger); }
+#raw-status.ok, #backups-status.ok, #priority-save-status.ok { color: var(--ok); }
+#raw-status.err, #backups-status.err, #priority-save-status.err { color: var(--danger); }
+.field-error { font-size: 11.5px; color: var(--danger); margin-top: 4px; }
+
+/* Pixoo LED preview (sources.appletv's pairing wizard reuses .field/
+   .field-row/.field-control, already defined above). */
+.pixoo-preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                       gap: 12px; margin-top: 10px; }
+.pixoo-preview-cell { text-align: center; }
+.pixoo-preview-cell img { width: 100%; aspect-ratio: 1 / 1; object-fit: contain;
+                           background: var(--mono-bg); border-radius: 8px; border: 1px solid var(--border); }
+.pixoo-preview-cell img.pixelated { image-rendering: pixelated; }
+.pixoo-preview-cell .caption { font-size: 11px; color: #8a93a6; margin-top: 4px; }
 
 /* -- component lists (Media/Metadata/Appearance/Displays, Fas 4) -- */
 .component-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }

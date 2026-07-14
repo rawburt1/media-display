@@ -9,7 +9,7 @@
 // Category lists are read-only browsing (built from the already-fetched
 // /api/ui/components, same data Pipeline uses). The detail page is the one
 // place in the new shell that writes config - it always goes through the
-// exact same endpoints the classic shell (app.html) already uses:
+// same endpoints the classic shell (now gone - see ADR 0001/H5) used:
 // /api/config/form (save), /api/test/{source,enricher}/<name> and
 // /api/test/output (test connection). No new backend endpoint exists or
 // is needed for this.
@@ -119,15 +119,6 @@ var detailNewGroupName = '';         // theme_group_editor's "+ Add group" name 
 // avoids the race instead of racing the DOM directly.
 var detailPendingStatus = null;
 
-function classicHrefFor(c) {
-  if (c.component_type === 'text_enricher') return API_PREFIX + '/form#advanced';
-  if (c.component_type === 'idle_source') return API_PREFIX + '/form#idle';
-  if (c.component_type === 'source') return API_PREFIX + '/form#sources';
-  if (c.component_type === 'enricher') return API_PREFIX + '/form#artwork';
-  if (c.component_type === 'theme' || c.component_type === 'output') return API_PREFIX + '/form#outputs';
-  return API_PREFIX + '/form';
-}
-
 function findDetailField(name) {
   var all = (detailComponent.essential_fields || []).concat(detailComponent.advanced_fields || []);
   for (var i = 0; i < all.length; i++) {
@@ -196,21 +187,6 @@ function renderSecretField(field, value) {
     + '<button type="button" class="btn secondary small" onclick="onDetailSecretReplace(\'' + esc(field.name) + '\')">Replace' + (isSet ? '…' : '') + '</button>'
     + (isSet ? '<button type="button" class="btn secondary small" onclick="onDetailFieldChange(\'' + esc(field.name) + '\', \'\')">Clear</button>' : '')
     + '</div>';
-}
-
-function fieldValueDisplay(field, value) {
-  if (field.secret) return field.secret_set ? '••••••••' : '(not set)';
-  if (Array.isArray(value)) return value.length ? value.join(', ') : '(none)';
-  return value == null || value === '' ? '(not set)' : String(value);
-}
-
-function renderUnsupportedWidgetField(field, value) {
-  return '<div class="field"><div class="field-row">'
-    + '<label class="field-label">' + esc(field.label) + '</label>'
-    + '<div class="field-control"><div class="readonly-field">' + esc(fieldValueDisplay(field, value)) + '</div>'
-    + '<div class="field-help">This field type isn’t editable here yet - '
-    + '<a href="' + esc(classicHrefFor(detailComponent)) + '">edit in Advanced settings</a>.</div>'
-    + '</div></div></div>';
 }
 
 // A flat list-of-strings field (see config_schema.py's _SIMPLE_LIST_FIELDS).
@@ -435,6 +411,13 @@ function renderComponentDetailBody() {
     html += renderGroupsEditor();
   }
 
+  if (c.id === 'sources.appletv') {
+    html += '<div class="card" style="margin-top:14px;">' + renderAppletvPairing() + '</div>';
+  }
+  if (c.id === 'outputs.pixoo') {
+    html += renderPixooPreview();
+  }
+
   html += '<div class="action-row">';
   if (c.supports_test) {
     html += '<button type="button" class="btn secondary" id="detail-test-btn" onclick="runDetailTest()">Test connection</button>';
@@ -455,6 +438,158 @@ function renderComponentDetailBody() {
     }
     detailPendingStatus = null;
   }
+}
+
+// ---------------------------------------------------------------------
+// Apple TV pairing wizard - shown only on the sources.appletv detail page
+// (see renderComponentDetailBody() above), ported as-is from the classic
+// shell. A local step machine (idle -> starting -> need_pin|
+// need_manual_entry -> finishing -> done) talking to the existing
+// /api/appletv/pair/{start,finish,cancel} endpoints; a successful finish
+// stages the returned credentials/enabled flag into this component's own
+// edit state via setFieldValue(), so "Save" below still goes through the
+// normal saveDetailComponent() path - pairing itself never writes
+// config.yaml directly.
+// ---------------------------------------------------------------------
+var appletvState = { step: 'idle', protocol: 'companion', devicePin: null, error: null };
+
+function renderAppletvPairing() {
+  var s = appletvState;
+  var rows = '';
+  if (s.step === 'idle') {
+    rows = '<select id="appletv-protocol">'
+      + '<option value="companion"' + (s.protocol === 'companion' ? ' selected' : '') + '>Companion (tvOS 15+)</option>'
+      + '<option value="mrp"' + (s.protocol === 'mrp' ? ' selected' : '') + '>MRP (older devices)</option>'
+      + '</select> <button type="button" class="btn secondary small" onclick="appletvPairStart()">Pair</button>';
+  } else if (s.step === 'starting') {
+    rows = '<span>Scanning and starting pairing…</span>';
+  } else if (s.step === 'need_pin') {
+    rows = '<div class="row-inline"><input type="text" id="appletv-pin" inputmode="numeric" placeholder="PIN shown on device" aria-label="Pairing PIN" style="width:140px;">'
+      + '<button type="button" class="btn secondary small" onclick="appletvPairSubmit()">Submit PIN</button>'
+      + '<button type="button" class="btn secondary small" onclick="appletvPairCancel()">Cancel</button></div>';
+  } else if (s.step === 'need_manual_entry') {
+    rows = '<p class="field-help">Enter <b>' + esc(s.devicePin) + '</b> on the Apple TV, then continue.</p>'
+      + '<button type="button" class="btn secondary small" onclick="appletvPairSubmit()">Continue</button> '
+      + '<button type="button" class="btn secondary small" onclick="appletvPairCancel()">Cancel</button>';
+  } else if (s.step === 'finishing') {
+    rows = '<span>Finishing pairing…</span>';
+  } else if (s.step === 'done') {
+    rows = '<p style="font-size:12px;color:var(--ok);">Paired - credentials staged below. Click Save to write them to config.yaml.</p>'
+      + '<button type="button" class="btn secondary small" onclick="appletvPairReset()">Pair again</button>';
+  }
+  var error = s.error ? '<p class="field-error">' + esc(s.error) + '</p>' : '';
+  return '<div class="field" id="appletv-pairing"><div class="field-row"><label class="field-label">Pairing wizard</label>'
+    + '<div class="field-control" role="status" aria-live="polite">' + error + rows + '</div></div></div>';
+}
+
+function appletvRerender() {
+  var el = document.getElementById('appletv-pairing');
+  if (el) el.outerHTML = renderAppletvPairing();
+}
+
+function appletvPairStart() {
+  var host = getFieldValue(findDetailField('host'));
+  appletvState.protocol = document.getElementById('appletv-protocol').value;
+  appletvState.step = 'starting'; appletvState.error = null;
+  appletvRerender();
+  apiFetch('/api/appletv/pair/start', {
+    method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
+    body: JSON.stringify({ host: host || '', protocol: appletvState.protocol }),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) { appletvState.step = 'idle'; appletvState.error = d.error; }
+    else if (d.device_provides_pin) { appletvState.step = 'need_pin'; }
+    else { appletvState.step = 'need_manual_entry'; appletvState.devicePin = d.manual_pin; }
+    appletvRerender();
+  }).catch(function() { appletvState.step = 'idle'; appletvState.error = 'Request failed.'; appletvRerender(); });
+}
+
+function appletvPairSubmit() {
+  var pinEl = document.getElementById('appletv-pin');
+  var pin = pinEl ? pinEl.value : null;
+  appletvState.step = 'finishing'; appletvRerender();
+  apiFetch('/api/appletv/pair/finish', {
+    method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
+    body: JSON.stringify({ pin: pin }),
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) {
+      appletvState.step = appletvState.devicePin ? 'need_manual_entry' : 'need_pin';
+      appletvState.error = d.error;
+      appletvRerender();
+      return;
+    }
+    setFieldValue(findDetailField(d.field), d.credentials);
+    setFieldValue(findDetailField('enabled'), true);
+    appletvState.step = 'done';
+    renderComponentDetailBody();
+  }).catch(function() { appletvState.error = 'Request failed.'; appletvRerender(); });
+}
+
+function appletvPairCancel() {
+  apiFetch('/api/appletv/pair/cancel', { method: 'POST', headers: CSRF_HEADERS }).catch(function() {});
+  appletvState = { step: 'idle', protocol: appletvState.protocol, devicePin: null, error: null };
+  appletvRerender();
+}
+
+function appletvPairReset() {
+  appletvState = { step: 'idle', protocol: appletvState.protocol, devicePin: null, error: null };
+  appletvRerender();
+}
+
+// ---------------------------------------------------------------------
+// Pixoo LED preview - shown only on the pixoo output's detail page (see
+// renderComponentDetailBody() above), for whichever instance the instance
+// picker currently has selected. Ported from the classic shell's
+// renderPixooPreview()/runPixooPreview(), using
+// detailOutputsWorking[detailInstanceIndex] (this page's own "current,
+// possibly unsaved settings" state) instead of app.html's flat
+// outputsData, so previewing never requires saving first here either.
+// ---------------------------------------------------------------------
+function renderPixooPreview() {
+  return '<div class="card" style="margin-top:14px;">'
+    + '<details class="advanced-toggle" open><summary>LED preview</summary>'
+    + '<div class="field-help">Upload a poster/album cover to see how it will look on the LED display with the settings above.</div>'
+    + '<div class="row-inline" style="margin-top:8px;">'
+    + '<input type="file" accept="image/*" id="pixoo-preview-file">'
+    + '<button type="button" class="btn secondary small" onclick="runPixooPreview()">Generate preview</button>'
+    + '</div>'
+    + '<div class="test-result" id="pixoo-preview-error"></div>'
+    + '<div class="pixoo-preview-grid" id="pixoo-preview-grid" style="display:none;">'
+    + '<div class="pixoo-preview-cell"><img id="pixoo-preview-original"><div class="caption">Original</div></div>'
+    + '<div class="pixoo-preview-cell"><img id="pixoo-preview-cropped"><div class="caption">Cropped</div></div>'
+    + '<div class="pixoo-preview-cell"><img id="pixoo-preview-final" class="pixelated"><div class="caption">Final (native size)</div></div>'
+    + '<div class="pixoo-preview-cell"><img id="pixoo-preview-upscaled" class="pixelated"><div class="caption">Final (enlarged)</div></div>'
+    + '</div>'
+    + '</details></div>';
+}
+
+function runPixooPreview() {
+  var fileInput = document.getElementById('pixoo-preview-file');
+  var errorEl = document.getElementById('pixoo-preview-error');
+  var gridEl = document.getElementById('pixoo-preview-grid');
+  var file = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) {
+    errorEl.className = 'test-result show fail'; errorEl.textContent = 'Choose an image first.';
+    return;
+  }
+  var settings = detailOutputsWorking[detailInstanceIndex];
+  var form = new FormData();
+  form.append('file', file);
+  form.append('settings', JSON.stringify(settings));
+
+  errorEl.className = 'test-result show'; errorEl.textContent = 'Generating…';
+  gridEl.style.display = 'none';
+  apiFetch('/api/preview/pixoo', { method: 'POST', headers: CSRF_HEADERS, body: form })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { errorEl.className = 'test-result show fail'; errorEl.textContent = d.error || 'Preview failed.'; return; }
+      document.getElementById('pixoo-preview-original').src = 'data:image/png;base64,' + d.original;
+      document.getElementById('pixoo-preview-cropped').src = 'data:image/png;base64,' + d.cropped;
+      document.getElementById('pixoo-preview-final').src = 'data:image/png;base64,' + d.final;
+      document.getElementById('pixoo-preview-upscaled').src = 'data:image/png;base64,' + d.final_upscaled;
+      errorEl.className = 'test-result'; errorEl.textContent = '';
+      gridEl.style.display = 'grid';
+    })
+    .catch(function() { errorEl.className = 'test-result show fail'; errorEl.textContent = 'Request failed.'; });
 }
 
 // theme_group_editor: auto_rotate.presets bespoke editor - a toggle-button

@@ -1,6 +1,10 @@
-"""Tests for the Fas 2 GUI-redesign Dashboard shell: the new "/" landing
-page (templates/config_ui/dashboard.html + static/config_ui/dashboard.*)
-and how it interacts with the classic shell/`ui` config flag. See
+"""Tests for the Dashboard shell: the single "/" landing page
+(templates/config_ui/dashboard.html + static/config_ui/dashboard.*). The
+classic shell it once linked out to (templates/config_ui/app.html) is gone
+- see docs/adr/0001-config-ui-two-shell-migration-and-request-lifecycle.md
+(H5 finished the migration that ADR describes as mid-flight) - so the `ui`
+config flag no longer changes which shell "/" serves; it's kept only so
+existing config.yaml files that set it still load. See
 docs/gui-redesign-phase0-inventory.md for the overall plan.
 """
 
@@ -41,56 +45,69 @@ def config_path(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# "/" serves the new shell by default; `ui: dashboard` keeps the classic one
+# "/" always serves the one shell now, regardless of `ui`
 # ---------------------------------------------------------------------------
 
 
-def test_root_serves_new_dashboard_shell_by_default(config_path):
+def test_root_serves_dashboard_shell_by_default(config_path):
     out = ConfigUiOutput(_config(), config_path)
     resp = _client(out).get("/")
     assert resp.status_code == 200
     body = resp.data
     assert b'data-section="dashboard"' in body
     assert b'data-section="pipeline"' in body
-    # Not the classic shell's markers.
-    assert b"data-initial-section" not in body
+    assert b'data-section="advanced"' in body
 
 
-def test_root_with_ui_dashboard_still_serves_classic_status_shell(config_path):
+def test_root_with_ui_dashboard_serves_the_same_shell(config_path):
+    # `ui: dashboard` no longer branches to anything - see this file's
+    # module docstring - it's just a legacy value that must not error.
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = _client(out).get("/")
     assert resp.status_code == 200
-    assert b'data-initial-section="status"' in resp.data
+    assert b'data-section="pipeline"' in resp.data
 
 
-def test_form_and_dashboard_routes_are_unaffected(config_path):
+def test_form_and_dashboard_routes_still_work(config_path):
     out = ConfigUiOutput(_config(), config_path)
     client = _client(out)
-    assert b'data-initial-section="overview"' in client.get("/form").data
-    assert b'data-initial-section="status"' in client.get("/dashboard").data
+    # /form predates the single-shell nav - kept as a redirect so an old
+    # bookmark still lands somewhere useful.
+    form_resp = client.get("/form", follow_redirects=False)
+    assert form_resp.status_code == 302
+    assert form_resp.headers["Location"].endswith("/#advanced")
+    # /dashboard is a plain alias for "/" (same shell, same markup).
+    assert b'data-section="pipeline"' in client.get("/dashboard").data
 
 
 # ---------------------------------------------------------------------------
-# New nav: two JS-rendered sections + real links into the classic shell
+# Nav: every section is rendered in-shell, none link out anymore
 # ---------------------------------------------------------------------------
 
 
-def test_new_shell_nav_has_in_shell_category_sections(config_path):
-    # Since Fas 4, Media/Metadata/Appearance/Displays are rendered in-shell
-    # (client-side hash routing, see static/config_ui/components.js)
-    # rather than linking out to the classic shell; Health joined them in
-    # Fas 6 and Library in Fas 7 - only Advanced remains a plain link
-    # (next test).
+def test_new_shell_nav_has_in_shell_sections(config_path):
+    # Media/Metadata/Appearance/Displays (Fas 4), Health (Fas 6), Library
+    # (Fas 7), and finally Advanced (H5) are all rendered in-shell via
+    # client-side hash routing (see static/config_ui/components.js and
+    # advanced.js) - nothing in the primary nav links to a separate page.
     out = ConfigUiOutput(_config(), config_path)
     body = _client(out).get("/").data
-    for section in (b"media", b"metadata", b"appearance", b"displays", b"library", b"health"):
+    for section in (
+        b"media",
+        b"metadata",
+        b"appearance",
+        b"displays",
+        b"library",
+        b"health",
+        b"advanced",
+    ):
         assert b'data-section="' + section + b'"' in body, section
 
 
-def test_new_shell_nav_links_into_classic_sections(config_path):
+def test_new_shell_nav_has_no_links_to_the_old_classic_shell(config_path):
     out = ConfigUiOutput(_config(), config_path)
     body = _client(out).get("/").data
-    assert b'href="/form"' in body
+    assert b"/form" not in body
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +141,12 @@ def test_dashboard_static_js_is_served(config_path):
 def test_components_static_js_is_served(config_path):
     out = ConfigUiOutput(_config(), config_path)
     resp = _client(out).get("/static/components.js")
+    assert resp.status_code == 200
+
+
+def test_advanced_static_js_is_served(config_path):
+    out = ConfigUiOutput(_config(), config_path)
+    resp = _client(out).get("/static/advanced.js")
     assert resp.status_code == 200
 
 

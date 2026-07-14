@@ -1,27 +1,28 @@
 'use strict';
 
-// Dashboard shell (Fas 2-8 of the GUI redesign) - the new landing page at
-// "/". Dashboard/Pipeline/Media/Metadata/Appearance/Displays/Library/
-// Health are all rendered in-shell via hash-based client routing (see
-// renderFromHash() below); Advanced stays a plain <a href> link straight
-// into the classic shell (see templates/config_ui/dashboard.html), since
-// raw YAML/backups/etc. don't have (or need) an in-shell equivalent yet.
+// Dashboard shell (Fas 2-8 of the GUI redesign, H5's single-shell finish
+// line) - the only landing page at "/" now that the classic app.html
+// shell is gone. Dashboard/Pipeline/Media/Metadata/Appearance/Displays/
+// Library/Health/Advanced are all rendered in-shell via hash-based client
+// routing (see renderFromHash() below).
 //
-// This file owns the shell chrome (nav/theme/routing) plus Dashboard and
-// Pipeline. Media/Metadata/Appearance/Displays' card-grid rendering
-// (filterable + hideable since Fas 8), Health's action-oriented card grid
-// (Fas 6/8), Library's browse/overrides/settings page (Fas 7), and the
-// per-component detail page (essential/advanced fields, save/discard/
-// test-connection - Fas 4) live in components.js, loaded after this file
-// and sharing its esc()/theme helpers, componentsData/componentsById, and
-// the confirmDiscardIfDirty() guard via the hasUnsavedComponentEdits flag
-// below.
+// This file owns the shell chrome (nav/theme/routing/Hitster-safe) plus
+// Dashboard and Pipeline. Media/Metadata/Appearance/Displays' card-grid
+// rendering (filterable + hideable since Fas 8), Health's action-oriented
+// card grid (Fas 6/8), Library's browse/overrides/settings page (Fas 7),
+// and the per-component detail page (essential/advanced fields, save/
+// discard/test-connection - Fas 4) live in components.js, loaded after
+// this file and sharing its esc()/theme helpers, componentsData/
+// componentsById, and the confirmDiscardIfDirty() guard via the
+// hasUnsavedComponentEdits flag below. Advanced (settings cards, config
+// backups/download, raw YAML editor) lives in advanced.js, loaded last.
 //
 // This file only ever reads from the read-only /api/ui/* endpoints
-// (Fas 1); components.js is the one file that writes, via the exact same
-// /api/config/form, /api/test/*, /api/library/*, /api/overrides*, and
-// /api/restart endpoints the classic shell already uses - no new backend
-// surface anywhere in this redesign.
+// (Fas 1); components.js and advanced.js are what write, via
+// /api/config/form, /api/config/raw, /api/config/backups(/restore),
+// /api/test/*, /api/library/*, /api/overrides*, and /api/restart - the
+// same backend surface the classic shell always used, no new endpoints
+// added anywhere in this redesign.
 
 var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
 // The five sections with a card-grid + filter bar + per-card hide (Fas 8) -
@@ -29,18 +30,18 @@ var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
 // deliberately isn't included: it reuses componentCard()/.component-list
 // for its settings cards, but stays plain - no grid, no hide, no filter.
 var FILTERABLE_SECTIONS = CATEGORY_SECTIONS.concat(['health']);
-var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'health']);
+var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'health', 'advanced']);
 var SECTION_TITLES = {
   dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
   metadata: 'Metadata', appearance: 'Appearance', displays: 'Displays',
-  library: 'Library', health: 'Health', wizard: 'Setup',
+  library: 'Library', health: 'Health', advanced: 'Advanced', wizard: 'Setup',
 };
 // UiComponent.category uses "display" (singular); the nav/section id uses
-// "displays" - this is the one place that mapping happens. "library"
-// matches its section id directly, but still needs an explicit entry
-// here so a library-category component's detail page ("← Back to
-// Library" link, nav highlight) doesn't fall back to "dashboard".
-var CATEGORY_TO_SECTION = { media: 'media', metadata: 'metadata', appearance: 'appearance', display: 'displays', library: 'library' };
+// "displays" - this is the one place that mapping happens. "library"/
+// "advanced" match their section id directly, but still need an explicit
+// entry here so a library- or advanced-category component's detail page
+// ("← Back to X" link, nav highlight) doesn't fall back to "dashboard".
+var CATEGORY_TO_SECTION = { media: 'media', metadata: 'metadata', appearance: 'appearance', display: 'displays', library: 'library', advanced: 'advanced' };
 
 var currentSection = 'dashboard';
 var currentParam = null;
@@ -90,6 +91,27 @@ function toggleTheme() {
   applyTheme(current === 'light' ? 'dark' : 'light');
 }
 applyTheme(localStorage.getItem('mediainfo-theme') || 'dark');
+
+// ---------------------------------------------------------------------
+// Hitster-safe (ported as-is from the classic shell)
+// ---------------------------------------------------------------------
+var hitsterSafeEnabled = false;
+function renderHitsterSafeButton() {
+  var btn = document.getElementById('hitster-safe-btn');
+  btn.textContent = hitsterSafeEnabled ? 'Hitster-safe: ON' : 'Hitster-safe';
+  btn.classList.toggle('active', hitsterSafeEnabled);
+  btn.setAttribute('aria-pressed', String(hitsterSafeEnabled));
+}
+function toggleHitsterSafe() {
+  apiFetch('/api/hitster-safe', {
+    method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
+    body: JSON.stringify({ enabled: !hitsterSafeEnabled }),
+  }).then(function(r) { return r.json(); })
+    .then(function(d) { hitsterSafeEnabled = !!d.enabled; renderHitsterSafeButton(); })
+    .catch(function() {});
+}
+apiFetch('/api/hitster-safe').then(function(r) { return r.json(); })
+  .then(function(d) { hitsterSafeEnabled = !!d.enabled; renderHitsterSafeButton(); }).catch(function() {});
 
 // ---------------------------------------------------------------------
 // Mobile nav drawer
@@ -173,6 +195,7 @@ function renderSection(name, param) {
   else if (CATEGORY_SECTIONS.indexOf(name) !== -1) renderCategorySection(name);
   else if (name === 'library') renderLibrarySection(param);
   else if (name === 'health') renderHealthSection();
+  else if (name === 'advanced') renderAdvancedSection();
   else if (name === 'component') renderComponentDetail(param);
   else if (name === 'wizard') renderWizard();
 }
@@ -520,6 +543,12 @@ function fetchComponents() {
       // search/artist-detail state - refresh just that one sub-panel
       // instead of the whole section (see renderLibrarySettingsCards()).
       renderLibrarySettingsCards();
+    } else if (currentSection === 'advanced') {
+      // Same reasoning as Library above: only the settings cards depend on
+      // componentsData - refreshing them must not touch the raw YAML
+      // textarea/backups list next to them, or a poll tick would blow away
+      // whatever the user is mid-typing there (see advanced.js).
+      renderAdvancedSettingsCards();
     } else if (FILTERABLE_SECTIONS.indexOf(currentSection) !== -1) {
       // A full re-render would reset the search input's value/focus out
       // from under someone mid-keystroke (it happens to have focus right
@@ -541,7 +570,7 @@ function fetchComponents() {
 setInterval(function() {
   fetchDashboard();
   if (currentSection === 'pipeline') { fetchPipeline(); fetchComponents(); fetchPriorityLists().then(renderPipeline); }
-  else if (currentSection === 'health' || currentSection === 'library' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
+  else if (currentSection === 'health' || currentSection === 'library' || currentSection === 'advanced' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
 }, 15000);
 
 Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents(), fetchPriorityLists()]).then(function() {

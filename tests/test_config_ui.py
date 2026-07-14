@@ -1446,10 +1446,10 @@ def test_hitster_safe_toggle_unavailable_when_unwired(config_path):
     assert resp.status_code == 503
 
 
-def test_hitster_safe_button_present_on_form_and_dashboard_pages(config_path):
+def test_hitster_safe_button_present_on_dashboard_shell(config_path):
     out = _output(config_path)
     client = _client(out)
-    assert b"hitster-safe-btn" in client.get("/form").data
+    assert b"hitster-safe-btn" in client.get("/").data
     assert b"hitster-safe-btn" in client.get("/dashboard").data
 
 
@@ -1778,18 +1778,16 @@ def test_update_on_idle_on_new_item_are_noops(config_path):
 
 
 def test_index_page_served(config_path):
-    # "/" now serves the new Dashboard shell by default (Fas 2 of the GUI
-    # redesign) - see tests/test_dashboard_shell.py for its dedicated
-    # coverage. The classic shell (still titled "... configuration") lives
-    # on at /form, tested separately below.
+    # "/" serves the single Dashboard shell (see tests/test_dashboard_shell.py
+    # for its dedicated coverage); /form is a compatibility redirect into it
+    # now that the classic shell is gone (ADR 0001/H5).
     out = _output(config_path)
     resp = _client(out).get("/")
     assert resp.status_code == 200
     assert b"mediainfo" in resp.data
 
-    resp = _client(out).get("/form")
-    assert resp.status_code == 200
-    assert b"configuration" in resp.data
+    resp = _client(out).get("/form", follow_redirects=False)
+    assert resp.status_code == 302
 
 
 # ---------------------------------------------------------------------------
@@ -1916,76 +1914,33 @@ def test_overview_reports_exposed_without_auth(config_path):
 
 
 # ---------------------------------------------------------------------------
-# Single-page shell (templates/config_ui/app.html), served identically at
-# "/form" and "/dashboard" - only the initially-selected nav section
-# (encoded as `data-initial-section` on <body>, read by client JS) differs
-# by route/`ui`. This replaced the old two-separate-templates design (a
-# full editable form vs. a read-only dashboard) with one guided app shell;
-# these tests check the new contract instead of the old templates' markup.
-# Since Fas 2 of the GUI redesign, "/" itself serves a *different*, newer
-# shell for the default `ui: form` config - see
-# tests/test_dashboard_shell.py - except when `ui: dashboard` is set, where
-# "/" keeps landing on this classic shell unchanged (next test).
+# Single shell (templates/config_ui/dashboard.html) - the classic app.html
+# shell this section used to test is gone (ADR 0001/H5); "/", "/dashboard"
+# all serve the identical shell now, and `ui` no longer changes anything
+# (kept only so old config.yaml files with `ui: dashboard`/`ui: form` still
+# load). See tests/test_dashboard_shell.py for the shell's own dedicated
+# coverage - these tests just confirm `ui`'s legacy value is truly inert.
 # ---------------------------------------------------------------------------
 
 
-def test_dashboard_ui_serves_dashboard_page(config_path):
+def test_ui_dashboard_value_no_longer_changes_the_served_shell(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = _client(out).get("/")
     assert resp.status_code == 200
-    assert b'data-initial-section="status"' in resp.data
+    assert b'data-section="pipeline"' in resp.data
 
 
-def test_form_page_reachable_on_dashboard_instance(config_path):
+def test_form_page_redirects_regardless_of_ui_value(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = _client(out).get("/form")
-    assert resp.status_code == 200
-    assert b'data-initial-section="overview"' in resp.data
+    resp = _client(out).get("/form", follow_redirects=False)
+    assert resp.status_code == 302
 
 
-def test_dashboard_page_reachable_on_form_instance(config_path):
+def test_dashboard_page_serves_the_one_shell(config_path):
     out = ConfigUiOutput(_config(), config_path)
     resp = _client(out).get("/dashboard")
     assert resp.status_code == 200
-    assert b'data-initial-section="status"' in resp.data
-
-
-def test_all_nav_sections_present_on_every_route(config_path):
-    # "/" is intentionally excluded here - since Fas 2 it serves the new
-    # Dashboard shell, not this classic one - see
-    # tests/test_dashboard_shell.py for its nav coverage.
-    out = ConfigUiOutput(_config(), config_path)
-    client = _client(out)
-    expected_sections = [
-        "overview",
-        "sources",
-        "outputs",
-        "artwork",
-        "idle",
-        "automation",
-        "library",
-        "status",
-        "advanced",
-    ]
-    for route in ("/form", "/dashboard"):
-        data = client.get(route).data
-        for section in expected_sections:
-            assert f'data-section="{section}"'.encode() in data, (
-                f"{section} missing from nav on {route}"
-            )
-
-
-def test_editing_capability_lives_in_guided_sections_not_status(config_path):
-    # Editing moved from an old "read-only dashboard with inline edit
-    # cards" design to the dedicated Media sources/Displays & outputs/
-    # Artwork & metadata sections - the shell still ships one JS function
-    # that writes field edits (setValue/setOutputField), used by all of
-    # them, rather than a status-page-only edit mode.
-    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = _client(out).get("/dashboard")
-    assert b"function setValue(" in resp.data
-    assert b"function setOutputField(" in resp.data
-    assert b"function renderStatus()" in resp.data
+    assert b'data-section="pipeline"' in resp.data
 
 
 def test_dashboard_instance_can_read_schema_and_config_for_editing(config_path):
@@ -2010,21 +1965,15 @@ def test_dashboard_instance_can_save_form_edits(config_path):
     assert resp.get_json() == {"ok": True, "restart_required": False}
 
 
-def test_dashboard_page_has_restart_button(config_path):
-    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = _client(out).get("/dashboard")
-    assert b"function restartNow(" in resp.data
+def test_dashboard_js_supports_restarting_from_a_quick_action(config_path):
+    # The classic shell's inline "function restartNow(...)" is gone with
+    # app.html - restart is now runRestartAction() in the external
+    # static/config_ui/dashboard.js, wired to the same /api/restart route
+    # (see the "restart" quick action in ui_builder.build_dashboard()).
+    out = ConfigUiOutput(_config(), config_path)
+    resp = _client(out).get("/static/dashboard.js")
+    assert b"function runRestartAction(" in resp.data
     assert b"/api/restart" in resp.data
-    assert b"Restart now" in resp.data or b"Restart mediainfo" in resp.data
-
-
-def test_dashboard_page_marks_failed_source_test_as_unavailable(config_path):
-    out = ConfigUiOutput(_config(ui="dashboard"), config_path)
-    resp = _client(out).get("/dashboard")
-    assert b"statusOverrides[key" in resp.data
-    assert b"'unavailable'" in resp.data
-    assert b"b-unavailable" in resp.data
-    assert b"'unavailable'" in resp.data and b"data-filter=" in resp.data
 
 
 def test_api_status_returns_empty_lists_without_health_provider(config_path):

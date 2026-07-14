@@ -22,10 +22,10 @@
       <button type="button" data-section="displays">Displays</button>
       <button type="button" data-section="library">Library</button>
       <button type="button" data-section="health">Health</button>
-      <a class="nav-link" href="{{ url_for('.form_page') }}">Advanced</a>
+      <button type="button" data-section="advanced">Advanced</button>
     </nav>
-    <div class="nav-hint">Advanced opens the classic settings editor (raw YAML, backups, and anything not covered here yet).</div>
     <div class="sidebar-footer">
+      <button type="button" id="hitster-safe-btn" onclick="toggleHitsterSafe()">Hitster-safe</button>
       <button type="button" id="theme-toggle" onclick="toggleTheme()">Light / dark</button>
     </div>
   </aside>
@@ -38,7 +38,7 @@
 
     <main id="main">
       {% if show_auth_warning %}
-      <div class="auth-warning"><strong>No authentication.</strong> This page and all credentials in it are accessible to anyone on your network. Turn on authentication and/or restrict this page to this machine only under <a href="{{ url_for('.form_page') }}">Advanced configuration</a>. See <a href="https://github.com/rawburt1/media-display/blob/master/SECURITY.md">SECURITY.md</a>.</div>
+      <div class="auth-warning"><strong>No authentication.</strong> This page and all credentials in it are accessible to anyone on your network. Turn on authentication and/or restrict this page to this machine only under <a href="#advanced">Advanced</a>. See <a href="https://github.com/rawburt1/media-display/blob/master/SECURITY.md">SECURITY.md</a>.</div>
       {% endif %}
 
       <div class="section" id="section-dashboard" tabindex="-1"><h1>Dashboard</h1><p class="lede">Loading…</p></div>
@@ -49,6 +49,7 @@
       <div class="section" id="section-displays" tabindex="-1"><h1>Displays</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-library" tabindex="-1"><h1>Library</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-health" tabindex="-1"><h1>Health</h1><p class="lede">Loading…</p></div>
+      <div class="section" id="section-advanced" tabindex="-1"><h1>Advanced</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-component" tabindex="-1"><h1>Component</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-wizard" tabindex="-1"><h1>Setup</h1><p class="lede">Loading…</p></div>
     </main>
@@ -58,5 +59,6 @@
 <script>window.API_PREFIX = {{ url_prefix|tojson }};</script>
 <script src="{{ url_for('.static', filename='dashboard.js') }}"></script>
 <script src="{{ url_for('.static', filename='components.js') }}"></script>
+<script src="{{ url_for('.static', filename='advanced.js') }}"></script>
 <script src="{{ url_for('.static', filename='wizard.js') }}"></script>
 </body></html>

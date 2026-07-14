@@ -649,20 +649,21 @@ def test_dashboard_disambiguates_multiple_instances_of_the_same_output_type():
     assert [a.href for a in page_actions] == ["/nest_hub", "/nest_hub-bedroom"]
 
 
-def test_dashboard_own_url_prefix_is_applied_to_classic_shell_links():
+def test_dashboard_quick_actions_are_bare_in_shell_hash_fragments():
+    # Media/Metadata/Appearance/Displays/Health/Advanced all have their own
+    # in-shell section (see ADR 0001/H5 - the classic shell is gone), so
+    # every one of these quick actions is a same-page hash fragment, not a
+    # separate route - no own_url_prefix needed.
     pipeline = UiPipeline(id="default", name="Default")
-    dashboard = build_dashboard([], pipeline, {}, None, own_url_prefix="/config")
+    dashboard = build_dashboard([], pipeline, {}, None)
     by_id = {a.id: a for a in dashboard.quick_actions}
 
-    # Media/Metadata/Appearance/Displays/Health now have their own in-shell
-    # sections, so their quick actions are bare hash fragments (no
-    # own_url_prefix) rather than links out to the classic shell.
     assert by_id["configure_media"].href == "#media"
     assert by_id["configure_metadata"].href == "#metadata"
     assert by_id["configure_appearance"].href == "#appearance"
     assert by_id["configure_displays"].href == "#displays"
     assert by_id["open_health"].href == "#health"
-    assert by_id["open_classic_settings"].href == "/config/form"
+    assert by_id["open_advanced"].href == "#advanced"
 
 
 # ---------------------------------------------------------------------------

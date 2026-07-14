@@ -671,7 +671,6 @@ def build_dashboard(
     overview: dict,
     health: Optional[dict],
     page_links: Optional[List[PageLink]] = None,
-    own_url_prefix: str = "",
 ) -> UiDashboard:
     health = health or {}
     counts_by_status: Dict[str, int] = {}
@@ -701,11 +700,10 @@ def build_dashboard(
                 href="/api/restart",
             )
         )
-    # These are bare in-shell hash fragments, not own_url_prefix-qualified
-    # paths: Media/Metadata/Appearance/Displays/Health each got their own
-    # dashboard.js section once the redesign reached them, so a quick
-    # action can jump straight there instead of out to the classic shell's
-    # Overview page (which is all a bare "/form" link ever landed on).
+    # Bare in-shell hash fragments (own_url_prefix isn't needed - every
+    # target here is a dashboard.js section on this same page, not a
+    # separate route) - see ADR 0001/H5, now that Media/Metadata/
+    # Appearance/Displays/Health/Advanced all have one.
     quick_actions += [
         UiAction(id="configure_media", label="Configure Media", kind="link", href="#media"),
         UiAction(
@@ -718,12 +716,7 @@ def build_dashboard(
             id="configure_displays", label="Configure Displays", kind="link", href="#displays"
         ),
         UiAction(id="open_health", label="Open Health", kind="link", href="#health"),
-        UiAction(
-            id="open_classic_settings",
-            label="Open Classic Settings",
-            kind="link",
-            href=f"{own_url_prefix}/form",
-        ),
+        UiAction(id="open_advanced", label="Advanced settings", kind="link", href="#advanced"),
     ]
     quick_actions += _page_link_actions(page_links or [])
 

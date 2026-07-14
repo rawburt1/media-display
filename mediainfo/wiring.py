@@ -337,11 +337,15 @@ def _collect_page_links(outputs: list) -> List[PageLink]:
     """One PageLink per output instance that actually registered an HTTP
     blueprint (Output.url_prefix is only set by instantiate_outputs() in
     that case - see its own docstring) - used by the config UI dashboard's
-    quick-open links (AppServices.page_links)."""
+    quick-open links (AppServices.page_links). Excludes "nest_hub": its
+    blueprint only serves /image/current, for its own Chromecast receiver
+    to fetch - there's no human-browsable page at its bare url_prefix, so
+    including it here would make the dashboard's "Nest Hub Display"
+    quick-open link 404."""
     return [
         PageLink(name=output.name, url_prefix=output.url_prefix)
         for output in outputs
-        if output.url_prefix is not None
+        if output.url_prefix is not None and output.name != "nest_hub"
     ]
 
 

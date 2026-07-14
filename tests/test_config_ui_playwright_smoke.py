@@ -156,6 +156,7 @@ def test_nav_sections_all_render_without_console_errors(page):
         "displays",
         "library",
         "health",
+        "advanced",
     ):
         page.click(f'#nav button[data-section="{section}"]')
         page.wait_for_timeout(300)
@@ -201,10 +202,4 @@ def test_secrets_never_reach_the_dom(page):
     page.wait_for_timeout(300)
     page.click('a.component-card[href="#component/enrichers.fanarttv"]')
     page.wait_for_timeout(400)
-    assert _FANARTTV_API_KEY not in page.content()
-
-    # And the classic shell, reached separately (own template, own JS).
-    page.goto(page.base_url + "/config/form#sources", wait_until="networkidle")
-    page.wait_for_timeout(400)
-    assert _KODI_PASSWORD not in page.content()
     assert _FANARTTV_API_KEY not in page.content()
