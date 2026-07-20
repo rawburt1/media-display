@@ -1,5 +1,6 @@
 """Tests for the playback history store (history.py)."""
 
+import sqlite3
 from unittest.mock import patch
 
 from mediainfo.stores.history import PlaybackHistory
@@ -109,3 +110,50 @@ def test_list_limit_clamped(tmp_path):
         store.record(_item(title=f"Song {i}"))
     assert len(store.list(limit=2)) == 2
     assert len(store.list(limit=0)) == 1  # clamped to at least 1
+
+
+def test_record_and_list_destinations(tmp_path):
+    store = _store(tmp_path)
+    store.record(_item(), destinations=["Living Room Pixoo", "Kitchen Web"])
+    assert store.list()[0]["displays"] == ["Living Room Pixoo", "Kitchen Web"]
+
+
+def test_record_without_destinations_defaults_to_empty_list(tmp_path):
+    store = _store(tmp_path)
+    store.record(_item())
+    assert store.list()[0]["displays"] == []
+
+
+def test_opens_pre_migration_database_without_displays_column(tmp_path):
+    """A database written before `displays` existed must still open and
+    read cleanly, back-filling the missing column instead of erroring."""
+    db_path = tmp_path / "history.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(
+        """
+        CREATE TABLE plays (
+            id INTEGER PRIMARY KEY,
+            played_at REAL NOT NULL,
+            source TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            subtitle TEXT NOT NULL DEFAULT '',
+            album TEXT NOT NULL DEFAULT '',
+            artwork_url TEXT NOT NULL DEFAULT ''
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO plays (played_at, source, media_type, title) VALUES (1000.0, 'sonos', 'music', 'Old Song')"
+    )
+    conn.commit()
+    conn.close()
+
+    store = PlaybackHistory(str(db_path))
+    items = store.list()
+    assert items[0]["title"] == "Old Song"
+    assert items[0]["displays"] == []
+
+    store.record(_item(title="New Song"), destinations=["Kitchen Web"])
+    items = store.list()
+    assert items[0]["displays"] == ["Kitchen Web"]

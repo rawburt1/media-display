@@ -55,12 +55,32 @@ class _RoutingEngine:
 
     def tick(self, results: List[NowPlaying], history: Optional[PlaybackHistory]) -> None:
         # Route: each group gets the highest-priority result it accepts.
+        # Computed as its own pass (rather than inline in the loop below,
+        # as before) so identity_displays can see every group routed to a
+        # given identity this tick, not just whichever group happens to be
+        # first to enrich (and therefore log) it - see
+        # _ArtworkPipeline.prepare_item.
+        routed_by_group = [
+            next((r for r in results if _group_accepts(group, r)), None) for group in self.groups
+        ]
+        # Only worth computing when there's a store to record into -
+        # history=None (see HistoryConfig.enabled) means it's pure
+        # overhead every tick otherwise.
+        identity_displays: Dict[tuple, List[str]] = {}
+        if history is not None:
+            for group, routed in zip(self.groups, routed_by_group):
+                if routed is not None:
+                    identity_displays.setdefault(routed.identity, []).extend(
+                        self._display_names(group)
+                    )
+
         # `prepared` deduplicates enrichment when several groups pick the
         # same item this tick (see _ArtworkPipeline.prepare_item).
         prepared: Dict[tuple, NowPlaying] = {}
-        for group in self.groups:
-            routed = next((r for r in results if _group_accepts(group, r)), None)
-            item = self._artwork.prepare_item(self.groups, group, routed, prepared, history)
+        for group, routed in zip(self.groups, routed_by_group):
+            item = self._artwork.prepare_item(
+                self.groups, group, routed, prepared, history, identity_displays
+            )
             self._tick_group(group, item)
 
         # Idle wallpapers go to whichever outputs ended this tick unbound
@@ -69,6 +89,25 @@ class _RoutingEngine:
         # group's outputs.
         self._show_idle()
         self._maybe_clear_stale_idle_state()
+
+    def _display_names(self, group: _RouteGroup) -> List[str]:
+        return [self._display_name(self.outputs[i], i) for i in group.output_indices]
+
+    def _display_name(self, output: Output, index: int) -> str:
+        """A human-readable name for one output instance, for playback
+        history entries (see PlaybackHistory) - the output's own cosmetic
+        `label` config field when set, otherwise its registry name (e.g.
+        "pixoo"), disambiguated with an ordinal when several unlabeled
+        instances of the same type exist. Mirrors the fallback the config
+        UI itself already uses for unlabeled instances (components.js:
+        `inst.label || ('Instance #' + (i + 1))`)."""
+        label = getattr(getattr(output, "config", None), "label", "") or ""
+        if label.strip():
+            return label.strip()
+        same_type = [o for o in self.outputs if o.name == output.name]
+        if len(same_type) <= 1:
+            return output.name or f"output #{index + 1}"
+        return f"{output.name} #{same_type.index(output) + 1}"
 
     def _tick_group(self, group: _RouteGroup, now_playing: Optional[NowPlaying]) -> None:
         """Advance one route group given the item routed to it this tick

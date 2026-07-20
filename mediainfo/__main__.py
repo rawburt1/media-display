@@ -298,7 +298,7 @@ def _start_and_wire(
             idle_source=idle_source,
         )
 
-    services = build_app_services(orch, config, outputs, history, overrides, mediadata_store)
+    services = build_app_services(orch, config, outputs, history, overrides, mediadata_store, cache)
     attach_services(outputs, services)
     return _Subsystems(
         orch=orch,

@@ -55,7 +55,7 @@ from PIL import Image, UnidentifiedImageError
 import mediainfo.outputs
 from mediainfo.app_services import AppServices
 from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
-from mediainfo.cache import ImageCache, flatten_transparency
+from mediainfo.cache import CacheTier, ImageCache, flatten_transparency
 from mediainfo.config import (
     ENRICHER_CONFIG_TYPES,
     IDLE_CONFIG_TYPES,
@@ -69,6 +69,7 @@ from mediainfo.config_backup import list_backups
 from mediainfo.imaging.led_image import _crop_square, prepare_led_image
 from mediainfo.imaging.text_removal import maybe_remove_text
 from mediainfo.models import Artwork, NowPlaying
+from mediainfo.stores.history import PlaybackHistory
 from mediainfo.stores.musiclibrary import MusicLibrary
 from mediainfo.configui.appletv_pairing import AppleTvPairingManager
 from mediainfo.outputs.base import Output
@@ -141,6 +142,8 @@ class ConfigUiOutput(Output):
         self._hitster_safe_get = None
         self._hitster_safe_set = None
         self._overrides: Optional[ArtworkOverrideStore] = None
+        self._history: Optional[PlaybackHistory] = None
+        self._cache: Optional[ImageCache] = None
         # Every other live HTTP output's own top-level page, for the
         # dashboard's quick-open links - see AppServices.page_links.
         self._page_links: list = []
@@ -180,6 +183,11 @@ class ConfigUiOutput(Output):
         AppServices.page_links and ui_builder.build_dashboard()."""
         self._page_links = page_links
 
+    def set_history(self, history: Optional[PlaybackHistory]) -> None:
+        """Register the PlaybackHistory store backing the History tab -
+        see AppServices.history. None means the feature is disabled."""
+        self._history = history
+
     def attach(self, services: AppServices) -> None:
         commands = services.commands
         self.set_hitster_safe_handlers(
@@ -189,6 +197,8 @@ class ConfigUiOutput(Output):
         self.set_artwork_overrides(services.overrides)
         self.set_health_provider(services.health_provider)
         self.set_page_links(services.page_links)
+        self.set_history(services.history)
+        self._cache = services.cache
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         pass
@@ -428,6 +438,37 @@ class ConfigUiOutput(Output):
         @bp.get("/api/overview")
         def overview():
             return jsonify(self._compute_overview())
+
+        @bp.get("/api/history")
+        def history_json():
+            if self._history is None:
+                return jsonify({"enabled": False, "items": []})
+            try:
+                limit = int(request.args.get("limit", 50))
+            except ValueError:
+                limit = 50
+            return jsonify({"enabled": True, "items": self._history.list(limit)})
+
+        @bp.get("/api/history/image/<int:entry_id>")
+        def history_image(entry_id: int):
+            """Thumbnail for one History tab entry, resolved through the
+            regular artwork cache by the entry's stored URL - same
+            approach as the web output's own /history/image/<id>."""
+            if self._history is None or self._cache is None:
+                return "", 404
+            entry = self._history.entry_artwork(entry_id)
+            if entry is None:
+                return "", 404
+            url, media_type = entry
+            tier: CacheTier = "music" if media_type == "music" else "default"
+            try:
+                path = self._cache.get_path(Artwork(url=url), tier=tier)
+            except Exception:
+                logger.exception("Failed to resolve history artwork %s", url)
+                return "", 404
+            if path is None or not path.exists():
+                return "", 404
+            return send_file(path)
 
         # -- New UI model endpoints (Fas 1 of the GUI redesign) -----------
         # Read-only translations of the same schema/config/health data the

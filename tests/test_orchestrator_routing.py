@@ -44,6 +44,11 @@ def _output(config=None):
     output.handles_images = True
     output.music_album_art_only = False
     output.transform_pipeline = []
+    # Real Output subclasses always set this as a plain string class
+    # attribute (see Output.name) - a bare MagicMock().name is instead an
+    # auto-generated child mock, which breaks anything that needs a real
+    # string (e.g. _RoutingEngine._display_name for history entries).
+    output.name = "output"
     return output
 
 
@@ -492,3 +497,73 @@ def test_history_not_recorded_when_group_rebinds_running_item(tmp_path):
 
     # kodi was already playing on the other group - no third entry.
     assert len(store.list()) == 2
+
+
+def test_history_records_display_name_for_its_own_group(tmp_path):
+    from mediainfo.stores.history import PlaybackHistory
+
+    store = PlaybackHistory(str(tmp_path / "history.db"))
+    pixoo = _output(_FilterConfig(allow_sources=["kodi"]))
+    pixoo.name = "pixoo"
+    orch = _orchestrator([_Source("kodi", _movie(source="kodi"))], [pixoo])
+    orch._history = store
+
+    orch._tick()
+
+    assert store.list()[0]["displays"] == ["pixoo"]
+
+
+def test_history_records_every_group_sharing_an_item():
+    """Two independent groups picking up the same genuinely-new identity
+    in the same tick must both show up on the one entry logged for it -
+    not just whichever group happened to enrich (and log) it first."""
+    from mediainfo.stores.history import PlaybackHistory
+
+    store = PlaybackHistory.__new__(PlaybackHistory)
+    # Avoid touching disk for this one - only .record()'s call args matter.
+    store.record = MagicMock()
+
+    everything = _output()
+    everything.name = "web"
+    kodi_only = _output(_FilterConfig(allow_sources=["kodi"]))
+    kodi_only.name = "pixoo"
+    orch = _orchestrator([_Source("kodi", _movie(source="kodi"))], [everything, kodi_only])
+    orch._history = store
+
+    orch._tick()
+
+    store.record.assert_called_once()
+    destinations = store.record.call_args.args[1]
+    assert sorted(destinations) == ["pixoo", "web"]
+
+
+def test_history_uses_label_over_registry_name(tmp_path):
+    from mediainfo.stores.history import PlaybackHistory
+
+    store = PlaybackHistory(str(tmp_path / "history.db"))
+    config = _FilterConfig(allow_sources=["kodi"])
+    config.label = "Living Room Pixoo"
+    pixoo = _output(config)
+    pixoo.name = "pixoo"
+    orch = _orchestrator([_Source("kodi", _movie(source="kodi"))], [pixoo])
+    orch._history = store
+
+    orch._tick()
+
+    assert store.list()[0]["displays"] == ["Living Room Pixoo"]
+
+
+def test_history_disambiguates_unlabeled_same_type_instances(tmp_path):
+    from mediainfo.stores.history import PlaybackHistory
+
+    store = PlaybackHistory(str(tmp_path / "history.db"))
+    first = _output()
+    first.name = "pixoo"
+    second = _output()
+    second.name = "pixoo"
+    orch = _orchestrator([_Source("kodi", _movie(source="kodi"))], [first, second])
+    orch._history = store
+
+    orch._tick()
+
+    assert sorted(store.list()[0]["displays"]) == ["pixoo #1", "pixoo #2"]

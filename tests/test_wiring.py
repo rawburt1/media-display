@@ -936,12 +936,14 @@ def test_build_app_services_populates_every_field():
     history = MagicMock()
     overrides = MagicMock()
     mediadata_store = MagicMock()
+    cache = MagicMock()
 
-    services = build_app_services(orch, cfg, [], history, overrides, mediadata_store)
+    services = build_app_services(orch, cfg, [], history, overrides, mediadata_store, cache)
 
     assert services.history is history
     assert services.overrides is overrides
     assert services.mediadata_store is mediadata_store
+    assert services.cache is cache
     assert services.commands is not None
     assert services.commands.get_hitster_safe is orch.get_hitster_safe
     assert services.commands.set_hitster_safe is orch.set_hitster_safe

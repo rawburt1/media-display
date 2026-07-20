@@ -25,6 +25,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable, List, Optional
 
+from mediainfo.cache import ImageCache
 from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 from mediainfo.stores.history import PlaybackHistory
 from mediainfo.stores.media_data_store import MediaDataStore
@@ -68,6 +69,10 @@ class AppServices:
     health_provider: Optional[Callable[[], dict]] = None
     # Playback history store backing the /history page.
     history: Optional[PlaybackHistory] = None
+    # Shared on-disk artwork cache - only needed by outputs that resolve
+    # artwork URLs into files themselves (e.g. the config UI's History tab
+    # thumbnails; WebOutput gets its own copy via on_new_item() instead).
+    cache: Optional[ImageCache] = None
     # Shared on-disk artwork/lyrics/metadata cache (see media_data_store.py).
     mediadata_store: Optional[MediaDataStore] = None
     # Manual per-title artwork pin store (see artwork_overrides.py).

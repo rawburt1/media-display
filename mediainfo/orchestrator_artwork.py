@@ -86,6 +86,7 @@ class _ArtworkPipeline:
         item: Optional[NowPlaying],
         prepared: Dict[tuple, NowPlaying],
         history: Optional[PlaybackHistory],
+        identity_displays: Optional[Dict[tuple, List[str]]] = None,
     ) -> Optional[NowPlaying]:
         """Return the item the caller should route to `group`, enriching a
         genuinely new item exactly once per tick even when several groups
@@ -125,9 +126,13 @@ class _ArtworkPipeline:
         # Exactly here - a genuinely new item, once per identity per tick,
         # after enrichment (so the logged artwork URL is the enriched
         # pick). The donor/rebind paths above deliberately don't log:
-        # the item was already playing, just on another group.
+        # the item was already playing, just on another group. Logs every
+        # display that accepted this identity this tick (identity_displays,
+        # built in _RoutingEngine.tick() before any group's prepare_item()
+        # call), not just this one group - so one entry covers every
+        # display that started showing it together.
         if history is not None:
-            history.record(item)
+            history.record(item, (identity_displays or {}).get(item.identity, []))
         prepared[item.identity] = item
         return item
 

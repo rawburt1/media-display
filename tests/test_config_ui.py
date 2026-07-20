@@ -2439,3 +2439,107 @@ def test_save_form_accepts_valid_active_hours_with_midnight_wrap(config_path):
     assert resp.get_json() == {"ok": True, "restart_required": True}
     cfg = Config.load(config_path)
     assert cfg.outputs["web"][0].active_hours == "22:00-06:00"
+
+
+# ---------------------------------------------------------------------------
+# History tab (/api/history, /api/history/image/<id>) - see
+# tests/test_web.py's matching tests for the on-display web output's own
+# /history route, which this mirrors.
+# ---------------------------------------------------------------------------
+
+
+def _history_store(tmp_path):
+    from mediainfo.stores.history import PlaybackHistory
+
+    return PlaybackHistory(str(tmp_path / "history.db"))
+
+
+def _music(**kwargs):
+    from mediainfo.models import NowPlaying
+
+    kwargs.setdefault("source", "sonos")
+    kwargs.setdefault("media_type", "music")
+    kwargs.setdefault("title", "Bohemian Rhapsody")
+    kwargs.setdefault("images", [])
+    return NowPlaying(**kwargs)
+
+
+def test_attach_wires_history_and_cache(config_path):
+    from mediainfo.app_services import AppServices
+
+    out = _output(config_path)
+    history = MagicMock()
+    cache = MagicMock()
+
+    out.attach(AppServices(history=history, cache=cache))
+
+    assert out._history is history
+    assert out._cache is cache
+
+
+def test_attach_passes_through_none_history_and_cache(config_path):
+    from mediainfo.app_services import AppServices
+
+    out = _output(config_path)
+    out.attach(AppServices(history=None, cache=None))
+
+    assert out._history is None
+    assert out._cache is None
+
+
+def test_history_api_reports_disabled_without_store(config_path):
+    out = _output(config_path)
+    resp = _client(out).get("/api/history")
+    assert resp.get_json() == {"enabled": False, "items": []}
+
+
+def test_history_api_lists_entries(config_path, tmp_path):
+    store = _history_store(tmp_path)
+    store.record(_music(), destinations=["Living Room Pixoo"])
+    out = _output(config_path)
+    out.set_history(store)
+
+    data = _client(out).get("/api/history").get_json()
+    assert data["enabled"] is True
+    assert data["items"][0]["title"] == "Bohemian Rhapsody"
+    assert data["items"][0]["displays"] == ["Living Room Pixoo"]
+
+
+def test_history_image_resolved_through_cache(config_path, tmp_path):
+    from mediainfo.models import Artwork
+
+    store = _history_store(tmp_path)
+    store.record(_music(images=[Artwork(url="http://x/cover.jpg")]))
+    entry_id = store.list()[0]["id"]
+
+    img = tmp_path / "cover.jpg"
+    img.write_bytes(b"cover-bytes")
+    cache = MagicMock()
+    cache.get_path.return_value = img
+
+    out = _output(config_path)
+    out.set_history(store)
+    out._cache = cache
+
+    resp = _client(out).get(f"/api/history/image/{entry_id}")
+    assert resp.status_code == 200
+    assert resp.data == b"cover-bytes"
+    assert cache.get_path.call_args.kwargs["tier"] == "music"
+
+
+def test_history_image_404_without_cache(config_path, tmp_path):
+    store = _history_store(tmp_path)
+    store.record(_music())
+    entry_id = store.list()[0]["id"]
+
+    out = _output(config_path)
+    out.set_history(store)
+    # cache stays None (not wired) - must 404, not raise.
+    assert _client(out).get(f"/api/history/image/{entry_id}").status_code == 404
+
+
+def test_history_image_404_for_unknown_entry(config_path, tmp_path):
+    out = _output(config_path)
+    out.set_history(_history_store(tmp_path))
+    out._cache = MagicMock()
+    assert _client(out).get("/api/history/image/999").status_code == 404

@@ -356,6 +356,7 @@ def build_app_services(
     history: Optional[PlaybackHistory],
     overrides: Optional[ArtworkOverrideStore],
     mediadata_store: Optional[MediaDataStore],
+    cache: Optional[ImageCache] = None,
 ) -> AppServices:
     """Gather every cross-cutting capability an output might want (health
     reporting, playback history, hitster-safe, artwork refresh/rotate-now,
@@ -375,6 +376,7 @@ def build_app_services(
         history=history,
         mediadata_store=mediadata_store,
         overrides=overrides,
+        cache=cache,
         commands=OrchestratorCommands(
             get_hitster_safe=orch.get_hitster_safe,
             set_hitster_safe=orch.set_hitster_safe,

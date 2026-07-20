@@ -1379,3 +1379,65 @@ function removeOverride(btn) {
     body: JSON.stringify({ title: btn.dataset.title, subtitle: btn.dataset.subtitle }),
   }).then(function() { fetchOverrides(); }).catch(function() { btn.disabled = false; });
 }
+
+// ---------------------------------------------------------------------
+// History - what has played, and which display(s) it went to (see
+// mediainfo.stores.history.PlaybackHistory). A plain newest-first list,
+// same information architecture as Library's own list/settings split
+// but with nothing to edit - just /api/history and its per-entry
+// thumbnail at /api/history/image/<id>. Entries recorded before display
+// tracking existed have an empty `displays` list.
+// ---------------------------------------------------------------------
+var historyData = null; // { enabled, items: [...] } once loaded
+
+function historyPageHtml() {
+  return '<h1>History</h1><p class="lede">What has played recently, and which display(s) showed it.</p>'
+    + '<div id="history-panel">Loading…</div>';
+}
+
+function renderHistorySection() {
+  var el = document.getElementById('section-history');
+  el.innerHTML = historyPageHtml();
+  if (historyData) renderHistoryPanel(); else fetchHistory();
+}
+
+function historyEntryCard(item) {
+  var thumb = item.has_artwork
+    ? '<img src="' + API_PREFIX + '/api/history/image/' + item.id + '" alt="">'
+    : '<div class="history-card-noart" aria-hidden="true"></div>';
+  var meta = [item.source, item.media_type].filter(Boolean).join(' · ');
+  var displays = (item.displays || []).map(function(d) {
+    return '<span class="badge b-display">' + esc(d) + '</span>';
+  }).join(' ');
+  var when = item.played_at ? new Date(item.played_at * 1000).toLocaleString() : '';
+  return '<div class="override-card history-card">'
+    + thumb
+    + '<div class="info">'
+    + '<div class="title">' + esc(item.title) + '</div>'
+    + (item.subtitle ? '<div class="subtitle">' + esc(item.subtitle) + '</div>' : '')
+    + '<div class="subtitle">' + esc(meta) + (when ? ' · ' + esc(when) : '') + '</div>'
+    + (displays ? '<div class="history-card-displays">' + displays + '</div>' : '')
+    + '</div>'
+    + '</div>';
+}
+
+function renderHistoryPanel() {
+  var el = document.getElementById('history-panel');
+  if (!el || !historyData) return;
+  if (historyData.enabled === false) {
+    el.innerHTML = '<div class="warning-item">Playback history is disabled - turn it on under '
+      + '<a href="#component/history">History settings</a>.</div>';
+    return;
+  }
+  var items = historyData.items || [];
+  el.innerHTML = '<div class="override-list">'
+    + (items.length ? items.map(historyEntryCard).join('') : '<span class="field-help">Nothing has played yet.</span>')
+    + '</div>';
+}
+
+function fetchHistory() {
+  return apiFetch('/api/history').then(function(r) { return r.json(); }).then(function(data) {
+    historyData = data;
+    if (currentSection === 'history') renderHistoryPanel();
+  }).catch(function() {});
+}

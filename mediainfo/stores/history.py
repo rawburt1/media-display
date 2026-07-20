@@ -3,8 +3,11 @@
 Every genuinely new item the orchestrator routes to an output gets one
 row here - a self-hosted scrobble log covering every source (Kodi, Sonos,
 Spotify, vinyl, ...), not just music. Browsable at the web output's
-/history page; the artwork shown there is resolved through the regular
-image cache by the stored artwork URL, so no extra files are kept.
+/history page and the config UI's History tab; the artwork shown there is
+resolved through the regular image cache by the stored artwork URL, so no
+extra files are kept. Each entry also names the display(s) it was routed
+to (see orchestrator_routing._RoutingEngine._display_name) - empty for
+entries recorded before that was tracked.
 
 Deliberately small: a single SQLite table, newest-first reads, capped at
 history.max_entries rows (oldest pruned on insert). A repeat of the most
@@ -18,6 +21,7 @@ request threads read), guarded by a lock - same pattern as MusicLibrary.
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import threading
@@ -44,6 +48,20 @@ CREATE TABLE IF NOT EXISTS plays (
 CREATE INDEX IF NOT EXISTS idx_plays_played_at ON plays(played_at DESC);
 """
 
+# Which display(s) (output instances - see orchestrator_routing._RoutingEngine.
+# _display_name) an entry was routed to, as a JSON list. Added after the
+# table above already shipped, so existing databases need a migration
+# rather than just a CREATE TABLE column - see _ensure_displays_column().
+_DISPLAYS_COLUMN = "displays"
+
+
+def _parse_displays(raw: str) -> List[str]:
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
 
 class PlaybackHistory:
     def __init__(
@@ -60,17 +78,32 @@ class PlaybackHistory:
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
         with self._lock:
             self._conn.executescript(_SCHEMA)
+            self._ensure_displays_column()
             self._conn.commit()
 
-    def record(self, now_playing: NowPlaying) -> None:
-        """Log one play. Never raises - a history hiccup must not disturb
-        the orchestrator tick that called it."""
+    def _ensure_displays_column(self) -> None:
+        """Add the `displays` column to a database created before it
+        existed. A plain CREATE TABLE IF NOT EXISTS (see _SCHEMA) never
+        touches an already-existing table, so older databases need this
+        explicit migration instead."""
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(plays)")}
+        if _DISPLAYS_COLUMN not in columns:
+            self._conn.execute(
+                f"ALTER TABLE plays ADD COLUMN {_DISPLAYS_COLUMN} TEXT NOT NULL DEFAULT '[]'"
+            )
+
+    def record(self, now_playing: NowPlaying, destinations: Optional[List[str]] = None) -> None:
+        """Log one play, optionally naming which display(s) it was routed
+        to (see orchestrator_routing._RoutingEngine._display_name) - empty/
+        omitted for callers that don't track that. Never raises - a
+        history hiccup must not disturb the orchestrator tick that called
+        it."""
         try:
-            self._record(now_playing)
+            self._record(now_playing, destinations or [])
         except Exception:
             logger.exception("Failed to record playback history entry")
 
-    def _record(self, now_playing: NowPlaying) -> None:
+    def _record(self, now_playing: NowPlaying, destinations: List[str]) -> None:
         now = time.time()
         # Prefer real cover/poster art for the row's thumbnail, not an
         # artist bio photo (see Artwork.is_artist_photo).
@@ -92,8 +125,8 @@ class PlaybackHistory:
 
             self._conn.execute(
                 "INSERT INTO plays"
-                " (played_at, source, media_type, title, subtitle, album, artwork_url)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                " (played_at, source, media_type, title, subtitle, album, artwork_url, displays)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     now,
                     now_playing.source,
@@ -102,6 +135,7 @@ class PlaybackHistory:
                     now_playing.subtitle,
                     now_playing.album,
                     artwork_url,
+                    json.dumps(destinations),
                 ),
             )
             self._conn.execute(
@@ -116,7 +150,7 @@ class PlaybackHistory:
         with self._lock:
             rows = self._conn.execute(
                 "SELECT id, played_at, source, media_type, title, subtitle, album,"
-                " artwork_url FROM plays ORDER BY played_at DESC, id DESC LIMIT ?",
+                " artwork_url, displays FROM plays ORDER BY played_at DESC, id DESC LIMIT ?",
                 (max(1, min(limit, self.max_entries)),),
             ).fetchall()
         return [
@@ -129,6 +163,7 @@ class PlaybackHistory:
                 "subtitle": row[5],
                 "album": row[6],
                 "has_artwork": bool(row[7]),
+                "displays": _parse_displays(row[8]),
             }
             for row in rows
         ]

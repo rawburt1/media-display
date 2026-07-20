@@ -255,6 +255,11 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 .override-card .info { flex: 1; min-width: 0; }
 .override-card .title { font-size: 13px; font-weight: 600; color: var(--bright); }
 .override-card .subtitle { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+/* -- History -- */
+.history-card-noart { width: 48px; height: 48px; border-radius: 6px; background: var(--bg); flex-shrink: 0; }
+.history-card-displays { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.badge.b-display { background: var(--badge-muted-bg); color: var(--muted); }
 .detail-list { list-style: none; padding: 0; margin: 0; }
 .detail-list li { font-size: 12.5px; color: var(--text); padding: 6px 0; border-top: 1px solid var(--border); }
 .detail-list li:first-child { border-top: none; }

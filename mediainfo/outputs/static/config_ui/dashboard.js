@@ -30,11 +30,11 @@ var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
 // deliberately isn't included: it reuses componentCard()/.component-list
 // for its settings cards, but stays plain - no grid, no hide, no filter.
 var FILTERABLE_SECTIONS = CATEGORY_SECTIONS.concat(['health']);
-var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'health', 'advanced']);
+var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'history', 'health', 'advanced']);
 var SECTION_TITLES = {
   dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
   metadata: 'Metadata', appearance: 'Appearance', displays: 'Displays',
-  library: 'Library', health: 'Health', advanced: 'Advanced', wizard: 'Setup',
+  library: 'Library', history: 'History', health: 'Health', advanced: 'Advanced', wizard: 'Setup',
 };
 // UiComponent.category uses "display" (singular); the nav/section id uses
 // "displays" - this is the one place that mapping happens. "library"/
@@ -194,6 +194,7 @@ function renderSection(name, param) {
   else if (name === 'pipeline') renderPipeline();
   else if (CATEGORY_SECTIONS.indexOf(name) !== -1) renderCategorySection(name);
   else if (name === 'library') renderLibrarySection(param);
+  else if (name === 'history') renderHistorySection();
   else if (name === 'health') renderHealthSection();
   else if (name === 'advanced') renderAdvancedSection();
   else if (name === 'component') renderComponentDetail(param);
@@ -570,6 +571,7 @@ function fetchComponents() {
 setInterval(function() {
   fetchDashboard();
   if (currentSection === 'pipeline') { fetchPipeline(); fetchComponents(); fetchPriorityLists().then(renderPipeline); }
+  else if (currentSection === 'history') { fetchHistory(); }
   else if (currentSection === 'health' || currentSection === 'library' || currentSection === 'advanced' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
 }, 15000);
 
