@@ -1,0 +1,8 @@
+{
+  "discoverySuggestions": true,
+  "usePersona": true,
+  "omitSections": [],
+  "requireVerification": false,
+  "taskCloseGate": "off",
+  "fableEnabled": false
+}
