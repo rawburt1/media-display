@@ -131,3 +131,6 @@ class UiDashboard:
     # the pipeline's enabled-component ids every request, never stored, so
     # it self-corrects the moment a source and an output are both enabled.
     needs_setup: bool = False
+    # mediainfo.__version__ - shown on the Help page for bug reports; not
+    # used for any compatibility check.
+    app_version: str = ""

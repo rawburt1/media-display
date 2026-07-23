@@ -3,11 +3,11 @@
 // Dashboard shell (Fas 2-8 of the GUI redesign, H5's single-shell finish
 // line) - the only landing page at "/" now that the classic app.html
 // shell is gone. Dashboard/Pipeline/Media/Metadata/Appearance/Displays/
-// Library/Health/Advanced are all rendered in-shell via hash-based client
-// routing (see renderFromHash() below).
+// Library/Health/Advanced/Help are all rendered in-shell via hash-based
+// client routing (see renderFromHash() below).
 //
 // This file owns the shell chrome (nav/theme/routing/Hitster-safe) plus
-// Dashboard and Pipeline. Media/Metadata/Appearance/Displays' card-grid
+// Dashboard, Pipeline, and Help. Media/Metadata/Appearance/Displays' card-grid
 // rendering (filterable + hideable since Fas 8), Health's action-oriented
 // card grid (Fas 6/8), Library's browse/overrides/settings page (Fas 7),
 // and the per-component detail page (essential/advanced fields, save/
@@ -30,11 +30,11 @@ var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
 // deliberately isn't included: it reuses componentCard()/.component-list
 // for its settings cards, but stays plain - no grid, no hide, no filter.
 var FILTERABLE_SECTIONS = CATEGORY_SECTIONS.concat(['health']);
-var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'history', 'health', 'advanced']);
+var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'history', 'health', 'advanced', 'help']);
 var SECTION_TITLES = {
   dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
   metadata: 'Metadata', appearance: 'Appearance', displays: 'Displays',
-  library: 'Library', history: 'History', health: 'Health', advanced: 'Advanced', wizard: 'Setup',
+  library: 'Library', history: 'History', health: 'Health', advanced: 'Advanced', help: 'Help', wizard: 'Setup',
 };
 // UiComponent.category uses "display" (singular); the nav/section id uses
 // "displays" - this is the one place that mapping happens. "library"/
@@ -197,6 +197,7 @@ function renderSection(name, param) {
   else if (name === 'history') renderHistorySection();
   else if (name === 'health') renderHealthSection();
   else if (name === 'advanced') renderAdvancedSection();
+  else if (name === 'help') renderHelpSection();
   else if (name === 'component') renderComponentDetail(param);
   else if (name === 'wizard') renderWizard();
 }
@@ -299,6 +300,75 @@ function fetchDashboard() {
     dashboardData = data;
     if (currentSection === 'dashboard') renderDashboard();
   }).catch(function() {});
+}
+
+// ---------------------------------------------------------------------
+// Help section - static reference material plus the same page-open links
+// Dashboard's quick actions already carry (dashboardData.quick_actions,
+// built by ui_builder._page_link_actions() - one entry per live output
+// page, id "open_page_<name>_<n>"). No section-specific fetch: everything
+// here either comes from dashboardData (already loaded for Dashboard) or
+// is fixed copy about how this app behaves. Live per-page health status
+// is deliberately left out for now - a static list is enough to be useful
+// and doesn't couple this page to /health's shape.
+// ---------------------------------------------------------------------
+var HELP_PAGE_DESCRIPTIONS = {
+  config: 'This config UI itself - if this instance runs more than one, this is the one you’re on now.',
+  web: 'The main "now playing" artwork display - what most people mean by "the display".',
+  health: 'Machine-readable status of every source/output/enricher (JSON, or HTML with a browser) - what this dashboard’s own status badges are built from.',
+  themes: 'Full-screen themed overlay display, separate from the plain artwork view.',
+  info: 'Text-only "now playing" metadata display, no artwork.',
+  feed: 'RSS/Atom feed of what has played, for feed readers.',
+  video: 'Full-screen idle video player (background loops from Pexels/Pixabay).',
+  nest_hub: 'Now-playing display formatted for a Google Nest Hub / Chromecast screen.',
+};
+
+function helpPageLinkRow(action) {
+  // Matches both "open_page_<name>_<n>" (page_links entries - see
+  // ui_builder._page_link_actions()) and the synthetic "open_page_health"
+  // (no count suffix - it's inserted separately, not from page_links).
+  var typeName = (action.id.match(/^open_page_(.+?)(?:_\d+)?$/) || [])[1];
+  var description = HELP_PAGE_DESCRIPTIONS[typeName] || '';
+  return '<div class="row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
+    + '<span><a href="' + esc(action.href) + '">' + esc(action.label) + '</a>'
+    + (description ? '<div class="field-help">' + esc(description) + '</div>' : '')
+    + '</span><span class="field-help">' + esc(action.href) + '</span></div>';
+}
+
+function renderHelpSection() {
+  var el = document.getElementById('section-help');
+  if (!dashboardData) {
+    el.innerHTML = '<h1>Help</h1><p class="lede">Loading…</p>';
+    return;
+  }
+  var pageLinks = (dashboardData.quick_actions || []).filter(function(a) {
+    return a.id.indexOf('open_page_') === 0;
+  });
+
+  var html = '<h1>Help</h1><p class="lede">Where things live and how this app behaves, for when something isn’t obvious from the page you’re on.</p>';
+
+  html += '<h2 class="group-title">Pages</h2><div class="card">'
+    + (pageLinks.length ? pageLinks.map(helpPageLinkRow).join('') : '<p class="field-help">No display pages are enabled yet.</p>')
+    + '</div>';
+
+  html += '<h2 class="group-title">Restarts</h2><div class="card">'
+    + '<p class="field-help">Changes to <a href="#displays">Displays</a> (any output) or authentication (under '
+    + '<a href="#advanced">Advanced</a>) only take effect after a restart - mediainfo only sets those up once, at '
+    + 'startup. Everything else (sources, metadata, appearance, library, timing) applies live within a few seconds, '
+    + 'no restart needed. When a restart is pending, a "Restart mediainfo" button appears on the '
+    + '<a href="#dashboard">Dashboard</a>.</p>'
+    + '</div>';
+
+  var aboutRow = function(label, valueHtml) {
+    return '<div class="row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+      + '<span>' + esc(label) + '</span><span class="field-help">' + valueHtml + '</span></div>';
+  };
+  html += '<h2 class="group-title">About</h2><div class="card">'
+    + aboutRow('Version', esc(dashboardData.app_version || 'unknown'))
+    + aboutRow('Documentation', '<a href="https://github.com/rawburt1/media-display">github.com/rawburt1/media-display</a>')
+    + '</div>';
+
+  el.innerHTML = html;
 }
 
 // ---------------------------------------------------------------------

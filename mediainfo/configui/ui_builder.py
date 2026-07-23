@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from mediainfo import __version__ as _APP_VERSION
 from mediainfo.app_services import PageLink
 from mediainfo.config import (
     ENRICHER_CONFIG_TYPES,
@@ -740,4 +741,5 @@ def build_dashboard(
         # already enables several outputs but zero sources, so this must
         # fire on "missing either half", not "missing both".
         needs_setup=not pipeline.media_component_ids or not pipeline.display_component_ids,
+        app_version=_APP_VERSION,
     )
