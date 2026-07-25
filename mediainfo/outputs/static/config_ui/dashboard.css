@@ -91,7 +91,7 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
          padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .b-connected, .b-enabled { background: var(--badge-ok-bg); color: var(--ok); }
 .b-disabled { background: var(--badge-muted-bg); color: var(--muted); }
-.b-needs_configuration, .b-warning { background: var(--badge-warn-bg); color: var(--warn); }
+.b-needs_configuration, .b-warning, .b-restart_required { background: var(--badge-warn-bg); color: var(--warn); }
 .b-error { background: var(--badge-danger-bg); color: var(--danger); }
 .b-unknown { background: var(--badge-muted-bg); color: var(--muted); }
 

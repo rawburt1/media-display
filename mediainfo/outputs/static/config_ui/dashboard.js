@@ -208,6 +208,7 @@ function renderSection(name, param) {
 var STATUS_LABELS = {
   connected: 'Connected', enabled: 'Enabled', disabled: 'Disabled',
   needs_configuration: 'Needs configuration', warning: 'Warning', error: 'Error', unknown: 'Unknown',
+  restart_required: 'Restart required',
 };
 
 // Activity (Fas 10) is a separate concept from the status badges above -
