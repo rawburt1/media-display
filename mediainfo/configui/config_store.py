@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from mediainfo.config import OUTPUT_CONFIG_TYPES, Config
 from mediainfo.config_backup import backup_config_file, list_backups, restore_backup
@@ -192,26 +192,37 @@ class ConfigStore:
 
     def save_form(
         self, values: Dict[str, Any], outputs: Dict[str, List[Dict[str, Any]]]
-    ) -> Tuple[Optional[str], bool]:
+    ) -> Tuple[Optional[str], bool, FrozenSet[str]]:
         """Merge posted form data into config.yaml. Returns
-        (error_message, restart_required); error_message is None on
-        success.
+        (error_message, restart_required, changed_output_types);
+        error_message is None on success.
+
+        changed_output_types is the subset of `outputs`' keys that are
+        registered output types (see OUTPUT_CONFIG_TYPES) and were
+        actually merged - the per-output-type refinement behind
+        UiComponent.requires_restart/status (see ui_builder.
+        _output_components and ConfigUiOutput._restart_required_outputs).
+        `restart_required` itself stays the same blanket "any output
+        section touched, or auth touched" bool it always was - see the
+        comment below.
         """
         with self._lock:
             data = _read_config(self.config_path)
 
             self._merge_single_instance_fields(data, values)
 
+            changed_output_types: Set[str] = set()
             for type_name, instances in outputs.items():
                 if type_name not in OUTPUT_CONFIG_TYPES:
                     continue
                 self._merge_output_instances(data, type_name, instances)
+                changed_output_types.add(type_name)
 
             # Validate filter fields before any write.
             filter_error = _validate_filter_fields(data)
             if filter_error:
                 logger.warning("Rejected config form save (filter): %s", filter_error)
-                return filter_error, False
+                return filter_error, False, frozenset()
 
             # Strip filter fields that are at their no-restriction defaults
             # so existing config files stay tidy.
@@ -221,7 +232,7 @@ class ConfigStore:
                 Config.from_dict(data)
             except Exception as exc:
                 logger.warning("Rejected config form save: %s", exc)
-                return friendly_config_error(exc), False
+                return friendly_config_error(exc), False, frozenset()
 
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
             backup_config_file(self.config_path)
@@ -237,8 +248,10 @@ class ConfigStore:
             # already-running servers. Everything else (sources/enrichers/
             # idle/general/cache/etc.) picks up via hot-reload without a
             # restart.
-            restart_required = bool(outputs) or any(key.startswith("auth.") for key in values)
-        return None, restart_required
+            restart_required = bool(changed_output_types) or any(
+                key.startswith("auth.") for key in values
+            )
+        return None, restart_required, frozenset(changed_output_types)
 
     @staticmethod
     def _merge_single_instance_fields(data: Any, values: Dict[str, Any]) -> None:
@@ -320,14 +333,14 @@ class ConfigStore:
             merged.append(instance)
         section[type_name] = merged
 
-    def save_raw(self, raw_yaml: str) -> Tuple[Optional[str], bool]:
-        """Returns (error_message, restart_required)."""
+    def save_raw(self, raw_yaml: str) -> Tuple[Optional[str], bool, FrozenSet[str]]:
+        """Returns (error_message, restart_required, changed_output_types)."""
         try:
             parsed = _yaml.load(raw_yaml) or {}
             Config.from_dict(parsed)
         except Exception as exc:
             logger.warning("Rejected raw config save: %s", exc)
-            return friendly_config_error(exc), False
+            return friendly_config_error(exc), False, frozenset()
 
         with self._lock:
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -335,25 +348,29 @@ class ConfigStore:
             with self.config_path.open("w", encoding="utf-8") as f:
                 f.write(raw_yaml)
         # A raw save can change anything, including outputs - safest to
-        # assume a restart might be needed rather than silently miss one.
-        return None, True
+        # assume a restart might be needed rather than silently miss one,
+        # and (since raw YAML isn't diffed field-by-field like the guided
+        # form's outputs) to mark every registered output type as pending
+        # rather than guessing which one(s) actually changed.
+        return None, True, frozenset(OUTPUT_CONFIG_TYPES.keys())
 
-    def restore_backup(self, filename: str) -> Tuple[Optional[str], bool]:
+    def restore_backup(self, filename: str) -> Tuple[Optional[str], bool, FrozenSet[str]]:
         """Restore config.yaml from one of its automatic backups (see
         mediainfo.config_backup), resolving `filename` by exact match
         against list_backups() - never as a raw path, since the client
         only ever supplies a name we ourselves listed. Returns
-        (error_message, restart_required).
+        (error_message, restart_required, changed_output_types).
         """
         with self._lock:
             backups = list_backups(self.config_path)
             if not backups:
-                return "No backups available to restore.", False
+                return "No backups available to restore.", False, frozenset()
             matches = [b for b in backups if b.name == filename]
             if not matches:
-                return f"Unknown backup: {filename!r}.", False
+                return f"Unknown backup: {filename!r}.", False, frozenset()
             restore_backup(self.config_path, matches[0])
         # A restored config.yaml can change anything, including outputs and
         # auth - safest to assume a restart might be needed, same reasoning
-        # as save_raw's raw-YAML save.
-        return None, True
+        # (and same "mark every output type" per-output fallback) as
+        # save_raw's raw-YAML save.
+        return None, True, frozenset(OUTPUT_CONFIG_TYPES.keys())

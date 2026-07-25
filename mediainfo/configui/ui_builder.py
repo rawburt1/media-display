@@ -20,7 +20,7 @@ their fields are secret).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 from mediainfo import __version__ as _APP_VERSION
 from mediainfo.app_services import PageLink
@@ -221,11 +221,24 @@ def _build_fields(
     return essential, advanced
 
 
-def _status_for(enabled: bool, missing_required: List[str], health_entry: Optional[dict]) -> str:
+def _status_for(
+    enabled: bool,
+    missing_required: List[str],
+    health_entry: Optional[dict],
+    restart_required: bool = False,
+) -> str:
+    # [Foreman: 001] restart_required takes priority over health-derived
+    # status (the component's config has moved on from what's actually
+    # running) but not over disabled/needs_configuration - those are more
+    # fundamental problems the restart won't fix by itself. See
+    # docs/foreman/001.md and _output_components() below, the only caller
+    # that can pass restart_required=True today.
     if not enabled:
         return "disabled"
     if missing_required:
         return "needs_configuration"
+    if restart_required:
+        return "restart_required"
     if health_entry is not None:
         return _HEALTH_STATUS_MAP.get(health_entry.get("status", ""), "unknown")
     return "enabled"
@@ -315,7 +328,15 @@ def _output_components(
     output_instances: Dict[str, List[dict]],
     output_secrets_set: Dict[str, bool],
     health_by_type: Dict[str, dict],
+    restart_required_outputs: FrozenSet[str] = frozenset(),
 ) -> List[UiComponent]:
+    # [Foreman: 001] restart_required_outputs is the set of output
+    # type_names (OUTPUT_CONFIG_TYPES keys) whose outputs.* config has
+    # changed since the process last restarted - see
+    # ConfigUiOutput._restart_required_outputs and ConfigStore.save_form/
+    # save_raw/restore_backup's `changed_output_types` return value. Empty
+    # (the default) means every output reads as not needing a restart,
+    # matching every existing caller/test that doesn't pass it.
     components = []
     for type_name, cls in OUTPUT_CONFIG_TYPES.items():
         if type_name in _NON_DISPLAY_OUTPUT_TYPES:
@@ -338,6 +359,7 @@ def _output_components(
         health_entry = health_by_type.get(type_name)
         info = config_schema._TYPE_INFO.get("outputs", {}).get(type_name, {})
         config_path = f"outputs.{type_name}"
+        needs_restart = type_name in restart_required_outputs
         components.append(
             UiComponent(
                 id=config_path,
@@ -347,12 +369,12 @@ def _output_components(
                 description=info.get("description", ""),
                 enabled=enabled,
                 configured=not missing,
-                status=_status_for(enabled, missing, health_entry),
+                status=_status_for(enabled, missing, health_entry, needs_restart),
                 health=(health_entry or {}).get("status", "unknown"),
                 config_path=config_path,
                 supports_test=True,
                 supports_multiple=True,
-                requires_restart=True,  # output changes are what trip the global restart flag - see UiDashboard.restart_required for the live signal
+                requires_restart=needs_restart,
                 essential_fields=essential,
                 advanced_fields=advanced,
                 filter_fields=filter_fields,
@@ -537,6 +559,7 @@ def build_components(
     output_secrets_set: Dict[str, bool],
     text_enrichers_raw: Dict[str, Any],
     health: Optional[dict],
+    restart_required_outputs: Optional[FrozenSet[str]] = None,
 ) -> List[UiComponent]:
     """Build every UiComponent from already-fetched config/schema/health
     data. `schema` is config_schema._build_schema()'s output; `values`/
@@ -545,7 +568,11 @@ def build_components(
     get_output_instances()'s two return values; `text_enrichers_raw` is the
     raw config dict's "text_enrichers" section (see module docstring for
     why); `health` is the health provider's dict, or None if none is wired
-    (e.g. most tests)."""
+    (e.g. most tests); `restart_required_outputs` is the set of output
+    type_names pending a restart (see ConfigUiOutput.
+    _restart_required_outputs) - None/omitted (every existing caller
+    except output.py) means none are pending, i.e. every output component
+    reads as not needing a restart. [Foreman: 001]"""
     health = health or {}
     sources_health = _health_index(health.get("sources"), "name")
     outputs_health = _health_index(health.get("outputs"), "type")
@@ -591,7 +618,11 @@ def build_components(
     )
     components += _text_enricher_components(text_enrichers_raw)
     components += _output_components(
-        schema.get("outputs", {}), output_instances, output_secrets_set, outputs_health
+        schema.get("outputs", {}),
+        output_instances,
+        output_secrets_set,
+        outputs_health,
+        restart_required_outputs=restart_required_outputs or frozenset(),
     )
     components += _theme_components(schema.get("themes", {}), output_instances)
     components.append(_auto_rotate_component(schema.get("auto_rotate", []), output_instances))

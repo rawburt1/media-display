@@ -47,7 +47,7 @@ import signal
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from flask import Blueprint, jsonify, redirect, render_template, request, send_file
 from PIL import Image, UnidentifiedImageError
@@ -153,6 +153,18 @@ class ConfigUiOutput(Output):
         # on the Overview page (/api/overview). Cleared when /api/restart
         # is called.
         self._restart_required = False
+        # [Foreman: 001] Which specific outputs.<type_name> config paths
+        # changed since the last restart (a refinement of the blanket
+        # _restart_required flag above, additive to it) - accumulated
+        # across saves via ConfigStore.save_form/save_raw/restore_backup's
+        # `changed_output_types` return value, cleared alongside
+        # _restart_required by /api/restart. Threaded into
+        # ui_builder.build_components() so only the affected output(s)'
+        # UiComponent reports requires_restart/status=="restart_required"
+        # - see docs/foreman/001.md. auth.* changes are deliberately not
+        # tracked here: they aren't output-specific, so they only ever
+        # flip the blanket flag above.
+        self._restart_required_outputs: Set[str] = set()
         # Set by build_http_blueprint() once wiring.py has computed it -
         # threaded into templates so their JS can prefix its own fetch()
         # calls (see static/config_ui/*.js).
@@ -316,6 +328,7 @@ class ConfigUiOutput(Output):
             output_secrets_set,
             text_enrichers_raw,
             health,
+            restart_required_outputs=frozenset(self._restart_required_outputs),
         )
 
     def _build_ui_dashboard(self):
@@ -502,23 +515,25 @@ class ConfigUiOutput(Output):
         @bp.post("/api/config/form")
         def save_form():
             body = request.get_json(silent=True) or {}
-            error, restart_required = self._store.save_form(
+            error, restart_required, changed_outputs = self._store.save_form(
                 body.get("values") or {}, body.get("outputs") or {}
             )
             if error:
                 return jsonify({"ok": False, "error": error}), 400
             if restart_required:
                 self._restart_required = True
+            self._restart_required_outputs |= changed_outputs
             return jsonify({"ok": True, "restart_required": self._restart_required})
 
         @bp.post("/api/config/raw")
         def save_raw():
             body = request.get_json(silent=True) or {}
-            error, restart_required = self._store.save_raw(body.get("yaml") or "")
+            error, restart_required, changed_outputs = self._store.save_raw(body.get("yaml") or "")
             if error:
                 return jsonify({"ok": False, "error": error}), 400
             if restart_required:
                 self._restart_required = True
+            self._restart_required_outputs |= changed_outputs
             return jsonify({"ok": True, "restart_required": self._restart_required})
 
         @bp.post("/api/config/hidden-types")
@@ -569,11 +584,12 @@ class ConfigUiOutput(Output):
             filename = (body.get("filename") or "").strip()
             if not filename:
                 return jsonify({"ok": False, "error": "No backup filename given."}), 400
-            error, restart_required = self._store.restore_backup(filename)
+            error, restart_required, changed_outputs = self._store.restore_backup(filename)
             if error:
                 return jsonify({"ok": False, "error": error}), 400
             if restart_required:
                 self._restart_required = True
+            self._restart_required_outputs |= changed_outputs
             response: Dict[str, Any] = {
                 "ok": True,
                 "restart_required": self._restart_required,
@@ -593,6 +609,7 @@ class ConfigUiOutput(Output):
         @bp.post("/api/restart")
         def restart():
             self._restart_required = False
+            self._restart_required_outputs = set()
             threading.Timer(_RESTART_DELAY_SECONDS, _restart_process).start()
             return jsonify({"ok": True})
 

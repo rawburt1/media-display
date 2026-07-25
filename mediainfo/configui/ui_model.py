@@ -14,15 +14,20 @@ from typing import Any, Dict, List, Optional
 UiCategory = str  # "media" | "metadata" | "appearance" | "display" | "library" | "health" | "system" | "advanced"
 
 # UiComponent.status: "connected" | "enabled" | "disabled" |
-# "needs_configuration" | "warning" | "error" | "unknown". "warning" (Fas
-# 10) is Health.WARNING translated via mediainfo.status.translate_availability
-# - a real problem is not yet confirmed (e.g. a device that might just be
-# briefly unreachable), distinct from "error"'s confirmed-broken meaning.
-# "missing_dependency" and "restart_required" are part of the vocabulary
-# but not yet derivable from any existing signal (no structured
-# "dependency missing" data, and restart-required is only tracked
-# globally, not per component - see UiDashboard.restart_required) -
-# reserved for a future phase rather than faked here.
+# "needs_configuration" | "warning" | "error" | "restart_required" |
+# "unknown". "warning" (Fas 10) is Health.WARNING translated via
+# mediainfo.status.translate_availability - a real problem is not yet
+# confirmed (e.g. a device that might just be briefly unreachable),
+# distinct from "error"'s confirmed-broken meaning. "restart_required"
+# (Foreman 001) is derived per output component from ConfigUiOutput.
+# _restart_required_outputs (see ui_builder._output_components/
+# _status_for) - only the specific output(s) whose outputs.* config
+# changed since the last restart report it; UiDashboard.restart_required
+# stays the separate, coarser global "does *something* need a restart"
+# flag it always was. "missing_dependency" is still part of the
+# vocabulary but not yet derivable from any existing signal (no
+# structured "dependency missing" data) - reserved for a future phase
+# rather than faked here.
 UiStatus = str
 
 
