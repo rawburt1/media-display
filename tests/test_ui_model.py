@@ -716,3 +716,144 @@ def test_dashboard_quick_actions_leads_with_restart_action_when_restart_required
     assert first["id"] == "restart"
     assert first["kind"] == "restart"
     assert first["href"] == "/api/restart"
+
+
+# ---------------------------------------------------------------------------
+# Per-output restart tracking (Foreman: 001)
+# ---------------------------------------------------------------------------
+
+
+def test_output_component_requires_restart_when_type_in_restart_set(config_path):
+    # An output whose type is in the restart-required set gets requires_restart=True
+    out = _output(config_path)
+    # Simulate that web output type has changed
+    out._restart_required_outputs.add("web")
+    components = out._build_ui_components()
+    web = _by_id(components, "outputs.web")
+    assert web.requires_restart is True
+
+
+def test_output_component_does_not_require_restart_when_type_not_in_set(config_path):
+    # An output whose type is NOT in the restart-required set gets requires_restart=False
+    out = _output(config_path)
+    out._restart_required_outputs.add("pixoo")  # only pixoo, not web
+    components = out._build_ui_components()
+    web = _by_id(components, "outputs.web")
+    assert web.requires_restart is False
+
+
+def test_output_component_status_is_restart_required_when_in_restart_set(config_path):
+    # UiComponent.status is "restart_required" for outputs in the restart set
+    out = _output(config_path)
+    out._restart_required_outputs.add("web")
+    components = out._build_ui_components()
+    web = _by_id(components, "outputs.web")
+    assert web.status == "restart_required"
+
+
+def test_output_component_status_is_normal_when_not_in_restart_set(config_path):
+    # UiComponent.status derives normally (not "restart_required") for outputs not in the set
+    out = _output(config_path)
+    out._restart_required_outputs.add("pixoo")  # only pixoo
+    components = out._build_ui_components()
+    web = _by_id(components, "outputs.web")
+    # web is enabled and configured in config.example.yaml, so it's "enabled" or "connected"
+    assert web.status != "restart_required"
+    assert web.status in ("enabled", "connected")
+
+
+def test_output_status_restart_required_overrides_normal_health_but_not_disabled(config_path):
+    # restart_required status takes priority over health-derived status,
+    # but not over disabled
+    out = _output(config_path)
+    out._restart_required_outputs.add("pixoo")
+
+    schema = _build_schema()
+    values, secrets_set = out._store.get_values()
+    output_instances, output_secrets_set = out._store.get_output_instances()
+    # Provide health showing pixoo as connected/ok
+    health = {
+        "sources": [],
+        "outputs": [{"type": "pixoo", "status": "ok"}],
+        "enrichers": [],
+        "idle_sources": [],
+    }
+    components = build_components(
+        schema,
+        values,
+        secrets_set,
+        output_instances,
+        output_secrets_set,
+        {},
+        health,
+        restart_required_outputs=frozenset(out._restart_required_outputs),
+    )
+    pixoo = _by_id(components, "outputs.pixoo")
+    # restart_required takes priority over ok status
+    assert pixoo.status == "restart_required"
+
+
+def test_disabled_output_keeps_disabled_status_despite_restart_required(config_path):
+    # disabled status is more fundamental than restart_required
+    config_path.write_text(
+        """
+outputs:
+  pixoo:
+    - enabled: false
+"""
+    )
+    out = _output(config_path)
+    # Mark a disabled output's type as needing restart
+    out._restart_required_outputs.add("pixoo")
+    components = out._build_ui_components()
+    pixoo = _by_id(components, "outputs.pixoo")
+    # disabled takes priority over restart_required in status
+    assert pixoo.status == "disabled"
+    # but requires_restart is still set since type is in the restart set
+    assert pixoo.requires_restart is True
+
+
+def test_missing_configuration_status_takes_priority_over_restart_required(config_path):
+    # needs_configuration takes priority over restart_required (more fundamental)
+    config_path.write_text(
+        """
+outputs:
+  pixoo:
+    - enabled: true
+"""
+    )
+    out = _output(config_path)
+    out._restart_required_outputs.add("pixoo")
+    components = out._build_ui_components()
+    pixoo = _by_id(components, "outputs.pixoo")
+    # Missing required field (ip) takes priority
+    assert pixoo.status == "needs_configuration"
+    # And requires_restart is still set for the component
+    assert pixoo.requires_restart is True
+
+
+def test_api_ui_components_includes_restart_required_status(config_path):
+    # The /api/ui/components endpoint includes the per-output restart status
+    out = _output(config_path)
+    out._restart_required_outputs.add("web")
+
+    data = _client(out).get("/api/ui/components").get_json()
+    web_component = next(c for c in data if c["id"] == "outputs.web")
+    assert web_component["requires_restart"] is True
+    assert web_component["status"] == "restart_required"
+
+
+def test_multiple_output_types_marked_for_restart(config_path):
+    # Multiple different output types can be marked for restart independently
+    out = _output(config_path)
+    out._restart_required_outputs.add("web")
+    out._restart_required_outputs.add("pixoo")
+
+    components = out._build_ui_components()
+    web = _by_id(components, "outputs.web")
+    pixoo = _by_id(components, "outputs.pixoo")
+
+    assert web.requires_restart is True
+    assert web.status == "restart_required"
+    assert pixoo.requires_restart is True
+    assert pixoo.status == "restart_required"

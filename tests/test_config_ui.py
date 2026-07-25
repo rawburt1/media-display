@@ -1383,6 +1383,151 @@ def test_restore_backup_warns_but_still_restores_when_result_fails_to_validate(
 
 
 # ---------------------------------------------------------------------------
+# Per-output restart tracking (Foreman: 001)
+# ---------------------------------------------------------------------------
+
+
+def test_save_form_returns_changed_output_types_for_single_save(config_path):
+    # save_form returns exactly the output types in the posted outputs dict
+    out = _output(config_path)
+    client = _client(out)
+    resp = client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {"web": [{"enabled": True}]},
+        },
+    )
+    assert resp.get_json() == {"ok": True, "restart_required": True}
+    # After this save, only web should be in restart_required_outputs
+    assert out._restart_required_outputs == {"web"}
+
+
+def test_save_form_returns_changed_output_types_for_specific_types_only(config_path):
+    # Only the output types posted are marked as changed, not all types
+    out = _output(config_path)
+    client = _client(out)
+    resp = client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {"pixoo": [{"enabled": True, "ip": "1.2.3.4"}]},
+        },
+    )
+    assert resp.get_json() == {"ok": True, "restart_required": True}
+    assert out._restart_required_outputs == {"pixoo"}
+
+
+def test_save_form_with_multiple_output_types(config_path):
+    # save_form can change multiple output types in one call
+    out = _output(config_path)
+    client = _client(out)
+    resp = client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {"web": [{"enabled": True}], "pixoo": [{"enabled": True, "ip": "1.2.3.4"}]},
+        },
+    )
+    assert resp.get_json() == {"ok": True, "restart_required": True}
+    assert out._restart_required_outputs == {"web", "pixoo"}
+
+
+def test_save_form_empty_outputs_dict_sets_no_restart_required_output(config_path):
+    # If outputs dict is empty/not present, no output types are marked changed
+    out = _output(config_path)
+    client = _client(out)
+    resp = client.post(
+        "/api/config/form",
+        json={"values": {"general.poll_interval_seconds": 42}, "outputs": {}},
+    )
+    assert resp.get_json() == {"ok": True, "restart_required": False}
+    assert out._restart_required_outputs == set()
+
+
+def test_save_raw_returns_all_registered_output_types(config_path):
+    # save_raw returns every registered output type since raw YAML can change anything
+    from mediainfo.config import OUTPUT_CONFIG_TYPES
+
+    out = _output(config_path)
+    client = _client(out)
+    resp = client.post(
+        "/api/config/raw", json={"yaml": "poll_interval_seconds: 99\npriority: []\n"}
+    )
+    assert resp.get_json() == {"ok": True, "restart_required": True}
+    # Every registered output type should be marked
+    assert out._restart_required_outputs == set(OUTPUT_CONFIG_TYPES.keys())
+
+
+def test_restore_backup_returns_all_registered_output_types(config_path):
+    # restore_backup returns every registered output type like save_raw
+    from mediainfo.config import OUTPUT_CONFIG_TYPES
+    from mediainfo.config_backup import backup_config_file, list_backups
+
+    backup_config_file(config_path)
+    config_path.write_text("poll_interval_seconds: 999\npriority: []\n")
+    out = _output(config_path)
+    client = _client(out)
+    filename = list_backups(config_path)[0].name
+
+    resp = client.post("/api/config/backups/restore", json={"filename": filename})
+
+    assert resp.get_json()["ok"] is True
+    assert out._restart_required_outputs == set(OUTPUT_CONFIG_TYPES.keys())
+
+
+def test_restart_required_outputs_accumulates_across_saves(config_path):
+    # Multiple saves accumulate into _restart_required_outputs
+    out = _output(config_path)
+    client = _client(out)
+
+    # First save: web
+    client.post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"web": [{"enabled": True}]}},
+    )
+    assert out._restart_required_outputs == {"web"}
+
+    # Second save: pixoo (accumulates)
+    client.post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"pixoo": [{"enabled": True, "ip": "1.2.3.4"}]}},
+    )
+    assert out._restart_required_outputs == {"web", "pixoo"}
+
+    # Third save: folder (further accumulates)
+    client.post(
+        "/api/config/form",
+        json={"values": {}, "outputs": {"folder": [{"enabled": True, "dir": "./art"}]}},
+    )
+    assert out._restart_required_outputs == {"web", "pixoo", "folder"}
+
+
+def test_api_restart_clears_restart_required_outputs(config_path):
+    # /api/restart clears the per-output restart set like it does the global flag
+    out = _output(config_path)
+    client = _client(out)
+
+    # Set up some restart-required outputs
+    client.post(
+        "/api/config/form",
+        json={
+            "values": {},
+            "outputs": {"web": [{"enabled": True}], "pixoo": [{"enabled": True, "ip": "1.2.3.4"}]},
+        },
+    )
+    assert out._restart_required_outputs == {"web", "pixoo"}
+
+    # Restart clears both the global flag and the per-output set
+    with patch("mediainfo.configui.output.threading.Timer"):
+        resp = client.post("/api/restart")
+
+    assert resp.get_json() == {"ok": True}
+    assert out._restart_required is False
+    assert out._restart_required_outputs == set()
+
+
+# ---------------------------------------------------------------------------
 # /api/restart
 # ---------------------------------------------------------------------------
 
@@ -1927,7 +2072,7 @@ def test_ui_dashboard_value_no_longer_changes_the_served_shell(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = _client(out).get("/")
     assert resp.status_code == 200
-    assert b'data-section="pipeline"' in resp.data
+    assert b'data-section="dashboard"' in resp.data
 
 
 def test_form_page_redirects_regardless_of_ui_value(config_path):
@@ -1940,7 +2085,7 @@ def test_dashboard_page_serves_the_one_shell(config_path):
     out = ConfigUiOutput(_config(), config_path)
     resp = _client(out).get("/dashboard")
     assert resp.status_code == 200
-    assert b'data-section="pipeline"' in resp.data
+    assert b'data-section="dashboard"' in resp.data
 
 
 def test_dashboard_instance_can_read_schema_and_config_for_editing(config_path):
