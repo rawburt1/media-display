@@ -356,8 +356,9 @@ function renderHelpSection() {
     + '<p class="field-help">Changes to <a href="#displays">Displays</a> (any output) or authentication (under '
     + '<a href="#advanced">Advanced</a>) only take effect after a restart - mediainfo only sets those up once, at '
     + 'startup. Everything else (sources, metadata, appearance, library, timing) applies live within a few seconds, '
-    + 'no restart needed. When a restart is pending, a "Restart mediainfo" button appears on the '
-    + '<a href="#dashboard">Dashboard</a>.</p>'
+    + 'no restart needed. An output that actually needs one shows a "Restart required" badge on its own card under '
+    + '<a href="#displays">Displays</a>, so you can tell exactly which one - not just that something does. When a '
+    + 'restart is pending, a "Restart mediainfo" button also appears on the <a href="#dashboard">Dashboard</a>.</p>'
     + '</div>';
 
   var aboutRow = function(label, valueHtml) {
