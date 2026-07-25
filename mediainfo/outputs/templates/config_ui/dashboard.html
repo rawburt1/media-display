@@ -13,20 +13,26 @@
 <div id="shell">
   <aside id="sidebar" aria-label="Configuration sections">
     <div class="brand">mediainfo</div>
+    <!-- [Foreman: 005] Pipeline nests under Dashboard (#dashboard/pipeline)
+         and History nests under Library (#library/history) - see
+         docs/foreman/005.md - so neither gets its own top-level button
+         here anymore; both are still reachable via an in-page sub-nav
+         (see dashboard.js's dashboardSubnavHtml()/librarySubnavHtml()). -->
     <nav id="nav" aria-label="Primary">
       <button type="button" data-section="dashboard">Dashboard</button>
-      <button type="button" data-section="pipeline">Pipeline</button>
       <button type="button" data-section="media">Media</button>
       <button type="button" data-section="metadata">Metadata</button>
       <button type="button" data-section="appearance">Appearance</button>
       <button type="button" data-section="displays">Displays</button>
       <button type="button" data-section="library">Library</button>
-      <button type="button" data-section="history">History</button>
       <button type="button" data-section="health">Health</button>
       <button type="button" data-section="advanced">Advanced</button>
-      <button type="button" data-section="help">Help</button>
     </nav>
     <div class="sidebar-footer">
+      <!-- [Foreman: 005] Help moved here from the primary nav - a fully
+           static reference page, the cheapest of the eleven original
+           top-level items to demote. See docs/foreman/005.md. -->
+      <button type="button" id="help-nav-btn" onclick="onFooterHelpClick()">Help</button>
       <button type="button" id="hitster-safe-btn" onclick="toggleHitsterSafe()">Hitster-safe</button>
       <button type="button" id="theme-toggle" onclick="toggleTheme()">Light / dark</button>
     </div>
@@ -44,13 +50,11 @@
       {% endif %}
 
       <div class="section" id="section-dashboard" tabindex="-1"><h1>Dashboard</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-pipeline" tabindex="-1"><h1>Pipeline</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-media" tabindex="-1"><h1>Media</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-metadata" tabindex="-1"><h1>Metadata</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-appearance" tabindex="-1"><h1>Appearance</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-displays" tabindex="-1"><h1>Displays</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-library" tabindex="-1"><h1>Library</h1><p class="lede">Loading…</p></div>
-      <div class="section" id="section-history" tabindex="-1"><h1>History</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-health" tabindex="-1"><h1>Health</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-advanced" tabindex="-1"><h1>Advanced</h1><p class="lede">Loading…</p></div>
       <div class="section" id="section-help" tabindex="-1"><h1>Help</h1><p class="lede">Loading…</p></div>

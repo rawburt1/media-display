@@ -55,7 +55,6 @@ def test_root_serves_dashboard_shell_by_default(config_path):
     assert resp.status_code == 200
     body = resp.data
     assert b'data-section="dashboard"' in body
-    assert b'data-section="pipeline"' in body
     assert b'data-section="advanced"' in body
 
 
@@ -65,7 +64,7 @@ def test_root_with_ui_dashboard_serves_the_same_shell(config_path):
     out = ConfigUiOutput(_config(ui="dashboard"), config_path)
     resp = _client(out).get("/")
     assert resp.status_code == 200
-    assert b'data-section="pipeline"' in resp.data
+    assert b'data-section="dashboard"' in resp.data
 
 
 def test_form_and_dashboard_routes_still_work(config_path):
@@ -77,7 +76,7 @@ def test_form_and_dashboard_routes_still_work(config_path):
     assert form_resp.status_code == 302
     assert form_resp.headers["Location"].endswith("/#advanced")
     # /dashboard is a plain alias for "/" (same shell, same markup).
-    assert b'data-section="pipeline"' in client.get("/dashboard").data
+    assert b'data-section="dashboard"' in client.get("/dashboard").data
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +101,30 @@ def test_new_shell_nav_has_in_shell_sections(config_path):
         b"advanced",
     ):
         assert b'data-section="' + section + b'"' in body, section
+
+
+def test_pipeline_and_history_are_not_top_level_nav_buttons(config_path):
+    # Foreman 005 (see docs/foreman/005.md): Pipeline nests under Dashboard
+    # and History nests under Library, one hash segment deeper
+    # (#dashboard/pipeline, #library/history) - neither gets its own
+    # #nav button anymore.
+    out = ConfigUiOutput(_config(), config_path)
+    body = _client(out).get("/").data
+    assert b'data-section="pipeline"' not in body
+    assert b'data-section="history"' not in body
+    assert b'id="section-pipeline"' not in body
+    assert b'id="section-history"' not in body
+
+
+def test_help_moved_to_sidebar_footer_not_primary_nav(config_path):
+    # Foreman 005: Help is a fully static reference page, the cheapest of
+    # the eleven original top-level items to demote - it moved into the
+    # sidebar footer next to Theme/Hitster-safe instead of #nav.
+    out = ConfigUiOutput(_config(), config_path)
+    body = _client(out).get("/").data
+    assert b'data-section="help"' not in body
+    assert b'id="help-nav-btn"' in body
+    assert b'id="section-help"' in body  # the section itself is unchanged
 
 
 def test_new_shell_nav_has_no_links_to_the_old_classic_shell(config_path):

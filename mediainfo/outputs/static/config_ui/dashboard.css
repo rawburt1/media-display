@@ -220,6 +220,7 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 .chip {
   background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
   border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  text-decoration: none; display: inline-block;
 }
 .chip:hover { border-color: var(--accent); }
 .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }

@@ -1175,6 +1175,11 @@ function renderHealthSection() {
 // out whatever's mid-typing in the search box - same reasoning as
 // Health/Media/Metadata/Appearance/Displays' applyCardFilters() split
 // (Fas 6/8), just three panels instead of one.
+//
+// [Foreman: 005] History (Fas 9) nests under Library as a second sub-view
+// (#library/history), one level deeper than its old top-level nav entry -
+// see docs/foreman/005.md. Reuses dashboard.js's subnavChips() helper, the
+// same shared chip-row pattern Dashboard/Pipeline uses.
 // ---------------------------------------------------------------------
 var libraryQuery = '';
 var librarySearchResults = null; // null = no search yet, [] = no matches
@@ -1182,8 +1187,16 @@ var librarySearchTimer = null;
 var libraryStats = null;
 var overridesData = null; // { enabled, items: [{title, subtitle, filename}] }
 
+function librarySubnavHtml(active) {
+  return subnavChips([
+    { href: '#library', label: 'Browse', active: active === 'browse' },
+    { href: '#library/history', label: 'History', active: active === 'history' },
+  ]);
+}
+
 function libraryPageHtml() {
-  return '<h1>Library</h1><p class="lede">Browse your music library, manage artwork overrides, and tune library-related settings.</p>'
+  return librarySubnavHtml('browse')
+    + '<h1>Library</h1><p class="lede">Browse your music library, manage artwork overrides, and tune library-related settings.</p>'
     + '<div class="card">'
     + '<h2 class="group-title">Browse</h2>'
     + '<div id="library-stats" class="field-help">Loading…</div>'
@@ -1205,6 +1218,13 @@ function renderLibrarySection(param) {
   var el = document.getElementById('section-library');
   if (param && param.indexOf('artist/') === 0) {
     renderLibraryArtistDetail(param.slice('artist/'.length));
+    return;
+  }
+  if (param === 'history') {
+    // [Foreman: 005] History sub-view - see renderHistorySection()'s old
+    // top-level rendering, ported as-is into Library's section element.
+    el.innerHTML = librarySubnavHtml('history') + historyPageHtml();
+    if (historyData) renderHistoryPanel(); else fetchHistory();
     return;
   }
   if (document.getElementById('library-search')) {
@@ -1387,18 +1407,17 @@ function removeOverride(btn) {
 // but with nothing to edit - just /api/history and its per-entry
 // thumbnail at /api/history/image/<id>. Entries recorded before display
 // tracking existed have an empty `displays` list.
+//
+// [Foreman: 005] Rendered by renderLibrarySection()'s `param === 'history'`
+// branch above (into #section-library, the shared Library section
+// element) rather than its own renderHistorySection()/#section-history -
+// both were removed when History nested under Library. See docs/foreman/005.md.
 // ---------------------------------------------------------------------
 var historyData = null; // { enabled, items: [...] } once loaded
 
 function historyPageHtml() {
   return '<h1>History</h1><p class="lede">What has played recently, and which display(s) showed it.</p>'
     + '<div id="history-panel">Loading…</div>';
-}
-
-function renderHistorySection() {
-  var el = document.getElementById('section-history');
-  el.innerHTML = historyPageHtml();
-  if (historyData) renderHistoryPanel(); else fetchHistory();
 }
 
 function historyEntryCard(item) {
@@ -1438,6 +1457,6 @@ function renderHistoryPanel() {
 function fetchHistory() {
   return apiFetch('/api/history').then(function(r) { return r.json(); }).then(function(data) {
     historyData = data;
-    if (currentSection === 'history') renderHistoryPanel();
+    if (currentSection === 'library' && currentParam === 'history') renderHistoryPanel();
   }).catch(function() {});
 }

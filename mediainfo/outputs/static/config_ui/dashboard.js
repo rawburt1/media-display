@@ -2,19 +2,24 @@
 
 // Dashboard shell (Fas 2-8 of the GUI redesign, H5's single-shell finish
 // line) - the only landing page at "/" now that the classic app.html
-// shell is gone. Dashboard/Pipeline/Media/Metadata/Appearance/Displays/
-// Library/Health/Advanced/Help are all rendered in-shell via hash-based
-// client routing (see renderFromHash() below).
+// shell is gone. Dashboard/Media/Metadata/Appearance/Displays/Library/
+// Health/Advanced are all rendered in-shell via hash-based client routing
+// (see renderFromHash() below). Help lives in the sidebar footer instead
+// of the primary nav; Pipeline and History are one level deeper still -
+// sub-views of Dashboard and Library respectively, reached via the same
+// hash's second segment already used for #component/<id> and
+// #library/artist/<id> (see dashboardSubnavHtml()/librarySubnavHtml() and
+// docs/foreman/005.md - [Foreman: 005]).
 //
 // This file owns the shell chrome (nav/theme/routing/Hitster-safe) plus
 // Dashboard, Pipeline, and Help. Media/Metadata/Appearance/Displays' card-grid
 // rendering (filterable + hideable since Fas 8), Health's action-oriented
-// card grid (Fas 6/8), Library's browse/overrides/settings page (Fas 7),
-// and the per-component detail page (essential/advanced fields, save/
-// discard/test-connection - Fas 4) live in components.js, loaded after
-// this file and sharing its esc()/theme helpers, componentsData/
-// componentsById, and the confirmDiscardIfDirty() guard via the
-// hasUnsavedComponentEdits flag below. Advanced (settings cards, config
+// card grid (Fas 6/8), Library's browse/overrides/settings/history page
+// (Fas 7, Foreman 005), and the per-component detail page (essential/advanced
+// fields, save/discard/test-connection - Fas 4) live in components.js,
+// loaded after this file and sharing its esc()/theme helpers,
+// componentsData/componentsById, and the confirmDiscardIfDirty() guard via
+// the hasUnsavedComponentEdits flag below. Advanced (settings cards, config
 // backups/download, raw YAML editor) lives in advanced.js, loaded last.
 //
 // This file only ever reads from the read-only /api/ui/* endpoints
@@ -30,11 +35,17 @@ var CATEGORY_SECTIONS = ['media', 'metadata', 'appearance', 'displays'];
 // deliberately isn't included: it reuses componentCard()/.component-list
 // for its settings cards, but stays plain - no grid, no hide, no filter.
 var FILTERABLE_SECTIONS = CATEGORY_SECTIONS.concat(['health']);
-var NAV_SECTIONS = ['dashboard', 'pipeline'].concat(CATEGORY_SECTIONS, ['library', 'history', 'health', 'advanced', 'help']);
+// [Foreman: 005] Pipeline and History no longer have their own top-level
+// nav entry - they're sub-views of dashboard/library, selected by the
+// hash's second segment (see parseHash()'s aliasing and
+// dashboardSubnavHtml()/librarySubnavHtml()). Help still resolves as a
+// section (its markup/route are unchanged) even though its nav trigger
+// moved to the sidebar footer - see dashboard.html.
+var NAV_SECTIONS = ['dashboard'].concat(CATEGORY_SECTIONS, ['library', 'health', 'advanced', 'help']);
 var SECTION_TITLES = {
-  dashboard: 'Dashboard', pipeline: 'Pipeline', media: 'Media',
+  dashboard: 'Dashboard', media: 'Media',
   metadata: 'Metadata', appearance: 'Appearance', displays: 'Displays',
-  library: 'Library', history: 'History', health: 'Health', advanced: 'Advanced', help: 'Help', wizard: 'Setup',
+  library: 'Library', health: 'Health', advanced: 'Advanced', help: 'Help', wizard: 'Setup',
 };
 // UiComponent.category uses "display" (singular); the nav/section id uses
 // "displays" - this is the one place that mapping happens. "library"/
@@ -142,9 +153,22 @@ function confirmDiscardIfDirty() {
   return true;
 }
 
+// [Foreman: 005] Back-compat aliases for pre-nesting bookmarks/in-app
+// links: "#pipeline" and "#history" were their own top-level sections
+// before this task moved them one level deeper. Rather than let an old
+// hash silently fall through to the Dashboard default (parseHash()'s
+// normal behavior for any unrecognized head segment), route it straight
+// to its new nested location - see docs/foreman/005.md.
+var LEGACY_SECTION_ALIASES = {
+  pipeline: { section: 'dashboard', param: 'pipeline' },
+  history: { section: 'library', param: 'history' },
+};
+
 function parseHash() {
   var raw = location.hash.replace('#', '');
   var parts = raw.split('/');
+  var alias = LEGACY_SECTION_ALIASES[parts[0]];
+  if (alias) return { section: alias.section, param: alias.param };
   var section = (NAV_SECTIONS.indexOf(parts[0]) !== -1 || parts[0] === 'component' || parts[0] === 'wizard') ? parts[0] : 'dashboard';
   var param = parts.slice(1).join('/') || null;
   return { section: section, param: param };
@@ -168,15 +192,31 @@ function renderFromHash() {
   document.querySelectorAll('.section').forEach(function(s) {
     s.classList.toggle('active', s.id === 'section-' + currentSection);
   });
-  document.getElementById('topbar-title').textContent = SECTION_TITLES[currentSection] || '';
+  document.getElementById('topbar-title').textContent = subsectionTitle(currentSection, currentParam);
   if (document.body.classList.contains('nav-open')) closeNav();
   renderSection(currentSection, currentParam);
+}
+
+// [Foreman: 005] Pipeline/History no longer have their own SECTION_TITLES
+// entry (they're not their own section anymore) - special-case their
+// nested title here so the topbar still reads "Pipeline"/"History" while
+// viewing that sub-view, same as it did when each was a top-level section.
+function subsectionTitle(section, param) {
+  if (section === 'dashboard' && param === 'pipeline') return 'Pipeline';
+  if (section === 'library' && param === 'history') return 'History';
+  return SECTION_TITLES[section] || '';
 }
 
 document.getElementById('nav').addEventListener('click', function(e) {
   var btn = e.target.closest('button[data-section]');
   if (btn && confirmDiscardIfDirty()) location.hash = btn.dataset.section;
 });
+// [Foreman: 005] Help's nav trigger lives in the sidebar footer, not
+// #nav, so it needs its own click handler - same confirmDiscardIfDirty()
+// guard the #nav listener above applies to every other nav button.
+function onFooterHelpClick() {
+  if (confirmDiscardIfDirty()) location.hash = 'help';
+}
 // Delegated guard for every in-shell "#..." link (component/list cards,
 // "Back to <category>" links) - real (non-hash) links, e.g. the auth
 // banner's "/form" link, are untouched.
@@ -190,11 +230,9 @@ window.addEventListener('beforeunload', function(e) {
 });
 
 function renderSection(name, param) {
-  if (name === 'dashboard') renderDashboard();
-  else if (name === 'pipeline') renderPipeline();
+  if (name === 'dashboard') { if (param === 'pipeline') renderPipeline(); else renderDashboard(); }
   else if (CATEGORY_SECTIONS.indexOf(name) !== -1) renderCategorySection(name);
   else if (name === 'library') renderLibrarySection(param);
-  else if (name === 'history') renderHistorySection();
   else if (name === 'health') renderHealthSection();
   else if (name === 'advanced') renderAdvancedSection();
   else if (name === 'help') renderHelpSection();
@@ -244,16 +282,37 @@ function runRestartAction(href) {
   fetchDashboard();
 }
 
+// [Foreman: 005] Shared sub-nav chip row for a section that nests a
+// second view one level deeper via the hash's second segment (Dashboard/
+// Pipeline, Library/History) - reuses the existing filter-bar chip look
+// (see .filters/.chip in dashboard.css) rather than introducing a new
+// tab pattern this shell doesn't otherwise have. Plain <a href="#..."> so
+// the existing #main delegated click guard (confirmDiscardIfDirty()) and
+// browser back/forward both keep working the same way every other
+// in-shell hash link already does.
+function subnavChips(items) {
+  return '<div class="filters" style="margin-bottom:20px;">' + items.map(function(it) {
+    return '<a class="chip' + (it.active ? ' active' : '') + '" href="' + it.href + '">' + esc(it.label) + '</a>';
+  }).join('') + '</div>';
+}
+
+function dashboardSubnavHtml(active) {
+  return subnavChips([
+    { href: '#dashboard', label: 'Overview', active: active === 'dashboard' },
+    { href: '#dashboard/pipeline', label: 'Pipeline', active: active === 'pipeline' },
+  ]);
+}
+
 function renderDashboard() {
   var el = document.getElementById('section-dashboard');
   if (!dashboardData) {
-    el.innerHTML = '<h1>Dashboard</h1><p class="lede">Loading…</p>';
+    el.innerHTML = dashboardSubnavHtml('dashboard') + '<h1>Dashboard</h1><p class="lede">Loading…</p>';
     return;
   }
   var d = dashboardData;
   var np = d.now_playing;
 
-  var html = '<h1>Dashboard</h1><p class="lede">A quick look at what mediainfo is doing right now, and anything that needs your attention.</p>';
+  var html = dashboardSubnavHtml('dashboard') + '<h1>Dashboard</h1><p class="lede">A quick look at what mediainfo is doing right now, and anything that needs your attention.</p>';
   html += '<div class="bento-grid">';
 
   html += '<div class="bento-item bento-item--now-playing">';
@@ -406,13 +465,16 @@ function pipelineStage(label, ids) {
 }
 
 function renderPipeline() {
-  var el = document.getElementById('section-pipeline');
+  // [Foreman: 005] Pipeline is a Dashboard sub-view now (#dashboard/pipeline)
+  // - it renders into the same section element Dashboard's overview does,
+  // not a dedicated #section-pipeline (removed from dashboard.html).
+  var el = document.getElementById('section-dashboard');
   if (!pipelineData || !componentsData) {
-    el.innerHTML = '<h1>Pipeline</h1><p class="lede">Loading…</p>';
+    el.innerHTML = dashboardSubnavHtml('pipeline') + '<h1>Pipeline</h1><p class="lede">Loading…</p>';
     return;
   }
   var pipeline = pipelineData[0] || {};
-  var html = '<h1>Pipeline</h1>'
+  var html = dashboardSubnavHtml('pipeline') + '<h1>Pipeline</h1>'
     + '<p class="lede">What’s currently enabled at each stage of the media flow.</p>';
   html += '<div class="card"><div class="pipeline-grid">' + PIPELINE_STAGES.map(function(stage) {
     return pipelineStage(stage.label, pipeline[stage.key] || []);
@@ -453,7 +515,7 @@ function renderPipeline() {
 function fetchPipeline() {
   return apiFetch('/api/ui/pipelines').then(function(r) { return r.json(); }).then(function(data) {
     pipelineData = data;
-    if (currentSection === 'pipeline') renderPipeline();
+    if (currentSection === 'dashboard' && currentParam === 'pipeline') renderPipeline();
   }).catch(function() {});
 }
 
@@ -609,7 +671,7 @@ function fetchComponents() {
     componentsData = data;
     componentsById = {};
     data.forEach(function(c) { componentsById[c.id] = c; });
-    if (currentSection === 'pipeline') renderPipeline();
+    if (currentSection === 'dashboard' && currentParam === 'pipeline') renderPipeline();
     else if (currentSection === 'library') {
       // Same reasoning as the filterable sections below, but Library's
       // settings cards are only one part of a page that also holds live
@@ -640,11 +702,18 @@ function fetchComponents() {
 // ---------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------
+// [Foreman: 005] Pipeline/History are now identified by section + param
+// (not their own currentSection value) - see docs/foreman/005.md.
 setInterval(function() {
   fetchDashboard();
-  if (currentSection === 'pipeline') { fetchPipeline(); fetchComponents(); fetchPriorityLists().then(renderPipeline); }
-  else if (currentSection === 'history') { fetchHistory(); }
-  else if (currentSection === 'health' || currentSection === 'library' || currentSection === 'advanced' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) { fetchComponents(); }
+  if (currentSection === 'dashboard') {
+    if (currentParam === 'pipeline') { fetchPipeline(); fetchComponents(); fetchPriorityLists().then(renderPipeline); }
+  } else if (currentSection === 'library') {
+    if (currentParam === 'history') { fetchHistory(); }
+    else { fetchComponents(); }
+  } else if (currentSection === 'health' || currentSection === 'advanced' || CATEGORY_SECTIONS.indexOf(currentSection) !== -1) {
+    fetchComponents();
+  }
 }, 15000);
 
 Promise.all([fetchDashboard(), fetchPipeline(), fetchComponents(), fetchPriorityLists()]).then(function() {

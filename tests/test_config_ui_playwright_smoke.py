@@ -149,7 +149,6 @@ def test_nav_sections_all_render_without_console_errors(page):
     page.wait_for_timeout(400)
     for section in (
         "dashboard",
-        "pipeline",
         "media",
         "metadata",
         "appearance",
@@ -160,6 +159,20 @@ def test_nav_sections_all_render_without_console_errors(page):
     ):
         page.click(f'#nav button[data-section="{section}"]')
         page.wait_for_timeout(300)
+    # Pipeline (nested under Dashboard) and History (nested under Library)
+    # aren't their own #nav buttons anymore (Foreman 005, see
+    # docs/foreman/005.md) - exercised via their in-page sub-nav links.
+    page.click('#nav button[data-section="dashboard"]')
+    page.wait_for_timeout(300)
+    page.click('a[href="#dashboard/pipeline"]')
+    page.wait_for_timeout(300)
+    page.click('#nav button[data-section="library"]')
+    page.wait_for_timeout(300)
+    page.click('a[href="#library/history"]')
+    page.wait_for_timeout(300)
+    # Help moved to the sidebar footer, not #nav.
+    page.click("#help-nav-btn")
+    page.wait_for_timeout(300)
     assert page.console_errors == []
 
 
