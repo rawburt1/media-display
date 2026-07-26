@@ -96,6 +96,15 @@ class UiComponent:
     # build_components() for where this gets set.
     activity: Optional[str] = None
     activity_label: Optional[str] = None
+    # A small, hand-curated "commonly used" marker (Foreman 006) - only
+    # meaningful for component_type source/enricher/output (see
+    # ui_builder.py's _COMMON_SOURCE_TYPES/_COMMON_ENRICHER_TYPES/
+    # _COMMON_OUTPUT_TYPES); everything else defaults False. Used by the
+    # Media/Metadata/Displays card grids to surface likely-relevant plugins
+    # first on a fresh, nothing-configured-yet install - a static curation
+    # signal, deliberately independent of `enabled` (see components.js's
+    # card sort, which combines both).
+    common: bool = False
 
 
 @dataclasses.dataclass

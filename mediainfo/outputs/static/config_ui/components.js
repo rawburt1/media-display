@@ -48,6 +48,11 @@ function hueForId(id) {
 
 function componentCard(c) {
   var badge = '<span class="badge b-' + esc(c.status) + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>';
+  // [Foreman: 006] "Popular" only earns a spot on an otherwise-unremarkable
+  // card - an enabled/configured component already has its own status
+  // badge (Connected/Enabled/...) making it self-evidently relevant, so
+  // this would just be visual noise there.
+  var popularBadge = (c.common && !c.enabled) ? '<span class="badge badge-popular">Popular</span>' : '';
   var warning = c.warnings && c.warnings.length ? '<div class="warning">' + esc(c.warnings[0]) + '</div>' : '';
   var accent = '';
   var cardClass = 'component-card';
@@ -57,10 +62,26 @@ function componentCard(c) {
     accent = '<div class="component-card-accent" style="background:linear-gradient(135deg, hsl(' + hue + ',70%,55%), hsl(' + ((hue + 45) % 360) + ',70%,55%));"></div>';
   }
   return '<a class="' + cardClass + '" href="#component/' + esc(c.id) + '">' + accent
-    + '<div class="body"><div class="name">' + esc(c.name) + '</div>' + badge
+    + '<div class="body"><div class="name">' + esc(c.name) + '</div>' + badge + popularBadge
     + (c.description ? '<div class="desc">' + esc(c.description) + '</div>' : '')
     + warning
     + '</div></a>';
+}
+
+// [Foreman: 006] Enabled first (already relevant to *this* household),
+// then the curated "common" markers (relevant to most households, even a
+// fresh install with nothing configured yet - see ui_builder.py's
+// _COMMON_SOURCE_TYPES/_COMMON_ENRICHER_TYPES/_COMMON_OUTPUT_TYPES), then
+// alphabetical - a stable sort so ties keep the API's own order. Two
+// independent signals (enabled vs. common) rather than one, since neither
+// alone covers both the fresh-install and the returning-user case.
+function sortCardsByRelevance(items) {
+  return items.slice().sort(function(a, b) {
+    var rank = function(c) { return (c.enabled ? 0 : 2) + (c.common ? 0 : 1); };
+    var diff = rank(a) - rank(b);
+    if (diff !== 0) return diff;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 function renderCategorySection(name) {
@@ -76,7 +97,7 @@ function renderCategorySection(name) {
   html += filterBarHtml(name, sectionItems);
   var any = false;
   groups.forEach(function(group) {
-    var items = sectionItems.filter(function(c) { return c.component_type === group.type; });
+    var items = sortCardsByRelevance(sectionItems.filter(function(c) { return c.component_type === group.type; }));
     if (!items.length) return;
     any = true;
     html += '<div class="card-group">';

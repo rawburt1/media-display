@@ -47,6 +47,23 @@ from mediainfo.configui.ui_model import (
 # category and from the pipeline's display_component_ids.
 _NON_DISPLAY_OUTPUT_TYPES = frozenset({"config", "themes"})
 
+# Curated "commonly used" markers (Foreman 006) - a small, hand-picked
+# subset per registry family, deliberately static rather than derived from
+# any usage data (none exists) or from being enabled (that's a *different*,
+# complementary signal - see build_components()'s common=... wiring below).
+# The point is a fresh, nothing-configured-yet install's Media/Metadata/
+# Displays pages surfacing likely-relevant plugins first instead of one
+# flat alphabetical list of 15-19 cards - see docs/architecture-usability-
+# review-2026-07.md's discoverability finding. Picked for broad
+# name-recognition / no-signup-friction, not popularity data that doesn't
+# exist; revisit by hand if that judgment ages poorly, there's no
+# mechanism here that self-corrects.
+_COMMON_SOURCE_TYPES = frozenset({"kodi", "plex", "spotify", "sonos", "homeassistant", "jellyfin"})
+_COMMON_ENRICHER_TYPES = frozenset(
+    {"musicbrainz", "fanarttv", "tmdb", "thetvdb", "wikipedia", "lrclib"}
+)
+_COMMON_OUTPUT_TYPES = frozenset({"web", "pixoo", "mqtt", "folder"})
+
 # Human-readable labels for PageLink.name (AppServices.page_links) - a
 # presentation concern, so it lives here rather than in wiring.py (core).
 # Deliberately its own map rather than reusing config_schema._TYPE_INFO's
@@ -277,7 +294,13 @@ def _registry_components(
     health_by_key: Dict[str, dict],
     supports_test: bool,
     test_href_fmt: Optional[str],
+    common_types: FrozenSet[str] = frozenset(),
 ) -> List[UiComponent]:
+    # [Foreman: 006] common_types marks a small, hand-curated subset of
+    # type_name as "commonly used" (see _COMMON_SOURCE_TYPES/
+    # _COMMON_ENRICHER_TYPES above) - empty (the default, used for "idle",
+    # which isn't part of the crowded-list problem this addresses) means no
+    # component in this call reads as common.
     components = []
     for type_name in registry:
         fields = schema_section.get(type_name, [])
@@ -312,6 +335,7 @@ def _registry_components(
                     supports_test,
                     test_href_fmt.format(type_name) if test_href_fmt else None,
                 ),
+                common=type_name in common_types,
                 # Only ever present for sources - health.py only sets
                 # these two keys in its sources loop (see
                 # mediainfo.status.Activity), so this naturally stays
@@ -385,6 +409,7 @@ def _output_components(
                 # "N instances configured" via its tab row.
                 warnings=_warnings_for(enabled, missing, health_entry),
                 actions=_default_actions(True, "/api/test/output"),
+                common=type_name in _COMMON_OUTPUT_TYPES,  # [Foreman: 006]
             )
         )
     return components
@@ -591,6 +616,7 @@ def build_components(
         sources_health,
         supports_test=True,
         test_href_fmt="/api/test/source/{}",
+        common_types=_COMMON_SOURCE_TYPES,
     )
     components += _registry_components(
         "idle",
@@ -615,6 +641,7 @@ def build_components(
         enrichers_health,
         supports_test=True,
         test_href_fmt="/api/test/enricher/{}",
+        common_types=_COMMON_ENRICHER_TYPES,
     )
     components += _text_enricher_components(text_enrichers_raw)
     components += _output_components(

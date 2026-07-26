@@ -103,6 +103,14 @@ a.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px
 .badge.a-playing, .badge.a-paused, .badge.a-idle, .badge.a-sleeping, .badge.a-unknown {
   background: transparent; border: 1px solid currentColor; margin-left: 6px;
 }
+
+/* [Foreman: 006] "Popular" (componentCard()'s popularBadge) - a curation
+   hint, not a health/activity signal, so it's outlined + muted like the
+   Activity badges above rather than sharing the status badge's filled
+   colors (which mean ok/warn/error) - never implies anything is wrong. */
+.badge.badge-popular {
+  background: transparent; border: 1px solid var(--muted); color: var(--muted); margin-left: 6px;
+}
 .a-playing { color: var(--ok); }
 .a-paused { color: var(--accent); }
 .a-idle { color: var(--muted); }
