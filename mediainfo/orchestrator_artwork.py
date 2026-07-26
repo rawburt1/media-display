@@ -42,6 +42,18 @@ logger = logging.getLogger(__name__)
 # the common case of a network call that simply never returns.
 _DEFAULT_ENRICHMENT_DEADLINE_SECONDS = 30.0
 
+# How long prefetch_images() waits for all of an item's images to finish
+# downloading concurrently before moving on (C2 in
+# docs/architecture-usability-review-2026-07.md). Unlike enrichers, image
+# downloads have no ordering dependency on each other, so real concurrency
+# here doesn't change behavior - only latency. Each individual download
+# already has its own 10s request timeout (see ImageCache.get_path), so this
+# is a backstop for the aggregate wait, not the primary bound. Best-effort:
+# an image not yet cached when this deadline passes is simply left for
+# show_image_for_output's existing lazy-fetch-with-fallback path, exactly as
+# before this method existed.
+_ARTWORK_PREFETCH_DEADLINE_SECONDS = 20.0
+
 
 def _enricher_deadline(enricher: Any, default: float) -> float:
     """An enricher's own `config.timeout_seconds`, if it has one, takes
@@ -68,6 +80,7 @@ class _ArtworkPipeline:
         overrides: Optional[ArtworkOverrideStore] = None,
         text_enrichers: Optional[List[TextEnricher]] = None,
         enrichment_deadline_seconds: float = _DEFAULT_ENRICHMENT_DEADLINE_SECONDS,
+        artwork_prefetch_deadline_seconds: float = _ARTWORK_PREFETCH_DEADLINE_SECONDS,
     ):
         self.enrichers = enrichers
         self.text_enrichers = text_enrichers or []
@@ -78,6 +91,7 @@ class _ArtworkPipeline:
         self._poster_store = poster_store
         self._overrides = overrides
         self.enrichment_deadline_seconds = enrichment_deadline_seconds
+        self.artwork_prefetch_deadline_seconds = artwork_prefetch_deadline_seconds
 
     def prepare_item(
         self,
@@ -143,6 +157,7 @@ class _ArtworkPipeline:
         self.apply_artwork_override(now_playing)
         for text_enricher in self.text_enrichers:
             self._run_enricher_with_deadline(text_enricher, text_enricher.enrich, now_playing)
+        self.prefetch_images(now_playing)
 
     def _run_enricher_with_deadline(
         self, enricher: Any, func: Callable[[NowPlaying], None], now_playing: NowPlaying
@@ -165,6 +180,39 @@ class _ArtworkPipeline:
                 type(enricher).__name__,
                 deadline,
             )
+        finally:
+            pool.shutdown(wait=False)
+
+    def prefetch_images(self, now_playing: NowPlaying) -> None:
+        """Download every enriched image into the cache now, concurrently,
+        so a later show_image_for_output() call for each output finds it
+        already cached instead of blocking on a fresh download the first
+        time that output pushes it (C2 in
+        docs/architecture-usability-review-2026-07.md).
+        """
+        images = now_playing.images
+        if not images:
+            return
+        tier: CacheTier = "music" if now_playing.media_type == "music" else "default"
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(images))
+        try:
+            futures = [
+                pool.submit(self._safe_call, lambda artwork=artwork: self.cache.get_path(artwork, tier=tier))
+                for artwork in images
+            ]
+            _done, not_done = concurrent.futures.wait(
+                futures, timeout=self.artwork_prefetch_deadline_seconds
+            )
+            if not_done:
+                logger.warning(
+                    "%d of %d artwork prefetch(es) for %r still in progress after "
+                    "%.0fs - moving on, show_image_for_output will fetch lazily if "
+                    "still needed",
+                    len(not_done),
+                    len(images),
+                    now_playing.title,
+                    self.artwork_prefetch_deadline_seconds,
+                )
         finally:
             pool.shutdown(wait=False)
 

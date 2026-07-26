@@ -845,7 +845,15 @@ def test_music_artwork_is_fetched_as_permanent():
     )
     orchestrator._tick()
 
-    cache.get_path.assert_called_once_with(artwork, tier="music")
+    # Called twice for this single-output tick: once by enrich_item's
+    # prefetch_images() (C2 in docs/architecture-usability-review-2026-07.md)
+    # and once by show_image_for_output() - a real ImageCache treats the
+    # second as a cheap cache hit, but this MagicMock can't tell the
+    # difference, so assert on the tier every call used rather than a call
+    # count of exactly one.
+    for call in cache.get_path.call_args_list:
+        assert call == ((artwork,), {"tier": "music"})
+    assert cache.get_path.call_count == 2
 
 
 def test_movie_artwork_is_not_fetched_as_permanent():
@@ -866,7 +874,11 @@ def test_movie_artwork_is_not_fetched_as_permanent():
     )
     orchestrator._tick()
 
-    cache.get_path.assert_called_once_with(artwork, tier="default")
+    # See test_music_artwork_is_fetched_as_permanent above for why this is
+    # 2 calls, not 1, since prefetch_images() was added (C2).
+    for call in cache.get_path.call_args_list:
+        assert call == ((artwork,), {"tier": "default"})
+    assert cache.get_path.call_count == 2
 
 
 def _tick_with_now_playing(now_playing):
