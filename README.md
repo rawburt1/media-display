@@ -11,158 +11,81 @@ a Ulanzi TC001, a Google Nest Hub, a simple local web page, and more.
 
 Currently implemented:
 
-- **Sources**: Kodi (movie/episode posters+fanart, music), Plex (movie/episode
-  posters+fanart, music), Jellyfin and Emby (movie/episode posters+fanart,
-  music, via the Sessions API), Sonos (album art), Spotify (current playback
-  via the Web API), Mopidy (music, via its core JSON-RPC API - backend-
-  agnostic, works the same regardless of which Mopidy backend is actually
-  playing), MPD/Music Player Daemon (music, including embedded/folder
-  cover art when the server supports it), Logitech Media Server/Squeezebox
-  (music, auto-selects the active player across a multi-player household
-  unless `player_id` is set), VLC (any media, via VLC's built-in web/HTTP
-  interface - requires enabling it and setting a password in VLC's own
-  preferences), foobar2000 (music, via the Beefweb Remote Control plugin -
-  https://github.com/hyperblast/beefweb), Apple TV (any app, via the
-  Companion/MRP/AirPlay protocols), **the YouTube *app* on Android TV**
-  (⚠️ not YouTube in general - this works only via ADB against an actual
-  Android TV device running the YouTube app, e.g. an Nvidia Shield; it
-  cannot see YouTube played in a browser, on a phone, on a smart TV's own
-  built-in app, or anywhere else - reports a song only when the video
-  looks like one, see "Extending" below), Android TV / Nvidia Shield (via
-  ADB, generic "now playing" from any other app on the same device),
-  vinyl turntable (audio recognition via
-  [vinyl_recognizer](vinyl_recognizer/) + AudD), Home Assistant (polls a
-  single media_player entity via HA's REST API - a fallback for devices a
-  more specific source can't read directly, e.g. a tvOS app that doesn't
-  populate Apple's own now-playing API), generic Chromecast/Cast (polls
-  any configured Cast device's media status directly, so anything cast
-  to it - Netflix, Disney+, YouTube, Spotify Connect, etc. - is picked up
-  regardless of which app is casting, unlike the Shield source which only
-  sees apps running locally on that device), a companion **browser
-  extension** (see [browser-extension/](browser-extension/)) for media
-  playing in a browser tab - YouTube, Spotify Web, Netflix, Disney+, SVT
-  Play, Plex Web - pushed to a small WebSocket server this source runs,
-  rather than polled
-- **Enrichers**: fanart.tv and thetvdb.com add extra posters/fanart for
-  movies and TV shows (matched via tmdb/imdb/tvdb ids); fanart.tv and
-  Discogs also add (and prefer) album covers for music, matched via
-  MusicBrainz ids or, failing that, by looking up the artist/album name
-  (e.g. for Sonos) via the MusicBrainz API or Discogs' search; Last.fm adds
-  artist photos; Wikipedia adds an artist bio / movie info / TV show info
-  summary plus a photo, for the `info` output and RSS/Atom feeds below;
-  Sonarr/Radarr/Lidarr each match against your own library (rather than a
-  public catalog) and add a studio/genres/discography plus poster/fanart/
-  album art - see below; TMDb and
-  OMDb each add a 0-10 rating for movies/TV shows, also for the `info`
-  output - both can be enabled at once without conflict, since neither
-  overwrites a rating the other already found
-- **Outputs**: Pixoo64 (local HTTP API), web page (`http://<host>:8090/`),
-  and Google Nest Hub (Cast) each rotate between all available poster/fanart
-  images for the current item on their own randomized schedule - each one
-  picks its own shuffled order, so they don't all show the same image at
-  the same time; folder export mirrors all of the current item's artwork to
-  a local directory; Ulanzi TC001 (AWTRIX3) shows the current item as
-  scrolling text instead of artwork (e.g. "Artist - Song",
-  "Title (Year)", "Show s01e01"); video output serves a full-screen web
-  player that shows idle stock-footage clips (Pexels/Pixabay) and switches
-  to artwork when something plays; info output (`http://<host>:8090/info`)
-  pairs the current artwork at its original (high) resolution with the
-  Wikipedia summary text; MQTT publishes now-playing state to a broker topic;
-  feed output serves RSS/Atom feeds describing only the currently playing
-  item, including the Wikipedia summary when available; config output
-  (`http://<host>:8090/config`) is a web page for editing every config option
-  above (sources, outputs, enrichers, idle sources, polling intervals,
-  including most list-valued fields like Sonos speaker IPs) without
-  hand-editing YAML - saved changes are hot-reloaded within a few seconds,
-  and it has a "Hitster-safe" button that suppresses song/artist/album
-  display across *every* output (falling back to idle wallpapers/text
-  instead) while it's on, so a song's title/artist never leaks onto a
-  screen mid-round of Hitster or similar music-guessing games; themes
-  output (`http://<host>:8090/themes`) is a completely separate full-screen
-  display from `web` that layers selectable, combinable Display Themes on
-  top of the current artwork - enabled themes render simultaneously into
-  one combined look. Off by default; ships today with Color Palette (a
-  strip of the artwork's dominant colors), Blurred Background (a heavily
-  blurred, darkened copy of the artwork filling the screen behind it),
-  Word Cloud (built from lyrics for music, or the plot summary for
-  movies/TV, colored from the artwork - reuses the same cached word cloud
-  described under mediadata above for music), Glow (a soft, slowly
-  pulsing ambient glow behind the artwork, colored from it), Ken Burns
-  (a slow, continuous pan/zoom on the artwork, the classic documentary
-  effect), Vinyl (shows the album art as a spinning record - music only),
-  Media Mosaic (a grid of other artwork for the same item - other albums,
-  other posters/fanart - alongside the current pick), Timeline (a
-  list of the artist's other albums - music only, needs `enrichers.lidarr`
-  configured or it just shows the current album), Equalizer (a
-  decorative bar/wave animation suggesting audio activity - music only,
-  not driven by a real audio signal), and Lyrics Ticker (a karaoke-style
-  ticker highlighting the current line of time-synced lyrics - music
-  only, needs synced lyrics available e.g. via `text_enrichers.lrclib`),
-  Now Playing Progress (a real-data full-width playback progress
-  border along one screen edge - works for music, movies, and TV alike),
-  Cast/Crew Mosaic (a grid of top-billed cast headshots - movie/TV
-  only, needs `enrichers.tmdb.fetch_cast` enabled), and Artist Spotlight
-  (a portrait card with the artist's photo and a short bio blurb),
-  with more themes still being added - see the Display Themes roadmap.
-  `outputs.themes[].auto_rotate` can
-  optionally cycle between named presets (subsets of the enabled themes
-  above) on a timer, instead of always showing all of them at once
-- **Idle wallpapers**: Unsplash, Pexels, local folders (random pictures
-  from your own collection - see `idle.local` below), Last.fm scrobble
-  history (album art from your recent scrobbles), and/or your own music
-  library (random covers from imported albums) - while nothing is
-  playing, downloads/picks a fresh batch of wallpapers every
-  `rotation_interval_seconds`, and each output independently rotates
-  through that batch on its own randomized schedule (same as the
-  now-playing artwork rotation above). Multiple idle sources can be
-  enabled at once, each refetched independently on its own schedule, but
-  they're never mixed within a single batch - `idle_priority` (an ordered
-  list of source names) picks which one supplies any given batch: the
-  first one in that list with wallpapers available wins, so e.g. enabling
-  both Unsplash and Pexels means one being temporarily unreachable falls
-  through to the other instead of blanking outputs. `idle_mode: random`
-  (instead of the default `priority`) picks the winning source at random
-  each batch instead of always preferring the same one first - either
-  way, exactly one source's pictures show per batch, never blended. The
-  last successfully-fetched batch is also persisted to disk and reloaded
-  on restart, so a source being down right when the process restarts
-  doesn't blank outputs either, as long as the previous batch's cached
-  image files haven't since been purged (see `cache.idle_max_age_hours`).
-- **Manual artwork overrides**: pin a specific image for a title/subtitle
-  that never gets a good poster from any enricher, via the config UI's
-  "Overrides" page - on by default (`overrides.enabled: true`)
-- **Alerting**: optionally POST a webhook (Slack, Discord, ntfy.sh,
-  healthchecks.io, or any endpoint that accepts JSON) once an output has
-  been continuously failing for a while (e.g. a Pixoo64 that's gone
-  unreachable on the network) - off by default, see `alerts` below
-- Disk cache for downloaded artwork (each image is only fetched once,
-  and unused files are purged after `cache.max_age_days`)
-- `/health` endpoint (on the web output) reports uptime, the current
-  now-playing item, and per-source/output/enricher status - JSON by default,
-  or an HTML dashboard when requested with `Accept: text/html`. The JSON
-  payload is a versioned schema (`schema_version`) - see
-  `docs/health-api-reference.md` for the full field-by-field reference if
-  you're scripting against it.
+### Sources
 
-- **`mediadata`**: a unified, human-browsable on-disk cache
-  (`mediainfo/media_data_store.py`) organizing artwork/lyrics/metadata as
-  `movies/<Title> (<Year>)/poster.jpg`, `music/<Artist>/artist.jpg`,
-  `music/<Artist>/<Album> (<Year>)/albumart.jpg`, etc., each with a
-  `metadata.json` recording where each file came from and when it was
-  last checked/refreshed - a cache-first design with a per-media-type
-  refresh policy (`mediadata.refresh`, see config.example.yaml), instead
-  of today's flat `cache/` directory. Off by default
-  (`enrichers.mediadata`/`text_enrichers.mediadata`); when enabled, real
-  fetches happen for movie/series posters+fanart (TMDb, falling back to
-  fanart.tv for movies), music artist photo (Wikipedia, falling back to
-  Last.fm) + album art (MusicBrainz, falling back to Discogs), and
-  lyrics (LRCLIB) - existing `cache/`/`overrides/`/`posters/` are
-  untouched and keep working exactly as before; this doesn't replace
-  them. A further opt-in switch (`enrichers.mediadata.wordcloud.enabled`)
-  renders a lyrics word-cloud PNG per track, colored from its album art,
-  once both are cached - stored next to the track's `.lrc` file and shown
-  on the web output only (not on Pixoo/Nest Hub/etc., where dense text
-  doesn't read well).
+- **Kodi** — movie/episode posters+fanart, music
+- **Plex** — movie/episode posters+fanart, music
+- **Jellyfin and Emby** — movie/episode posters+fanart, music, via the Sessions API
+- **Sonos** — album art
+- **Spotify** — current playback via the Web API
+- **Mopidy** — music, via its core JSON-RPC API - backend-agnostic, works the same regardless of which Mopidy backend is actually playing
+- **MPD / Music Player Daemon** — music, including embedded/folder cover art when the server supports it
+- **Logitech Media Server / Squeezebox** — music, auto-selects the active player across a multi-player household unless `player_id` is set
+- **VLC** — any media, via VLC's built-in web/HTTP interface - requires enabling it and setting a password in VLC's own preferences
+- **foobar2000** — music, via the [Beefweb Remote Control plugin](https://github.com/hyperblast/beefweb)
+- **Apple TV** — any app, via the Companion/MRP/AirPlay protocols
+- **The YouTube *app* on Android TV** — ⚠️ not YouTube in general: this works only via ADB against an actual Android TV device running the YouTube app, e.g. an Nvidia Shield; it cannot see YouTube played in a browser, on a phone, on a smart TV's own built-in app, or anywhere else. Reports a song only when the video looks like one - see "Extending" below.
+- **Android TV / Nvidia Shield** — via ADB, generic "now playing" from any other app on the same device
+- **Vinyl turntable** — audio recognition via [vinyl_recognizer](vinyl_recognizer/) + AudD
+- **Home Assistant** — polls a single `media_player` entity via HA's REST API - a fallback for devices a more specific source can't read directly, e.g. a tvOS app that doesn't populate Apple's own now-playing API
+- **Generic Chromecast/Cast** — polls any configured Cast device's media status directly, so anything cast to it (Netflix, Disney+, YouTube, Spotify Connect, etc.) is picked up regardless of which app is casting, unlike the Shield source which only sees apps running locally on that device
+- **Browser extension** (see [browser-extension/](browser-extension/)) — for media playing in a browser tab: YouTube, Spotify Web, Netflix, Disney+, SVT Play, Plex Web - pushed to a small WebSocket server this source runs, rather than polled
+
+### Enrichers
+
+- **fanart.tv** and **thetvdb.com** — extra posters/fanart for movies and TV shows (matched via tmdb/imdb/tvdb ids)
+- **fanart.tv** and **Discogs** — also add (and prefer) album covers for music, matched via MusicBrainz ids or, failing that, by looking up the artist/album name (e.g. for Sonos) via the MusicBrainz API or Discogs' search
+- **Last.fm** — artist photos
+- **Wikipedia** — an artist bio / movie info / TV show info summary plus a photo, for the `info` output and RSS/Atom feeds below
+- **Sonarr / Radarr / Lidarr** — each match against your own library (rather than a public catalog) and add a studio/genres/discography plus poster/fanart/album art - see below
+- **TMDb** and **OMDb** — each add a 0-10 rating for movies/TV shows, also for the `info` output. Both can be enabled at once without conflict, since neither overwrites a rating the other already found.
+
+### Outputs
+
+- **Pixoo64** (local HTTP API), **web page** (`http://<host>:8090/`), and **Google Nest Hub** (Cast) — each rotate between all available poster/fanart images for the current item on their own randomized schedule; each one picks its own shuffled order, so they don't all show the same image at the same time
+- **Folder export** — mirrors all of the current item's artwork to a local directory
+- **Ulanzi TC001** (AWTRIX3) — shows the current item as scrolling text instead of artwork (e.g. "Artist - Song", "Title (Year)", "Show s01e01")
+- **Video output** — serves a full-screen web player that shows idle stock-footage clips (Pexels/Pixabay) and switches to artwork when something plays
+- **Info output** (`http://<host>:8090/info`) — pairs the current artwork at its original (high) resolution with the Wikipedia summary text
+- **MQTT** — publishes now-playing state to a broker topic
+- **Feed output** — serves RSS/Atom feeds describing only the currently playing item, including the Wikipedia summary when available
+- **Config output** (`http://<host>:8090/config`) — a web page for editing every config option above (sources, outputs, enrichers, idle sources, polling intervals, including most list-valued fields like Sonos speaker IPs) without hand-editing YAML. Saved changes are hot-reloaded within a few seconds, and it has a "Hitster-safe" button that suppresses song/artist/album display across *every* output (falling back to idle wallpapers/text instead) while it's on, so a song's title/artist never leaks onto a screen mid-round of Hitster or similar music-guessing games.
+- **Themes output** (`http://<host>:8090/themes`) — a completely separate full-screen display from `web` that layers selectable, combinable Display Themes on top of the current artwork; enabled themes render simultaneously into one combined look. Off by default. `outputs.themes[].auto_rotate` can optionally cycle between named presets (subsets of the enabled themes) on a timer, instead of always showing all of them at once.
+
+  Ships today with:
+
+  - **Color Palette** — a strip of the artwork's dominant colors
+  - **Blurred Background** — a heavily blurred, darkened copy of the artwork filling the screen behind it
+  - **Word Cloud** — built from lyrics for music, or the plot summary for movies/TV, colored from the artwork (reuses the same cached word cloud described under `mediadata` below for music)
+  - **Glow** — a soft, slowly pulsing ambient glow behind the artwork, colored from it
+  - **Ken Burns** — a slow, continuous pan/zoom on the artwork, the classic documentary effect
+  - **Vinyl** — shows the album art as a spinning record (music only)
+  - **Media Mosaic** — a grid of other artwork for the same item - other albums, other posters/fanart - alongside the current pick
+  - **Timeline** — a list of the artist's other albums (music only, needs `enrichers.lidarr` configured or it just shows the current album)
+  - **Equalizer** — a decorative bar/wave animation suggesting audio activity (music only, not driven by a real audio signal)
+  - **Lyrics Ticker** — a karaoke-style ticker highlighting the current line of time-synced lyrics (music only, needs synced lyrics available e.g. via `text_enrichers.lrclib`)
+  - **Now Playing Progress** — a real-data full-width playback progress border along one screen edge (works for music, movies, and TV alike)
+  - **Cast/Crew Mosaic** — a grid of top-billed cast headshots (movie/TV only, needs `enrichers.tmdb.fetch_cast` enabled)
+  - **Artist Spotlight** — a portrait card with the artist's photo and a short bio blurb
+
+  More themes still being added - see the Display Themes roadmap.
+
+### Idle wallpapers
+
+Sources: **Unsplash**, **Pexels**, **local folders** (random pictures from your own collection - see `idle.local` below), **Last.fm scrobble history** (album art from your recent scrobbles), and/or **your own music library** (random covers from imported albums).
+
+- While nothing is playing, downloads/picks a fresh batch of wallpapers every `rotation_interval_seconds`, and each output independently rotates through that batch on its own randomized schedule (same as the now-playing artwork rotation above).
+- Multiple idle sources can be enabled at once, each refetched independently on its own schedule, but they're never mixed within a single batch - `idle_priority` (an ordered list of source names) picks which one supplies any given batch: the first one in that list with wallpapers available wins, so e.g. enabling both Unsplash and Pexels means one being temporarily unreachable falls through to the other instead of blanking outputs.
+- `idle_mode: random` (instead of the default `priority`) picks the winning source at random each batch instead of always preferring the same one first - either way, exactly one source's pictures show per batch, never blended.
+- The last successfully-fetched batch is also persisted to disk and reloaded on restart, so a source being down right when the process restarts doesn't blank outputs either, as long as the previous batch's cached image files haven't since been purged (see `cache.idle_max_age_hours`).
+
+### Other features
+
+- **Manual artwork overrides** — pin a specific image for a title/subtitle that never gets a good poster from any enricher, via the config UI's "Overrides" page. On by default (`overrides.enabled: true`).
+- **Alerting** — optionally POST a webhook (Slack, Discord, ntfy.sh, healthchecks.io, or any endpoint that accepts JSON) once an output has been continuously failing for a while (e.g. a Pixoo64 that's gone unreachable on the network). Off by default, see `alerts` below.
+- **Disk cache** for downloaded artwork (each image is only fetched once, and unused files are purged after `cache.max_age_days`).
+- **`/health` endpoint** (on the web output) — reports uptime, the current now-playing item, and per-source/output/enricher status. JSON by default, or an HTML dashboard when requested with `Accept: text/html`. The JSON payload is a versioned schema (`schema_version`) - see `docs/health-api-reference.md` for the full field-by-field reference if you're scripting against it.
+- **`mediadata`** — a unified, human-browsable on-disk cache (`mediainfo/media_data_store.py`) organizing artwork/lyrics/metadata as `movies/<Title> (<Year>)/poster.jpg`, `music/<Artist>/artist.jpg`, `music/<Artist>/<Album> (<Year>)/albumart.jpg`, etc., each with a `metadata.json` recording where each file came from and when it was last checked/refreshed - a cache-first design with a per-media-type refresh policy (`mediadata.refresh`, see config.example.yaml), instead of today's flat `cache/` directory. Off by default (`enrichers.mediadata`/`text_enrichers.mediadata`); when enabled, real fetches happen for movie/series posters+fanart (TMDb, falling back to fanart.tv for movies), music artist photo (Wikipedia, falling back to Last.fm) + album art (MusicBrainz, falling back to Discogs), and lyrics (LRCLIB) - existing `cache/`/`overrides/`/`posters/` are untouched and keep working exactly as before; this doesn't replace them. A further opt-in switch (`enrichers.mediadata.wordcloud.enabled`) renders a lyrics word-cloud PNG per track, colored from its album art, once both are cached - stored next to the track's `.lrc` file and shown on the web output only (not on Pixoo/Nest Hub/etc., where dense text doesn't read well).
 
 ## Setup
 
