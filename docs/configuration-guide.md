@@ -7,6 +7,8 @@ itself starts out as a copy of `config.starter.yaml` (just the config UI and
 a few harmless local outputs, no sources), not the full example file. Key
 things to fill in:
 
+## General settings
+
 - **`config_version`**: schema version of the file, currently `3`. Safe to
   leave out entirely (an absent version is treated as `1` and migrated
   forward automatically, e.g. dropping the per-output `host`/`port` keys
@@ -38,6 +40,9 @@ things to fill in:
   (default `priority`) picks the winning source at random each batch
   instead of always preferring the same highest-priority one first - either
   way, exactly one source's pictures show per batch, never blended.
+
+## Sources
+
 - **`sources.kodi`**: Kodi host/port and credentials. In Kodi, enable
   *Settings → Services → Control → Allow remote control via HTTP*.
 - **`sources.sonos`**: IP address of every Sonos speaker on your network
@@ -150,6 +155,9 @@ things to fill in:
   (or similar USB audio interface) is connected to, listens to a turntable's
   output, and identifies the playing track via [AudD](https://audd.io/). See
   `vinyl_recognizer/README.md` for setup.
+
+## Outputs
+
 - Any entry under `outputs` can be a single config (as below) or a list of
   configs, to run multiple instances of that output at once - e.g. several
   Ulanzi displays in different rooms, or several `web`/`nest_hub` instances.
@@ -321,6 +329,9 @@ things to fill in:
   movie info, or TV show info, supplied by `enrichers.wikipedia`. No image
   transforms are applied by default, so artwork is shown at its original
   resolution rather than scaled down as on the small physical displays.
+
+## Idle wallpapers
+
 - **`idle.unsplash`**: comma-separated `queries` to pull wallpapers from
   while nothing is playing. `batch_size` wallpapers are downloaded every
   `rotation_interval_seconds`, and each output rotates through that batch
@@ -354,6 +365,9 @@ things to fill in:
   playing, refreshed every `rotation_interval_seconds`. No API key
   required; only shows albums that have a known MusicBrainz id (e.g. from
   `import-lidarr`).
+
+## Enrichers
+
 - **`enrichers.fanarttv`**: free `api_key` from https://fanart.tv/get-an-api-key/.
 - **`enrichers.thetvdb`**: free `api_key` from
   https://thetvdb.com/dashboard/account/apikey (only "user-supported" keys
@@ -420,6 +434,9 @@ things to fill in:
   `text_enrichers.ollama_text` populated one) and/or genre - never from
   lyrics. Generated images are cached per song under
   `cache.dir/ai_artwork`, so a song is only ever generated once.
+
+## Text enrichers
+
 - **`text_enrichers.lrclib`**: no API key required (free public
   https://lrclib.net API). Looks up plain and time-synced lyrics for the
   currently playing music track (`NowPlaying.lyrics`/`synced_lyrics`),
@@ -434,6 +451,9 @@ things to fill in:
   metadata (artist/title/album/genres/year) to the model - never lyrics.
   `timeout_seconds` bounds how long one (usually cached-after-first-play)
   generation may take.
+
+## Cache and library
+
 - **`cache.dir`**: where downloaded artwork is stored.
 - **`cache.min_width`** / **`cache.min_height`**: any downloaded image
   smaller than this (default 640×480) is rejected - not cached, and
@@ -474,6 +494,9 @@ things to fill in:
   reporting "Simon and Garfunkel" still matches a library entry imported
   as "Simon & Garfunkel". Browse/search the library at `/library` under the
   `config` output's path (e.g. http://localhost:8090/config/library).
+
+## Logging
+
 - **`logging.level`**: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`, or
   `CRITICAL`. Switch to `DEBUG` when troubleshooting why a source isn't
   detecting playback - it logs things like each Sonos coordinator
@@ -481,6 +504,9 @@ things to fill in:
 - **`logging.file`** / **`logging.max_bytes`** / **`logging.backup_count`**:
   optionally also write logs to a rotating file (logs always go to
   stdout, visible via `docker compose logs`).
+
+## Authentication
+
 - **`auth`**: optional HTTP Basic Auth for the `web`/`config`/`info`/
   `feed`/`video`/`nest_hub` outputs, off by default (`enabled: false`).
   When turned on, requests from RFC1918 private-use addresses and
@@ -520,6 +546,9 @@ things to fill in:
   untouched unless you pass `--enable` - so resetting an existing password
   can't accidentally turn authentication on. **Restart afterwards** (same
   caveat as above) for the new password to actually take effect.
+
+## Alerts
+
 - **`alerts`**: off by default (`enabled: false`). When enabled, `webhook_url`
   gets a JSON POST once an output has been continuously failing for at
   least `error_threshold_seconds` (default 5 minutes) - e.g. a Pixoo64
@@ -529,6 +558,9 @@ things to fill in:
   `repeat_interval_seconds` (default 1 hour) while the outage continues,
   and resets the moment the output recovers, so a long outage doesn't spam
   the webhook but also doesn't get silently forgotten about.
+
+## Manual artwork overrides
+
 - **`overrides`**: on by default (`enabled: true`). Lets you pin a specific
   image for a title/subtitle that never gets a good poster from any
   enricher (matched by exact title + subtitle, case-insensitive) - manage
