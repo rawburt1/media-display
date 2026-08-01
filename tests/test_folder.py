@@ -179,3 +179,38 @@ def test_sanitizes_label_for_filename(tmp_path):
     assert len(files) == 1
     assert "/" not in files[0].name
     assert files[0].read_bytes() == b"image-bytes"
+
+
+def test_truncates_long_label_to_fit_filesystem_limit(tmp_path):
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    image = src_dir / "abc.jpg"
+    image.write_bytes(b"image-bytes")
+
+    cache = MagicMock()
+    cache.get_path.return_value = image
+    cache.get_transformed_path.side_effect = lambda path, _: path
+
+    # A long, multi-byte caption like a real Unsplash label, long enough to
+    # overflow the 255-byte filename limit once the idle_ prefix and .jpg
+    # extension are added.
+    long_label = "Λ " * 200
+
+    out_dir = tmp_path / "artwork"
+    output = FolderOutput(FolderConfig(enabled=True, dir=str(out_dir)))
+    idle_now_playing = NowPlaying(
+        source="idle",
+        media_type="wallpaper",
+        title="",
+        subtitle="",
+        images=[Artwork(url="https://example.com/w.jpg", label=long_label)],
+    )
+    output.on_new_item(idle_now_playing, cache)
+
+    files = list(out_dir.iterdir())
+    assert len(files) == 1
+    filename = files[0].name
+    assert len(filename.encode("utf-8")) <= 255
+    assert filename.startswith("idle_")
+    assert filename.endswith(".jpg")
+    assert files[0].read_bytes() == b"image-bytes"

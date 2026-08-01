@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 _INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
+# Most filesystems (ext4, etc.) cap filenames at 255 bytes; long artwork
+# labels (e.g. full Unsplash captions) can exceed that.
+_MAX_FILENAME_BYTES = 255
+
 
 class FolderOutput(Output):
     """Mirrors all artwork (album art, fanart, posters) for the currently
@@ -79,4 +83,8 @@ class FolderOutput(Output):
     def _filename(artwork: Artwork, extension: str, idle: bool = False) -> str:
         name = _INVALID_CHARS.sub("_", artwork.label or "image").strip()
         prefix = "idle_" if idle else ""
+        budget = _MAX_FILENAME_BYTES - len((prefix + extension).encode("utf-8"))
+        encoded = name.encode("utf-8")
+        if len(encoded) > budget:
+            name = encoded[:budget].decode("utf-8", errors="ignore").strip()
         return f"{prefix}{name}{extension}"
