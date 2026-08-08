@@ -31,6 +31,16 @@ logger = logging.getLogger(__name__)
 # user-facing settings below changed.
 _LED_PIPELINE_VERSION = 1
 
+# The Pixoo channel that displays Draw/SendHttpGif pushes. Divoom's API
+# accepts SendHttpGif (200, error_code 0) regardless of which channel the
+# device is currently showing (Faces/Clock=0, Cloud=1, Visualizer=2), but the
+# screen only actually renders it while on this one - otherwise the push is
+# silently accepted and never displayed. A device can end up on a different
+# channel at any time outside this app's control (its physical remote, the
+# Divoom mobile app, or its own power-on default), so every draw forces the
+# channel back rather than assuming it's already there.
+_CUSTOM_CHANNEL_INDEX = 3
+
 
 class PixooOutput(Output):
     name = "pixoo"
@@ -76,6 +86,9 @@ class PixooOutput(Output):
         if self.config.preview_path:
             _save_preview(image, Path(self.config.preview_path))
 
+        # Force the custom channel before every draw - see
+        # _CUSTOM_CHANNEL_INDEX for why this can't just be assumed.
+        self._post({"Command": "Channel/SetIndex", "SelectIndex": _CUSTOM_CHANNEL_INDEX})
         # Reset the gif id before each send so repeated single-frame
         # updates never run into Pixoo's PicId exhaustion error.
         self._post({"Command": "Draw/ResetHttpGifId"})
@@ -99,6 +112,7 @@ class PixooOutput(Output):
         # output (see orchestrator_artwork.py's show_image_for_output).
         size = self.config.size
         blank = base64.b64encode(bytes(size * size * 3)).decode("ascii")
+        self._post({"Command": "Channel/SetIndex", "SelectIndex": _CUSTOM_CHANNEL_INDEX})
         self._post({"Command": "Draw/ResetHttpGifId"})
         self._post(
             {

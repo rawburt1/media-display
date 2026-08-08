@@ -147,9 +147,9 @@ def test_update_sends_correct_commands(tmp_path):
     with patch.object(output, "_post") as mock_post:
         output.update(_now_playing(), _artwork(), img_path)
 
-    assert mock_post.call_count == 2
+    assert mock_post.call_count == 3
     commands = [c.args[0]["Command"] for c in mock_post.call_args_list]
-    assert commands == ["Draw/ResetHttpGifId", "Draw/SendHttpGif"]
+    assert commands == ["Channel/SetIndex", "Draw/ResetHttpGifId", "Draw/SendHttpGif"]
 
 
 def test_update_sends_64x64_pixels(tmp_path):
@@ -164,6 +164,24 @@ def test_update_sends_64x64_pixels(tmp_path):
     raw = base64.b64decode(gif_payload["PicData"])
     assert len(raw) == 64 * 64 * 3  # RGB bytes
     assert gif_payload["PicWidth"] == 64
+
+
+def test_update_forces_custom_channel_before_drawing(tmp_path):
+    # A Pixoo accepts Draw/SendHttpGif (200, error_code 0) no matter which
+    # channel it's currently showing, but only renders it while on the
+    # custom channel - see _CUSTOM_CHANNEL_INDEX. Without this, a device
+    # left on Clock/Cloud/Visualizer (its own remote, the Divoom app, or
+    # its power-on default) silently never displays what's pushed.
+    img_path = _save_image(tmp_path / "art.jpg")
+    output = PixooOutput(_config(), _cache(tmp_path))
+
+    with patch.object(output, "_post") as mock_post:
+        output.update(_now_playing(), _artwork(), img_path)
+
+    assert mock_post.call_args_list[0].args[0] == {
+        "Command": "Channel/SetIndex",
+        "SelectIndex": 3,
+    }
 
 
 def test_update_sends_16x16_pixels_when_size_16(tmp_path):
@@ -191,9 +209,9 @@ def test_on_idle_sends_correct_commands(tmp_path):
     with patch.object(output, "_post") as mock_post:
         output.on_idle()
 
-    assert mock_post.call_count == 2
+    assert mock_post.call_count == 3
     commands = [c.args[0]["Command"] for c in mock_post.call_args_list]
-    assert commands == ["Draw/ResetHttpGifId", "Draw/SendHttpGif"]
+    assert commands == ["Channel/SetIndex", "Draw/ResetHttpGifId", "Draw/SendHttpGif"]
 
 
 def test_on_idle_sends_an_all_black_frame(tmp_path):
