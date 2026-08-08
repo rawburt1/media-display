@@ -13,6 +13,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   mediainfo:
+    # No bind mount for mediainfo/ - it's baked into the image at build
+    # time. A `docker compose restart` reuses the existing image and will
+    # NOT pick up local source changes; after editing code, rebuild with
+    # `docker compose up -d --build mediainfo` (or `docker compose build
+    # mediainfo` then `up -d mediainfo`) instead.
     build: .
     restart: unless-stopped
     command: ["python", "-m", "mediainfo", "--config", "config/config.yaml"]
