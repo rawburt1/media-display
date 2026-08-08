@@ -927,7 +927,7 @@ function runDetailTest() {
   } else if (c.component_type === 'enricher') {
     req = apiFetch('/api/test/enricher/' + encodeURIComponent(typeName), { method: 'POST', headers: CSRF_HEADERS });
   } else if (c.component_type === 'output') {
-    var body = Object.assign({ type: typeName }, detailOutputsWorking[0]);
+    var body = Object.assign({ type: typeName }, detailOutputsWorking[detailInstanceIndex]);
     req = apiFetch('/api/test/output', {
       method: 'POST',
       headers: Object.assign({ 'Content-Type': 'application/json' }, CSRF_HEADERS),
