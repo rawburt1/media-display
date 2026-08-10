@@ -44,14 +44,40 @@
     let activeImg = document.getElementById("art-a");
     let standbyImg = document.getElementById("art-b");
 
+    // Bumped on every showImage() call so a retry for an older, superseded
+    // image can tell it's stale and give up instead of clobbering whatever
+    // is loading (or already showing) for the current one.
+    let showToken = 0;
+    const MAX_IMAGE_RETRIES = 5;
+
     function showImage(src) {
-      prepareForTransition(standbyImg);
-      standbyImg.onload = standbyImg.onerror = () => {
-        activeImg.classList.remove("visible");
-        standbyImg.classList.add("visible");
-        [activeImg, standbyImg] = [standbyImg, activeImg];
+      const token = ++showToken;
+      const img = standbyImg;
+      prepareForTransition(img);
+
+      const load = (retriesLeft, url) => {
+        if (token !== showToken) return;
+        img.onload = () => {
+          if (token !== showToken) return;
+          activeImg.classList.remove("visible");
+          img.classList.add("visible");
+          [activeImg, standbyImg] = [img, activeImg];
+        };
+        img.onerror = () => {
+          if (token !== showToken || retriesLeft <= 0) return;
+          // Keep whatever's currently visible on screen and retry rather
+          // than swapping in a failed/broken image - a slow or
+          // resource-constrained device is more likely to hit a transient
+          // load failure, and it should recover on its own instead of
+          // sticking with a broken picture until the next rotation.
+          setTimeout(() => {
+            const sep = src.includes("?") ? "&" : "?";
+            load(retriesLeft - 1, src + sep + "retry=" + retriesLeft);
+          }, 1000);
+        };
+        img.src = url;
       };
-      standbyImg.src = src;
+      load(MAX_IMAGE_RETRIES, src);
     }
 
     function applyState(data) {

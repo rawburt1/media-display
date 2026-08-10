@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import logging
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -66,6 +67,30 @@ def flatten_transparency(img: Image.Image, background: str = "white") -> Image.I
         flattened.paste(rgba, mask=rgba.split()[3])
         return flattened
     return img.convert("RGB")
+
+
+def _atomic_save(img: Image.Image, out_path: Path, **save_kwargs) -> None:
+    """Save `img` to `out_path` atomically.
+
+    Saving directly to `out_path` would let a concurrent reader (e.g. an
+    output's HTTP server streaming the file to a display) see a
+    partially-written file, since PIL truncates the destination before
+    writing - on a slow/CPU-constrained device this window is wide enough
+    to hit in practice, and the reader gets a truncated/corrupt image it
+    can't decode. Saving to a sibling temp file first and renaming into
+    place makes the file always either fully-old or fully-new from a
+    reader's point of view (os.replace is atomic on the same filesystem,
+    which a sibling file always is).
+    """
+    fd, tmp_name = tempfile.mkstemp(dir=out_path.parent, suffix=out_path.suffix)
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            img.save(f, **save_kwargs)
+        os.replace(tmp_path, out_path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 class ImageCache:
@@ -292,7 +317,7 @@ class ImageCache:
             img = transform.apply(img)
 
         out_path = base_dir / f"{key}.jpg"
-        flatten_transparency(img).save(out_path, format="JPEG", quality=95)
+        _atomic_save(flatten_transparency(img), out_path, format="JPEG", quality=95)
         return out_path
 
     def get_derived_path(
@@ -335,7 +360,7 @@ class ImageCache:
             image, metadata = result, None
 
         out_path = base_dir / f"{key}.png"
-        image.save(out_path, format="PNG")
+        _atomic_save(image, out_path, format="PNG")
         if metadata is not None:
             (base_dir / f"{key}.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         return out_path
