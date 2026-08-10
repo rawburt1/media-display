@@ -112,7 +112,7 @@ class NestHubOutput(Output):
         try:
             cast.quit_app()
         except Exception:
-            self._cast = None
+            self._drop_cast()
             raise
         self._idle = True
         self._last_url = None
@@ -154,7 +154,7 @@ class NestHubOutput(Output):
         try:
             cast.media_controller.play_media(url, content_type)
         except Exception:
-            self._cast = None
+            self._drop_cast()
             raise
         self._last_url = url
 
@@ -170,6 +170,7 @@ class NestHubOutput(Output):
             return None
 
         self._last_connect_attempt = now
+        cast = None
         try:
             cast = pychromecast.get_chromecast_from_host(
                 (self.config.device_ip, 8009, None, None, "Nest Hub")
@@ -177,7 +178,33 @@ class NestHubOutput(Output):
             cast.wait(timeout=_CONNECT_TIMEOUT_SECONDS)
         except Exception:
             logger.exception("Failed to connect to Nest Hub at %s", self.config.device_ip)
+            # get_chromecast_from_host() already spun up the Chromecast's
+            # background SocketClient thread even though .wait() then
+            # failed - dropping `cast` here without disconnecting leaves
+            # that thread retrying forever, each attempt leaking a socket
+            # (pychromecast.socket_client.SocketClient owns a
+            # socket.socketpair() used to interrupt its own thread, never
+            # closed unless disconnect() runs).
+            if cast is not None:
+                self._close_cast(cast)
             return None
 
         self._cast = cast
         return cast
+
+    def _drop_cast(self) -> None:
+        """Disconnect the current cast connection and clear it - same
+        leaked-thread rationale as the comment in _get_cast(), but for a
+        previously-working connection that just failed a call.
+        """
+        cast = self._cast
+        self._cast = None
+        if cast is not None:
+            self._close_cast(cast)
+
+    @staticmethod
+    def _close_cast(cast) -> None:
+        try:
+            cast.disconnect(timeout=_CONNECT_TIMEOUT_SECONDS, blocking=False)
+        except Exception:
+            logger.debug("Nest Hub: error disconnecting stale cast connection", exc_info=True)

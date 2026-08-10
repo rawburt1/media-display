@@ -103,6 +103,55 @@ def test_connection_error_propagates(mock_get_cast, tmp_path):
 
 
 @patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
+def test_wait_failure_disconnects_the_half_connected_cast(mock_get_cast, tmp_path):
+    # get_chromecast_from_host() already spun up the Chromecast's
+    # background SocketClient thread before .wait() times out - dropping
+    # it without disconnect() would leak that thread's socketpair forever
+    # (the file-descriptor leak this fix addresses).
+    cast = MagicMock()
+    cast.wait.side_effect = RuntimeError("timed out")
+    mock_get_cast.return_value = cast
+
+    output = _output()
+    with pytest.raises(ConnectionError):
+        output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
+
+    cast.disconnect.assert_called_once()
+
+
+@patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
+def test_play_media_failure_disconnects_the_stale_cast(mock_get_cast, tmp_path):
+    cast = MagicMock()
+    mock_get_cast.return_value = cast
+
+    output = _output()
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
+
+    cast.media_controller.play_media.side_effect = RuntimeError("connection lost")
+    with pytest.raises(RuntimeError):
+        output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "def456.jpg"))
+
+    cast.disconnect.assert_called_once()
+    assert output._cast is None
+
+
+@patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
+def test_quit_app_failure_disconnects_the_stale_cast(mock_get_cast, tmp_path):
+    cast = MagicMock()
+    mock_get_cast.return_value = cast
+
+    output = _output()
+    output.update(_NOW_PLAYING, _ARTWORK, _img(tmp_path, "abc123.jpg"))
+
+    cast.quit_app.side_effect = RuntimeError("connection lost")
+    with pytest.raises(RuntimeError):
+        output.on_idle()
+
+    cast.disconnect.assert_called_once()
+    assert output._cast is None
+
+
+@patch("mediainfo.outputs.nest_hub.pychromecast.get_chromecast_from_host")
 def test_connection_error_does_not_retry_immediately(mock_get_cast, tmp_path):
     mock_get_cast.side_effect = RuntimeError("connection refused")
 
