@@ -93,6 +93,22 @@ def _atomic_save(img: Image.Image, out_path: Path, **save_kwargs) -> None:
         raise
 
 
+def _atomic_write_text(text: str, out_path: Path, encoding: str = "utf-8") -> None:
+    """Write `text` to `out_path` atomically - same rationale as `_atomic_save`,
+    for sidecar files (e.g. get_derived_path's JSON metadata) written next to
+    an atomically-saved image.
+    """
+    fd, tmp_name = tempfile.mkstemp(dir=out_path.parent, suffix=out_path.suffix)
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as f:
+            f.write(text)
+        os.replace(tmp_path, out_path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 class ImageCache:
     """Downloads artwork once per URL and reuses the cached file afterwards."""
 
@@ -362,7 +378,7 @@ class ImageCache:
         out_path = base_dir / f"{key}.png"
         _atomic_save(image, out_path, format="PNG")
         if metadata is not None:
-            (base_dir / f"{key}.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+            _atomic_write_text(json.dumps(metadata, indent=2), base_dir / f"{key}.json")
         return out_path
 
     def purge_expired(self) -> None:
