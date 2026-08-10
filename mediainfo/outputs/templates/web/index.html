@@ -133,9 +133,31 @@
 
     setInterval(renderProgress, 1000);
 
+    // Force a full page reload if no message has arrived in a while. A
+    // dead connection doesn't always fire onclose (e.g. a Wi-Fi drop with
+    // no clean close, or a resource-constrained device like a Raspberry
+    // Pi 3 whose tab stalls) - when that happens the reconnect logic
+    // below never runs, leaving stale state on screen indefinitely until
+    // someone manually reloads. A reload resets everything and recovers
+    // reliably where a JS-only reconnect can't. The threshold scales with
+    // the server's own rotation cadence (state pushes at least that
+    // often) with a floor so a short configured interval doesn't cause
+    // reload churn from ordinary jitter.
+    const STALE_TIMEOUT_MS = Math.max(90000, {{ rotation_interval_seconds }} * 3000);
+    let lastMessageTime = Date.now();
+
+    setInterval(() => {
+      if (Date.now() - lastMessageTime > STALE_TIMEOUT_MS) {
+        location.reload();
+      }
+    }, 10000);
+
     function connect() {
       const ws = new WebSocket("ws://" + location.host + "/ws");
-      ws.onmessage = (event) => { applyState(JSON.parse(event.data)); };
+      ws.onmessage = (event) => {
+        lastMessageTime = Date.now();
+        applyState(JSON.parse(event.data));
+      };
       ws.onclose = () => { setTimeout(connect, 3000); };
       ws.onerror = () => { ws.close(); };
     }

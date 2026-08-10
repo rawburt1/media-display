@@ -366,6 +366,7 @@ class WebOutput(Output):
                 "web/index.html",
                 transitions_css=self._transitions_css,
                 transitions_js=self._transitions_js,
+                rotation_interval_seconds=self.rotation_interval_seconds,
             )
 
         @bp.get("/health/live")

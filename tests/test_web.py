@@ -155,6 +155,21 @@ def test_index_page_has_progress_bar():
     assert 'id="progress"' in body
 
 
+def test_index_page_stale_timeout_scales_with_rotation_interval():
+    # A short configured rotation interval shouldn't shrink the reload
+    # watchdog below its 90s floor - see the STALE_TIMEOUT_MS comment in
+    # web/index.html.
+    out = _output(rotation_interval_seconds=10)
+    body = _client(out).get("/").data.decode()
+    assert "Math.max(90000, 10 * 3000)" in body
+
+
+def test_index_page_stale_timeout_uses_configured_interval_when_longer():
+    out = _output(rotation_interval_seconds=300)
+    body = _client(out).get("/").data.decode()
+    assert "Math.max(90000, 300 * 3000)" in body
+
+
 # ---------------------------------------------------------------------------
 # _push
 # ---------------------------------------------------------------------------
