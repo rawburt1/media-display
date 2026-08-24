@@ -35,6 +35,7 @@ from mediainfo.sources.adb_base import (
 # media_type == "episode". Add to this set as you find more.
 _VIDEO_PACKAGES = {
     "se.svt.android.svtplay",  # SVT Play (Swedish public broadcaster)
+    "com.nuvio.app",  # Nuvio (streaming app)
 }
 
 
