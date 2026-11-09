@@ -220,6 +220,40 @@ def test_idle_source_shows_wallpaper():
     output.on_idle.assert_not_called()
 
 
+def test_idle_wallpaper_derivatives_are_cleaned_up_after_update(tmp_path, monkeypatch):
+    # Outputs bake derivatives (e.g. Pixoo's LED image via
+    # ImageCache.get_derived_path) next to the temp download, named
+    # `{stem}_{cache_key}.*` - they must go along with the original, or the
+    # system temp dir fills up with one file per rotation.
+    import mediainfo.orchestrator_idle as orchestrator_idle
+
+    monkeypatch.setattr(orchestrator_idle, "_TEMP_DIR", tmp_path.resolve())
+    original = tmp_path / "tmpabc12345.jpg"
+    original.write_bytes(b"x")
+    unrelated = tmp_path / "tmpzzz99999_cd6ea54081f6ca37.png"
+    unrelated.write_bytes(b"other")
+
+    def bake(_now_playing, _artwork, image_path):
+        (tmp_path / f"{image_path.stem}_cd6ea54081f6ca37.png").write_bytes(b"led")
+
+    output = MagicMock()
+    output.update.side_effect = bake
+    cache = MagicMock()
+    cache.download_temp.return_value = original
+    cache.get_transformed_path.side_effect = lambda path, _: path
+    artwork = Artwork(url="https://i.redd.it/abc.jpg", label="r/wallpapers: Test")
+
+    orchestrator = _orchestrator(
+        outputs=[output], cache=cache, idle_source=_FakeIdleSource([artwork])
+    )
+    orchestrator._tick()
+
+    output.update.assert_called_once()
+    assert not original.exists()
+    assert not (tmp_path / "tmpabc12345_cd6ea54081f6ca37.png").exists()
+    assert unrelated.exists()
+
+
 def test_idle_source_transform_pipeline_applied_before_output_pipeline():
     # Regression guard for Fas 12: a source-level pipeline (e.g. the "arts"
     # idle source's own crop/filter) must run first, then the output's own

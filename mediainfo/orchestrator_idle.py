@@ -50,6 +50,25 @@ def _unlink_temp(path: Optional[Path]) -> None:
         pass
 
 
+def _unlink_temp_derivatives(path: Optional[Path]) -> None:
+    """Delete every `{path.stem}_*` sibling of a temp-dir path.
+
+    ImageCache.get_transformed_path()/get_derived_path() write their output
+    next to the image they're derived from, named `{stem}_{cache_key}.*` -
+    for a download_temp() original that's the system temp directory, where
+    nothing would ever purge e.g. Pixoo's per-wallpaper LED bake. The stem
+    is download_temp()'s own random name, so the glob only ever matches
+    this one wallpaper's derivatives.
+    """
+    if path is None:
+        return
+    try:
+        for sibling in path.parent.glob(f"{path.stem}_*"):
+            _unlink_temp(sibling)
+    except Exception:
+        pass
+
+
 class _IdleBatchManager:
     def __init__(
         self,
@@ -324,4 +343,8 @@ class _IdleBatchManager:
             _unlink_temp(original_path)
             if image_path is not original_path:
                 _unlink_temp(image_path)
+            if not artwork.url.startswith("file://"):
+                # download_temp() returns file:// paths as-is - those belong
+                # to their source, so only sweep our own downloads.
+                _unlink_temp_derivatives(original_path)
             return
