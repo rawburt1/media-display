@@ -202,3 +202,63 @@ def test_tcp_check_failure():
 
     assert ok is False
     assert "Could not reach" in message
+
+
+# ---------------------------------------------------------------------------
+# check_temp_dir
+# ---------------------------------------------------------------------------
+
+
+def test_check_temp_dir_reports_usage_of_given_path(tmp_path):
+    from mediainfo.configui.config_dashboard import check_temp_dir
+
+    result = check_temp_dir(str(tmp_path))
+    assert result is not None
+    assert result["path"] == str(tmp_path)
+    assert result["total_bytes"] > 0
+    assert 0 <= result["percent"] <= 100
+
+
+def test_check_temp_dir_defaults_to_system_temp_dir():
+    import tempfile
+
+    from mediainfo.configui.config_dashboard import check_temp_dir
+
+    result = check_temp_dir()
+    assert result is not None
+    assert result["path"] == tempfile.gettempdir()
+
+
+def test_check_temp_dir_warns_at_threshold():
+    import shutil
+
+    from mediainfo.configui.config_dashboard import check_temp_dir
+
+    gib = 1024**3
+    full = shutil._ntuple_diskusage(total=2 * gib, used=int(1.7 * gib), free=int(0.3 * gib))
+    with patch("mediainfo.configui.config_dashboard.shutil.disk_usage", return_value=full):
+        result = check_temp_dir("/tmp")
+    assert result is not None
+    assert result["percent"] == 85.0
+    assert result["warning"] is True
+
+
+def test_check_temp_dir_no_warning_below_threshold():
+    import shutil
+
+    from mediainfo.configui.config_dashboard import check_temp_dir
+
+    usage = shutil._ntuple_diskusage(total=100, used=10, free=90)
+    with patch("mediainfo.configui.config_dashboard.shutil.disk_usage", return_value=usage):
+        result = check_temp_dir("/tmp")
+    assert result is not None
+    assert result["warning"] is False
+
+
+def test_check_temp_dir_returns_none_when_unreadable():
+    from mediainfo.configui.config_dashboard import check_temp_dir
+
+    with patch(
+        "mediainfo.configui.config_dashboard.shutil.disk_usage", side_effect=OSError("gone")
+    ):
+        assert check_temp_dir("/nonexistent") is None

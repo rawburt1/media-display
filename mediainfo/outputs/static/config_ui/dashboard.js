@@ -268,6 +268,23 @@ function bentoStatItem(num, label, statusClass) {
     + '<div class="stat-label"><span class="badge ' + (statusClass || '') + '">' + esc(label) + '</span></div></div>';
 }
 
+function formatBytes(n) {
+  var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(n < 10 ? 1 : 0)) + ' ' + units[i];
+}
+
+// Temp space (/tmp - a size-capped tmpfs in Docker): used/total plus an
+// ok/warning badge; the warning text itself comes via health.warnings.
+function tempDirStatItem(t) {
+  return bentoStatItem(
+    esc(formatBytes(t.used_bytes)) + ' / ' + esc(formatBytes(t.total_bytes)),
+    'Temp space ' + t.percent + '%',
+    t.warning ? 'b-warning' : 'b-connected'
+  );
+}
+
 function actionButton(action) {
   if (action.kind === 'restart') {
     return '<button type="button" class="btn danger" onclick="runRestartAction(\'' + esc(action.href) + '\')">' + esc(action.label) + '</button>';
@@ -335,6 +352,8 @@ function renderDashboard() {
   html += Object.keys(counts).map(function(status) {
     return bentoStatItem(counts[status], STATUS_LABELS[status] || status, 'b-' + status);
   }).join('');
+
+  if (d.temp_dir) html += tempDirStatItem(d.temp_dir);
 
   var warnings = (d.health && d.health.warnings) || [];
   html += '<div class="bento-item bento-item--warnings">';

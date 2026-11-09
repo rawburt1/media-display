@@ -73,7 +73,12 @@ from mediainfo.stores.history import PlaybackHistory
 from mediainfo.stores.musiclibrary import MusicLibrary
 from mediainfo.configui.appletv_pairing import AppleTvPairingManager
 from mediainfo.outputs.base import Output
-from mediainfo.configui.config_dashboard import test_enricher, test_output, test_source
+from mediainfo.configui.config_dashboard import (
+    check_temp_dir,
+    test_enricher,
+    test_output,
+    test_source,
+)
 from mediainfo.configui.config_schema import (
     _HIDDEN_TYPE_CATEGORIES,
     _as_instance_list,
@@ -294,6 +299,7 @@ class ConfigUiOutput(Output):
             "counts": counts,
             "restart_required": self._restart_required,
             "exposed_without_auth": self._is_exposed_without_auth(),
+            "temp_dir": check_temp_dir(),
         }
 
     def _is_exposed_without_auth(self) -> bool:

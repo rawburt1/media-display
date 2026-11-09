@@ -743,6 +743,12 @@ def build_dashboard(
             warnings.append(f"{c.name}: {w}")
     if overview.get("exposed_without_auth"):
         warnings.append("The config UI is reachable beyond this machine with no login required.")
+    temp_dir = overview.get("temp_dir")
+    if temp_dir and temp_dir.get("warning"):
+        warnings.append(
+            f"Temp space ({temp_dir['path']}) is {temp_dir['percent']:g}% full - artwork "
+            "downloads will start failing when it runs out. Restarting mediainfo clears it."
+        )
 
     overall_status = "error" if counts_by_status.get("error") else health.get("status", "ok")
 
@@ -800,4 +806,5 @@ def build_dashboard(
         # fire on "missing either half", not "missing both".
         needs_setup=not pipeline.media_component_ids or not pipeline.display_component_ids,
         app_version=_APP_VERSION,
+        temp_dir=temp_dir or None,
     )

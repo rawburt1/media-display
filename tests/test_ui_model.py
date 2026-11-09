@@ -7,6 +7,8 @@ docs/gui-redesign-phase0-inventory.md for the overall plan.
 import shutil
 from pathlib import Path
 
+from unittest.mock import patch
+
 import pytest
 from flask import Flask
 
@@ -509,7 +511,10 @@ def test_api_ui_dashboard_has_no_warnings_for_intentionally_disabled_components(
     # test_overview_reports_exposed_without_auth in test_config_ui.py for
     # that behavior's own dedicated coverage.
     out = _output(config_path, http_host="127.0.0.1")
-    data = _client(out).get("/api/ui/dashboard").get_json()
+    # Pin the temp-dir probe too, so a nearly-full /tmp on the machine
+    # running the tests can't add its own (legitimate) warning here.
+    with patch("mediainfo.configui.output.check_temp_dir", return_value=None):
+        data = _client(out).get("/api/ui/dashboard").get_json()
     assert data["health"]["warnings"] == []
 
 
@@ -857,3 +862,47 @@ def test_multiple_output_types_marked_for_restart(config_path):
     assert web.status == "restart_required"
     assert pixoo.requires_restart is True
     assert pixoo.status == "restart_required"
+
+
+# ---------------------------------------------------------------------------
+# build_dashboard(): temp dir (/tmp) usage
+# ---------------------------------------------------------------------------
+
+
+def _temp_dir(percent, warning):
+    return {
+        "path": "/tmp",
+        "used_bytes": int(percent * 1024**3 * 2 / 100),
+        "total_bytes": 2 * 1024**3,
+        "free_bytes": 0,
+        "percent": percent,
+        "warning": warning,
+    }
+
+
+def test_dashboard_passes_temp_dir_through_without_warning_when_ok():
+    pipeline = UiPipeline(id="default", name="Default")
+    temp_dir = _temp_dir(1.0, False)
+    dashboard = build_dashboard([], pipeline, {"temp_dir": temp_dir}, None)
+    assert dashboard.temp_dir == temp_dir
+    assert not any("Temp space" in w for w in dashboard.health.warnings)
+
+
+def test_dashboard_warns_when_temp_dir_nearly_full():
+    pipeline = UiPipeline(id="default", name="Default")
+    dashboard = build_dashboard([], pipeline, {"temp_dir": _temp_dir(91.5, True)}, None)
+    assert any("Temp space (/tmp) is 91.5% full" in w for w in dashboard.health.warnings)
+
+
+def test_dashboard_temp_dir_absent_when_unreadable():
+    pipeline = UiPipeline(id="default", name="Default")
+    dashboard = build_dashboard([], pipeline, {"temp_dir": None}, None)
+    assert dashboard.temp_dir is None
+
+
+def test_api_ui_dashboard_includes_temp_dir(config_path, monkeypatch):
+    monkeypatch.setattr("mediainfo.configui.output.check_temp_dir", lambda: _temp_dir(42.0, False))
+    out = _output(config_path)
+    data = _client(out).get("/api/ui/dashboard").get_json()
+    assert data["temp_dir"]["percent"] == 42.0
+    assert data["temp_dir"]["warning"] is False

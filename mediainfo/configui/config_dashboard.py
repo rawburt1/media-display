@@ -35,9 +35,11 @@ Test-connection implementation notes:
 
 from __future__ import annotations
 
+import shutil
 import socket
+import tempfile
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 # Local servers this process itself runs - "testing" them means confirming
 # the embedded Flask app is actually answering, not reaching some other
@@ -117,6 +119,33 @@ def test_output(type_name: str, fields: dict) -> Tuple[bool, str]:
         return False, f"Error: {exc}"
 
     return False, "No connection test available for this output"
+
+
+# Temp-dir usage at or above this percentage becomes a dashboard warning.
+# In Docker /tmp is a size-capped tmpfs (see docker-compose.yml) - once it
+# fills, artwork downloads and LED/transform derivatives start failing with
+# ENOSPC, so this is worth flagging before it actually happens.
+TEMP_DIR_WARN_PERCENT = 80.0
+
+
+def check_temp_dir(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Usage of the filesystem holding the system temp dir (/tmp in the
+    container), or None if it can't be read. Never raises - a dashboard
+    probe must not take the page down."""
+    target = path or tempfile.gettempdir()
+    try:
+        usage = shutil.disk_usage(target)
+    except OSError:
+        return None
+    percent = (usage.used / usage.total * 100.0) if usage.total else 0.0
+    return {
+        "path": target,
+        "used_bytes": usage.used,
+        "total_bytes": usage.total,
+        "free_bytes": usage.free,
+        "percent": round(percent, 1),
+        "warning": percent >= TEMP_DIR_WARN_PERCENT,
+    }
 
 
 def _tcp_check(host: str, port: int, timeout: float = 3.0) -> Tuple[bool, str]:

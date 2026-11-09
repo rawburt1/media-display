@@ -148,3 +148,7 @@ class UiDashboard:
     # mediainfo.__version__ - shown on the Help page for bug reports; not
     # used for any compatibility check.
     app_version: str = ""
+    # Usage of the system temp dir's filesystem (/tmp - a size-capped tmpfs
+    # in Docker), from config_dashboard.check_temp_dir(): path/used_bytes/
+    # total_bytes/free_bytes/percent/warning. None if it couldn't be read.
+    temp_dir: Optional[dict] = None
