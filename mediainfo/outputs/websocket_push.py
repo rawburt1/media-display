@@ -81,10 +81,12 @@ def summarize_payload(payload: dict, idle_label: Optional[str] = None) -> Dict[s
 
 
 def describe_user_agent(user_agent: str) -> str:
-    """A rough, human-readable device/browser name from a User-Agent."""
+    """A rough, human-readable device/browser name from a User-Agent -
+    language-neutral ("Chrome · Windows"), since both the Swedish /clients
+    page and the English config UI show it. Empty when unknown."""
     ua = user_agent or ""
     if not ua:
-        return "Okänd"
+        return ""
     if "CrKey" in ua:
         browser = "Chromecast"
     elif "Edg/" in ua:
@@ -111,7 +113,7 @@ def describe_user_agent(user_agent: str) -> str:
         ("Linux", "Linux"),
     ):
         if needle in ua:
-            return f"{browser} på {system}"
+            return f"{browser} · {system}"
     return browser
 
 

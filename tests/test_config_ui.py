@@ -2688,3 +2688,32 @@ def test_history_image_404_for_unknown_entry(config_path, tmp_path):
     out.set_history(_history_store(tmp_path))
     out._cache = MagicMock()
     assert _client(out).get("/api/history/image/999").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Connected screens (/api/clients) - Displays > Connected screens view
+# ---------------------------------------------------------------------------
+
+
+def test_clients_api_lists_connected_screens(config_path, monkeypatch):
+    from mediainfo.configui import output as configui_output
+    from mediainfo.outputs.websocket_push import ClientRegistry
+
+    reg = ClientRegistry()
+    monkeypatch.setattr(configui_output, "CLIENTS", reg)
+    conn = object()
+    reg.add(conn, page="/themes", remote_addr="", user_agent="")
+    reg.note_sent(conn, {"source": "kodi", "title": "Song"})
+
+    data = _client(_output(config_path)).get("/api/clients").get_json()
+    assert [(c["page"], c["showing"]["mode"]) for c in data["clients"]] == [("/themes", "playing")]
+    assert "now" in data
+
+
+def test_clients_api_empty_when_nothing_connected(config_path, monkeypatch):
+    from mediainfo.configui import output as configui_output
+    from mediainfo.outputs.websocket_push import ClientRegistry
+
+    monkeypatch.setattr(configui_output, "CLIENTS", ClientRegistry())
+    data = _client(_output(config_path)).get("/api/clients").get_json()
+    assert data["clients"] == []

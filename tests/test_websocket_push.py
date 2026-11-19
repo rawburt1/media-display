@@ -129,9 +129,9 @@ def test_summarize_playing():
 
 
 def test_describe_user_agent():
-    assert describe_user_agent(_CHROME_LINUX) == "Chrome på Linux (ARM)"
+    assert describe_user_agent(_CHROME_LINUX) == "Chrome · Linux (ARM)"
     assert describe_user_agent("Mozilla/5.0 (Linux; Android 9) CrKey/1.56") == "Chromecast"
-    assert describe_user_agent("") == "Okänd"
+    assert describe_user_agent("") == ""
 
 
 def test_registry_tracks_connection_and_last_payload(no_dns):
@@ -141,7 +141,7 @@ def test_registry_tracks_connection_and_last_payload(no_dns):
     [entry] = reg.snapshot()
     assert entry["showing"]["mode"] == "unknown"
     assert entry["hostname"] == "tv.lan"
-    assert entry["device"] == "Chrome på Linux (ARM)"
+    assert entry["device"] == "Chrome · Linux (ARM)"
 
     reg.note_sent(conn, {"source": "kodi", "title": "Song"})
     [entry] = reg.snapshot()

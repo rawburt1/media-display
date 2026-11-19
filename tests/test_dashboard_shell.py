@@ -177,3 +177,12 @@ def test_dashboard_static_css_is_served(config_path):
     out = ConfigUiOutput(_config(), config_path)
     resp = _client(out).get("/static/dashboard.css")
     assert resp.status_code == 200
+
+
+def test_displays_has_connected_screens_subview(config_path):
+    out = ConfigUiOutput(_config(), config_path)
+    components = _client(out).get("/static/components.js").data.decode()
+    dashboard = _client(out).get("/static/dashboard.js").data.decode()
+    assert "#displays/clients" in components
+    assert "apiFetch('/api/clients')" in components
+    assert "renderClientsSection()" in dashboard

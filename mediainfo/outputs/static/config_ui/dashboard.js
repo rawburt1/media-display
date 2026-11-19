@@ -204,6 +204,7 @@ function renderFromHash() {
 function subsectionTitle(section, param) {
   if (section === 'dashboard' && param === 'pipeline') return 'Pipeline';
   if (section === 'library' && param === 'history') return 'History';
+  if (section === 'displays' && param === 'clients') return 'Connected screens';
   return SECTION_TITLES[section] || '';
 }
 
@@ -231,6 +232,7 @@ window.addEventListener('beforeunload', function(e) {
 
 function renderSection(name, param) {
   if (name === 'dashboard') { if (param === 'pipeline') renderPipeline(); else renderDashboard(); }
+  else if (name === 'displays' && param === 'clients') renderClientsSection();
   else if (CATEGORY_SECTIONS.indexOf(name) !== -1) renderCategorySection(name);
   else if (name === 'library') renderLibrarySection(param);
   else if (name === 'health') renderHealthSection();
@@ -703,6 +705,9 @@ function fetchComponents() {
       // textarea/backups list next to them, or a poll tick would blow away
       // whatever the user is mid-typing there (see advanced.js).
       renderAdvancedSettingsCards();
+    } else if (currentSection === 'displays' && currentParam === 'clients') {
+      // Connected screens sub-view has nothing from componentsData on it -
+      // it polls /api/clients on its own (see components.js).
     } else if (FILTERABLE_SECTIONS.indexOf(currentSection) !== -1) {
       // A full re-render would reset the search input's value/focus out
       // from under someone mid-keystroke (it happens to have focus right

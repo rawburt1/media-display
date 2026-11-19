@@ -93,7 +93,8 @@ function renderCategorySection(name) {
   var category = CATEGORY_FOR_SECTION[name];
   var groups = CATEGORY_GROUPS[name];
   var sectionItems = componentsData.filter(function(c) { return c.category === category; });
-  var html = '<h1>' + esc(SECTION_TITLES[name]) + '</h1><p class="lede">Click a component to view or edit its settings.</p>';
+  var html = (name === 'displays' ? displaysSubnavHtml('settings') : '')
+    + '<h1>' + esc(SECTION_TITLES[name]) + '</h1><p class="lede">Click a component to view or edit its settings.</p>';
   html += filterBarHtml(name, sectionItems);
   var any = false;
   groups.forEach(function(group) {
@@ -108,6 +109,111 @@ function renderCategorySection(name) {
   if (!any) html += '<div class="card"><span class="field-help">Nothing here yet.</span></div>';
   el.innerHTML = html;
   applyCardFilters(name);
+}
+
+// ---------------------------------------------------------------------
+// Displays > Connected screens (#displays/clients) - every browser that
+// has a display page (web, themes, info, ordklocka) open right now, and
+// what it shows, from /api/clients (see mediainfo.outputs.websocket_push.
+// ClientRegistry). Read-only; refreshes itself every 5s while visible.
+// ---------------------------------------------------------------------
+var clientsData = null; // { clients: [...], now } once loaded
+var clientsTimer = null;
+
+var CLIENT_MODE_LABELS = {
+  playing: 'Playing', clock: 'Word clock', wallpaper: 'Idle wallpaper',
+  idle: 'Nothing playing', unknown: 'Connecting',
+};
+var CLIENT_MODE_BADGE = {
+  playing: 'b-connected', clock: 'b-display', wallpaper: 'b-display',
+  idle: 'b-disabled', unknown: 'b-unknown',
+};
+
+function displaysSubnavHtml(active) {
+  return subnavChips([
+    { href: '#displays', label: 'Settings', active: active === 'settings' },
+    { href: '#displays/clients', label: 'Connected screens', active: active === 'clients' },
+  ]);
+}
+
+function clientPageLabel(page) {
+  if (page === '/') return 'Now playing (web)';
+  if (page === '/ordklocka') return 'Word clock (standalone)';
+  if (page === '/themes') return 'Themes';
+  if (page === '/info') return 'Info';
+  if (page.indexOf('/web-') === 0) return 'Web: ' + page.slice(5);
+  return page;
+}
+
+function clientDuration(seconds) {
+  if (seconds < 60) return 'just now';
+  var m = Math.floor(seconds / 60);
+  if (m < 60) return m + ' min';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + ' h ' + (m % 60) + ' min';
+  return Math.floor(h / 24) + ' d ' + (h % 24) + ' h';
+}
+
+function clientCard(c, now) {
+  var mode = (c.showing && c.showing.mode) || 'unknown';
+  var details = [c.device];
+  if (c.hostname && c.address) details.push(c.address);
+  var playing = mode === 'playing' && c.showing.text ? c.showing.text : '';
+  return '<div class="override-card">'
+    + '<div class="info">'
+    + '<div class="title">' + esc(c.hostname || c.address || 'Unknown address') + '</div>'
+    + '<div class="subtitle">' + esc(details.filter(Boolean).join(' · ') || 'Unknown browser') + '</div>'
+    + (playing ? '<div class="subtitle">' + esc(playing) + '</div>' : '')
+    + '</div>'
+    + '<div style="text-align:right; flex-shrink:0;">'
+    + '<span class="badge ' + (CLIENT_MODE_BADGE[mode] || 'b-unknown') + '">' + esc(CLIENT_MODE_LABELS[mode] || mode) + '</span>'
+    + '<div class="field-help" style="margin-top:4px;">connected ' + esc(clientDuration(now - c.connected_at)) + '</div>'
+    + '</div>'
+    + '</div>';
+}
+
+function renderClientsPanel() {
+  var el = document.getElementById('clients-panel');
+  if (!el || !clientsData) return;
+  var clients = clientsData.clients || [];
+  if (!clients.length) {
+    el.innerHTML = '<div class="card"><span class="field-help">No screens are connected right now.</span></div>';
+    return;
+  }
+  var html = '';
+  var group = null;
+  clients.forEach(function(c) {
+    if (c.page !== group) {
+      if (group !== null) html += '</div></div>';
+      group = c.page;
+      html += '<div class="card-group"><h2 class="group-title">' + esc(clientPageLabel(c.page)) + '</h2><div class="override-list">';
+    }
+    html += clientCard(c, clientsData.now);
+  });
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
+function fetchClients() {
+  return apiFetch('/api/clients').then(function(r) { return r.json(); }).then(function(data) {
+    clientsData = data;
+    renderClientsPanel();
+  }).catch(function() {});
+}
+
+function renderClientsSection() {
+  var el = document.getElementById('section-displays');
+  el.innerHTML = displaysSubnavHtml('clients')
+    + '<h1>Connected screens</h1><p class="lede">Every browser that has a display page open right now, and what it is showing. Updates every 5 seconds.</p>'
+    + '<div id="clients-panel">' + (clientsData ? '' : '<p class="field-help">Loading…</p>') + '</div>';
+  renderClientsPanel();
+  fetchClients();
+  if (!clientsTimer) {
+    clientsTimer = setInterval(function() {
+      if (currentSection === 'displays' && currentParam === 'clients') fetchClients();
+      else { clearInterval(clientsTimer); clientsTimer = null; }
+    }, 5000);
+  }
 }
 
 // ---------------------------------------------------------------------

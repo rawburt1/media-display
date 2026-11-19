@@ -45,6 +45,7 @@ import logging
 import os
 import signal
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
@@ -73,6 +74,7 @@ from mediainfo.stores.history import PlaybackHistory
 from mediainfo.stores.musiclibrary import MusicLibrary
 from mediainfo.configui.appletv_pairing import AppleTvPairingManager
 from mediainfo.outputs.base import Output
+from mediainfo.outputs.websocket_push import CLIENTS
 from mediainfo.configui.config_dashboard import (
     check_temp_dir,
     test_enricher,
@@ -457,6 +459,13 @@ class ConfigUiOutput(Output):
         @bp.get("/api/overview")
         def overview():
             return jsonify(self._compute_overview())
+
+        @bp.get("/api/clients")
+        def clients_json():
+            """Browsers connected to any display page (web/themes/info/
+            ordklocka) and what each shows - the Displays > Connected
+            screens view. Same data as the web output's own /api/clients."""
+            return jsonify({"clients": CLIENTS.snapshot(), "now": time.time()})
 
         @bp.get("/api/history")
         def history_json():

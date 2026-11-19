@@ -92,7 +92,7 @@ function render(data) {
     const details = [c.device];
     if (c.hostname && c.address) details.push(c.address);
     if (c.showing.text && c.showing.mode === "playing") details.push(c.showing.text);
-    info.appendChild(el("div", "subtitle", details.join(" · ")));
+    info.appendChild(el("div", "subtitle", details.filter(Boolean).join(" · ")));
     const meta = el("div", "meta");
     meta.appendChild(el("div", "time", "uppkopplad " + since(data.now - c.connected_at)));
     const mode = c.showing.mode;
