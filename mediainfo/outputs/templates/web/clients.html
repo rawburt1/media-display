@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Now Playing &middot; klienter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000; color: #ddd; font-family: sans-serif;
+           max-width: 720px; margin: 0 auto; padding: 24px 16px 60px; }
+    h1 { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .nav-link { float: right; color: #888; font-size: 12px; text-decoration: none; }
+    .nav-link:hover { color: #fff; }
+    p.hint { font-size: 12px; color: #888; margin-bottom: 20px; }
+    .group { font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+             text-transform: uppercase; color: #777; margin: 18px 0 8px; }
+    .row { display: flex; align-items: center; gap: 12px; padding: 10px;
+           border-radius: 10px; }
+    .row:hover { background: #111; }
+    .info { flex: 1; min-width: 0; }
+    .title { font-size: 14px; font-weight: 600; color: #fff;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .subtitle { font-size: 12px; color: #999; margin-top: 2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .meta { text-align: right; flex: none; }
+    .time { font-size: 12px; color: #999; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 700;
+             letter-spacing: 0.3px; text-transform: uppercase; border-radius: 999px;
+             padding: 2px 8px; margin-top: 3px; color: #7a8a9f; background: #10151d; }
+    .badge.playing { color: #7fc79a; background: #0f1d14; }
+    .badge.clock { color: #d8b878; background: #1d180e; }
+    .badge.wallpaper { color: #a08fd0; background: #16121f; }
+    #empty, #error { font-size: 13px; color: #666; padding: 24px 0; }
+  </style>
+</head>
+<body>
+<a class="nav-link" href="/">&larr; Now playing</a>
+<h1>Uppkopplade skärmar</h1>
+<p class="hint">Alla webbläsare som just nu har en display-sida öppen, och vad de visar. Uppdateras var 5:e sekund.</p>
+<div id="error" style="display:none">Kunde inte hämta listan - försöker igen.</div>
+<div id="list"></div>
+
+<script>
+const MODE_LABELS = {
+  playing: "Spelar", clock: "Ordklocka", wallpaper: "Idle-bild",
+  idle: "Inget spelas", unknown: "Ansluter",
+};
+const PAGE_LABELS = {
+  "/": "Startsidan (web)", "/ordklocka": "Ordklocka (fristående)",
+  "/themes": "Themes", "/info": "Info",
+};
+
+function pageLabel(page) {
+  if (PAGE_LABELS[page]) return PAGE_LABELS[page];
+  if (page.startsWith("/web-")) return "Web: " + page.slice(5);
+  return page;
+}
+
+function since(seconds) {
+  if (seconds < 60) return "nyss";
+  const m = Math.floor(seconds / 60);
+  if (m < 60) return m + " min";
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + " h " + (m % 60) + " min";
+  return Math.floor(h / 24) + " d " + (h % 24) + " h";
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function render(data) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  if (data.clients.length === 0) {
+    list.appendChild(el("div", null, "Inga skärmar är uppkopplade just nu."));
+    list.firstChild.id = "empty";
+    return;
+  }
+  let group = null;
+  data.clients.forEach(function (c) {
+    if (c.page !== group) {
+      group = c.page;
+      list.appendChild(el("div", "group", pageLabel(c.page)));
+    }
+    const row = el("div", "row");
+    const info = el("div", "info");
+    info.appendChild(el("div", "title", c.hostname || c.address || "Okänd adress"));
+    const details = [c.device];
+    if (c.hostname && c.address) details.push(c.address);
+    if (c.showing.text && c.showing.mode === "playing") details.push(c.showing.text);
+    info.appendChild(el("div", "subtitle", details.join(" · ")));
+    const meta = el("div", "meta");
+    meta.appendChild(el("div", "time", "uppkopplad " + since(data.now - c.connected_at)));
+    const mode = c.showing.mode;
+    meta.appendChild(el("div", "badge " + mode, MODE_LABELS[mode] || mode));
+    row.appendChild(info);
+    row.appendChild(meta);
+    list.appendChild(row);
+  });
+}
+
+function load() {
+  fetch("/api/clients")
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (data) {
+      document.getElementById("error").style.display = "none";
+      render(data);
+    })
+    .catch(function () { document.getElementById("error").style.display = "block"; });
+}
+
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

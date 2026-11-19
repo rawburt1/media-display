@@ -340,6 +340,21 @@
   ["mousemove", "pointerdown", "keydown", "touchstart"].forEach(ev =>
     document.addEventListener(ev, wake, { passive: true }));
   wake();
+
+  // Närvaro: håll en WebSocket öppen så att klockan syns på /clients.
+  // Hoppas över när sidan är inbäddad (idle-klockan på startsidan, som
+  // redan är listad) eller öppnad som lokal fil. Klockan fungerar
+  // likadant om anslutningen misslyckas.
+  if (location.protocol.startsWith("http") &&
+      !new URLSearchParams(location.search).has("embedded")) {
+    const presence = () => {
+      const ws = new WebSocket(
+        (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ordklocka/ws");
+      ws.onclose = () => setTimeout(presence, 10000);
+      ws.onerror = () => ws.close();
+    };
+    presence();
+  }
 </script>
 </body>
 </html>

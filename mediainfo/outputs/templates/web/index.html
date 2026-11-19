@@ -128,7 +128,9 @@
       const frame = document.getElementById("idle-clock");
       if (show === idleClockVisible()) return;
       frame.classList.toggle("visible", show);
-      frame.src = show ? "/ordklocka" : "about:blank";
+      // embedded=1: the clock page skips its own presence connection -
+      // this page is already listed on /clients.
+      frame.src = show ? "/ordklocka?embedded=1" : "about:blank";
     }
 
     // Payloads only arrive on item changes and rotation ticks, so the bar

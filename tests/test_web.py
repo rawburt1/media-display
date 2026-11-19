@@ -779,3 +779,35 @@ def test_dropped_client_forgets_heartbeat_state():
     out._push({})
     assert conn not in out._last_sent
     assert conn not in out._clients
+
+
+# ---------------------------------------------------------------------------
+# /clients page
+# ---------------------------------------------------------------------------
+
+
+def test_clients_page_renders():
+    resp = _client(_output()).get("/clients")
+    assert resp.status_code == 200
+    assert "/api/clients" in resp.data.decode()
+
+
+def test_clients_api_returns_registry_snapshot(monkeypatch):
+    from mediainfo.outputs import web
+    from mediainfo.outputs.websocket_push import ClientRegistry
+
+    reg = ClientRegistry()
+    monkeypatch.setattr(web, "CLIENTS", reg)
+    conn = object()
+    reg.add(conn, page="/", remote_addr="", user_agent="")
+    reg.note_sent(conn, {})
+    data = _client(_output()).get("/api/clients").get_json()
+    assert [c["showing"]["mode"] for c in data["clients"]] == ["idle"]
+    assert "now" in data
+
+
+def test_web_summary_reports_clock_when_idle_clock_enabled():
+    assert _output(_config(idle_clock=True))._summarize({})["mode"] == "clock"
+    assert _output()._summarize({})["mode"] == "idle"
+    playing = {"source": "kodi", "title": "X"}
+    assert _output(_config(idle_clock=True))._summarize(playing)["mode"] == "playing"

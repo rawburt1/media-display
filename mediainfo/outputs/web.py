@@ -47,10 +47,12 @@ from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs import transitions
 from mediainfo.outputs.base import Output
 from mediainfo.outputs.websocket_push import (
+    CLIENTS,
     add_playback_position,
     broadcast,
     register_websocket_route,
     send_to_one,
+    summarize_payload,
 )
 from mediainfo.imaging.transforms import parse_pipeline
 
@@ -134,6 +136,11 @@ class WebOutput(Output):
         # conn -> time.monotonic() of the last payload sent to it, for the
         # heartbeat (see _HEARTBEAT_INTERVAL_SECONDS).
         self._last_sent: Dict[Any, float] = {}
+
+        # Standalone /ordklocka pages - connected only so they show up on
+        # /clients; never sent anything after their initial payload.
+        self._clock_clients_lock = threading.Lock()
+        self._clock_clients: set[Any] = set()
 
         self._health_fn = None
         self._history = None
@@ -349,6 +356,13 @@ class WebOutput(Output):
         for conn in due:
             self._send_to_one(conn, self._personalized_payload(conn))
 
+    def _summarize(self, payload: dict) -> Dict[str, str]:
+        """What a /ws client shows (for /clients) - with idle_clock on, the
+        word clock covers the idle screen."""
+        return summarize_payload(
+            payload, idle_label="Ordklocka" if self.config.idle_clock else None
+        )
+
     def _heartbeat_once(self) -> None:
         """Re-send every client that hasn't been sent anything for
         _HEARTBEAT_INTERVAL_SECONDS its current (unchanged) state."""
@@ -398,6 +412,16 @@ class WebOutput(Output):
                 on_connect=self._assign_client_rotation,
                 on_disconnect=self._drop_client,
                 bp=bp,
+                summarize=self._summarize,
+            )
+            register_websocket_route(
+                sock,
+                "/ordklocka/ws",
+                self._clock_clients_lock,
+                self._clock_clients,
+                get_initial_payload=lambda conn: {},
+                bp=bp,
+                summarize=lambda payload: {"mode": "clock", "text": "Ordklocka"},
             )
 
         @bp.get("/")
@@ -417,6 +441,14 @@ class WebOutput(Output):
             if not _ORDKLOCKA_PAGE.exists():
                 return "Word clock page is missing from this installation", 404
             return send_file(_ORDKLOCKA_PAGE, mimetype="text/html")
+
+        @bp.get("/clients")
+        def clients_page():
+            return render_template("web/clients.html")
+
+        @bp.get("/api/clients")
+        def clients_json():
+            return jsonify({"clients": CLIENTS.snapshot(), "now": time.time()})
 
         @bp.get("/health/live")
         def health_live():
