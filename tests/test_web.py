@@ -811,3 +811,51 @@ def test_web_summary_reports_clock_when_idle_clock_enabled():
     assert _output()._summarize({})["mode"] == "idle"
     playing = {"source": "kodi", "title": "X"}
     assert _output(_config(idle_clock=True))._summarize(playing)["mode"] == "playing"
+
+
+# ---------------------------------------------------------------------------
+# Split-flap clock (/ordklocka/tavla) + shared tid.js + idle_clock_style
+# ---------------------------------------------------------------------------
+
+
+def test_tavla_page_is_served():
+    resp = _client(_output()).get("/ordklocka/tavla")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/html"
+    body = resp.data.decode()
+    assert "/ordklocka/tid.js" in body
+    assert "/ordklocka/tavla/ws" in body
+
+
+def test_shared_time_script_is_served_and_used_by_both_clocks():
+    client = _client(_output())
+    resp = client.get("/ordklocka/tid.js")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/javascript"
+    assert "OrdklockaTid" in resp.data.decode()
+    assert '<script src="/ordklocka/tid.js">' in client.get("/ordklocka").data.decode()
+
+
+def test_tavla_missing_file_returns_404(monkeypatch, tmp_path):
+    monkeypatch.setattr("mediainfo.outputs.web._ORDKLOCKA_DIR", tmp_path)
+    resp = _client(_output()).get("/ordklocka/tavla")
+    assert resp.status_code == 404
+
+
+def test_idle_clock_style_defaults_to_word_clock():
+    assert WebConfig().idle_clock_style == "words"
+    body = _client(_output(_config(idle_clock=True))).get("/").data.decode()
+    assert '"/ordklocka" + "?embedded=1"' in body
+
+
+def test_idle_clock_style_split_flap_embeds_tavla():
+    out = _output(_config(idle_clock=True, idle_clock_style="split_flap"))
+    body = _client(out).get("/").data.decode()
+    assert '"/ordklocka/tavla" + "?embedded=1"' in body
+    assert out._summarize({}) == {"mode": "clock", "text": "Ordklocka (tavla)"}
+
+
+def test_unknown_idle_clock_style_falls_back_to_word_clock(caplog):
+    out = _output(_config(idle_clock=True, idle_clock_style="digital"))
+    assert out._idle_clock_url == "/ordklocka"
+    assert "idle_clock_style" in caplog.text

@@ -197,14 +197,16 @@
 </div>
 </div>
 
+<script src="/ordklocka/tid.js"></script>
 <script>
   // 12 × 14 bokstäver, 24-timmarsklocka. Ordens positioner anges nedan
   // som [rad, kolumn, längd]. FEM/SEX/SJU/TRE tänds som början av
   // FEMTON/SEXTON/SJUTTON/TRETTON, och 21–23 är TJUGO + ETT/TVÅ/TRE.
   //
-  // 00:00–12:59 läses som vanligt ("fem i halv ett"), med minutorden i
-  // rad 0–3 före timmen. Från 13:00 läses tiden digitalt ("tretton
-  // tjugofem") med minutorden i rad 10–13, efter alla timord 13–23.
+  // Vad som sägs avgörs av tid.js (delas med /ordklocka/tavla). Här
+  // finns bara var orden sitter: vanlig läsning (00:00–12:59) tänder
+  // minutorden i rad 0–3 före timmen, digital läsning (från 13:00)
+  // minutorden i rad 10–13, efter alla timord 13–23.
   const ROWS = [
     "KLOCKANTÄRSO",
     "FEMXKVARTNAD",
@@ -247,20 +249,6 @@
     FYRTIO: [12, 0, 6], FEMTIO: [12, 6, 6],
     NOLL: [13, 0, 4], FEM: [13, 4, 3], FEMTON: [13, 4, 6],
   };
-  // Varje inre lista är ett utläst ord: [["TJUGO", "FEM"]] = "tjugofem".
-  const DIGITAL_MINUTES = {
-    0: [], 5: [["NOLL"], ["FEM"]], 10: [["TIO"]], 15: [["FEMTON"]],
-    20: [["TJUGO"]], 25: [["TJUGO", "FEM"]], 30: [["TRETTIO"]],
-    35: [["TRETTIO", "FEM"]], 40: [["FYRTIO"]], 45: [["FYRTIO", "FEM"]],
-    50: [["FEMTIO"]], 55: [["FEMTIO", "FEM"]],
-  };
-  const HOUR_WORDS = [
-    ["TOLV"], ["ETT"], ["TVÅ"], ["TRE"], ["FYRA"], ["FEM"], ["SEX"], ["SJU"],
-    ["ÅTTA"], ["NIO"], ["TIO"], ["ELVA"], ["TOLV"], ["TRETTON"], ["FJORTON"],
-    ["FEMTON"], ["SEXTON"], ["SJUTTON"], ["ARTON"], ["NITTON"], ["TJUGO"],
-    ["TJUGO", "ETT"], ["TJUGO", "TVÅ"], ["TJUGO", "TRE"],
-  ];
-
   // Sanity check: varje ord ska matcha rutnätet.
   const check = (name, [r, c, n]) => {
     if (ROWS[r].slice(c, c + n) !== name) console.warn("Fel position för", name);
@@ -283,51 +271,23 @@
   const dots = [...document.querySelectorAll(".dot")];
   const readout = document.getElementById("readout");
 
-  // Vanlig läsning: [minutord, nästa timme?]
-  function phrase(m5, style) {
-    switch (m5) {
-      case 0:  return [[], 0];
-      case 5:  return [["FEM", "ÖVER"], 0];
-      case 10: return [["TIO", "ÖVER"], 0];
-      case 15: return [["KVART", "ÖVER"], 0];
-      case 20: return style === "halv" ? [["TIO", "I", "HALV"], 1] : [["TJUGO", "ÖVER"], 0];
-      case 25: return [["FEM", "I", "HALV"], 1];
-      case 30: return [["HALV"], 1];
-      case 35: return [["FEM", "ÖVER", "HALV"], 1];
-      case 40: return style === "halv" ? [["TIO", "ÖVER", "HALV"], 1] : [["TJUGO", "I"], 1];
-      case 45: return [["KVART", "I"], 1];
-      case 50: return [["TIO", "I"], 1];
-      case 55: return [["FEM", "I"], 1];
-    }
-  }
-  const hourName = h => HOUR_WORDS[h].join("").toLowerCase();
-
   let style = "tjugo";
   let last = "";
 
   // Vad som ska tändas och läsas ut: [[rad, kolumn, längd], ...] och text.
   function reading(hour, min, style) {
-    const m5 = min - (min % 5);
-    if (hour >= 13) {
-      const minutes = DIGITAL_MINUTES[m5];
-      return [
-        [W.KLOCKAN, W.ÄR, ...HOUR_WORDS[hour].map(w => H[w]), ...minutes.flat().map(w => M[w])],
-        [hourName(hour), ...minutes.map(parts => parts.join("").toLowerCase())],
-      ];
-    }
-    const [words, bump] = phrase(m5, style);
-    // 12-timmarsnamn: 12:25 är "fem i halv ett", inte "... halv tretton".
-    const h = (hour + bump) % 12;
-    return [
-      [W.KLOCKAN, W.ÄR, ...words.map(w => W[w]), ...HOUR_WORDS[h].map(w => H[w])],
-      [...words.map(w => w.toLowerCase()), hourName(h)],
-    ];
+    const t = OrdklockaTid.spokenTime(hour, min, style);
+    const hourCells = t.hourWords.map(w => H[w]);
+    const lit = t.digital
+      ? [W.KLOCKAN, W.ÄR, ...hourCells, ...t.minutes.flat().map(w => M[w])]
+      : [W.KLOCKAN, W.ÄR, ...t.minuteWords.map(w => W[w]), ...hourCells];
+    return [lit, t];
   }
 
   function render() {
     const now = new Date();
     const min = now.getMinutes();
-    const [lit, spoken] = reading(now.getHours(), min, style);
+    const [lit, t] = reading(now.getHours(), min, style);
     const key = lit.join("|") + (min % 5);
     if (key === last) return;
     last = key;
@@ -337,9 +297,7 @@
     cells.flat().forEach((s, i) => s.classList.toggle("on", on.has(i)));
     dots.forEach((d, i) => d.classList.toggle("on", i < min % 5));
 
-    const extra = min % 5 ? ` (+${min % 5} min)` : "";
-    readout.textContent =
-      ["Klockan är", ...spoken].join(" ") + extra;
+    readout.textContent = OrdklockaTid.spokenSentence(t);
   }
 
   // Inställningar (sparas lokalt om möjligt)

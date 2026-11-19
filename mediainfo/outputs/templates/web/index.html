@@ -130,7 +130,7 @@
       frame.classList.toggle("visible", show);
       // embedded=1: the clock page skips its own presence connection -
       // this page is already listed on /clients.
-      frame.src = show ? "/ordklocka?embedded=1" : "about:blank";
+      frame.src = show ? {{ idle_clock_url|tojson }} + "?embedded=1" : "about:blank";
     }
 
     // Payloads only arrive on item changes and rotation ticks, so the bar

@@ -139,6 +139,10 @@ class WebConfig(_OutputFilterMixin):
     # full-screen instead of idle wallpapers/blank screen while nothing
     # is playing. Off by default.
     idle_clock: bool = False
+    # Which clock idle_clock shows: "words" (the word clock grid, also at
+    # /ordklocka) or "split_flap" (an old railway departure board whose
+    # flaps rattle to each word, also at /ordklocka/tavla).
+    idle_clock_style: str = "words"
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))

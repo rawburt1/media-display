@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka – tavla</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Josefin+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* Split-flap-tavla i stil med gamla tågtidtabeller: varje tecken sitter
+     på en bricka som bläddrar fram genom alfabetet till rätt bokstav. */
+  :root {
+    --page: #0d0d0c;
+    --board: #171716;
+    --board-edge: #050505;
+    --flap-top: #2b2b29;
+    --flap-bottom: #242422;
+    --ink: #f3efe4;
+    --hinge: rgba(0, 0, 0, 0.75);
+    --lamp-off: #2a2a28;
+    --lamp-on: #ffcf4a;
+    --panel-page: #e9e6e1;
+    --panel-ink: #3a3732;
+    --panel-muted: #8a857c;
+  }
+  .board-wrap[data-ink="gul"] { --ink: #ffcf4a; }
+  .board-wrap[data-ink="vit"] { --ink: #f3efe4; }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--page); }
+  body.idle { cursor: none; }
+
+  .board-wrap {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+  }
+  .board {
+    background: var(--board);
+    border-radius: calc(var(--cw) * 0.25);
+    padding: calc(var(--cw) * 0.55) calc(var(--cw) * 0.5);
+    box-shadow:
+      inset 0 0 0 calc(var(--cw) * 0.06) var(--board-edge),
+      0 calc(var(--cw) * 0.3) calc(var(--cw) * 1.2) rgba(0, 0, 0, 0.6);
+    display: grid;
+    row-gap: calc(var(--cw) * 0.32);
+  }
+  .row { display: flex; gap: calc(var(--cw) * 0.1); }
+
+  .cell {
+    position: relative;
+    width: var(--cw);
+    height: var(--ch);
+    perspective: calc(var(--ch) * 5);
+    font-family: "Oswald", "Arial Narrow", "Helvetica Neue", sans-serif;
+    font-weight: 500;
+    font-size: calc(var(--ch) * 0.74);
+    color: var(--ink);
+    user-select: none;
+  }
+  .half, .leaf {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 50%;
+    overflow: hidden;
+  }
+  .half span, .leaf span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--ch);
+    line-height: var(--ch);
+    text-align: center;
+  }
+  .top, .leaf.front {
+    top: 0;
+    background: linear-gradient(var(--flap-top), var(--flap-bottom));
+    border-radius: calc(var(--cw) * 0.08) calc(var(--cw) * 0.08) 0 0;
+  }
+  .bottom, .leaf.back {
+    bottom: 0;
+    background: var(--flap-bottom);
+    border-radius: 0 0 calc(var(--cw) * 0.08) calc(var(--cw) * 0.08);
+  }
+  .top span, .leaf.front span { top: 0; }
+  .bottom span, .leaf.back span { bottom: 0; }
+  .leaf {
+    z-index: 2;
+    backface-visibility: hidden;
+    visibility: hidden;
+  }
+  .leaf.front { transform-origin: 50% 100%; }
+  .leaf.back { transform-origin: 50% 0; }
+  /* Gångjärnet mitt på brickan */
+  .cell::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(50% - var(--ch) * 0.012);
+    height: calc(var(--ch) * 0.024);
+    background: var(--hinge);
+    z-index: 3;
+  }
+
+  /* Fyra lampor för minuterna mellan femminuterssteg */
+  .lamps {
+    display: flex;
+    justify-content: center;
+    gap: calc(var(--cw) * 0.5);
+    margin-top: calc(var(--cw) * 0.1);
+  }
+  .lamp {
+    width: calc(var(--cw) * 0.22);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--lamp-off);
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  .lamp.on { background: var(--lamp-on); box-shadow: 0 0 calc(var(--cw) * 0.25) var(--lamp-on); }
+
+  /* Kontroller som tonas fram vid musrörelse/tryck (som på ordklockan) */
+  .panel {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    padding: 10px 16px 12px;
+    border-radius: 14px;
+    background: var(--panel-page);
+    color: var(--panel-ink);
+    font-family: "Josefin Sans", system-ui, sans-serif;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    transition: opacity 0.4s;
+    z-index: 10;
+  }
+  body.idle .panel { opacity: 0; pointer-events: none; }
+  .readout { text-align: center; font-size: 14px; color: var(--panel-muted); margin-bottom: 8px; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    justify-content: center;
+    align-items: center;
+    font-size: 14px;
+  }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .group > .label { color: var(--panel-muted); margin-right: 4px; }
+  .controls button {
+    font: inherit;
+    color: var(--panel-ink);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--panel-ink) 25%, transparent);
+    border-radius: 999px;
+    padding: 5px 12px 3px;
+    cursor: pointer;
+  }
+  .controls button[aria-pressed="true"] {
+    background: var(--panel-ink);
+    color: var(--panel-page);
+    border-color: var(--panel-ink);
+  }
+</style>
+</head>
+<body>
+
+<div class="board-wrap" id="wrap" data-ink="vit">
+  <div>
+    <div class="board" id="board" aria-hidden="true"></div>
+    <div class="lamps"><i class="lamp"></i><i class="lamp"></i><i class="lamp"></i><i class="lamp"></i></div>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40 (före 13:00)">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo" aria-pressed="true">tjugo över</button>
+      <button data-style="halv" aria-pressed="false">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Textfärg">
+      <span class="label">Text</span>
+      <button data-ink="vit" aria-pressed="true">vit</button>
+      <button data-ink="gul" aria-pressed="false">gul</button>
+    </div>
+    <div class="group">
+      <button id="sound" aria-pressed="false">ljud</button>
+      <button id="fs" aria-pressed="false">helskärm</button>
+    </div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script>
+  const COLS = 13;
+  const ROWS = 3;
+  // Brickornas ordning: varje bricka bläddrar framåt genom den här
+  // listan (och runt) tills den når rätt tecken.
+  const FLAPS = " ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ";
+  const FLIP_MS = 70;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // --- Storlek: tavlan fyller skärmen men behåller brickornas proportioner
+  function fit() {
+    const ratio = 1.5;               // brickans höjd / bredd
+    const wUnits = COLS + (COLS - 1) * 0.1 + 1.0;
+    const hUnits = ROWS * ratio + (ROWS - 1) * 0.32 + 1.1 + 0.6;
+    const cw = Math.min(innerWidth * 0.94 / wUnits, innerHeight * 0.86 / hUnits);
+    document.documentElement.style.setProperty("--cw", cw + "px");
+    document.documentElement.style.setProperty("--ch", cw * ratio + "px");
+  }
+  addEventListener("resize", fit);
+  fit();
+
+  // --- Ljud: ett kort klick per bläddring, avstängt från början
+  let soundOn = false;
+  let audio = null;
+  let noise = null;
+  let lastClick = 0;
+  function initAudio() {
+    if (audio) return;
+    try {
+      audio = new (window.AudioContext || window.webkitAudioContext)();
+      const len = Math.floor(audio.sampleRate * 0.012);
+      noise = audio.createBuffer(1, len, audio.sampleRate);
+      const data = noise.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    } catch { audio = null; }
+  }
+  function click() {
+    if (!soundOn || !audio || audio.state !== "running") return;
+    const now = audio.currentTime;
+    if (now - lastClick < 0.012) return;   // många brickor samtidigt = ett rassel, inte ett dån
+    lastClick = now;
+    const src = audio.createBufferSource();
+    src.buffer = noise;
+    src.playbackRate.value = 0.8 + Math.random() * 0.5;
+    const filter = audio.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = 1800;
+    const gain = audio.createGain();
+    gain.gain.value = 0.18;
+    src.connect(filter).connect(gain).connect(audio.destination);
+    src.start(now);
+  }
+
+  // --- Brickor
+  function makeCell() {
+    const el = document.createElement("div");
+    el.className = "cell";
+    el.innerHTML =
+      '<div class="half top"><span></span></div>' +
+      '<div class="half bottom"><span></span></div>' +
+      '<div class="leaf front"><span></span></div>' +
+      '<div class="leaf back"><span></span></div>';
+    const [top, bottom, front, back] = el.querySelectorAll("span");
+    const cell = {
+      el, char: " ", target: " ", running: false,
+      top, bottom, front, back,
+      frontLeaf: el.querySelector(".leaf.front"),
+      backLeaf: el.querySelector(".leaf.back"),
+    };
+    show(cell, " ");
+    return cell;
+  }
+
+  function show(cell, ch) {
+    cell.char = ch;
+    cell.top.textContent = cell.bottom.textContent = ch;
+  }
+
+  // Ett steg: övre halvan av nuvarande tecken fälls ner och avslöjar nästa
+  // teckens övre halva, sedan landar nästa teckens nedre halva.
+  async function flip(cell, next) {
+    cell.top.textContent = next;
+    cell.front.textContent = cell.char;
+    cell.back.textContent = next;
+    cell.frontLeaf.style.visibility = "visible";
+    click();
+    await cell.frontLeaf.animate(
+      [{ transform: "rotateX(0deg)", filter: "brightness(1)" },
+       { transform: "rotateX(-90deg)", filter: "brightness(0.55)" }],
+      { duration: FLIP_MS / 2, easing: "ease-in" }).finished;
+    cell.frontLeaf.style.visibility = "hidden";
+    cell.backLeaf.style.visibility = "visible";
+    await cell.backLeaf.animate(
+      [{ transform: "rotateX(90deg)", filter: "brightness(1.35)" },
+       { transform: "rotateX(0deg)", filter: "brightness(1)" }],
+      { duration: FLIP_MS / 2, easing: "ease-out" }).finished;
+    cell.backLeaf.style.visibility = "hidden";
+    show(cell, next);
+  }
+
+  // Bläddra framåt tills brickan visar sitt mål. Målet läses om inför
+  // varje steg, så en ny tid mitt i ett rassel tas med direkt.
+  async function run(cell, delay) {
+    if (cell.running) return;
+    cell.running = true;
+    await new Promise(r => setTimeout(r, delay));
+    try {
+      while (cell.char !== cell.target) {
+        if (reduceMotion || document.hidden) { show(cell, cell.target); break; }
+        const i = FLAPS.indexOf(cell.char);
+        await flip(cell, FLAPS[(i + 1) % FLAPS.length]);
+      }
+    } catch {
+      show(cell, cell.target);   // animationen avbröts - visa bara rätt tecken
+    } finally {
+      cell.running = false;
+    }
+  }
+
+  const board = document.getElementById("board");
+  const cells = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const rowCells = [];
+    for (let c = 0; c < COLS; c++) {
+      const cell = makeCell();
+      row.appendChild(cell.el);
+      rowCells.push(cell);
+    }
+    board.appendChild(row);
+    cells.push(rowCells);
+  }
+
+  function setLine(r, text) {
+    const t = text.slice(0, COLS);
+    const pad = Math.floor((COLS - t.length) / 2);
+    const line = " ".repeat(pad) + t + " ".repeat(COLS - pad - t.length);
+    [...line].forEach((ch, c) => {
+      const cell = cells[r][c];
+      cell.target = FLAPS.includes(ch) ? ch : " ";
+      // Liten slumpad fördröjning per bricka ger det typiska rasslet.
+      if (cell.char !== cell.target) run(cell, Math.random() * 350);
+    });
+  }
+
+  // --- Tid
+  const lamps = [...document.querySelectorAll(".lamp")];
+  const readout = document.getElementById("readout");
+  let style = "tjugo";
+  let last = "";
+
+  function lines(t) {
+    if (t.digital) {
+      const minutes = t.minutes.map(parts => parts.join("")).join(" ");
+      return ["KLOCKAN ÄR", t.hourWords.join(""), minutes];
+    }
+    const hour = t.hourWords.join("");
+    if (!t.minuteWords.length) return ["KLOCKAN ÄR", hour, ""];
+    return ["KLOCKAN ÄR", t.minuteWords.join(" "), hour];
+  }
+
+  function render() {
+    const now = new Date();
+    const t = OrdklockaTid.spokenTime(now.getHours(), now.getMinutes(), style);
+    const text = lines(t);
+    const key = text.join("|") + t.extra;
+    if (key === last) return;
+    last = key;
+    text.forEach((line, r) => setLine(r, line));
+    lamps.forEach((l, i) => l.classList.toggle("on", i < t.extra));
+    readout.textContent = OrdklockaTid.spokenSentence(t);
+  }
+
+  // --- Inställningar (sparas lokalt om möjligt)
+  const wrap = document.getElementById("wrap");
+  const load = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  function setPressed(attr, value) {
+    document.querySelectorAll(`button[data-${attr}]`).forEach(b =>
+      b.setAttribute("aria-pressed", b.dataset[attr] === value));
+  }
+  function setStyle(v) { style = v; setPressed("style", v); save("tavla-style", v); last = ""; render(); }
+  function setInk(v) { wrap.dataset.ink = v; setPressed("ink", v); save("tavla-ink", v); }
+  function setSound(on) {
+    soundOn = on;
+    document.getElementById("sound").setAttribute("aria-pressed", on);
+    save("tavla-sound", on ? "på" : "av");
+    if (on) { initAudio(); audio?.resume?.().catch(() => {}); }
+  }
+
+  document.querySelectorAll("button[data-style]").forEach(b => b.onclick = () => setStyle(b.dataset.style));
+  document.querySelectorAll("button[data-ink]").forEach(b => b.onclick = () => setInk(b.dataset.ink));
+  document.getElementById("sound").onclick = () => setSound(!soundOn);
+  // Webbläsare startar inte ljud förrän någon har rört sidan - väck det
+  // vid första tryck om ljudet var påslaget sedan tidigare.
+  ["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, () => {
+    if (soundOn) { initAudio(); audio?.resume?.().catch(() => {}); }
+  }, { passive: true }));
+
+  setInk(load("tavla-ink", "vit"));
+  soundOn = load("tavla-sound", "av") === "på";
+  document.getElementById("sound").setAttribute("aria-pressed", soundOn);
+  setStyle(load("tavla-style", "tjugo"));
+  setInterval(render, 1000);
+
+  // --- Helskärm: knapp, dubbelklick eller F
+  const fsBtn = document.getElementById("fs");
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+  fsBtn.onclick = toggleFullscreen;
+  wrap.ondblclick = toggleFullscreen;
+  document.addEventListener("keydown", e => { if (e.key === "f" || e.key === "F") toggleFullscreen(); });
+  document.addEventListener("fullscreenchange", () =>
+    fsBtn.setAttribute("aria-pressed", !!document.fullscreenElement));
+
+  // --- Göm panel och muspekare efter 3 s utan aktivitet
+  let idleTimer;
+  function wake() {
+    document.body.classList.remove("idle");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => document.body.classList.add("idle"), 3000);
+  }
+  ["mousemove", "pointerdown", "keydown", "touchstart"].forEach(ev =>
+    document.addEventListener(ev, wake, { passive: true }));
+  wake();
+
+  // --- Närvaro: syns på /clients. Hoppas över när sidan är inbäddad
+  // (idle-klockan på startsidan, som redan är listad) eller öppnad som fil.
+  if (location.protocol.startsWith("http") &&
+      !new URLSearchParams(location.search).has("embedded")) {
+    const presence = () => {
+      const ws = new WebSocket(
+        (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ordklocka/tavla/ws");
+      ws.onclose = () => setTimeout(presence, 10000);
+      ws.onerror = () => ws.close();
+    };
+    presence();
+  }
+</script>
+</body>
+</html>

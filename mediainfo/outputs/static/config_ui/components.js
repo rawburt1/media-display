@@ -139,6 +139,7 @@ function displaysSubnavHtml(active) {
 function clientPageLabel(page) {
   if (page === '/') return 'Now playing (web)';
   if (page === '/ordklocka') return 'Word clock (standalone)';
+  if (page === '/ordklocka/tavla') return 'Word clock, split-flap board (standalone)';
   if (page === '/themes') return 'Themes';
   if (page === '/info') return 'Info';
   if (page.indexOf('/web-') === 0) return 'Web: ' + page.slice(5);

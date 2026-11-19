@@ -60,7 +60,10 @@ logger = logging.getLogger(__name__)
 
 # The standalone Swedish word clock page (served at /ordklocka, and shown
 # in an iframe over the idle screen when WebConfig.idle_clock is on).
-_ORDKLOCKA_PAGE = Path(__file__).resolve().parent / "static" / "ordklocka" / "index.html"
+_ORDKLOCKA_DIR = Path(__file__).resolve().parent / "static" / "ordklocka"
+_ORDKLOCKA_PAGE = _ORDKLOCKA_DIR / "index.html"
+# idle_clock_style -> the clock page shown over the idle screen.
+_IDLE_CLOCK_URLS = {"words": "/ordklocka", "split_flap": "/ordklocka/tavla"}
 
 # How often the background thread checks for clients due to rotate to
 # their next image. Independent of (and much finer-grained than)
@@ -87,6 +90,14 @@ class _ClientRotation:
     order: List[int]
     position: int
     next_due: float
+
+
+def _send_ordklocka_file(name: str, mimetype: str):
+    """Serve one of the fixed clock files (never a caller-supplied path)."""
+    path = _ORDKLOCKA_DIR / name
+    if not path.exists():
+        return "Word clock file is missing from this installation", 404
+    return send_file(path, mimetype=mimetype)
 
 
 class WebOutput(Output):
@@ -141,6 +152,13 @@ class WebOutput(Output):
         # /clients; never sent anything after their initial payload.
         self._clock_clients_lock = threading.Lock()
         self._clock_clients: set[Any] = set()
+        if config.idle_clock_style not in _IDLE_CLOCK_URLS:
+            logger.warning(
+                "outputs.web.idle_clock_style %r is not one of %s - using the word clock",
+                config.idle_clock_style,
+                ", ".join(_IDLE_CLOCK_URLS),
+            )
+        self._idle_clock_url = _IDLE_CLOCK_URLS.get(config.idle_clock_style, "/ordklocka")
 
         self._health_fn = None
         self._history = None
@@ -359,9 +377,10 @@ class WebOutput(Output):
     def _summarize(self, payload: dict) -> Dict[str, str]:
         """What a /ws client shows (for /clients) - with idle_clock on, the
         word clock covers the idle screen."""
-        return summarize_payload(
-            payload, idle_label="Ordklocka" if self.config.idle_clock else None
-        )
+        if not self.config.idle_clock:
+            return summarize_payload(payload)
+        label = "Ordklocka (tavla)" if self._idle_clock_url.endswith("/tavla") else "Ordklocka"
+        return summarize_payload(payload, idle_label=label)
 
     def _heartbeat_once(self) -> None:
         """Re-send every client that hasn't been sent anything for
@@ -423,6 +442,15 @@ class WebOutput(Output):
                 bp=bp,
                 summarize=lambda payload: {"mode": "clock", "text": "Ordklocka"},
             )
+            register_websocket_route(
+                sock,
+                "/ordklocka/tavla/ws",
+                self._clock_clients_lock,
+                self._clock_clients,
+                get_initial_payload=lambda conn: {},
+                bp=bp,
+                summarize=lambda payload: {"mode": "clock", "text": "Ordklocka (tavla)"},
+            )
 
         @bp.get("/")
         def index():
@@ -432,6 +460,7 @@ class WebOutput(Output):
                 transitions_js=self._transitions_js,
                 rotation_interval_seconds=self.rotation_interval_seconds,
                 idle_clock=self.config.idle_clock,
+                idle_clock_url=self._idle_clock_url,
             )
 
         @bp.get("/ordklocka")
@@ -441,6 +470,15 @@ class WebOutput(Output):
             if not _ORDKLOCKA_PAGE.exists():
                 return "Word clock page is missing from this installation", 404
             return send_file(_ORDKLOCKA_PAGE, mimetype="text/html")
+
+        @bp.get("/ordklocka/tavla")
+        def ordklocka_tavla():
+            return _send_ordklocka_file("tavla.html", "text/html")
+
+        @bp.get("/ordklocka/tid.js")
+        def ordklocka_tid_js():
+            # Time-reading logic shared by both clock pages.
+            return _send_ordklocka_file("tid.js", "text/javascript")
 
         @bp.get("/clients")
         def clients_page():
