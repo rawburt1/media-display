@@ -56,6 +56,10 @@ from mediainfo.imaging.transforms import parse_pipeline
 
 logger = logging.getLogger(__name__)
 
+# The standalone Swedish word clock page (served at /ordklocka, and shown
+# in an iframe over the idle screen when WebConfig.idle_clock is on).
+_ORDKLOCKA_PAGE = Path(__file__).resolve().parent / "static" / "ordklocka" / "index.html"
+
 # How often the background thread checks for clients due to rotate to
 # their next image. Independent of (and much finer-grained than)
 # rotation_interval_seconds, which controls how often any given client
@@ -367,7 +371,16 @@ class WebOutput(Output):
                 transitions_css=self._transitions_css,
                 transitions_js=self._transitions_js,
                 rotation_interval_seconds=self.rotation_interval_seconds,
+                idle_clock=self.config.idle_clock,
             )
+
+        @bp.get("/ordklocka")
+        def ordklocka():
+            # Served as-is (not via render_template) - it's a self-contained
+            # page, and its CSS/JS mustn't be run through Jinja.
+            if not _ORDKLOCKA_PAGE.exists():
+                return "Word clock page is missing from this installation", 404
+            return send_file(_ORDKLOCKA_PAGE, mimetype="text/html")
 
         @bp.get("/health/live")
         def health_live():

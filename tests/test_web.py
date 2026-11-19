@@ -696,3 +696,35 @@ def test_show_wordclouds_is_enabled():
     from mediainfo.outputs.web import WebOutput
 
     assert WebOutput.show_wordclouds is True
+
+
+# ---------------------------------------------------------------------------
+# Word clock (/ordklocka + idle_clock)
+# ---------------------------------------------------------------------------
+
+
+def test_ordklocka_page_is_served():
+    out = _output()
+    resp = _client(out).get("/ordklocka")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/html"
+    assert "KLOCKANTÄRK" in resp.data.decode()
+
+
+def test_ordklocka_missing_page_returns_404(monkeypatch, tmp_path):
+    monkeypatch.setattr("mediainfo.outputs.web._ORDKLOCKA_PAGE", tmp_path / "missing.html")
+    resp = _client(_output()).get("/ordklocka")
+    assert resp.status_code == 404
+
+
+def test_idle_clock_disabled_by_default():
+    assert WebConfig().idle_clock is False
+    body = _client(_output()).get("/").data.decode()
+    assert "const IDLE_CLOCK = false;" in body
+
+
+def test_idle_clock_enabled_in_index_page():
+    out = _output(_config(idle_clock=True))
+    body = _client(out).get("/").data.decode()
+    assert "const IDLE_CLOCK = true;" in body
+    assert 'id="idle-clock"' in body

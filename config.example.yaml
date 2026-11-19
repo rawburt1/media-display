@@ -722,6 +722,10 @@ outputs:
     # list any to skip here, e.g. [slide-up, slide-down]. Also available on
     # `info` and `video` below.
     transition_exclude: []
+    # Show a Swedish word clock ("ordklocka") full-screen while nothing is
+    # playing, instead of idle wallpapers. The clock page itself is always
+    # available at http://<this-machine>:<http.port>/ordklocka.
+    idle_clock: false
 
   # Multiple web outputs — e.g. one per room. Only the first can mount at
   # "/"; every instance past the first needs a unique `label` and is

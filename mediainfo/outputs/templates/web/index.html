@@ -23,6 +23,9 @@
     #art-label { font-size: 0.8em; opacity: 0.5; margin-top: 0.3em; }
     #progress { display: none; width: min(60vw, 400px); height: 4px; margin: 0.6em auto 0;
                 background: rgba(255, 255, 255, 0.25); border-radius: 2px; overflow: hidden; }
+    #idle-clock { position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0;
+                  display: none; background: #000; z-index: 10; }
+    #idle-clock.visible { display: block; }
     #progress-fill { width: 0%; height: 100%; background: #fff; border-radius: 2px; }
   </style>
 </head>
@@ -31,6 +34,7 @@
     <img id="art-a" alt="">
     <img id="art-b" alt="">
   </div>
+  <iframe id="idle-clock" title="Ordklocka" allow="fullscreen"></iframe>
   <div id="meta">
     <div id="title"></div>
     <div id="subtitle"></div>
@@ -99,6 +103,9 @@
       }
 
       const isIdle = data.source === "idle";
+      // Empty payload = stopped with no idle wallpapers; source "idle" =
+      // idle wallpaper. Either way nothing is playing.
+      setIdleClock(IDLE_CLOCK && (isIdle || !data.source));
       artContainer.classList.toggle("fullscreen", isIdle);
       meta.classList.toggle("hidden", isIdle);
 
@@ -106,6 +113,22 @@
       subtitle.textContent = data.subtitle || "";
       artLabel.textContent = data.art_label || "";
       setProgress(data);
+    }
+
+    // Optional word clock shown over everything while nothing is playing
+    // (outputs.web.idle_clock). Loaded only while shown, so it costs
+    // nothing during playback.
+    const IDLE_CLOCK = {{ "true" if idle_clock else "false" }};
+
+    function idleClockVisible() {
+      return document.getElementById("idle-clock").classList.contains("visible");
+    }
+
+    function setIdleClock(show) {
+      const frame = document.getElementById("idle-clock");
+      if (show === idleClockVisible()) return;
+      frame.classList.toggle("visible", show);
+      frame.src = show ? "/ordklocka" : "about:blank";
     }
 
     // Payloads only arrive on item changes and rotation ticks, so the bar
@@ -148,12 +171,24 @@
 
     setInterval(() => {
       if (Date.now() - lastMessageTime > STALE_TIMEOUT_MS) {
-        location.reload();
+        if (idleClockVisible() && currentWs) {
+          // Idle without wallpapers sends no messages at all, so silence
+          // is normal here - reconnect quietly (the server replies with
+          // the current state) instead of reloading and making the clock
+          // flicker every STALE_TIMEOUT_MS.
+          lastMessageTime = Date.now();
+          currentWs.close();
+        } else {
+          location.reload();
+        }
       }
     }, 10000);
 
+    let currentWs = null;
+
     function connect() {
       const ws = new WebSocket("ws://" + location.host + "/ws");
+      currentWs = ws;
       ws.onmessage = (event) => {
         lastMessageTime = Date.now();
         applyState(JSON.parse(event.data));

@@ -135,6 +135,10 @@ class WebConfig(_OutputFilterMixin):
     # All variants (fade, slide-left, slide-right, slide-up, slide-down,
     # zoom) are used by default, picked at random per image change.
     transition_exclude: list = dataclasses.field(default_factory=list)
+    # Show the Swedish word clock (also always available at /ordklocka)
+    # full-screen instead of idle wallpapers/blank screen while nothing
+    # is playing. Off by default.
+    idle_clock: bool = False
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))

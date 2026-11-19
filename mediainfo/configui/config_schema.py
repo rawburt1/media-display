@@ -591,6 +591,7 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "sources.chromecast.ignore_apps": 'Cast app names to ignore (e.g. screensaver apps). Also list any Nest Hub used as an output here, to avoid it detecting its own cast image as "now playing".',
     "sources.shield.adb_key_path": "Generated automatically on first run if missing - accept the authorization prompt on the device's screen.",
     "sources.youtube.adb_key_path": "Generated automatically on first run if missing. Use a different key file than sources.shield if pointed at the same device.",
+    "outputs.web.idle_clock": "Show a Swedish word clock full-screen while nothing is playing, instead of idle wallpapers. The clock is also always available at /ordklocka.",
     "outputs.pixoo.size": "64 for the Pixoo64 (most common), 16 for the 16×16 Pixel Art LED Frame.",
     "outputs.pixoo.screen_off_hours": "Turn the panel off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
     "outputs.pixoo.crop_strategy": 'How to pick the square crop before downscaling. "automatic" biases toward the top third for portrait sources (posters/covers) and centers otherwise.',

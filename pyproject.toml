@@ -66,7 +66,7 @@ mediainfo = "mediainfo.__main__:main"
 # mediainfo/outputs/static/) - without this they'd be silently dropped
 # from a `pip install .`, breaking those routes at runtime only.
 [tool.setuptools.package-data]
-"mediainfo.outputs" = ["templates/*/*.html", "static/*/*.css", "static/*/*.js"]
+"mediainfo.outputs" = ["templates/*/*.html", "static/*/*.css", "static/*/*.js", "static/*/*.html"]
 
 [tool.mypy]
 ignore_missing_imports = true

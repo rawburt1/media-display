@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page: #e9e6e1;
+    --ink: #3a3732;
+    --muted: #8a857c;
+    --face: #141414;
+    --face-edge: #000;
+    --off: rgba(255, 255, 255, 0.09);
+    --on: #fff8ea;
+    --glow: rgba(255, 236, 200, 0.55);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page: #0b0b0b;
+      --ink: #d8d4cc;
+      --muted: #7d786f;
+      --face: #161616;
+      --face-edge: #262626;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #0b0b0b;
+    --ink: #d8d4cc;
+    --muted: #7d786f;
+    --face: #161616;
+    --face-edge: #262626;
+  }
+  /* Klockfrontens färg (oberoende av sidans tema) */
+  .face[data-face="vit"] {
+    --face: #f4f2ee;
+    --face-edge: #d9d5ce;
+    --off: rgba(0, 0, 0, 0.08);
+    --on: #111;
+    --glow: transparent;
+  }
+  .face[data-face="ek"] {
+    --face: #6b4a2b;
+    --face-edge: #4a311b;
+    --off: rgba(0, 0, 0, 0.22);
+    --on: #fff3d6;
+    --glow: rgba(255, 220, 160, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: "Josefin Sans", system-ui, sans-serif;
+  }
+  body.idle { cursor: none; }
+
+  /* Klockfronten fyller hela skärmen */
+  .face {
+    position: fixed;
+    inset: 0;
+    background: var(--face);
+    display: grid;
+    place-items: center;
+    transition: background 0.4s;
+    --s: min(100vw, 100vh);
+  }
+  .square {
+    position: relative;
+    width: calc(var(--s) * 0.94);
+    height: calc(var(--s) * 0.94);
+    display: grid;
+    place-items: center;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(11, 1fr);
+    width: 84%;
+    row-gap: 0.9em;
+    font-size: calc(var(--s) * 0.055);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1;
+    user-select: none;
+  }
+  .grid span {
+    color: var(--off);
+    transition: color 0.6s ease, text-shadow 0.6s ease;
+  }
+  .grid span.on {
+    color: var(--on);
+    text-shadow: 0 0 0.35em var(--glow);
+  }
+
+  .dot {
+    position: absolute;
+    width: 1.4%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--off);
+    transition: background 0.6s, box-shadow 0.6s;
+  }
+  .dot.on { background: var(--on); box-shadow: 0 0 8px var(--glow); }
+  .dot:nth-of-type(1) { top: 3%; left: 3%; }
+  .dot:nth-of-type(2) { top: 3%; right: 3%; }
+  .dot:nth-of-type(3) { bottom: 3%; right: 3%; }
+  .dot:nth-of-type(4) { bottom: 3%; left: 3%; }
+
+  /* Kontroller som tonas fram vid musrörelse/tryck */
+  .panel {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: 14px;
+    background: var(--page);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    transition: opacity 0.5s, transform 0.5s;
+  }
+  body.idle .panel {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+    pointer-events: none;
+  }
+
+  .readout {
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    justify-content: center;
+    font-size: 14px;
+  }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .group > .label { color: var(--muted); margin-right: 4px; }
+  .controls button {
+    font: inherit;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+    border-radius: 999px;
+    padding: 5px 12px 3px;
+    cursor: pointer;
+  }
+  .controls button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--page);
+    border-color: var(--ink);
+  }
+</style>
+</head>
+<body>
+
+<div class="face" id="face" data-face="svart">
+  <div class="square">
+    <i class="dot"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i>
+    <div class="grid" id="grid" aria-hidden="true"></div>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+<div class="readout" id="readout" aria-live="polite"></div>
+
+<div class="controls">
+  <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+    <span class="label">20 / 40</span>
+    <button data-style="tjugo" aria-pressed="true">tjugo över</button>
+    <button data-style="halv" aria-pressed="false">tio i halv</button>
+  </div>
+  <div class="group" role="group" aria-label="Klockfront">
+    <span class="label">Front</span>
+    <button data-face="svart" aria-pressed="true">svart</button>
+    <button data-face="vit" aria-pressed="false">vit</button>
+    <button data-face="ek" aria-pressed="false">ek</button>
+  </div>
+  <div class="group">
+    <button id="fs" aria-pressed="false">helskärm</button>
+  </div>
+</div>
+</div>
+
+<script>
+  // 11 × 8 bokstäver. Ordens positioner anges nedan som [rad, kolumn, längd].
+  const ROWS = [
+    "KLOCKANTÄRK",
+    "FEMXKVARTNA",
+    "TIOFTJUGOLI",
+    "ÖVERMHALVBY",
+    "ETTUTVÅTREM",
+    "FYRAFEMSEXO",
+    "SJUÅTTANIOP",
+    "TIOELVATOLV",
+  ];
+
+  const W = {
+    KLOCKAN: [0, 0, 7], ÄR: [0, 8, 2],
+    FEM: [1, 0, 3], KVART: [1, 4, 5],
+    TIO: [2, 0, 3], TJUGO: [2, 4, 5], I: [2, 10, 1],
+    ÖVER: [3, 0, 4], HALV: [3, 5, 4],
+  };
+  const HOURS = [
+    [7, 7, 4], // TOLV
+    [4, 0, 3], // ETT
+    [4, 4, 3], // TVÅ
+    [4, 7, 3], // TRE
+    [5, 0, 4], // FYRA
+    [5, 4, 3], // FEM
+    [5, 7, 3], // SEX
+    [6, 0, 3], // SJU
+    [6, 3, 4], // ÅTTA
+    [6, 7, 3], // NIO
+    [7, 0, 3], // TIO
+    [7, 3, 4], // ELVA
+  ];
+
+  // Sanity check: varje ord ska matcha rutnätet.
+  const check = (name, [r, c, n]) => {
+    if (ROWS[r].slice(c, c + n) !== name) console.warn("Fel position för", name);
+  };
+  Object.entries(W).forEach(([k, v]) => check(k, v));
+  ["TOLV","ETT","TVÅ","TRE","FYRA","FEM","SEX","SJU","ÅTTA","NIO","TIO","ELVA"]
+    .forEach((h, i) => check(h, HOURS[i]));
+
+  // Bygg rutnätet
+  const grid = document.getElementById("grid");
+  const cells = ROWS.map(row =>
+    [...row].map(ch => {
+      const s = document.createElement("span");
+      s.textContent = ch;
+      grid.appendChild(s);
+      return s;
+    })
+  );
+  const dots = [...document.querySelectorAll(".dot")];
+  const readout = document.getElementById("readout");
+
+  // [minutord, nästa timme?]
+  function phrase(m5, style) {
+    switch (m5) {
+      case 0:  return [[], 0];
+      case 5:  return [["FEM", "ÖVER"], 0];
+      case 10: return [["TIO", "ÖVER"], 0];
+      case 15: return [["KVART", "ÖVER"], 0];
+      case 20: return style === "halv" ? [["TIO", "I", "HALV"], 1] : [["TJUGO", "ÖVER"], 0];
+      case 25: return [["FEM", "I", "HALV"], 1];
+      case 30: return [["HALV"], 1];
+      case 35: return [["FEM", "ÖVER", "HALV"], 1];
+      case 40: return style === "halv" ? [["TIO", "ÖVER", "HALV"], 1] : [["TJUGO", "I"], 1];
+      case 45: return [["KVART", "I"], 1];
+      case 50: return [["TIO", "I"], 1];
+      case 55: return [["FEM", "I"], 1];
+    }
+  }
+  const HOUR_NAMES = ["tolv","ett","två","tre","fyra","fem","sex","sju","åtta","nio","tio","elva"];
+
+  let style = "tjugo";
+  let last = "";
+
+  function render() {
+    const now = new Date();
+    const min = now.getMinutes();
+    const m5 = min - (min % 5);
+    const [words, bump] = phrase(m5, style);
+    const h = (now.getHours() + bump) % 12;
+
+    const lit = [W.KLOCKAN, W.ÄR, ...words.map(w => W[w]), HOURS[h]];
+    const key = lit.join("|") + (min % 5);
+    if (key === last) return;
+    last = key;
+
+    const on = new Set();
+    lit.forEach(([r, c, n]) => { for (let i = 0; i < n; i++) on.add(r * 11 + c + i); });
+    cells.flat().forEach((s, i) => s.classList.toggle("on", on.has(i)));
+    dots.forEach((d, i) => d.classList.toggle("on", i < min % 5));
+
+    const extra = min % 5 ? ` (+${min % 5} min)` : "";
+    readout.textContent =
+      ["Klockan är", ...words.map(w => w.toLowerCase()), HOUR_NAMES[h]].join(" ") + extra;
+  }
+
+  // Inställningar (sparas lokalt om möjligt)
+  const face = document.getElementById("face");
+  const load = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+  function setPressed(attr, value) {
+    document.querySelectorAll(`[data-${attr}]`).forEach(b => {
+      if (b.tagName === "BUTTON") b.setAttribute("aria-pressed", b.dataset[attr] === value);
+    });
+  }
+  function setStyle(v) { style = v; setPressed("style", v); save("ordklocka-style", v); last = ""; render(); }
+  function setFace(v) { face.dataset.face = v; setPressed("face", v); save("ordklocka-face", v); }
+
+  document.querySelectorAll("button[data-style]").forEach(b => b.onclick = () => setStyle(b.dataset.style));
+  document.querySelectorAll("button[data-face]").forEach(b => b.onclick = () => setFace(b.dataset.face));
+
+  setFace(load("ordklocka-face", "svart"));
+  setStyle(load("ordklocka-style", "tjugo"));
+  setInterval(render, 1000);
+
+  // Helskärm: knapp, dubbelklick eller F
+  const fsBtn = document.getElementById("fs");
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+  fsBtn.onclick = toggleFullscreen;
+  face.ondblclick = toggleFullscreen;
+  document.addEventListener("keydown", e => {
+    if (e.key === "f" || e.key === "F") toggleFullscreen();
+  });
+  document.addEventListener("fullscreenchange", () =>
+    fsBtn.setAttribute("aria-pressed", !!document.fullscreenElement));
+
+  // Göm panel och muspekare efter 3 s utan aktivitet
+  let idleTimer;
+  function wake() {
+    document.body.classList.remove("idle");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => document.body.classList.add("idle"), 3000);
+  }
+  ["mousemove", "pointerdown", "keydown", "touchstart"].forEach(ev =>
+    document.addEventListener(ev, wake, { passive: true }));
+  wake();
+</script>
+</body>
+</html>
