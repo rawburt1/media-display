@@ -66,6 +66,15 @@ _ORDKLOCKA_PAGE = Path(__file__).resolve().parent / "static" / "ordklocka" / "in
 # actually advances.
 _ROTATION_CHECK_INTERVAL_SECONDS = 1.0
 
+# Re-send a client its current state when nothing else has been sent to
+# it for this long. Idle with no wallpapers (or an item with a single
+# image) otherwise sends nothing at all, and the page's stale-connection
+# watchdog (STALE_TIMEOUT_MS in templates/web/index.html, 90s minimum)
+# would then reload the page every 90s. Re-sending the unchanged state is
+# a no-op on the page (same image, same text), so it works as a heartbeat
+# even for pages loaded before this existed. Must stay well under 90s.
+_HEARTBEAT_INTERVAL_SECONDS = 30.0
+
 
 @dataclasses.dataclass
 class _ClientRotation:
@@ -122,6 +131,9 @@ class WebOutput(Output):
         self._shared_order: List[int] = []
         self._next_offset = 0
         self._images_pushed_for_pool = False
+        # conn -> time.monotonic() of the last payload sent to it, for the
+        # heartbeat (see _HEARTBEAT_INTERVAL_SECONDS).
+        self._last_sent: Dict[Any, float] = {}
 
         self._health_fn = None
         self._history = None
@@ -225,6 +237,10 @@ class WebOutput(Output):
         as clients) and a randomly staggered timer phase. Caller must
         already hold _clients_lock.
         """
+        # Called on connect (right before the initial payload goes out)
+        # and on pool resets (followed by a push) - either way counts as
+        # just sent for the heartbeat.
+        self._last_sent[conn] = time.monotonic()
         if not self._pool_urls:
             self._client_rotation.pop(conn, None)
             return
@@ -310,6 +326,7 @@ class WebOutput(Output):
             time.sleep(_ROTATION_CHECK_INTERVAL_SECONDS)
             try:
                 self._rotate_clients_once()
+                self._heartbeat_once()
             except Exception:
                 # Without this, any unexpected error here (e.g. a bad
                 # artwork URL raising somewhere unanticipated) would kill
@@ -332,21 +349,40 @@ class WebOutput(Output):
         for conn in due:
             self._send_to_one(conn, self._personalized_payload(conn))
 
+    def _heartbeat_once(self) -> None:
+        """Re-send every client that hasn't been sent anything for
+        _HEARTBEAT_INTERVAL_SECONDS its current (unchanged) state."""
+        cutoff = time.monotonic() - _HEARTBEAT_INTERVAL_SECONDS
+        with self._clients_lock:
+            due = [c for c in self._clients if self._last_sent.get(c, 0.0) <= cutoff]
+        for conn in due:
+            self._send_to_one(conn, self._personalized_payload(conn))
+
+    def _drop_client(self, conn: Any) -> None:
+        self._client_rotation.pop(conn, None)
+        self._last_sent.pop(conn, None)
+
     def _send_to_one(self, conn: Any, payload: dict) -> None:
+        with self._clients_lock:
+            self._last_sent[conn] = time.monotonic()
         send_to_one(
             self._clients_lock,
             self._clients,
             conn,
             payload,
-            on_drop=lambda c: self._client_rotation.pop(c, None),
+            on_drop=self._drop_client,
         )
 
     def _push(self, payload: dict) -> None:
+        now = time.monotonic()
+        with self._clients_lock:
+            for conn in self._clients:
+                self._last_sent[conn] = now
         broadcast(
             self._clients_lock,
             self._clients,
             payload,
-            on_drop=lambda c: self._client_rotation.pop(c, None),
+            on_drop=self._drop_client,
         )
 
     def build_http_blueprint(self, url_prefix: str, sock: Optional[Sock] = None) -> Blueprint:
@@ -360,7 +396,7 @@ class WebOutput(Output):
                 self._clients,
                 get_initial_payload=self._personalized_payload,
                 on_connect=self._assign_client_rotation,
-                on_disconnect=lambda conn: self._client_rotation.pop(conn, None),
+                on_disconnect=self._drop_client,
                 bp=bp,
             )
 

@@ -728,3 +728,54 @@ def test_idle_clock_enabled_in_index_page():
     body = _client(out).get("/").data.decode()
     assert "const IDLE_CLOCK = true;" in body
     assert 'id="idle-clock"' in body
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat (keeps the page's stale-connection watchdog from reloading)
+# ---------------------------------------------------------------------------
+
+
+def test_heartbeat_resends_state_to_silent_idle_client():
+    from mediainfo.outputs import web
+
+    out = _output()
+    conn = _connect(out)
+    out._last_sent[conn] -= web._HEARTBEAT_INTERVAL_SECONDS + 1
+    out._heartbeat_once()
+    assert [json.loads(m) for m in conn.sent] == [{}]
+
+
+def test_heartbeat_resends_unchanged_playing_state():
+    from mediainfo.outputs import web
+
+    out = _output()
+    out.on_new_item(_music(), cache=None)
+    conn = _connect(out)
+    out._last_sent[conn] -= web._HEARTBEAT_INTERVAL_SECONDS + 1
+    out._heartbeat_once()
+    assert json.loads(conn.sent[-1])["title"] == "Bohemian Rhapsody"
+
+
+def test_heartbeat_skips_recently_sent_client():
+    out = _output()
+    conn = _connect(out)
+    out._push({})
+    sent_before = len(conn.sent)
+    out._heartbeat_once()
+    assert len(conn.sent) == sent_before
+
+
+def test_heartbeat_interval_is_well_under_page_reload_timeout():
+    from mediainfo.outputs import web
+
+    # The page reloads after 90s without a message (STALE_TIMEOUT_MS floor).
+    assert web._HEARTBEAT_INTERVAL_SECONDS * 2 < 90
+
+
+def test_dropped_client_forgets_heartbeat_state():
+    out = _output()
+    conn = _connect(out)
+    conn.alive = False
+    out._push({})
+    assert conn not in out._last_sent
+    assert conn not in out._clients

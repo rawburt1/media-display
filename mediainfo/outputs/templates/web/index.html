@@ -156,7 +156,10 @@
 
     setInterval(renderProgress, 1000);
 
-    // Force a full page reload if no message has arrived in a while. A
+    // Force a full page reload if no message has arrived in a while (the
+    // server re-sends the current state at least every 30s even when
+    // nothing changes - see _HEARTBEAT_INTERVAL_SECONDS in web.py - so
+    // silence means the connection is dead, not just idle). A
     // dead connection doesn't always fire onclose (e.g. a Wi-Fi drop with
     // no clean close, or a resource-constrained device like a Raspberry
     // Pi 3 whose tab stalls) - when that happens the reconnect logic
@@ -171,24 +174,12 @@
 
     setInterval(() => {
       if (Date.now() - lastMessageTime > STALE_TIMEOUT_MS) {
-        if (idleClockVisible() && currentWs) {
-          // Idle without wallpapers sends no messages at all, so silence
-          // is normal here - reconnect quietly (the server replies with
-          // the current state) instead of reloading and making the clock
-          // flicker every STALE_TIMEOUT_MS.
-          lastMessageTime = Date.now();
-          currentWs.close();
-        } else {
-          location.reload();
-        }
+        location.reload();
       }
     }, 10000);
 
-    let currentWs = null;
-
     function connect() {
       const ws = new WebSocket("ws://" + location.host + "/ws");
-      currentWs = ws;
       ws.onmessage = (event) => {
         lastMessageTime = Date.now();
         applyState(JSON.parse(event.data));
