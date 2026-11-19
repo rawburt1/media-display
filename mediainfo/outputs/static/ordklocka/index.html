@@ -81,8 +81,8 @@
     display: grid;
     grid-template-columns: repeat(12, 1fr);
     width: 86%;
-    row-gap: 0.62em;
-    font-size: calc(var(--s) * 0.049);
+    row-gap: 0.55em;
+    font-size: calc(var(--s) * 0.042);
     font-weight: 600;
     text-align: center;
     line-height: 1;
@@ -198,9 +198,13 @@
 </div>
 
 <script>
-  // 12 × 11 bokstäver, 24-timmarsklocka. Ordens positioner anges nedan
+  // 12 × 14 bokstäver, 24-timmarsklocka. Ordens positioner anges nedan
   // som [rad, kolumn, längd]. FEM/SEX/SJU/TRE tänds som början av
   // FEMTON/SEXTON/SJUTTON/TRETTON, och 21–23 är TJUGO + ETT/TVÅ/TRE.
+  //
+  // 00:00–12:59 läses som vanligt ("fem i halv ett"), med minutorden i
+  // rad 0–3 före timmen. Från 13:00 läses tiden digitalt ("tretton
+  // tjugofem") med minutorden i rad 10–13, efter alla timord 13–23.
   const ROWS = [
     "KLOCKANTÄRSO",
     "FEMXKVARTNAD",
@@ -213,6 +217,9 @@
     "SJUTTONÅTTAR",
     "ARTONNITTONE",
     "NIOTIOELVAKS",
+    "TJUGOTRETTIO",
+    "FYRTIOFEMTIO",
+    "NOLLFEMTONUR",
   ];
   const COLS = ROWS[0].length;
 
@@ -233,6 +240,20 @@
     ARTON: [9, 0, 5], NITTON: [9, 5, 6],
     NIO: [10, 0, 3], TIO: [10, 3, 3], ELVA: [10, 6, 4],
   };
+  // Minutord för digital läsning (13:00–23:59). TIO delas med timordet
+  // TIO i rad 10 - alla timmar 13–23 ligger före det.
+  const M = {
+    TIO: [10, 3, 3], TJUGO: [11, 0, 5], TRETTIO: [11, 5, 7],
+    FYRTIO: [12, 0, 6], FEMTIO: [12, 6, 6],
+    NOLL: [13, 0, 4], FEM: [13, 4, 3], FEMTON: [13, 4, 6],
+  };
+  // Varje inre lista är ett utläst ord: [["TJUGO", "FEM"]] = "tjugofem".
+  const DIGITAL_MINUTES = {
+    0: [], 5: [["NOLL"], ["FEM"]], 10: [["TIO"]], 15: [["FEMTON"]],
+    20: [["TJUGO"]], 25: [["TJUGO", "FEM"]], 30: [["TRETTIO"]],
+    35: [["TRETTIO", "FEM"]], 40: [["FYRTIO"]], 45: [["FYRTIO", "FEM"]],
+    50: [["FEMTIO"]], 55: [["FEMTIO", "FEM"]],
+  };
   const HOUR_WORDS = [
     ["TOLV"], ["ETT"], ["TVÅ"], ["TRE"], ["FYRA"], ["FEM"], ["SEX"], ["SJU"],
     ["ÅTTA"], ["NIO"], ["TIO"], ["ELVA"], ["TOLV"], ["TRETTON"], ["FJORTON"],
@@ -246,6 +267,7 @@
   };
   Object.entries(W).forEach(([k, v]) => check(k, v));
   Object.entries(H).forEach(([k, v]) => check(k, v));
+  Object.entries(M).forEach(([k, v]) => check(k, v));
   if (ROWS.some(r => r.length !== COLS)) console.warn("Raderna är olika långa");
 
   // Bygg rutnätet
@@ -261,7 +283,7 @@
   const dots = [...document.querySelectorAll(".dot")];
   const readout = document.getElementById("readout");
 
-  // [minutord, nästa timme?]
+  // Vanlig läsning: [minutord, nästa timme?]
   function phrase(m5, style) {
     switch (m5) {
       case 0:  return [[], 0];
@@ -283,14 +305,29 @@
   let style = "tjugo";
   let last = "";
 
+  // Vad som ska tändas och läsas ut: [[rad, kolumn, längd], ...] och text.
+  function reading(hour, min, style) {
+    const m5 = min - (min % 5);
+    if (hour >= 13) {
+      const minutes = DIGITAL_MINUTES[m5];
+      return [
+        [W.KLOCKAN, W.ÄR, ...HOUR_WORDS[hour].map(w => H[w]), ...minutes.flat().map(w => M[w])],
+        [hourName(hour), ...minutes.map(parts => parts.join("").toLowerCase())],
+      ];
+    }
+    const [words, bump] = phrase(m5, style);
+    // 12-timmarsnamn: 12:25 är "fem i halv ett", inte "... halv tretton".
+    const h = (hour + bump) % 12;
+    return [
+      [W.KLOCKAN, W.ÄR, ...words.map(w => W[w]), ...HOUR_WORDS[h].map(w => H[w])],
+      [...words.map(w => w.toLowerCase()), hourName(h)],
+    ];
+  }
+
   function render() {
     const now = new Date();
     const min = now.getMinutes();
-    const m5 = min - (min % 5);
-    const [words, bump] = phrase(m5, style);
-    const h = (now.getHours() + bump) % 24;
-
-    const lit = [W.KLOCKAN, W.ÄR, ...words.map(w => W[w]), ...HOUR_WORDS[h].map(w => H[w])];
+    const [lit, spoken] = reading(now.getHours(), min, style);
     const key = lit.join("|") + (min % 5);
     if (key === last) return;
     last = key;
@@ -302,7 +339,7 @@
 
     const extra = min % 5 ? ` (+${min % 5} min)` : "";
     readout.textContent =
-      ["Klockan är", ...words.map(w => w.toLowerCase()), hourName(h)].join(" ") + extra;
+      ["Klockan är", ...spoken].join(" ") + extra;
   }
 
   // Inställningar (sparas lokalt om möjligt)
