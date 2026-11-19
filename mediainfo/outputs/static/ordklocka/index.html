@@ -79,10 +79,10 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(11, 1fr);
-    width: 84%;
-    row-gap: 0.9em;
-    font-size: calc(var(--s) * 0.055);
+    grid-template-columns: repeat(12, 1fr);
+    width: 86%;
+    row-gap: 0.62em;
+    font-size: calc(var(--s) * 0.049);
     font-weight: 600;
     text-align: center;
     line-height: 1;
@@ -198,17 +198,23 @@
 </div>
 
 <script>
-  // 11 × 8 bokstäver. Ordens positioner anges nedan som [rad, kolumn, längd].
+  // 12 × 11 bokstäver, 24-timmarsklocka. Ordens positioner anges nedan
+  // som [rad, kolumn, längd]. FEM/SEX/SJU/TRE tänds som början av
+  // FEMTON/SEXTON/SJUTTON/TRETTON, och 21–23 är TJUGO + ETT/TVÅ/TRE.
   const ROWS = [
-    "KLOCKANTÄRK",
-    "FEMXKVARTNA",
-    "TIOFTJUGOLI",
-    "ÖVERMHALVBY",
-    "ETTUTVÅTREM",
-    "FYRAFEMSEXO",
-    "SJUÅTTANIOP",
-    "TIOELVATOLV",
+    "KLOCKANTÄRSO",
+    "FEMXKVARTNAD",
+    "TIOFTJUGOLIS",
+    "ÖVERMHALVBYN",
+    "TJUGOETTTOLV",
+    "TVÅTRETTONAS",
+    "FJORTONFYRAK",
+    "FEMTONSEXTON",
+    "SJUTTONÅTTAR",
+    "ARTONNITTONE",
+    "NIOTIOELVAKS",
   ];
+  const COLS = ROWS[0].length;
 
   const W = {
     KLOCKAN: [0, 0, 7], ÄR: [0, 8, 2],
@@ -216,19 +222,22 @@
     TIO: [2, 0, 3], TJUGO: [2, 4, 5], I: [2, 10, 1],
     ÖVER: [3, 0, 4], HALV: [3, 5, 4],
   };
-  const HOURS = [
-    [7, 7, 4], // TOLV
-    [4, 0, 3], // ETT
-    [4, 4, 3], // TVÅ
-    [4, 7, 3], // TRE
-    [5, 0, 4], // FYRA
-    [5, 4, 3], // FEM
-    [5, 7, 3], // SEX
-    [6, 0, 3], // SJU
-    [6, 3, 4], // ÅTTA
-    [6, 7, 3], // NIO
-    [7, 0, 3], // TIO
-    [7, 3, 4], // ELVA
+  // Timord 0–23, var och en en lista av [rad, kolumn, längd]. Timme 0
+  // läses "tolv" (kvart över tolv), precis som på en 12-timmarsklocka.
+  const H = {
+    TJUGO: [4, 0, 5], ETT: [4, 5, 3], TOLV: [4, 8, 4],
+    TVÅ: [5, 0, 3], TRE: [5, 3, 3], TRETTON: [5, 3, 7],
+    FJORTON: [6, 0, 7], FYRA: [6, 7, 4],
+    FEM: [7, 0, 3], FEMTON: [7, 0, 6], SEX: [7, 6, 3], SEXTON: [7, 6, 6],
+    SJU: [8, 0, 3], SJUTTON: [8, 0, 7], ÅTTA: [8, 7, 4],
+    ARTON: [9, 0, 5], NITTON: [9, 5, 6],
+    NIO: [10, 0, 3], TIO: [10, 3, 3], ELVA: [10, 6, 4],
+  };
+  const HOUR_WORDS = [
+    ["TOLV"], ["ETT"], ["TVÅ"], ["TRE"], ["FYRA"], ["FEM"], ["SEX"], ["SJU"],
+    ["ÅTTA"], ["NIO"], ["TIO"], ["ELVA"], ["TOLV"], ["TRETTON"], ["FJORTON"],
+    ["FEMTON"], ["SEXTON"], ["SJUTTON"], ["ARTON"], ["NITTON"], ["TJUGO"],
+    ["TJUGO", "ETT"], ["TJUGO", "TVÅ"], ["TJUGO", "TRE"],
   ];
 
   // Sanity check: varje ord ska matcha rutnätet.
@@ -236,8 +245,8 @@
     if (ROWS[r].slice(c, c + n) !== name) console.warn("Fel position för", name);
   };
   Object.entries(W).forEach(([k, v]) => check(k, v));
-  ["TOLV","ETT","TVÅ","TRE","FYRA","FEM","SEX","SJU","ÅTTA","NIO","TIO","ELVA"]
-    .forEach((h, i) => check(h, HOURS[i]));
+  Object.entries(H).forEach(([k, v]) => check(k, v));
+  if (ROWS.some(r => r.length !== COLS)) console.warn("Raderna är olika långa");
 
   // Bygg rutnätet
   const grid = document.getElementById("grid");
@@ -269,7 +278,7 @@
       case 55: return [["FEM", "I"], 1];
     }
   }
-  const HOUR_NAMES = ["tolv","ett","två","tre","fyra","fem","sex","sju","åtta","nio","tio","elva"];
+  const hourName = h => HOUR_WORDS[h].join("").toLowerCase();
 
   let style = "tjugo";
   let last = "";
@@ -279,21 +288,21 @@
     const min = now.getMinutes();
     const m5 = min - (min % 5);
     const [words, bump] = phrase(m5, style);
-    const h = (now.getHours() + bump) % 12;
+    const h = (now.getHours() + bump) % 24;
 
-    const lit = [W.KLOCKAN, W.ÄR, ...words.map(w => W[w]), HOURS[h]];
+    const lit = [W.KLOCKAN, W.ÄR, ...words.map(w => W[w]), ...HOUR_WORDS[h].map(w => H[w])];
     const key = lit.join("|") + (min % 5);
     if (key === last) return;
     last = key;
 
     const on = new Set();
-    lit.forEach(([r, c, n]) => { for (let i = 0; i < n; i++) on.add(r * 11 + c + i); });
+    lit.forEach(([r, c, n]) => { for (let i = 0; i < n; i++) on.add(r * COLS + c + i); });
     cells.flat().forEach((s, i) => s.classList.toggle("on", on.has(i)));
     dots.forEach((d, i) => d.classList.toggle("on", i < min % 5));
 
     const extra = min % 5 ? ` (+${min % 5} min)` : "";
     readout.textContent =
-      ["Klockan är", ...words.map(w => w.toLowerCase()), HOUR_NAMES[h]].join(" ") + extra;
+      ["Klockan är", ...words.map(w => w.toLowerCase()), hourName(h)].join(" ") + extra;
   }
 
   // Inställningar (sparas lokalt om möjligt)

@@ -708,7 +708,7 @@ def test_ordklocka_page_is_served():
     resp = _client(out).get("/ordklocka")
     assert resp.status_code == 200
     assert resp.mimetype == "text/html"
-    assert "KLOCKANTÄRK" in resp.data.decode()
+    assert "KLOCKANTÄRSO" in resp.data.decode()
 
 
 def test_ordklocka_missing_page_returns_404(monkeypatch, tmp_path):
