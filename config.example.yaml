@@ -726,9 +726,11 @@ outputs:
     # playing, instead of idle wallpapers. The clock page itself is always
     # available at http://<this-machine>:<http.port>/ordklocka.
     idle_clock: false
-    # Which clock idle_clock shows: "words" (the word clock grid) or
+    # Which clock idle_clock shows: "words" (the word clock grid),
     # "split_flap" (an old railway departure board whose flaps rattle to
-    # each word - also always available at /ordklocka/tavla).
+    # each word - also always available at /ordklocka/tavla), "matrix"
+    # (green code rain that writes the words, /ordklocka/matrix) or
+    # "eye_chart" (an optician's eye chart, /ordklocka/syntavla).
     idle_clock_style: words
 
   # Multiple web outputs — e.g. one per room. Only the first can mount at

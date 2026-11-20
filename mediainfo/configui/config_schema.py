@@ -561,7 +561,7 @@ _ENUM_CHOICES: Dict[str, List[str]] = {
     "contrast_boost": ["off", "low", "medium", "high"],
     "saturation_boost": ["off", "low", "medium", "high"],
     "text_removal_method": ["inpaint", "soft_fill", "crop_preference"],
-    "idle_clock_style": ["words", "split_flap"],
+    "idle_clock_style": ["words", "split_flap", "matrix", "eye_chart"],
     "transition_exclude": ["fade", "slide-left", "slide-right", "slide-up", "slide-down", "zoom"],
 }
 
@@ -593,7 +593,7 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "sources.shield.adb_key_path": "Generated automatically on first run if missing - accept the authorization prompt on the device's screen.",
     "sources.youtube.adb_key_path": "Generated automatically on first run if missing. Use a different key file than sources.shield if pointed at the same device.",
     "outputs.web.idle_clock": "Show a Swedish word clock full-screen while nothing is playing, instead of idle wallpapers. The clock is also always available at /ordklocka.",
-    "outputs.web.idle_clock_style": '"words" is the word clock grid (/ordklocka); "split_flap" is an old railway departure board whose flaps rattle to each word (/ordklocka/tavla).',
+    "outputs.web.idle_clock_style": '"words" is the word clock grid (/ordklocka); "split_flap" is an old railway departure board whose flaps rattle to each word (/ordklocka/tavla); "matrix" has falling green code rain write the words (/ordklocka/matrix); "eye_chart" lights the words on an optician eye chart (/ordklocka/syntavla).',
     "outputs.pixoo.size": "64 for the Pixoo64 (most common), 16 for the 16×16 Pixel Art LED Frame.",
     "outputs.pixoo.screen_off_hours": "Turn the panel off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
     "outputs.pixoo.crop_strategy": 'How to pick the square crop before downscaling. "automatic" biases toward the top third for portrait sources (posters/covers) and centers otherwise.',

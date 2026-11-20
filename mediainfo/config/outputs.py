@@ -141,7 +141,9 @@ class WebConfig(_OutputFilterMixin):
     idle_clock: bool = False
     # Which clock idle_clock shows: "words" (the word clock grid, also at
     # /ordklocka) or "split_flap" (an old railway departure board whose
-    # flaps rattle to each word, also at /ordklocka/tavla).
+    # flaps rattle to each word, also at /ordklocka/tavla), "matrix"
+    # (code rain that writes the words, /ordklocka/matrix) or "eye_chart"
+    # (an optician's eye chart, /ordklocka/syntavla).
     idle_clock_style: str = "words"
 
 

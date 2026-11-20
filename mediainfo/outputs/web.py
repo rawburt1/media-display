@@ -34,7 +34,7 @@ import random
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from flask import Blueprint, jsonify, render_template, request, send_file
 from flask_sock import Sock
@@ -63,7 +63,22 @@ logger = logging.getLogger(__name__)
 _ORDKLOCKA_DIR = Path(__file__).resolve().parent / "static" / "ordklocka"
 _ORDKLOCKA_PAGE = _ORDKLOCKA_DIR / "index.html"
 # idle_clock_style -> the clock page shown over the idle screen.
-_IDLE_CLOCK_URLS = {"words": "/ordklocka", "split_flap": "/ordklocka/tavla"}
+_IDLE_CLOCK_URLS = {
+    "words": "/ordklocka",
+    "split_flap": "/ordklocka/tavla",
+    "matrix": "/ordklocka/matrix",
+    "eye_chart": "/ordklocka/syntavla",
+}
+# Clock page path -> its label on /clients. Each page has a presence
+# WebSocket at <path>/ws (/ordklocka/ws for the word clock).
+_CLOCK_LABELS = {
+    "/ordklocka": "Ordklocka",
+    "/ordklocka/tavla": "Ordklocka (tavla)",
+    "/ordklocka/matrix": "Ordklocka (matrix)",
+    "/ordklocka/syntavla": "Ordklocka (syntavla)",
+}
+# The only font files /ordklocka/fonts/<name> will serve.
+_ORDKLOCKA_FONTS = frozenset({"josefin-sans-latin-600.woff2", "optician-sans.woff2"})
 
 # How often the background thread checks for clients due to rotate to
 # their next image. Independent of (and much finer-grained than)
@@ -98,6 +113,11 @@ def _send_ordklocka_file(name: str, mimetype: str):
     if not path.exists():
         return "Word clock file is missing from this installation", 404
     return send_file(path, mimetype=mimetype)
+
+
+def _clock_summary(label: str) -> Callable[[dict], Dict[str, str]]:
+    """What a standalone clock page shows, for /clients."""
+    return lambda payload: {"mode": "clock", "text": label}
 
 
 class WebOutput(Output):
@@ -379,8 +399,7 @@ class WebOutput(Output):
         word clock covers the idle screen."""
         if not self.config.idle_clock:
             return summarize_payload(payload)
-        label = "Ordklocka (tavla)" if self._idle_clock_url.endswith("/tavla") else "Ordklocka"
-        return summarize_payload(payload, idle_label=label)
+        return summarize_payload(payload, idle_label=_CLOCK_LABELS[self._idle_clock_url])
 
     def _heartbeat_once(self) -> None:
         """Re-send every client that hasn't been sent anything for
@@ -433,24 +452,16 @@ class WebOutput(Output):
                 bp=bp,
                 summarize=self._summarize,
             )
-            register_websocket_route(
-                sock,
-                "/ordklocka/ws",
-                self._clock_clients_lock,
-                self._clock_clients,
-                get_initial_payload=lambda conn: {},
-                bp=bp,
-                summarize=lambda payload: {"mode": "clock", "text": "Ordklocka"},
-            )
-            register_websocket_route(
-                sock,
-                "/ordklocka/tavla/ws",
-                self._clock_clients_lock,
-                self._clock_clients,
-                get_initial_payload=lambda conn: {},
-                bp=bp,
-                summarize=lambda payload: {"mode": "clock", "text": "Ordklocka (tavla)"},
-            )
+            for page, label in _CLOCK_LABELS.items():
+                register_websocket_route(
+                    sock,
+                    page + "/ws",
+                    self._clock_clients_lock,
+                    self._clock_clients,
+                    get_initial_payload=lambda conn: {},
+                    bp=bp,
+                    summarize=_clock_summary(label),
+                )
 
         @bp.get("/")
         def index():
@@ -474,6 +485,25 @@ class WebOutput(Output):
         @bp.get("/ordklocka/tavla")
         def ordklocka_tavla():
             return _send_ordklocka_file("tavla.html", "text/html")
+
+        @bp.get("/ordklocka/matrix")
+        def ordklocka_matrix():
+            return _send_ordklocka_file("matrix.html", "text/html")
+
+        @bp.get("/ordklocka/syntavla")
+        def ordklocka_syntavla():
+            return _send_ordklocka_file("syntavla.html", "text/html")
+
+        @bp.get("/ordklocka/layouts.js")
+        def ordklocka_layouts_js():
+            # Grids and reading rules for the matrix and syntavla pages.
+            return _send_ordklocka_file("layouts.js", "text/javascript")
+
+        @bp.get("/ordklocka/fonts/<name>")
+        def ordklocka_font(name: str):
+            if name not in _ORDKLOCKA_FONTS:
+                return "Not found", 404
+            return _send_ordklocka_file("fonts/" + name, "font/woff2")
 
         @bp.get("/ordklocka/tid.js")
         def ordklocka_tid_js():

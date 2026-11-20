@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Syntavla</title>
+<style>
+  @font-face {
+    font-family: "Optician Sans";
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url("/ordklocka/fonts/optician-sans.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Josefin Sans";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("/ordklocka/fonts/josefin-sans-latin-600.woff2") format("woff2");
+  }
+  :root {
+    --wall: #c9ccc8;
+    --ink: #3a3732;
+    --muted: #7b7a74;
+    --panel: #ecebe6;
+    --chart: #fbfbf7;
+    --chart-glow: rgba(0, 0, 0, 0.18);
+    --lit: #111;
+    --unlit: rgba(0, 0, 0, 0.065);
+    --label: #9a9a92;
+    --red: #d42f2a;
+    --green: #2b9447;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --wall: #17191b;
+      --ink: #d8d4cc;
+      --muted: #8a867e;
+      --panel: #222426;
+      --chart-glow: rgba(255, 255, 240, 0.16);
+    }
+  }
+  :root[data-theme="dark"] {
+    --wall: #17191b;
+    --ink: #d8d4cc;
+    --muted: #8a867e;
+    --panel: #222426;
+    --chart-glow: rgba(255, 255, 240, 0.16);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: var(--wall);
+    color: var(--ink);
+    font-family: "Josefin Sans", system-ui, sans-serif;
+    display: grid;
+    place-items: center;
+    /* Tavlans innehållsbredd: tavlan är ungefär dubbelt så hög som bred */
+    --cw: min(70vw, calc((100vh - 6vh) / 1.98));
+    --cw: min(70vw, calc((100dvh - 6dvh) / 1.98));
+  }
+  body.idle { cursor: none; }
+
+  /* Ljuslådan */
+  .chart {
+    position: relative;
+    width: calc(var(--cw) * 1.3);
+    padding: calc(var(--cw) * 0.07) calc(var(--cw) * 0.15) calc(var(--cw) * 0.06);
+    background: var(--chart);
+    border-radius: calc(var(--cw) * 0.012);
+    box-shadow: 0 0 calc(var(--cw) * 0.12) var(--chart-glow),
+                0 0 0 calc(var(--cw) * 0.012) #e3e2dc;
+    font-family: "Optician Sans", "Josefin Sans", sans-serif;
+    user-select: none;
+  }
+  .title {
+    text-align: center;
+    font-family: "Josefin Sans", sans-serif;
+    font-weight: 600;
+    font-size: calc(var(--cw) * 0.03);
+    letter-spacing: 0.5em;
+    padding-left: 0.5em;
+    color: #3a3a36;
+    margin-bottom: calc(var(--cw) * 0.06);
+  }
+
+  .row {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    gap: 0.55em;
+    font-size: calc(var(--cw) / (var(--n) * 1.55));
+    line-height: 1;
+    margin-bottom: 0.5em;
+  }
+  .row span {
+    width: 1em;
+    text-align: center;
+    color: var(--unlit);
+    transition: color 0.9s ease;
+  }
+  .row span.on { color: var(--lit); }
+
+  /* Visus-värden i marginalen, som på en riktig tavla */
+  .row::after {
+    content: attr(data-visus);
+    position: absolute;
+    right: calc(var(--cw) * -0.11);
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: "Josefin Sans", sans-serif;
+    font-weight: 600;
+    font-size: calc(var(--cw) * 0.022);
+    color: var(--label);
+  }
+  .row::before {
+    content: attr(data-dist);
+    position: absolute;
+    left: calc(var(--cw) * -0.11);
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: "Josefin Sans", sans-serif;
+    font-weight: 600;
+    font-size: calc(var(--cw) * 0.022);
+    color: var(--label);
+  }
+  .rule {
+    height: calc(var(--cw) * 0.004);
+    background: var(--red);
+    margin: calc(var(--cw) * -0.01) calc(var(--cw) * -0.04) calc(var(--cw) * 0.035);
+    opacity: 0.85;
+  }
+
+  /* Rött/grönt test längst ner – ringarna visar minuterna mellan femminuterssteg */
+  .duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: calc(var(--cw) * 0.13);
+    margin-top: calc(var(--cw) * 0.04);
+  }
+  .duo > div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--cw) * 0.07);
+  }
+  .duo .r { background: var(--red); }
+  .duo .g { background: var(--green); }
+  .ring {
+    width: calc(var(--cw) * 0.06);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: calc(var(--cw) * 0.012) solid rgba(0, 0, 0, 0.18);
+    transition: border-color 0.9s ease;
+  }
+  .ring.on { border-color: #111; }
+
+  /* Kontroller som tonas fram vid musrörelse/tryck */
+  .panel {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    transition: opacity 0.5s, transform 0.5s;
+  }
+  body.idle .panel {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+    pointer-events: none;
+  }
+  .readout { font-size: 14px; letter-spacing: 0.04em; color: var(--muted); text-align: center; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    justify-content: center;
+    font-size: 14px;
+  }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .group[hidden] { display: none; }
+  .group > .label { color: var(--muted); margin-right: 4px; }
+  .controls button, .controls a {
+    font: inherit;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+    border-radius: 999px;
+    padding: 5px 12px 3px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .controls button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--panel);
+    border-color: var(--ink);
+  }
+</style>
+</head>
+<body>
+
+<div class="chart" id="chart" aria-hidden="true">
+  <div class="title">KLOCKAN ÄR</div>
+  <div id="rows"></div>
+  <div class="duo">
+    <div class="r"><i class="ring"></i><i class="ring"></i></div>
+    <div class="g"><i class="ring"></i><i class="ring"></i></div>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Tidsformat">
+      <span class="label">Tid</span>
+      <button data-mode="12" aria-pressed="true">12 h</button>
+      <button data-mode="24" aria-pressed="false">24 h</button>
+    </div>
+    <div class="group" id="style-group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo" aria-pressed="true">tjugo över</button>
+      <button data-style="halv" aria-pressed="false">tio i halv</button>
+    </div>
+    <div class="group">
+      <button id="fs" aria-pressed="false">helskärm</button>
+      <a href="/ordklocka">klassisk</a>
+      <a href="/ordklocka/matrix">matrix</a>
+    </div>
+  </div>
+</div>
+
+<script src="/ordklocka/layouts.js"></script>
+<script>
+  const LAYOUTS = window.ORDKLOCKA_LAYOUTS;
+  // Marginaltexter per rad: avstånd (m) till vänster, visus till höger
+  const LABELS = {
+    syn: {
+      dist:  ["60", "36", "24", "18", "12", "9", "7,5", "6", "5"],
+      visus: ["0,1", "0,15", "0,25", "0,3", "0,5", "0,6", "0,8", "1,0", "1,2"],
+    },
+    syn24: {
+      dist:  ["60", "48", "36", "30", "24", "18", "15", "12", "10", "9", "7,5", "6", "5"],
+      visus: ["0,1", "0,12", "0,16", "0,2", "0,25", "0,3", "0,4", "0,5", "0,6", "0,7", "0,8", "1,0", "1,2"],
+    },
+  };
+
+  const rowsEl = document.getElementById("rows");
+  let L, cells = [];
+
+  function buildChart(key) {
+    L = LAYOUTS[key];
+    const lab = LABELS[key];
+    rowsEl.textContent = "";
+    cells = L.rows.map((row, r) => {
+      const div = document.createElement("div");
+      div.className = "row";
+      const letters = [...row];
+      div.style.setProperty("--n", letters.length);
+      div.dataset.dist = lab.dist[r] || "";
+      div.dataset.visus = lab.visus[r] || "";
+      rowsEl.appendChild(div);
+      if (r === L.ruleAfter) {             // röd linje som på många syntavlor
+        const rule = document.createElement("div");
+        rule.className = "rule";
+        rowsEl.appendChild(rule);
+      }
+      return letters.map(ch => {
+        const s = document.createElement("span");
+        s.textContent = ch;
+        div.appendChild(s);
+        return s;
+      });
+    });
+    last = "";
+  }
+  const rings = [...document.querySelectorAll(".ring")];
+  const readout = document.getElementById("readout");
+
+  let style = "tjugo";
+  var last = "";
+
+  function render() {
+    const now = new Date();
+    const min = now.getMinutes();
+    const { cells: lit, text } = L.compute(now, style);
+    const key = lit.join("|") + (min % 5);
+    if (key === last) return;
+    last = key;
+
+    const on = new Set();
+    lit.forEach(([r, c, n]) => { for (let i = 0; i < n; i++) on.add(r + ":" + (c + i)); });
+    cells.forEach((row, r) => row.forEach((s, c) => s.classList.toggle("on", on.has(r + ":" + c))));
+    rings.forEach((d, i) => d.classList.toggle("on", i < min % 5));
+    readout.textContent = text + (min % 5 ? ` (+${min % 5} min)` : "");
+  }
+
+  // Inställningar
+  const load = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  function setStyle(v) {
+    style = v;
+    document.querySelectorAll("button[data-style]").forEach(b =>
+      b.setAttribute("aria-pressed", b.dataset.style === v));
+    save("ordklocka-style", v); last = ""; render();
+  }
+  function setMode(v) {
+    if (v !== "24") v = "12";
+    document.querySelectorAll("button[data-mode]").forEach(b =>
+      b.setAttribute("aria-pressed", b.dataset.mode === v));
+    document.getElementById("style-group").hidden = v !== "12";
+    save("ordklocka-mode", v);
+    buildChart(v === "24" ? "syn24" : "syn");
+    render();
+  }
+  document.querySelectorAll("button[data-style]").forEach(b => b.onclick = () => setStyle(b.dataset.style));
+  document.querySelectorAll("button[data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  setMode(load("ordklocka-mode", "12"));
+  setStyle(load("ordklocka-style", "tjugo"));
+  setInterval(render, 1000);
+
+  // Helskärm: knapp, dubbelklick eller F
+  const fsBtn = document.getElementById("fs");
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+  fsBtn.onclick = toggleFullscreen;
+  document.getElementById("chart").ondblclick = toggleFullscreen;
+  document.addEventListener("keydown", e => { if (e.key === "f" || e.key === "F") toggleFullscreen(); });
+  document.addEventListener("fullscreenchange", () =>
+    fsBtn.setAttribute("aria-pressed", !!document.fullscreenElement));
+
+  // Göm panel och muspekare efter 3 s utan aktivitet
+  let idleTimer;
+  function wake() {
+    document.body.classList.remove("idle");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => document.body.classList.add("idle"), 3000);
+  }
+  ["mousemove", "pointerdown", "keydown", "touchstart"].forEach(ev =>
+    document.addEventListener(ev, wake, { passive: true }));
+  wake();
+
+  // --- Närvaro: syns på /clients. Hoppas över när sidan är inbäddad
+  // (idle-klockan på startsidan, som redan är listad) eller öppnad som fil.
+  if (location.protocol.startsWith("http") &&
+      !new URLSearchParams(location.search).has("embedded")) {
+    const presence = () => {
+      const ws = new WebSocket(
+        (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ordklocka/syntavla/ws");
+      ws.onclose = () => setTimeout(presence, 10000);
+      ws.onerror = () => ws.close();
+    };
+    presence();
+  }
+</script>
+</body>
+</html>

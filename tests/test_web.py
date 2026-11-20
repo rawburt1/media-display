@@ -1,6 +1,7 @@
 """Tests for the WebOutput push logic."""
 
 import json
+import re
 import time
 from unittest.mock import MagicMock, patch
 
@@ -859,3 +860,50 @@ def test_unknown_idle_clock_style_falls_back_to_word_clock(caplog):
     out = _output(_config(idle_clock=True, idle_clock_style="digital"))
     assert out._idle_clock_url == "/ordklocka"
     assert "idle_clock_style" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Matrix and syntavla clocks (/ordklocka/matrix, /ordklocka/syntavla)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("page", ["matrix", "syntavla"])
+def test_matrix_and_syntavla_pages_are_served(page):
+    client = _client(_output())
+    resp = client.get(f"/ordklocka/{page}")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/html"
+    body = resp.data.decode()
+    assert '<script src="/ordklocka/layouts.js">' in body
+    assert f"/ordklocka/{page}/ws" in body
+    # Every font the page uses is actually served.
+    for font in re.findall(r'url\("(/ordklocka/fonts/[^"]+)"\)', body):
+        font_resp = client.get(font)
+        assert font_resp.status_code == 200, font
+        assert font_resp.mimetype == "font/woff2"
+
+
+def test_layouts_script_is_served():
+    resp = _client(_output()).get("/ordklocka/layouts.js")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/javascript"
+    assert "ORDKLOCKA_LAYOUTS" in resp.data.decode()
+
+
+@pytest.mark.parametrize("name", ["OFL.txt", "..%2Fmatrix.html", "missing.woff2"])
+def test_font_route_only_serves_known_fonts(name):
+    assert _client(_output()).get(f"/ordklocka/fonts/{name}").status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("style", "url", "label"),
+    [
+        ("matrix", "/ordklocka/matrix", "Ordklocka (matrix)"),
+        ("eye_chart", "/ordklocka/syntavla", "Ordklocka (syntavla)"),
+    ],
+)
+def test_idle_clock_style_matrix_and_eye_chart(style, url, label):
+    out = _output(_config(idle_clock=True, idle_clock_style=style))
+    body = _client(out).get("/").data.decode()
+    assert f'"{url}" + "?embedded=1"' in body
+    assert out._summarize({}) == {"mode": "clock", "text": label}

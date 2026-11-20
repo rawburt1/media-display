@@ -140,6 +140,8 @@ function clientPageLabel(page) {
   if (page === '/') return 'Now playing (web)';
   if (page === '/ordklocka') return 'Word clock (standalone)';
   if (page === '/ordklocka/tavla') return 'Word clock, split-flap board (standalone)';
+  if (page === '/ordklocka/matrix') return 'Word clock, matrix (standalone)';
+  if (page === '/ordklocka/syntavla') return 'Word clock, eye chart (standalone)';
   if (page === '/themes') return 'Themes';
   if (page === '/info') return 'Info';
   if (page.indexOf('/web-') === 0) return 'Web: ' + page.slice(5);
