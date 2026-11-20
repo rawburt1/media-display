@@ -91,8 +91,9 @@ _CLOCK_PAGE_FILES = {
     path: path.rsplit("/", 1)[1] + ".html" for path in _CLOCK_LABELS if path != "/ordklocka"
 }
 # Scripts shared by the clock pages: tid.js (time reading), sida.js (panel,
-# presence, ticking) and layouts.js (grids for matrix/syntavla).
-_ORDKLOCKA_SCRIPTS = ("tid.js", "sida.js", "layouts.js")
+# presence, ticking), layouts.js (grids for matrix/syntavla) and meny.js
+# (the clock picker in every clock page's panel).
+_ORDKLOCKA_SCRIPTS = ("tid.js", "sida.js", "layouts.js", "meny.js")
 # The only font files /ordklocka/fonts/<name> will serve.
 _ORDKLOCKA_FONTS = frozenset({"josefin-sans-latin-600.woff2", "optician-sans.woff2"})
 

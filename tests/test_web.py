@@ -956,3 +956,16 @@ def test_shared_page_script_is_served():
     assert resp.status_code == 200
     assert resp.mimetype == "text/javascript"
     assert "OrdklockaSida" in resp.data.decode()
+
+
+def test_every_clock_page_has_the_clock_menu_listing_every_clock():
+    from mediainfo.outputs import web
+
+    client = _client(_output())
+    menu = client.get("/ordklocka/meny.js")
+    assert menu.status_code == 200
+    assert menu.mimetype == "text/javascript"
+    menu_js = menu.data.decode()
+    for path in web._CLOCK_LABELS:
+        assert f'["{path}", ' in menu_js, path
+        assert '<script src="/ordklocka/meny.js">' in client.get(path).data.decode(), path
