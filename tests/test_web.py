@@ -910,7 +910,7 @@ def test_idle_clock_style_matrix_and_eye_chart(style, url, label):
 
 
 # ---------------------------------------------------------------------------
-# Neon, magneter, buss, texttv, ordfläta (all on tid.js + sida.js)
+# Neon, magneter, buss, texttv (all on tid.js + sida.js)
 # ---------------------------------------------------------------------------
 
 _NEW_CLOCKS = [
@@ -918,7 +918,6 @@ _NEW_CLOCKS = [
     ("magneter", "fridge_magnets", "Ordklocka (magneter)"),
     ("buss", "bus_sign", "Ordklocka (busskylt)"),
     ("texttv", "teletext", "Ordklocka (text-tv)"),
-    ("ordflata", "word_search", "Ordklocka (ordfläta)"),
 ]
 
 

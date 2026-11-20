@@ -570,7 +570,6 @@ _ENUM_CHOICES: Dict[str, List[str]] = {
         "fridge_magnets",
         "bus_sign",
         "teletext",
-        "word_search",
     ],
     "transition_exclude": ["fade", "slide-left", "slide-right", "slide-up", "slide-down", "zoom"],
 }
@@ -603,7 +602,7 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "sources.shield.adb_key_path": "Generated automatically on first run if missing - accept the authorization prompt on the device's screen.",
     "sources.youtube.adb_key_path": "Generated automatically on first run if missing. Use a different key file than sources.shield if pointed at the same device.",
     "outputs.web.idle_clock": "Show a Swedish word clock full-screen while nothing is playing, instead of idle wallpapers. The clock is also always available at /ordklocka.",
-    "outputs.web.idle_clock_style": '"words" is the word clock grid (/ordklocka); "split_flap" is an old railway departure board whose flaps rattle to each word (/ordklocka/tavla); "matrix" has falling green code rain write the words (/ordklocka/matrix); "eye_chart" lights the words on an optician eye chart (/ordklocka/syntavla); "neon" is a flickering neon sign on a brick wall (/ordklocka/neon); "fridge_magnets" slides letter magnets into place on a fridge door (/ordklocka/magneter); "bus_sign" is an orange LED bus destination sign (/ordklocka/buss); "teletext" is a Text-TV page (/ordklocka/texttv); "word_search" circles the words in a word search puzzle (/ordklocka/ordflata).',
+    "outputs.web.idle_clock_style": '"words" is the word clock grid (/ordklocka); "split_flap" is an old railway departure board whose flaps rattle to each word (/ordklocka/tavla); "matrix" has falling green code rain write the words (/ordklocka/matrix); "eye_chart" lights the words on an optician eye chart (/ordklocka/syntavla); "neon" is a flickering neon sign on a brick wall (/ordklocka/neon); "fridge_magnets" slides letter magnets into place on a fridge door (/ordklocka/magneter); "bus_sign" is an orange LED bus destination sign (/ordklocka/buss); "teletext" is a Text-TV page (/ordklocka/texttv).',
     "outputs.pixoo.size": "64 for the Pixoo64 (most common), 16 for the 16×16 Pixel Art LED Frame.",
     "outputs.pixoo.screen_off_hours": "Turn the panel off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
     "outputs.pixoo.crop_strategy": 'How to pick the square crop before downscaling. "automatic" biases toward the top third for portrait sources (posters/covers) and centers otherwise.',

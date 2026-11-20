@@ -146,7 +146,6 @@ function clientPageLabel(page) {
   if (page === '/ordklocka/magneter') return 'Word clock, fridge magnets (standalone)';
   if (page === '/ordklocka/buss') return 'Word clock, bus sign (standalone)';
   if (page === '/ordklocka/texttv') return 'Word clock, teletext (standalone)';
-  if (page === '/ordklocka/ordflata') return 'Word clock, word search (standalone)';
   if (page === '/themes') return 'Themes';
   if (page === '/info') return 'Info';
   if (page.indexOf('/web-') === 0) return 'Web: ' + page.slice(5);

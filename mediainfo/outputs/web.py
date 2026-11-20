@@ -73,7 +73,6 @@ _IDLE_CLOCK_URLS = {
     "fridge_magnets": "/ordklocka/magneter",
     "bus_sign": "/ordklocka/buss",
     "teletext": "/ordklocka/texttv",
-    "word_search": "/ordklocka/ordflata",
 }
 # Clock page path -> its label on /clients. Each page has a presence
 # WebSocket at <path>/ws (/ordklocka/ws for the word clock).
@@ -86,7 +85,6 @@ _CLOCK_LABELS = {
     "/ordklocka/magneter": "Ordklocka (magneter)",
     "/ordklocka/buss": "Ordklocka (busskylt)",
     "/ordklocka/texttv": "Ordklocka (text-tv)",
-    "/ordklocka/ordflata": "Ordklocka (ordfläta)",
 }
 # Clock pages other than /ordklocka itself: path -> file in _ORDKLOCKA_DIR.
 _CLOCK_PAGE_FILES = {
