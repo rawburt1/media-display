@@ -11,6 +11,7 @@
     ["/ordklocka/magneter", "Kylskåpsmagneter"],
     ["/ordklocka/buss", "Busskylt"],
     ["/ordklocka/texttv", "Text-TV"],
+    ["/ordklocka/brickor", "Bokstavsbrickor"],
   ];
   if (new URLSearchParams(location.search).has("embedded")) return;
   const controls = document.querySelector(".panel .controls");

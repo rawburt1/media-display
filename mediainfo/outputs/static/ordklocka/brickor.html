@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Brickor</title>
+<style>
+  :root {
+    --tile: #f1dfb4; --tile-edge: #c9a86a; --tile-ink: #2a2118;
+    --panel-bg: rgba(30, 24, 18, 0.9); --panel-fg: #f3e9d6; --panel-accent: #f1dfb4;
+    --panel-bg-solid: #1e1812;
+  }
+  [data-tiles="mörk"] { --tile: #3b2a1c; --tile-edge: #1f150d; --tile-ink: #f5e6c6; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    /* Bordsskiva i trä */
+    background:
+      repeating-linear-gradient(92deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 9px),
+      linear-gradient(180deg, #6e4a2c, #4f331d);
+    font-family: system-ui, sans-serif;
+    display: grid; place-items: center;
+  }
+  .table { display: flex; align-items: flex-start; gap: calc(var(--cell) * 0.5); }
+  .board {
+    position: relative; padding: calc(var(--cell) * 0.18);
+    background: #22304a; border-radius: calc(var(--cell) * 0.12);
+    box-shadow: 0 calc(var(--cell) * 0.2) calc(var(--cell) * 0.6) rgba(0, 0, 0, 0.45);
+  }
+  .squares { display: grid; gap: calc(var(--cell) * 0.04); }
+  .sq {
+    width: var(--cell); height: var(--cell); border-radius: calc(var(--cell) * 0.06);
+    background: #e9e4d2; display: grid; place-items: center;
+    font: 700 calc(var(--cell) * 0.2) / 1.05 system-ui, sans-serif; text-align: center;
+    color: rgba(255, 255, 255, 0.92); letter-spacing: 0.02em;
+  }
+  .sq.l2 { background: #a7bf95; }
+  .sq.l3 { background: #5f8550; }
+  .sq.w2 { background: #e0b04f; }
+  .sq.w3 { background: #c0603a; }
+  .sq.star { background: #e0b04f; color: #fff; font-size: calc(var(--cell) * 0.55); }
+
+  .tiles { position: absolute; inset: calc(var(--cell) * 0.18); pointer-events: none; }
+  .tile {
+    position: absolute; width: var(--cell); height: var(--cell);
+    border-radius: calc(var(--cell) * 0.1);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--tile) 80%, #fff), var(--tile) 45%,
+                color-mix(in srgb, var(--tile) 85%, #000));
+    box-shadow: inset 0 calc(var(--cell) * -0.05) 0 var(--tile-edge),
+                0 calc(var(--cell) * 0.05) calc(var(--cell) * 0.08) rgba(0, 0, 0, 0.4);
+    color: var(--tile-ink);
+    font: 800 calc(var(--cell) * 0.6) / 1 "Georgia", "DejaVu Serif", serif;
+    display: grid; place-items: center; padding-bottom: calc(var(--cell) * 0.06);
+  }
+  .tile small {
+    position: absolute; right: calc(var(--cell) * 0.1); bottom: calc(var(--cell) * 0.08);
+    font: 700 calc(var(--cell) * 0.2) / 1 system-ui, sans-serif;
+  }
+
+  /* Hyllan med brickor att lägga */
+  .rack {
+    position: relative; margin: calc(var(--cell) * 0.45) auto 0; width: max-content;
+    display: flex; gap: calc(var(--cell) * 0.08);
+    padding: calc(var(--cell) * 0.1) calc(var(--cell) * 0.25) calc(var(--cell) * 0.22);
+    background: linear-gradient(180deg, #8a5a33, #5d3a1f); border-radius: calc(var(--cell) * 0.1);
+    box-shadow: 0 calc(var(--cell) * 0.1) calc(var(--cell) * 0.3) rgba(0, 0, 0, 0.4);
+  }
+  .rack .tile { position: relative; }
+
+  /* Poänglistan: läser upp tiden ord för ord */
+  .pad {
+    width: calc(var(--cell) * 4.2); padding: calc(var(--cell) * 0.35) calc(var(--cell) * 0.4);
+    background: #fbf8ee repeating-linear-gradient(transparent 0 calc(var(--cell) * 0.55 - 1px), #c7d6e6 calc(var(--cell) * 0.55 - 1px) calc(var(--cell) * 0.55));
+    background-position: 0 calc(var(--cell) * 0.95);
+    box-shadow: 0 calc(var(--cell) * 0.15) calc(var(--cell) * 0.4) rgba(0, 0, 0, 0.4);
+    transform: rotate(1.5deg);
+    color: #23325e; font: italic calc(var(--cell) * 0.36) / calc(var(--cell) * 0.55) "Segoe Print", "Comic Sans MS", "URW Chancery L", cursive;
+  }
+  .pad h2 { margin: 0 0 calc(var(--cell) * 0.2); font: 700 calc(var(--cell) * 0.32) / 1.2 system-ui, sans-serif;
+            letter-spacing: 0.12em; color: #5a5a5a; text-transform: uppercase; }
+  .pad .row { display: flex; justify-content: space-between; gap: 1em; }
+  .pad .row.total { border-top: 2px solid #23325e; margin-top: calc(var(--cell) * 0.1); font-weight: 700; }
+  .pad .row.new { animation: write 0.6s ease-out both; }
+  @keyframes write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  .dots { display: flex; gap: calc(var(--cell) * 0.2); margin-top: calc(var(--cell) * 0.35); }
+  .dot { width: calc(var(--cell) * 0.22); height: calc(var(--cell) * 0.22); border-radius: 50%;
+         border: 2px solid #23325e; }
+  .dot.on { background: #23325e; }
+  @media (prefers-reduced-motion: reduce) { .pad .row.new { animation: none; } }
+</style>
+</head>
+<body>
+<div class="table" aria-hidden="true">
+  <div>
+    <div class="board"><div class="squares" id="squares"></div><div class="tiles" id="tiles"></div></div>
+    <div class="rack" id="rack"></div>
+  </div>
+  <div class="pad"><h2>Poäng</h2><div id="score"></div><div class="dots" id="dots"></div></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Brickornas färg">
+      <span class="label">Brickor</span>
+      <button data-tiles="ljus">ljusa</button>
+      <button data-tiles="mörk">mörka</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const COLS = 15, ROWS = 9;
+  // Poäng per bokstav: vanliga bokstäver är billiga, ovanliga dyra.
+  const POINTS = {
+    A: 1, E: 1, N: 1, R: 1, S: 1, T: 1, I: 1, L: 1, O: 2, K: 2, D: 2, M: 2, G: 2,
+    U: 3, Ä: 3, V: 3, H: 3, F: 3, Å: 4, P: 4, Ö: 4, B: 4, J: 7, Y: 7, C: 8, X: 8, Z: 10, Q: 10, W: 10,
+  };
+  // Bonusrutor, spegelvända runt mitten: l2/l3 = bokstavspoäng x2/x3, w2/w3 = ordpoäng x2/x3.
+  const BONUS = {};
+  [[0, 0, "w3"], [7, 0, "w3"], [3, 0, "l2"], [1, 1, "w2"], [5, 1, "l3"], [2, 2, "l2"], [6, 2, "l2"],
+   [3, 3, "w2"], [0, 4, "l2"], [4, 4, "l3"], [7, 4, "star"]].forEach(([c, r, kind]) => {
+    for (const [cc, rr] of [[c, r], [COLS - 1 - c, r], [c, ROWS - 1 - r], [COLS - 1 - c, ROWS - 1 - r]]) {
+      BONUS[rr * COLS + cc] = kind;
+    }
+  });
+  const BONUS_TEXT = { l2: "2×\nBOKST", l3: "3×\nBOKST", w2: "2×\nORD", w3: "3×\nORD", star: "★" };
+
+  const squares = document.getElementById("squares");
+  squares.style.gridTemplateColumns = `repeat(${COLS}, var(--cell))`;
+  for (let i = 0; i < COLS * ROWS; i++) {
+    const d = document.createElement("div");
+    d.className = "sq " + (BONUS[i] || "");
+    d.textContent = BONUS_TEXT[BONUS[i]] || "";
+    d.style.whiteSpace = "pre";
+    squares.appendChild(d);
+  }
+
+  function makeTile(ch) {
+    const t = document.createElement("div");
+    t.className = "tile";
+    t.textContent = ch;
+    const v = document.createElement("small");
+    v.textContent = POINTS[ch] ?? 0;
+    t.appendChild(v);
+    return t;
+  }
+
+  // ---------- Hyllan ----------
+  const rack = document.getElementById("rack");
+  const BAG = "AAAEEEENNNRRRSSTTTIILLOOKKDMGUÄVHFÅPÖBJY";
+  function fillRack() {
+    rack.replaceChildren();
+    for (let i = 0; i < 7; i++) rack.appendChild(makeTile(BAG[Math.floor(Math.random() * BAG.length)]));
+  }
+
+  // ---------- Storlek ----------
+  let cell = 50;
+  function resize() {
+    const gap = 0.04, pad = 0.18;
+    const boardW = COLS * (1 + gap) + 2 * pad, boardH = ROWS * (1 + gap) + 2 * pad;
+    // Bredd: brädet + mellanrum + poänglistan; höjd: brädet + hyllan.
+    cell = Math.floor(Math.min(innerWidth * 0.94 / (boardW + 0.5 + 4.2), innerHeight * 0.94 / (boardH + 1.9)));
+    document.documentElement.style.setProperty("--cell", cell + "px");
+  }
+  const pos = i => {
+    const step = cell * 1.04;
+    return { x: (i % COLS) * step, y: Math.floor(i / COLS) * step };
+  };
+
+  // ---------- Läggning ----------
+  // Raderna läses uppifrån och ner; orden i en rad med en tom ruta emellan.
+  function layout(t) {
+    const lines = ["KLOCKAN ÄR", ...S.lines(t)];
+    const top = Math.floor((ROWS - (lines.length * 2 - 1)) / 2);
+    const words = [];
+    lines.forEach((line, li) => {
+      const row = top + li * 2;
+      let col = Math.floor((COLS - [...line].length) / 2);
+      for (const w of line.split(" ")) {
+        words.push({ word: w, cells: [...w].map((ch, k) => ({ ch, i: row * COLS + col + k })) });
+        col += [...w].length + 1;
+      }
+    });
+    return words;
+  }
+
+  function score(word) {
+    let sum = 0, mult = 1;
+    for (const { ch, i } of word.cells) {
+      const b = BONUS[i];
+      sum += (POINTS[ch] ?? 0) * (b === "l2" ? 2 : b === "l3" ? 3 : 1);
+      if (b === "w2" || b === "star") mult *= 2;
+      if (b === "w3") mult *= 3;
+    }
+    return sum * mult;
+  }
+
+  const tilesEl = document.getElementById("tiles");
+  const scoreEl = document.getElementById("score");
+  const dots = document.getElementById("dots");
+  let placed = [];        // [{el, i}]
+  let lastWords = null;
+
+  function place(words, animate) {
+    lastWords = words;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    animate = animate && !reduce;
+    // Brickor som ligger kvar på samma ruta (t.ex. KLOCKAN ÄR) rörs inte.
+    const keep = new Map();
+    const wanted = new Set(words.flatMap(w => w.cells.map(c => c.i + c.ch)));
+    if (animate) placed = placed.filter(p => {
+      if (!wanted.has(p.i + p.ch) || keep.has(p.i + p.ch)) return true;
+      keep.set(p.i + p.ch, p);
+      return false;
+    });
+    // Övriga gamla brickor sopas av brädet.
+    for (const { el } of placed) {
+      if (!animate) { el.remove(); continue; }
+      el.animate([{ opacity: 1, transform: "none" },
+                  { opacity: 0, transform: `translateY(${cell * 1.5}px) rotate(${(Math.random() - 0.5) * 60}deg)` }],
+                 { duration: 500, delay: Math.random() * 200, easing: "ease-in", fill: "forwards" })
+        .finished.then(() => el.remove());
+    }
+    placed = [];
+    // Nya brickor läggs ett ord i taget, från hyllan.
+    const rackBox = rack.getBoundingClientRect(), boardBox = tilesEl.getBoundingClientRect();
+    let n = 0, wi = 0;
+    const changed = new Set();
+    words.forEach(w => {
+      if (w.cells.every(c => keep.has(c.i + c.ch))) return;
+      changed.add(w);
+    });
+    words.forEach(w => {
+      const isNew = changed.has(w);
+      w.cells.forEach(({ ch, i }) => {
+        const kept = keep.get(i + ch);
+        if (kept) { keep.delete(i + ch); placed.push(kept); return; }
+        const el = makeTile(ch);
+        const p = pos(i);
+        el.style.left = p.x + "px"; el.style.top = p.y + "px";
+        tilesEl.appendChild(el);
+        placed.push({ el, i, ch });
+        if (animate) {
+          const fromX = rackBox.left + rackBox.width / 2 - boardBox.left - p.x - cell / 2;
+          const fromY = rackBox.top - boardBox.top - p.y;
+          el.animate([
+            { transform: `translate(${fromX}px, ${fromY}px) rotate(${(Math.random() - 0.5) * 30}deg) scale(1.15)`, opacity: 0 },
+            { opacity: 1, offset: 0.2 },
+            { transform: "translate(0, -6%) scale(1.08)", offset: 0.85 },
+            { transform: "none", opacity: 1 },
+          ], { duration: 650, delay: 600 + wi * 450 + n * 70, easing: "cubic-bezier(0.3, 0.7, 0.3, 1)", fill: "backwards" });
+        }
+        n++;
+      });
+      if (isNew) wi++;
+    });
+    if (animate) setTimeout(fillRack, 600 + wi * 450);
+
+    // Poänglistan
+    scoreEl.replaceChildren();
+    let total = 0;
+    let order = 0;
+    words.forEach(w => {
+      const s = score(w);
+      total += s;
+      const row = document.createElement("div");
+      const isNew = animate && changed.has(w);
+      row.className = "row" + (isNew ? " new" : "");
+      if (isNew) row.style.animationDelay = 700 + order++ * 450 + "ms";
+      row.innerHTML = "<span></span><span></span>";
+      row.children[0].textContent = w.word.charAt(0) + w.word.slice(1).toLowerCase();
+      row.children[1].textContent = s;
+      scoreEl.appendChild(row);
+    });
+    const tot = document.createElement("div");
+    tot.className = "row total" + (animate ? " new" : "");
+    if (animate) tot.style.animationDelay = 700 + order * 450 + "ms";
+    tot.innerHTML = "<span>Summa</span><span></span>";
+    tot.children[1].textContent = total;
+    scoreEl.appendChild(tot);
+  }
+
+  const clock = S.clock((t, info) => {
+    if (info.wordsChanged) place(layout(t), !info.first);
+    dots.replaceChildren(...[0, 1, 2, 3].map(k => {
+      const d = document.createElement("i");
+      d.className = "dot" + (k < t.extra ? " on" : "");
+      return d;
+    }));
+  });
+
+  addEventListener("resize", () => {
+    resize();
+    if (lastWords) place(lastWords, false);
+  });
+  resize();
+  fillRack();
+  S.choice("tiles", "brickor-tiles", "ljus", v => { document.documentElement.dataset.tiles = v; });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/brickor/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

@@ -733,8 +733,9 @@ outputs:
     # "eye_chart" (an optician's eye chart, /ordklocka/syntavla), "neon"
     # (a flickering neon sign, /ordklocka/neon), "fridge_magnets" (letter
     # magnets on a fridge door, /ordklocka/magneter), "bus_sign" (an LED
-    # bus destination sign, /ordklocka/buss) or "teletext" (a Text-TV page,
-    # /ordklocka/texttv).
+    # bus destination sign, /ordklocka/buss), "teletext" (a Text-TV page,
+    # /ordklocka/texttv) or "letter_tiles" (word game letter tiles on a
+    # board, /ordklocka/brickor).
     idle_clock_style: words
 
   # Multiple web outputs — e.g. one per room. Only the first can mount at

@@ -1,4 +1,4 @@
-// Gemensamt för ordklockorna neon, magneter, buss och texttv:
+// Gemensamt för ordklockorna neon, magneter, buss, texttv och brickor:
 // inställningar i localStorage, panelen som tonas bort, helskärm,
 // närvaro på /clients och en klocka som anropar sidan när tiden ändras.
 // Själva tidsläsningen kommer från tid.js (OrdklockaTid).

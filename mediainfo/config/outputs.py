@@ -144,8 +144,8 @@ class WebConfig(_OutputFilterMixin):
     # flaps rattle to each word, also at /ordklocka/tavla), "matrix"
     # (code rain that writes the words, /ordklocka/matrix), "eye_chart"
     # (an optician's eye chart, /ordklocka/syntavla), "neon" (/ordklocka/neon),
-    # "fridge_magnets" (/ordklocka/magneter), "bus_sign" (/ordklocka/buss)
-    # or "teletext" (/ordklocka/texttv).
+    # "fridge_magnets" (/ordklocka/magneter), "bus_sign" (/ordklocka/buss),
+    # "teletext" (/ordklocka/texttv) or "letter_tiles" (/ordklocka/brickor).
     idle_clock_style: str = "words"
 
 
