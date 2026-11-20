@@ -145,7 +145,10 @@ class WebConfig(_OutputFilterMixin):
     # (code rain that writes the words, /ordklocka/matrix), "eye_chart"
     # (an optician's eye chart, /ordklocka/syntavla), "neon" (/ordklocka/neon),
     # "fridge_magnets" (/ordklocka/magneter), "bus_sign" (/ordklocka/buss),
-    # "teletext" (/ordklocka/texttv) or "letter_tiles" (/ordklocka/brickor).
+    # "teletext" (/ordklocka/texttv), "letter_tiles" (/ordklocka/brickor),
+    # "embroidery", "rubber_stamps", "type_case", "misty_window",
+    # "counter_drums", "receipt", "dominoes", "balloons", "constellations",
+    # "steamy_shower" or "blood" - see config.example.yaml for their pages.
     idle_clock_style: str = "words"
 
 

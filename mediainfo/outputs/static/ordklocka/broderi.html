@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Broderi</title>
+<style>
+  :root {
+    --panel-bg: rgba(250, 245, 235, 0.95); --panel-fg: #4a3a2a; --panel-accent: #4a3a2a;
+    --panel-bg-solid: #faf5eb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    /* Blommig duk under sybågen */
+    background:
+      radial-gradient(circle at 25% 25%, rgba(190, 120, 120, 0.18) 0 6%, transparent 6.5%) 0 0 / 14vmin 14vmin,
+      radial-gradient(circle at 75% 75%, rgba(120, 150, 110, 0.18) 0 5%, transparent 5.5%) 0 0 / 14vmin 14vmin,
+      #e8dcc8;
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<canvas id="cloth" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Garn">
+      <span class="label">Garn</span>
+      <button data-yarn="klassisk">röd och blå</button>
+      <button data-yarn="regnbåge">regnbåge</button>
+      <button data-yarn="svart">svart</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const cv = document.getElementById("cloth");
+  const ctx = cv.getContext("2d");
+  const COLS = 84, ROWS = 35, LINE_ROWS = 9, GAP = 3;
+
+  // ---------- Text till stygnmönster ----------
+  // Varje rad ritas i stor skala och provtas sedan ruta för ruta.
+  function pattern(lines) {
+    const cell = 10;
+    const c = document.createElement("canvas");
+    c.width = COLS * cell; c.height = ROWS * cell;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.fillStyle = "#000"; g.textAlign = "center"; g.textBaseline = "alphabetic";
+    const top = Math.floor((ROWS - (lines.length * LINE_ROWS + (lines.length - 1) * GAP)) / 2);
+    const bands = lines.map((text, i) => {
+      const y0 = top + i * (LINE_ROWS + GAP);
+      let size = LINE_ROWS * cell * 1.02;
+      g.font = `900 ${size}px "Arial Black", "DejaVu Sans", sans-serif`;
+      const w = g.measureText(text).width;
+      if (w > (COLS - 4) * cell) size *= (COLS - 4) * cell / w;
+      g.font = `900 ${size}px "Arial Black", "DejaVu Sans", sans-serif`;
+      g.fillText(text, c.width / 2, (y0 + LINE_ROWS - 1.2) * cell);
+      return y0;
+    });
+    const data = g.getImageData(0, 0, c.width, c.height).data;
+    const cells = [];
+    for (let r = 0; r < ROWS; r++) for (let col = 0; col < COLS; col++) {
+      let sum = 0;
+      for (let y = 2; y < cell; y += 3) for (let x = 2; x < cell; x += 3) sum += data[((r * cell + y) * c.width + col * cell + x) * 4 + 3];
+      if (sum / 9 / 255 > 0.45) {
+        const line = bands.findIndex(y0 => r >= y0 - 2 && r < y0 + LINE_ROWS + 1);
+        cells.push({ r, c: col, line: Math.max(0, line) });
+      }
+    }
+    // Sys i läsordning: rad för rad, kolumn för kolumn (som man syr en bokstav i taget).
+    cells.sort((a, b) => a.line - b.line || a.c - b.c || a.r - b.r);
+    return cells;
+  }
+
+  // ---------- Garn ----------
+  const YARNS = {
+    klassisk: (cell) => cell.line === 0 ? "#b3262e" : "#24477a",
+    regnbåge: (cell) => ["#c0392b", "#e67e22", "#d4ac0d", "#27ae60", "#2471a3", "#7d3c98"][Math.floor(cell.c / 7) % 6],
+    svart: () => "#222",
+  };
+  let yarn = YARNS.klassisk;
+  const shade = (hex, k) => {
+    const n = parseInt(hex.slice(1), 16);
+    const f = v => Math.max(0, Math.min(255, Math.round(v * k)));
+    return `rgb(${f(n >> 16)}, ${f(n >> 8 & 255)}, ${f(n & 255)})`;
+  };
+
+  // ---------- Geometri ----------
+  let W, H, dpr, pitch, ox, oy, hoop;
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    hoop = { x: W / 2, y: H / 2, rx: Math.min(W * 0.47, H * 0.86), ry: H * 0.44 };
+    pitch = Math.min(hoop.rx * 1.5 / COLS, hoop.ry * 1.45 / ROWS);
+    ox = W / 2 - COLS * pitch / 2;
+    oy = H / 2 - ROWS * pitch / 2 - pitch;
+    clothCache = null;
+  }
+
+  // Aidaväven och bågen ritas en gång och sparas.
+  let clothCache = null;
+  function cloth() {
+    if (clothCache) return clothCache;
+    const c = document.createElement("canvas");
+    c.width = cv.width; c.height = cv.height;
+    const g = c.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Skugga under bågen
+    g.fillStyle = "rgba(0,0,0,0.25)";
+    g.beginPath(); g.ellipse(hoop.x + 8, hoop.y + 14, hoop.rx + 14, hoop.ry + 14, 0, 0, Math.PI * 2); g.fill();
+    g.save();
+    g.beginPath(); g.ellipse(hoop.x, hoop.y, hoop.rx, hoop.ry, 0, 0, Math.PI * 2); g.clip();
+    g.fillStyle = "#f3ecdc"; g.fillRect(0, 0, W, H);
+    // Hålen i aidaväven
+    g.fillStyle = "rgba(120, 100, 70, 0.22)";
+    const start = { x: ox - Math.ceil(ox / pitch) * pitch, y: oy - Math.ceil(oy / pitch) * pitch };
+    for (let y = start.y; y < H; y += pitch) for (let x = start.x; x < W; x += pitch) {
+      g.fillRect(x - pitch * 0.09, y - pitch * 0.09, pitch * 0.18, pitch * 0.18);
+    }
+    // Vävens ljusa trådar
+    g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineWidth = pitch * 0.12;
+    for (let y = start.y + pitch / 2; y < H; y += pitch) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    const grd = g.createRadialGradient(hoop.x, hoop.y, hoop.ry * 0.5, hoop.x, hoop.y, hoop.rx);
+    grd.addColorStop(0, "rgba(0,0,0,0)"); grd.addColorStop(1, "rgba(80,60,30,0.18)");
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    g.restore();
+    // Träbågen
+    const ring = (rx, ry, w, col) => {
+      g.lineWidth = w; g.strokeStyle = col;
+      g.beginPath(); g.ellipse(hoop.x, hoop.y, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+    };
+    const t = Math.min(W, H) * 0.028;
+    ring(hoop.rx + t * 0.5, hoop.ry + t * 0.5, t, "#c9975c");
+    ring(hoop.rx + t * 0.15, hoop.ry + t * 0.15, t * 0.25, "rgba(255, 230, 190, 0.6)");
+    ring(hoop.rx + t * 1.0, hoop.ry + t * 1.0, t * 0.15, "rgba(90, 55, 25, 0.6)");
+    // Mässingsskruven upptill
+    g.fillStyle = "#b8963e";
+    g.fillRect(hoop.x - t * 0.8, hoop.y - hoop.ry - t * 2.2, t * 1.6, t * 2);
+    g.fillStyle = "#e4c871";
+    g.beginPath(); g.arc(hoop.x, hoop.y - hoop.ry - t * 2.4, t * 0.9, 0, Math.PI * 2); g.fill();
+    clothCache = c;
+    return c;
+  }
+
+  function stitch(cell, part) {
+    const x = ox + cell.c * pitch, y = oy + cell.r * pitch, m = pitch * 0.12;
+    const col = yarn(cell);
+    ctx.lineCap = "round";
+    ctx.lineWidth = pitch * 0.3;
+    // Undre stygnet lite mörkare, övre med en ljus glans
+    ctx.strokeStyle = shade(col, 0.8);
+    ctx.beginPath(); ctx.moveTo(x + m, y + pitch - m); ctx.lineTo(x + pitch - m, y + m); ctx.stroke();
+    if (part < 2) return;
+    ctx.strokeStyle = col;
+    ctx.beginPath(); ctx.moveTo(x + m, y + m); ctx.lineTo(x + pitch - m, y + pitch - m); ctx.stroke();
+    ctx.strokeStyle = shade(col, 1.45); ctx.lineWidth = pitch * 0.08;
+    ctx.beginPath(); ctx.moveTo(x + m * 1.6, y + m * 1.2); ctx.lineTo(x + pitch * 0.55, y + pitch * 0.45); ctx.stroke();
+  }
+
+  function needle(cell) {
+    const x = ox + (cell.c + 1) * pitch, y = oy + cell.r * pitch;
+    ctx.strokeStyle = shade(yarn(cell), 1);
+    ctx.lineWidth = pitch * 0.12;
+    ctx.beginPath(); ctx.moveTo(x + pitch * 3.6, y - pitch * 2.6);
+    ctx.quadraticCurveTo(x + pitch * 6, y + pitch * 2, x + pitch * 9, y + pitch * 1); ctx.stroke();
+    ctx.strokeStyle = "#cfd3d6"; ctx.lineWidth = pitch * 0.2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + pitch * 4, y - pitch * 2.9); ctx.stroke();
+    ctx.strokeStyle = "#8a9096"; ctx.lineWidth = pitch * 0.06;
+    ctx.beginPath(); ctx.moveTo(x + pitch * 3.3, y - pitch * 2.4); ctx.lineTo(x + pitch * 3.8, y - pitch * 2.75); ctx.stroke();
+  }
+
+  // ---------- Animation ----------
+  let shown = [];          // stygn som syns
+  let target = [];         // stygn som ska sys
+  let sewn = 0;            // antal sydda halvstygn i target
+  let unpick = 0;          // antal gamla stygn kvar att repa upp
+  let extra = 0;
+  let prev = performance.now();
+
+  function frame(now) {
+    const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
+    let active = null;
+    if (unpick > 0) {
+      unpick = Math.max(0, unpick - dt * 260);
+      shown.length = Math.ceil(unpick);
+    } else if (sewn < target.length * 2) {
+      sewn = Math.min(target.length * 2, sewn + dt * 220);
+      active = target[Math.min(target.length - 1, Math.floor(sewn / 2))];
+    }
+    ctx.drawImage(cloth(), 0, 0, W, H);
+    if (unpick > 0) shown.forEach(c => stitch(c, 2));
+    else target.forEach((c, i) => { const p = sewn - i * 2; if (p > 0) stitch(c, p >= 2 ? 2 : 1); });
+    // Minutstygn: små kors under texten
+    for (let i = 0; i < 4; i++) {
+      const cell = { r: ROWS + 1, c: COLS / 2 - 4 + i * 2.5, line: 0 };
+      if (i < extra) stitch(cell, 2);
+    }
+    if (active) needle(active);
+    requestAnimationFrame(frame);
+  }
+
+  function show(lines, animate) {
+    const next = pattern(lines);
+    if (animate && target.length) { shown = target.slice(0, Math.floor(sewn / 2)); unpick = shown.length; }
+    target = next;
+    sewn = animate ? 0 : next.length * 2;
+  }
+
+  const clock = S.clock((t, info) => {
+    extra = t.extra;
+    if (info.wordsChanged) show(["KLOCKAN ÄR", ...S.lines(t)], true);
+  });
+  addEventListener("resize", resize);
+  resize();
+  S.choice("yarn", "broderi-yarn", "klassisk", v => { yarn = YARNS[v]; });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/broderi/ws");
+  requestAnimationFrame(t => { prev = t; frame(t); });
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

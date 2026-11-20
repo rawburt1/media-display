@@ -12,6 +12,17 @@
     ["/ordklocka/buss", "Busskylt"],
     ["/ordklocka/texttv", "Text-TV"],
     ["/ordklocka/brickor", "Bokstavsbrickor"],
+    ["/ordklocka/broderi", "Broderi"],
+    ["/ordklocka/stampel", "Bokstavsstämplar"],
+    ["/ordklocka/sattlada", "Sättlåda"],
+    ["/ordklocka/fonster", "Imma på rutan"],
+    ["/ordklocka/rakneverk", "Räkneverk"],
+    ["/ordklocka/kvitto", "Kassakvitto"],
+    ["/ordklocka/domino", "Dominobrickor"],
+    ["/ordklocka/ballonger", "Ballonger"],
+    ["/ordklocka/stjarnor", "Stjärnhimmel"],
+    ["/ordklocka/dusch", "Duschvägg"],
+    ["/ordklocka/blod", "Blod på golvet"],
   ];
   if (new URLSearchParams(location.search).has("embedded")) return;
   const controls = document.querySelector(".panel .controls");

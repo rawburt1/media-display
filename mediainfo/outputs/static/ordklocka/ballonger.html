@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Ballonger</title>
+<style>
+  :root {
+    --panel-bg: rgba(255, 255, 255, 0.92); --panel-fg: #234; --panel-accent: #234;
+    --panel-bg-solid: #fff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: linear-gradient(180deg, #5aa6e6 0%, #8cc6f0 55%, #d6ecfa 100%); }
+  [data-sky="kväll"] body, body[data-sky="kväll"] { background: linear-gradient(180deg, #2b2f6b 0%, #b0577a 60%, #f3a86b 100%); }
+  .cloud { position: fixed; height: 9vh; border-radius: 9vh; background: rgba(255, 255, 255, 0.85);
+           filter: blur(2px); animation: drift linear infinite; }
+  .cloud::before, .cloud::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+  .cloud::before { width: 45%; height: 160%; left: 15%; bottom: 20%; }
+  .cloud::after { width: 35%; height: 130%; left: 50%; bottom: 25%; }
+  @keyframes drift { from { transform: translateX(-40vw); } to { transform: translateX(140vw); } }
+  .balloon {
+    position: absolute; left: 0; top: 0; width: var(--b); height: calc(var(--b) * 1.2);
+    border-radius: 50% 50% 48% 48% / 55% 55% 45% 45%;
+    background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.75), transparent 22%),
+                radial-gradient(circle at 50% 55%, var(--c), color-mix(in srgb, var(--c) 65%, #000) 100%);
+    display: grid; place-items: center;
+    color: #fff; font: 900 calc(var(--b) * 0.58) / 1 "Arial Rounded MT Bold", "Nunito", system-ui, sans-serif;
+    text-shadow: 0 0.04em 0.06em rgba(0, 0, 0, 0.35);
+  }
+  .balloon::before {   /* knuten */
+    content: ""; position: absolute; left: 50%; bottom: -6%; width: 14%; height: 9%;
+    transform: translateX(-50%); background: color-mix(in srgb, var(--c) 70%, #000);
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  }
+  .balloon::after {    /* snöret */
+    content: ""; position: absolute; left: 50%; top: 103%; width: calc(var(--b) * 0.3); height: calc(var(--b) * 1.3);
+    border-left: 1.5px solid rgba(60, 60, 60, 0.6); border-radius: 0 0 0 100% / 0 0 0 40%;
+  }
+  .bob { position: absolute; left: 0; top: 0; animation: bob 3.2s ease-in-out infinite alternate; }
+  @keyframes bob { from { transform: translateY(-3%) rotate(-3deg); } to { transform: translateY(3%) rotate(3deg); } }
+  .weights { position: fixed; left: 50%; bottom: 3vh; transform: translateX(-50%); display: flex; gap: 2vmin; }
+  .weights i { width: 3vmin; height: 3vmin; border-radius: 50%; background: rgba(255, 255, 255, 0.35); }
+  .weights i.on { background: #ff5a6e; box-shadow: inset -0.4vmin -0.4vmin 0 rgba(0, 0, 0, 0.2); }
+  @media (prefers-reduced-motion: reduce) { .bob, .cloud { animation: none; } }
+</style>
+</head>
+<body>
+<div class="cloud" style="top:8vh;width:22vw;animation-duration:90s;animation-delay:-20s"></div>
+<div class="cloud" style="top:30vh;width:16vw;animation-duration:120s;animation-delay:-70s;opacity:.7"></div>
+<div class="cloud" style="top:62vh;width:26vw;animation-duration:150s;animation-delay:-40s;opacity:.6"></div>
+<div id="sky" aria-hidden="true"></div>
+<div class="weights" id="weights"><i></i><i></i><i></i><i></i></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Himmel">
+      <span class="label">Himmel</span>
+      <button data-sky="dag">dag</button>
+      <button data-sky="kväll">kväll</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const sky = document.getElementById("sky");
+  const weights = [...document.querySelectorAll(".weights i")];
+  const COLORS = ["#ff4d5e", "#ffb020", "#ffd93b", "#33c27a", "#2f8ff0", "#8e5cf0", "#ff6fb5", "#22c3c3"];
+  const LONGEST = 14;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  let size = 60;
+
+  function resize() {
+    size = Math.min(innerWidth * 0.92 / (LONGEST * 0.98), innerHeight * 0.7 / (3 * 2.15));
+    document.documentElement.style.setProperty("--b", size + "px");
+  }
+
+  let current = [];   // {wrap, ch, x, y}
+  function launch(lines, animate) {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Ballonger som inte behövs släpps och flyger iväg uppåt.
+    for (const b of current) {
+      if (!animate || reduce) { b.wrap.remove(); continue; }
+      b.wrap.animate([{ transform: `translate(${b.x}px, ${b.y}px)` },
+                      { transform: `translate(${b.x + rnd(-120, 120)}px, ${-innerHeight * 0.4 - size * 3}px) rotate(${rnd(-20, 20)}deg)` }],
+                     { duration: rnd(2600, 4200), delay: rnd(0, 500), easing: "cubic-bezier(0.5, 0, 0.8, 0.6)", fill: "forwards" })
+        .finished.then(() => b.wrap.remove());
+    }
+    current = [];
+    const step = size * 0.98, lineH = size * 2.15;
+    const top = (innerHeight * 0.82 - lines.length * lineH) / 2 + size * 0.1;
+    let n = 0;
+    lines.forEach((line, li) => {
+      const chars = [...line];
+      const x0 = (innerWidth - chars.length * step) / 2;
+      chars.forEach((ch, k) => {
+        if (ch === " ") return;
+        const wrap = document.createElement("div");
+        wrap.style.position = "absolute";
+        const x = x0 + k * step + rnd(-0.04, 0.04) * size, y = top + li * lineH + rnd(-0.08, 0.08) * size;
+        wrap.style.transform = `translate(${x}px, ${y}px)`;
+        const bob = document.createElement("div");
+        bob.className = "bob";
+        bob.style.animationDelay = rnd(-3, 0) + "s";
+        bob.style.animationDuration = rnd(2.6, 3.8) + "s";
+        const b = document.createElement("div");
+        b.className = "balloon";
+        b.textContent = ch;
+        b.style.setProperty("--c", COLORS[Math.floor(Math.random() * COLORS.length)]);
+        bob.appendChild(b); wrap.appendChild(bob); sky.appendChild(wrap);
+        if (animate && !reduce) {
+          // Nya ballonger stiger underifrån och stannar på sin plats.
+          wrap.animate([{ transform: `translate(${x + rnd(-60, 60)}px, ${innerHeight + size * 2}px)` },
+                        { transform: `translate(${x}px, ${y - size * 0.1}px)`, offset: 0.85 },
+                        { transform: `translate(${x}px, ${y}px)` }],
+                       { duration: rnd(2200, 2800), delay: 900 + n * 90, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)", fill: "backwards" });
+        }
+        current.push({ wrap, x, y });
+        n++;
+      });
+    });
+  }
+
+  const clock = S.clock((t, info) => {
+    if (info.wordsChanged) launch(["KLOCKAN ÄR", ...S.lines(t)], true);
+    weights.forEach((w, i) => w.classList.toggle("on", i < t.extra));
+  });
+  addEventListener("resize", () => { resize(); clock.refresh(); });
+  resize();
+  S.choice("sky", "ballonger-sky", "dag", v => { document.body.dataset.sky = v; });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/ballonger/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

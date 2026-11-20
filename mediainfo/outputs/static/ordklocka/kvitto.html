@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Kvitto</title>
+<style>
+  :root {
+    --panel-bg: rgba(24, 26, 28, 0.92); --panel-fg: #eee; --panel-accent: #eee;
+    --panel-bg-solid: #18191b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: radial-gradient(ellipse at 50% 30%, #4b5258, #1d2023 75%); }
+  /* Kvittoskrivaren längst ner; kvittot matas ut uppåt ur springan */
+  .printer {
+    position: fixed; left: 50%; bottom: -2vh; transform: translateX(-50%);
+    width: calc(var(--paper) + 8vmin); height: 15vh; border-radius: 2vmin 2vmin 0 0;
+    background: linear-gradient(180deg, #3a3d41, #232528); z-index: 5;
+    box-shadow: 0 -1vmin 3vmin rgba(0, 0, 0, 0.5), inset 0 0.3vmin 0 rgba(255, 255, 255, 0.12);
+  }
+  .printer::before { content: ""; position: absolute; left: 3vmin; right: 3vmin; top: 2vh; height: 1vh;
+                     background: #0b0c0d; border-radius: 0.5vh; }
+  .printer::after { content: ""; position: absolute; right: 4vmin; bottom: 5vh; width: 1.4vmin; height: 1.4vmin;
+                    border-radius: 50%; background: #3ddc6a; box-shadow: 0 0 1vmin #3ddc6a; }
+  .receipt {
+    position: fixed; left: 50%; bottom: calc(13vh - 2vh + 1vh); width: var(--paper);
+    transform: translateX(-50%); transform-origin: 50% 100%;
+    background: #fbfbf6; color: #262626;
+    font: 500 var(--fs) / 1.32 "DejaVu Sans Mono", "Courier New", monospace;
+    padding: calc(var(--fs) * 1.2) calc(var(--fs) * 1.1) 0;
+    box-shadow: 0 0 2vmin rgba(0, 0, 0, 0.35);
+    /* Avrivningskant upptill */
+    -webkit-mask: linear-gradient(#000, #000) 0 calc(var(--fs) * 0.6) / 100% 100% no-repeat,
+                  conic-gradient(from 135deg at 50% 0, #000 90deg, transparent 0) 0 0 / calc(var(--fs) * 1.2) calc(var(--fs) * 0.6) repeat-x;
+            mask: linear-gradient(#000, #000) 0 calc(var(--fs) * 0.6) / 100% 100% no-repeat,
+                  conic-gradient(from 135deg at 50% 0, #000 90deg, transparent 0) 0 0 / calc(var(--fs) * 1.2) calc(var(--fs) * 0.6) repeat-x;
+  }
+  .receipt pre { margin: 0; font: inherit; white-space: pre; }
+  .receipt .big { font-weight: 800; font-size: calc(var(--fs) * 1.6); line-height: 1.25; white-space: pre-wrap; text-align: center; }
+  .receipt .center { text-align: center; }
+  .receipt .bars { height: calc(var(--fs) * 2.4); margin: calc(var(--fs) * 0.4) auto 0; width: 80%; }
+  .receipt .gap { height: calc(var(--fs) * 2); }
+</style>
+</head>
+<body>
+<div class="printer" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const WIDTH = 32;
+  let fs = 14, receipt = null, timer = null;
+  let receiptNo = 1000 + Math.floor(Math.random() * 8000);
+
+  function resize() {
+    // Kvittot med ca 26 rader ska få plats ovanför skrivaren.
+    fs = Math.min(innerHeight * 0.8 / (28 * 1.32), innerWidth * 0.8 / (WIDTH * 0.62));
+    document.documentElement.style.setProperty("--fs", fs + "px");
+    document.documentElement.style.setProperty("--paper", fs * (WIDTH * 0.602 + 2.2) + "px");
+  }
+
+  const kr = n => n.toFixed(2).replace(".", ",");
+  const row = (left, right) => left + " ".repeat(Math.max(1, WIDTH - left.length - right.length)) + right;
+  const center = s => " ".repeat(Math.max(0, Math.floor((WIDTH - s.length) / 2))) + s;
+  const rule = "-".repeat(WIDTH);
+
+  // Kvittots rader: [text, klass]. Varje bokstav kostar 1 krona.
+  function lines(t, now) {
+    const words = OrdklockaTid.spokenWords(t);
+    const p2 = n => String(n).padStart(2, "0");
+    const out = [
+      [center("TIDSBUTIKEN"), "big"],
+      [center("Visargatan 12, Tidaholm")],
+      [center("Org.nr 000000-0000")],
+      [rule],
+      [row(`${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`, `${p2(now.getHours())}:${p2(now.getMinutes())}`)],
+      [row("Kassa 1", `Kvitto ${++receiptNo}`)],
+      [rule],
+      [row("KLOCKAN", kr(7))],
+      [row("ÄR", kr(2))],
+    ];
+    let total = 9;
+    for (const w of words) { total += w.length; out.push([row(w, kr(w.length))]); }
+    if (t.extra) { out.push([row(`TILLÄGG ${t.extra} MIN`, kr(t.extra))]); total += t.extra; }
+    out.push([rule], [row("ATT BETALA", kr(total))], [row("varav moms 25%", kr(total * 0.2))], [rule]);
+    out.push([S.lines(t).join(" "), "big"]);
+    out.push([rule], [center("Tack för besöket!")], [center(`Välkommen åter om ${5 - t.extra} min`)], ["", "bars"], ["", "gap"]);
+    return out;
+  }
+
+  function barcode() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 100 20");
+    svg.setAttribute("preserveAspectRatio", "none");
+    let x = 0;
+    while (x < 100) {
+      const w = [0.6, 1, 1.6, 2.2][Math.floor(Math.random() * 4)];
+      const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      r.setAttribute("x", x); r.setAttribute("width", w); r.setAttribute("height", 20); r.setAttribute("fill", "#222");
+      svg.appendChild(r);
+      x += w + [0.6, 1, 1.5][Math.floor(Math.random() * 3)];
+    }
+    return svg;
+  }
+
+  function print(t, now, animate) {
+    clearInterval(timer);
+    // Det gamla kvittot rivs av och fladdrar iväg.
+    if (receipt) {
+      const old = receipt;
+      if (animate) old.animate([{ transform: "translateX(-50%)" },
+                                { transform: `translate(-30%, -110vh) rotate(${8 + Math.random() * 10}deg)`, opacity: 0.6 }],
+                               { duration: 900, easing: "ease-in", fill: "forwards" }).finished.then(() => old.remove());
+      else old.remove();
+    }
+    receipt = document.createElement("div");
+    receipt.className = "receipt";
+    receipt.setAttribute("aria-hidden", "true");
+    document.body.insertBefore(receipt, document.querySelector(".printer"));
+    const rows = lines(t, now);
+    const add = ([text, cls]) => {
+      const el = cls === "bars" ? Object.assign(document.createElement("div"), { className: "bars" }) : document.createElement("pre");
+      if (cls === "bars") el.appendChild(barcode());
+      else { el.textContent = text; if (cls) el.className = cls; }
+      receipt.appendChild(el);
+      return el;
+    };
+    if (!animate || matchMedia("(prefers-reduced-motion: reduce)").matches) { rows.forEach(add); return; }
+    // Matas fram en rad i taget.
+    let i = 0;
+    setTimeout(() => {
+      timer = setInterval(() => {
+        if (i >= rows.length) { clearInterval(timer); return; }
+        const el = add(rows[i++]);
+        el.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 120 });
+      }, 110);
+    }, animate && receipt ? 700 : 0);
+  }
+
+  const clock = S.clock((t, info) => print(t, info.now, true));
+  addEventListener("resize", resize);
+  resize();
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/kvitto/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

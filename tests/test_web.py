@@ -919,6 +919,17 @@ _NEW_CLOCKS = [
     ("buss", "bus_sign", "Ordklocka (busskylt)"),
     ("texttv", "teletext", "Ordklocka (text-tv)"),
     ("brickor", "letter_tiles", "Ordklocka (brickor)"),
+    ("broderi", "embroidery", "Ordklocka (broderi)"),
+    ("stampel", "rubber_stamps", "Ordklocka (stämplar)"),
+    ("sattlada", "type_case", "Ordklocka (sättlåda)"),
+    ("fonster", "misty_window", "Ordklocka (fönster)"),
+    ("rakneverk", "counter_drums", "Ordklocka (räkneverk)"),
+    ("kvitto", "receipt", "Ordklocka (kvitto)"),
+    ("domino", "dominoes", "Ordklocka (domino)"),
+    ("ballonger", "balloons", "Ordklocka (ballonger)"),
+    ("stjarnor", "constellations", "Ordklocka (stjärnhimmel)"),
+    ("dusch", "steamy_shower", "Ordklocka (duschvägg)"),
+    ("blod", "blood", "Ordklocka (blod)"),
 ]
 
 

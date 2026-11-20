@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Fönster</title>
+<style>
+  :root {
+    --panel-bg: rgba(14, 20, 32, 0.88); --panel-fg: #e6edf5; --panel-accent: #ffd99a;
+    --panel-bg-solid: #0e1420;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1424; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  /* Vinternatt utanför: himmel, hus med tända fönster, gatlampor */
+  .outside {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(circle at 18% 58%, rgba(255, 200, 120, 0.55), transparent 4%),
+      radial-gradient(circle at 18% 58%, rgba(255, 180, 90, 0.18), transparent 16%),
+      radial-gradient(circle at 82% 52%, rgba(255, 200, 120, 0.5), transparent 4%),
+      radial-gradient(circle at 82% 52%, rgba(255, 180, 90, 0.16), transparent 15%),
+      linear-gradient(180deg, #081022 0%, #142540 55%, #23344f 68%, #4f5d73 70%, #3a4558 100%);   /* snö i mörkret */
+  }
+  .houses { position: fixed; left: 0; right: 0; top: 46%; height: 24%; display: flex; align-items: flex-end; gap: 2vw; padding: 0 4vw; }
+  .house { position: relative; flex: 1; background: #0d1626; }
+  .house::before { content: ""; position: absolute; left: -6%; right: -6%; bottom: 100%; height: 45%;
+                   background: #0d1626; clip-path: polygon(50% 0, 100% 100%, 0 100%);
+                   box-shadow: inset 0 0.6vh 0 #dfe7f2; }
+  .house i { position: absolute; width: 14%; height: 18%; background: #ffcf7a; box-shadow: 0 0 1.5vh rgba(255, 190, 90, 0.7); }
+  /* Fönsterkarmen och fönsterbrädan ovanpå imman */
+  .frame { position: fixed; inset: 0; pointer-events: none;
+           border: 3.2vmin solid #f1ece2; box-shadow: inset 0 0 0 0.6vmin #d8d0c2, inset 0 0 4vmin rgba(0, 0, 0, 0.35); }
+  .frost { position: fixed; inset: 0; pointer-events: none;
+           background:
+             radial-gradient(ellipse at 0 0, rgba(255, 255, 255, 0.55), transparent 22%),
+             radial-gradient(ellipse at 100% 0, rgba(255, 255, 255, 0.45), transparent 18%),
+             radial-gradient(ellipse at 0 100%, rgba(255, 255, 255, 0.6), transparent 26%),
+             radial-gradient(ellipse at 100% 100%, rgba(255, 255, 255, 0.55), transparent 24%); }
+  .sill { position: fixed; left: 0; right: 0; bottom: 0; height: 3.6vmin; background: linear-gradient(#f6f2ea, #d9d1c3);
+          box-shadow: 0 -0.4vmin 1vmin rgba(0, 0, 0, 0.3); }
+</style>
+</head>
+<body>
+<div class="outside"></div>
+<div class="houses">
+  <div class="house" style="height:70%"><i style="left:20%;top:30%"></i><i style="left:62%;top:30%;opacity:.25"></i></div>
+  <div class="house" style="height:95%"><i style="left:15%;top:22%;opacity:.3"></i><i style="left:45%;top:22%"></i><i style="left:72%;top:55%"></i></div>
+  <div class="house" style="height:60%"><i style="left:40%;top:35%"></i></div>
+  <div class="house" style="height:85%"><i style="left:22%;top:28%"></i><i style="left:62%;top:28%"></i></div>
+</div>
+<canvas id="snow"></canvas>
+<canvas id="fog"></canvas>
+<div class="frost"></div>
+<div class="frame"></div>
+<div class="sill"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/skrift.js"></script>
+<script src="/ordklocka/imma.js"></script>
+<script>
+  const S = OrdklockaSida;
+
+  // Snö som faller utanför
+  const snow = document.getElementById("snow");
+  const sctx = snow.getContext("2d");
+  let flakes = [];
+  function sizeSnow() {
+    snow.width = innerWidth; snow.height = innerHeight;
+    flakes = Array.from({ length: 220 }, () => ({
+      x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+      r: 0.6 + Math.random() * 2.4, v: 20 + Math.random() * 50, s: Math.random() * 6,
+    }));
+  }
+  let last = performance.now();
+  function fall(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    sctx.clearRect(0, 0, snow.width, snow.height);
+    sctx.fillStyle = "rgba(255,255,255,0.85)";
+    for (const f of flakes) {
+      f.y += f.v * dt * (f.r / 2); f.s += dt;
+      const x = f.x + Math.sin(f.s) * 12;
+      if (f.y > snow.height) { f.y = -5; f.x = Math.random() * snow.width; }
+      sctx.beginPath(); sctx.arc(x, f.y, f.r, 0, Math.PI * 2); sctx.fill();
+    }
+    requestAnimationFrame(fall);
+  }
+  addEventListener("resize", sizeSnow);
+  sizeSnow();
+  requestAnimationFrame(fall);
+
+  const fog = OrdklockaImma.start({
+    fog: "rgb(196, 207, 220)", alpha: 0.9, drips: 0.25, dripLength: 0.9, dripSpeed: 0.25,
+    box: (w, h) => ({ x: w * 0.1, y: h * 0.1, w: w * 0.8, h: h * 0.72 }),
+  });
+  const clock = S.clock((t, info) => {
+    if (info.wordsChanged) fog.show(["Klockan är", ...S.lines(t).map(l => l.toLowerCase())], true);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/fonster/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

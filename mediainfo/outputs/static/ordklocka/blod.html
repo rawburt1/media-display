@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Blod</title>
+<style>
+  :root {
+    --panel-bg: rgba(12, 6, 6, 0.9); --panel-fg: #e8d6d0; --panel-accent: #b3201b;
+    --panel-bg-solid: #0c0606;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #050303; }
+  /* Golvet, lutat bort från betraktaren */
+  .room { position: fixed; inset: 0; perspective: 110vh; perspective-origin: 50% 10%; }
+  .floor {
+    position: absolute; left: -25%; right: -25%; top: -10%; bottom: -40%;
+    transform: rotateX(38deg); transform-origin: 50% 30%;
+    /* Slitna golvplankor */
+    background:
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0 0.35vw, transparent 0.35vw 11vw),
+      repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 1.3vw, rgba(0, 0, 0, 0.05) 1.3vw 2.1vw),
+      linear-gradient(180deg, #3a2a20, #2a1d15);
+  }
+  .floor canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* Ljuset: en kon från en ensam lampa, mörkt runtom */
+  .light {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 55% 60% at 50% 48%, transparent 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0.92) 100%);
+  }
+  .dark { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="room" aria-hidden="true"><div class="floor"><canvas id="blood"></canvas></div></div>
+<div class="light"></div>
+<div class="dark" id="dark"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/skrift.js"></script>
+<script>
+  const S = OrdklockaSida, K = OrdklockaSkrift;
+  const cv = document.getElementById("blood");
+  const ctx = cv.getContext("2d");
+  const dark = document.getElementById("dark");
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const FONT = s => `bold ${s}px "Chiller", "Jokerman", "Z003", ${K.HAND}`;
+
+  let W, H, L = null, lines = null, progress = 0, splats = [];
+
+  function resize() {
+    const r = cv.getBoundingClientRect();
+    // Canvasens egen storlek (före perspektivet), inte den lutade bilden.
+    W = cv.offsetWidth; H = cv.offsetHeight;
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    L = null;
+  }
+
+  // Texten ligger i den del av golvet som syns i ljuskäglan.
+  const box = () => ({ x: W * 0.27, y: H * 0.2, w: W * 0.46, h: H * 0.33 });
+
+  function drawText(g, line) {
+    // Mörk kant, blodröd fyllning och en våt glans uppåt vänster
+    g.lineJoin = "round";
+    g.strokeStyle = "#2a0202";
+    g.lineWidth = L.size * 0.09;
+    g.strokeText(line.text, line.x, line.y);
+    g.fillStyle = "#7d0b0b";
+    g.fillText(line.text, line.x, line.y);
+    g.globalAlpha = 0.35;
+    g.fillStyle = "#d8483e";
+    g.fillText(line.text, line.x - L.size * 0.02, line.y - L.size * 0.03);
+    g.globalAlpha = 1;
+  }
+
+  function splat(x, y, big) {
+    // Stänk: en klump och några droppar runtom
+    const r = L.size * (big ? rnd(0.08, 0.14) : rnd(0.02, 0.05));
+    splats.push({ x, y, r, rot: rnd(0, Math.PI), sx: rnd(0.7, 1.4) });
+    const n = big ? 6 : 2;
+    for (let i = 0; i < n; i++) {
+      const a = rnd(0, Math.PI * 2), d = r * rnd(1.5, 4);
+      splats.push({ x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, r: r * rnd(0.15, 0.4), rot: a, sx: rnd(1, 2.2) });
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    if (!lines) return null;
+    if (!L) {
+      L = K.layout(ctx, lines, box(), FONT, { lineHeight: 1.15 });
+      if (progress > L.chars) progress = L.chars;
+    }
+    ctx.font = L.font;
+    ctx.textBaseline = "middle";
+    for (const s of splats) {
+      ctx.save();
+      ctx.translate(s.x, s.y); ctx.rotate(s.rot); ctx.scale(s.sx, 1);
+      ctx.fillStyle = "#6a0808";
+      ctx.beginPath(); ctx.arc(0, 0, s.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(216, 72, 62, 0.35)";
+      ctx.beginPath(); ctx.arc(-s.r * 0.25, -s.r * 0.25, s.r * 0.45, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    return K.drawPartial(ctx, L, progress, drawText);
+  }
+
+  let prev = performance.now(), writing = false;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
+    if (writing && L) {
+      const before = Math.floor(progress);
+      progress = Math.min(L.chars, progress + dt * 4);
+      const pen = draw();
+      if (pen && Math.floor(progress) > before && Math.random() < 0.3) splat(pen.x, pen.y + rnd(-0.3, 0.5) * L.size, Math.random() < 0.3);
+      if (progress >= L.chars) writing = false;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function write(newLines, animate) {
+    const begin = () => {
+      lines = newLines; L = null; splats = []; progress = animate ? 0 : 9999;
+      draw();
+      writing = animate;
+    };
+    if (!animate || !lines) { begin(); return; }
+    // Lampan slocknar, och när den tänds igen står något nytt skrivet.
+    dark.style.transition = "opacity 0.15s";
+    dark.style.opacity = 1;
+    setTimeout(() => { begin(); }, 900);
+    setTimeout(() => { dark.style.transition = "opacity 0.6s"; dark.style.opacity = 0; }, 1300);
+  }
+
+  // Lampan fladdrar ibland.
+  (function flicker() {
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches && dark.style.opacity !== "1") {
+      const seq = [0.7, 0.1, 0.85, 0];
+      seq.forEach((o, i) => setTimeout(() => {
+        if (dark.style.opacity === "1") return;
+        dark.style.transition = "none"; dark.style.opacity = o;
+      }, i * 70));
+    }
+    setTimeout(flicker, 5000 + Math.random() * 15000);
+  })();
+
+  const clock = S.clock((t, info) => {
+    if (info.wordsChanged) write(["Klockan är", ...S.lines(t).map(l => l.toLowerCase())], !info.first);
+  });
+  addEventListener("resize", () => { resize(); draw(); });
+  resize();
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/blod/ws");
+  requestAnimationFrame(t => { prev = t; frame(t); });
+  // Första gången skrivs texten fram långsamt.
+  setTimeout(() => { if (lines) { progress = 0; splats = []; writing = true; } }, 300);
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

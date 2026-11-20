@@ -734,8 +734,19 @@ outputs:
     # (a flickering neon sign, /ordklocka/neon), "fridge_magnets" (letter
     # magnets on a fridge door, /ordklocka/magneter), "bus_sign" (an LED
     # bus destination sign, /ordklocka/buss), "teletext" (a Text-TV page,
-    # /ordklocka/texttv) or "letter_tiles" (word game letter tiles on a
-    # board, /ordklocka/brickor).
+    # /ordklocka/texttv), "letter_tiles" (word game letter tiles on a
+    # board, /ordklocka/brickor),
+    # "embroidery" (cross-stitch embroidery in a hoop, stitched letter by letter, /ordklocka/broderi),
+    # "rubber_stamps" (rubber letter stamps on kraft paper, /ordklocka/stampel),
+    # "type_case" (metal type picked from a type case and printed, /ordklocka/sattlada),
+    # "misty_window" (written with a finger on a misted-up winter window, /ordklocka/fonster),
+    # "counter_drums" (rolling letter drums like an old mechanical counter, /ordklocka/rakneverk),
+    # "receipt" (printed on a till receipt, /ordklocka/kvitto),
+    # "dominoes" (dominoes that topple in a chain to form the words, /ordklocka/domino),
+    # "balloons" (letter balloons floating in the sky, /ordklocka/ballonger),
+    # "constellations" (the words as constellations in a night sky, /ordklocka/stjarnor),
+    # "steamy_shower" (written in the steam on a shower wall, /ordklocka/dusch) or
+    # "blood" (a spooky scrawl in blood on the floor, /ordklocka/blod).
     idle_clock_style: words
 
   # Multiple web outputs — e.g. one per room. Only the first can mount at

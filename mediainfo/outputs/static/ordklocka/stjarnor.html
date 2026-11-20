@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Stjärnhimmel</title>
+<style>
+  :root {
+    --panel-bg: rgba(6, 10, 24, 0.88); --panel-fg: #dfe6ff; --panel-accent: #dfe6ff;
+    --panel-bg-solid: #060a18;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #02040c; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Stjärnbildslinjer">
+      <span class="label">Linjer</span>
+      <button data-lines="på">på</button>
+      <button data-lines="av">av</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const cv = document.getElementById("sky");
+  const ctx = cv.getContext("2d");
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  // ---------- Streckbokstäver, 4 x 6 enheter (y nedåt) ----------
+  const A = [[[0, 6], [2, 0], [4, 6]], [[1, 3.6], [3, 3.6]]];
+  const O = [[[1, 0], [3, 0], [4, 1.5], [4, 4.5], [3, 6], [1, 6], [0, 4.5], [0, 1.5], [1, 0]]];
+  const DOTS = [[[1, -1.3]], [[3, -1.3]]];
+  const STROKES = {
+    A, O,
+    C: [[[4, 1], [3, 0], [1, 0], [0, 1.5], [0, 4.5], [1, 6], [3, 6], [4, 5]]],
+    E: [[[4, 0], [0, 0], [0, 6], [4, 6]], [[0, 3], [3, 3]]],
+    F: [[[4, 0], [0, 0], [0, 6]], [[0, 3], [3, 3]]],
+    G: [[[4, 1], [3, 0], [1, 0], [0, 1.5], [0, 4.5], [1, 6], [3, 6], [4, 5], [4, 3.5], [2.5, 3.5]]],
+    H: [[[0, 0], [0, 6]], [[4, 0], [4, 6]], [[0, 3], [4, 3]]],
+    I: [[[2, 0], [2, 6]]],
+    J: [[[4, 0], [4, 4.5], [3, 6], [1, 6], [0, 4.5]]],
+    K: [[[0, 0], [0, 6]], [[4, 0], [0, 3.6]], [[1.4, 2.5], [4, 6]]],
+    L: [[[0, 0], [0, 6], [4, 6]]],
+    M: [[[0, 6], [0, 0], [2, 3], [4, 0], [4, 6]]],
+    N: [[[0, 6], [0, 0], [4, 6], [4, 0]]],
+    R: [[[0, 6], [0, 0], [3, 0], [4, 1], [4, 2], [3, 3], [0, 3]], [[2, 3], [4, 6]]],
+    S: [[[4, 1], [3, 0], [1, 0], [0, 1], [0, 2], [1, 3], [3, 3], [4, 4], [4, 5], [3, 6], [1, 6], [0, 5]]],
+    T: [[[0, 0], [4, 0]], [[2, 0], [2, 6]]],
+    U: [[[0, 0], [0, 4.5], [1, 6], [3, 6], [4, 4.5], [4, 0]]],
+    V: [[[0, 0], [2, 6], [4, 0]]],
+    X: [[[0, 0], [4, 6]], [[4, 0], [0, 6]]],
+    Y: [[[0, 0], [2, 3], [4, 0]], [[2, 3], [2, 6]]],
+    Ä: [...A, ...DOTS],
+    Ö: [...O, ...DOTS],
+    Å: [...A, [[2, -1.0], [2.6, -1.6], [2, -2.2], [1.4, -1.6], [2, -1.0]]],
+  };
+
+  // ---------- Bakgrundshimmel ----------
+  let W, H, dpr, bg, twinklers = [], constellation = null;
+  function buildSky() {
+    bg = document.createElement("canvas");
+    bg.width = cv.width; bg.height = cv.height;
+    const g = bg.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const grd = g.createLinearGradient(0, 0, 0, H);
+    grd.addColorStop(0, "#02030a"); grd.addColorStop(1, "#0b1530");
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    // Vintergatan: ett diagonalt dis
+    g.save(); g.translate(W / 2, H / 2); g.rotate(-0.5);
+    const mw = g.createLinearGradient(0, -H * 0.25, 0, H * 0.25);
+    mw.addColorStop(0, "rgba(120,140,200,0)"); mw.addColorStop(0.5, "rgba(150,165,220,0.12)"); mw.addColorStop(1, "rgba(120,140,200,0)");
+    g.fillStyle = mw; g.fillRect(-W, -H * 0.25, W * 2, H * 0.5);
+    g.restore();
+    for (let i = 0; i < W * H / 900; i++) {
+      g.fillStyle = `rgba(255,255,255,${rnd(0.1, 0.6)})`;
+      g.fillRect(Math.random() * W, Math.random() * H, rnd(0.5, 1.4), rnd(0.5, 1.4));
+    }
+    twinklers = Array.from({ length: 90 }, () => ({ x: Math.random() * W, y: Math.random() * H, r: rnd(0.8, 1.8), p: Math.random() * 6, s: rnd(0.8, 2.5) }));
+  }
+
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    buildSky();
+    if (lastLines) constellation = build(lastLines, false);
+  }
+
+  // ---------- Stjärnbilder ----------
+  // Stjärnor i bokstävernas hörn, linjer längs strecken. order = i vilken tur de tänds.
+  function build(lines, animate) {
+    const unit = Math.min(W * 0.9 / (14 * 5.6), H * 0.78 / (lines.length * 9.5));
+    const stars = [], segs = [];
+    const key = new Map();
+    let order = 0;
+    lines.forEach((line, li) => {
+      const chars = [...line];
+      const x0 = (W - (chars.length * 5.6 - 1.6) * unit) / 2;
+      const y0 = (H * 0.92 - lines.length * 9.5 * unit) / 2 + (li * 9.5 + 2.2) * unit;
+      chars.forEach((ch, ci) => {
+        for (const stroke of STROKES[ch] || []) {
+          let prev = null;
+          for (const [sx, sy] of stroke) {
+            const x = x0 + (ci * 5.6 + sx) * unit + rnd(-0.12, 0.12) * unit;
+            const y = y0 + sy * unit + rnd(-0.12, 0.12) * unit;
+            const k = `${li}:${ci}:${sx}:${sy}`;
+            let star = key.get(k);
+            if (!star) {
+              star = { x, y, r: rnd(1.4, 3.2) * unit / 9, t: order++ };
+              key.set(k, star); stars.push(star);
+            }
+            if (prev) segs.push({ a: prev, b: star, t: Math.max(prev.t, star.t) });
+            prev = star;
+          }
+        }
+      });
+    });
+    return { stars, segs, born: performance.now(), animate, fade: 1, total: order };
+  }
+
+  let lastLines = null, old = null, showLines = true;
+  function show(lines) {
+    lastLines = lines;
+    old = constellation;
+    if (old) old.dying = performance.now();
+    constellation = build(lines, true);
+    constellation.born = performance.now() + (old ? 1200 : 300);
+  }
+
+  // Stjärnfall ibland
+  let shooting = null, nextShot = performance.now() + 8000;
+
+  function drawConstellation(c, now, alpha) {
+    const STAR_MS = 60, LINE_MS = 500;
+    const since = now - c.born;
+    for (const seg of c.segs) {
+      if (!showLines) break;
+      const start = seg.t * STAR_MS + 400;
+      const p = Math.max(0, Math.min(1, (since - start) / LINE_MS));
+      if (p <= 0) continue;
+      ctx.strokeStyle = `rgba(150, 180, 255, ${0.38 * alpha})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(seg.a.x, seg.a.y);
+      ctx.lineTo(seg.a.x + (seg.b.x - seg.a.x) * p, seg.a.y + (seg.b.y - seg.a.y) * p);
+      ctx.stroke();
+    }
+    for (const s of c.stars) {
+      const p = Math.max(0, Math.min(1, (since - s.t * STAR_MS) / 500));
+      if (p <= 0) continue;
+      const flare = p < 1 ? 1 + (1 - p) * 2.5 : 1;
+      const tw = 0.85 + 0.15 * Math.sin(now / 400 + s.t);
+      const r = s.r * flare;
+      const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 5);
+      glow.addColorStop(0, `rgba(220, 230, 255, ${0.55 * alpha * tw})`);
+      glow.addColorStop(1, "rgba(220, 230, 255, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(s.x, s.y, r * 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha * p})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  let extra = 0;
+  function frame(now) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(bg, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const t of twinklers) {
+      const a = 0.35 + 0.35 * Math.sin(now / 1000 * t.s + t.p);
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2); ctx.fill();
+    }
+    if (old) {
+      const a = 1 - (now - old.dying) / 1000;
+      if (a <= 0) old = null; else drawConstellation(old, now + 1e6, a);
+    }
+    if (constellation && now >= constellation.born - 1) drawConstellation(constellation, now, 1);
+    // Minuterna: fyra planeter längs nederkanten
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = i < extra ? "rgba(255, 214, 140, 0.95)" : "rgba(255, 255, 255, 0.12)";
+      ctx.beginPath(); ctx.arc(W / 2 + (i - 1.5) * 26, H * 0.95, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    // Stjärnfall
+    if (!shooting && now > nextShot && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      shooting = { x: rnd(0.1, 0.7) * W, y: rnd(0.02, 0.3) * H, t: now };
+      nextShot = now + rnd(15000, 40000);
+    }
+    if (shooting) {
+      const p = (now - shooting.t) / 900;
+      if (p > 1) shooting = null;
+      else {
+        const x = shooting.x + p * W * 0.25, y = shooting.y + p * H * 0.12;
+        const grd = ctx.createLinearGradient(x - W * 0.08, y - H * 0.04, x, y);
+        grd.addColorStop(0, "rgba(255,255,255,0)"); grd.addColorStop(1, `rgba(255,255,255,${1 - p})`);
+        ctx.strokeStyle = grd; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x - W * 0.08, y - H * 0.04); ctx.lineTo(x, y); ctx.stroke();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    extra = t.extra;
+    if (info.wordsChanged) show(["KLOCKAN ÄR", ...S.lines(t)]);
+  });
+  addEventListener("resize", resize);
+  resize();
+  S.choice("lines", "stjarnor-lines", "på", v => { showLines = v === "på"; });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/stjarnor/ws");
+  requestAnimationFrame(frame);
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

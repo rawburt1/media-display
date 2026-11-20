@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Stämplar</title>
+<style>
+  :root {
+    --ink: #1c1c22;
+    --panel-bg: rgba(40, 30, 20, 0.9); --panel-fg: #f1e6d2; --panel-accent: #f1e6d2;
+    --panel-bg-solid: #281e14;
+  }
+  [data-ink="röd"] { --ink: #b0211c; }
+  [data-ink="blå"] { --ink: #213e8f; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    display: grid; place-items: center;
+    background: repeating-linear-gradient(88deg, rgba(0, 0, 0, 0.06) 0 3px, transparent 3px 14px),
+                linear-gradient(160deg, #5b4330, #3b2a1c);
+  }
+  .desk { position: relative; width: var(--sw); height: var(--sh); }
+  .sheet {
+    position: absolute; inset: 0;
+    /* Kraftpapper med fibrer */
+    background:
+      repeating-linear-gradient(17deg, rgba(90, 60, 20, 0.05) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(-23deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 11px),
+      linear-gradient(170deg, #d7b585, #c9a26d);
+    box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, 0.45);
+  }
+  .letter {
+    position: absolute; transform-origin: 50% 60%;
+    font: 700 var(--lf) / 1 "Courier New", "Nimbus Mono PS", "DejaVu Sans Mono", monospace;
+    color: var(--ink); filter: url(#ink); mix-blend-mode: multiply;
+  }
+  .badge {
+    position: absolute; right: 6%; top: 7%; width: calc(var(--lf) * 1.5); height: calc(var(--lf) * 1.5);
+    border: calc(var(--lf) * 0.08) solid #b0211c; border-radius: 50%; color: #b0211c;
+    display: grid; place-items: center; transform: rotate(-14deg);
+    font: 700 calc(var(--lf) * 0.42) / 1 "Courier New", monospace; filter: url(#ink); mix-blend-mode: multiply;
+  }
+  /* Stämpeln: gummiplatta och trähandtag, sedd snett ovanifrån */
+  .stamp {
+    position: absolute; left: 0; top: 0; z-index: 50; pointer-events: none;
+    width: calc(var(--lf) * 0.95); height: calc(var(--lf) * 1.05);
+    background: linear-gradient(160deg, #a0703f, #6e4825);
+    border-radius: calc(var(--lf) * 0.08);
+    box-shadow: 0 calc(var(--lf) * 0.12) 0 #2d2d2d, 0 calc(var(--lf) * 0.4) calc(var(--lf) * 0.5) rgba(0, 0, 0, 0.4);
+    opacity: 0;
+  }
+  .stamp::after {
+    content: ""; position: absolute; left: 22%; right: 22%; top: -45%; height: 60%;
+    border-radius: 50% 50% 30% 30%; background: linear-gradient(160deg, #c08a52, #7c5228);
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <!-- Ojämnt bläck: små luckor där gummit inte tog -->
+  <filter id="ink">
+    <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="3" result="noise"/>
+    <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.55" result="holes"/>
+    <feComposite in="SourceGraphic" in2="holes" operator="in"/>
+  </filter>
+</svg>
+<div class="desk" id="desk" aria-hidden="true"><div class="stamp" id="stamp"></div></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Bläck">
+      <span class="label">Bläck</span>
+      <button data-ink="svart">svart</button>
+      <button data-ink="röd">röd</button>
+      <button data-ink="blå">blå</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const desk = document.getElementById("desk");
+  const stamp = document.getElementById("stamp");
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const LONGEST = 14;
+  let lf = 40, sheetW, sheetH;
+
+  function resize() {
+    sheetW = Math.min(innerWidth * 0.8, innerHeight * 0.85 * 1.414);
+    sheetH = sheetW / 1.414;
+    lf = Math.min(sheetW * 0.84 / (LONGEST * 0.62), sheetH * 0.7 / (3 * 1.3));
+    const root = document.documentElement.style;
+    root.setProperty("--sw", sheetW + "px");
+    root.setProperty("--sh", sheetH + "px");
+    root.setProperty("--lf", lf + "px");
+  }
+
+  let current = null, queue = [], timer = null;
+
+  function newSheet(lines, extra, animate) {
+    const sheet = document.createElement("div");
+    sheet.className = "sheet";
+    const rot = rnd(-2.5, 2.5);
+    sheet.style.transform = `rotate(${rot}deg)`;
+    desk.insertBefore(sheet, stamp);
+    if (animate) sheet.animate([{ transform: `translate(${-sheetW * 1.3}px, ${rnd(-40, 40)}px) rotate(${rot - 8}deg)` },
+                                { transform: `rotate(${rot}deg)` }], { duration: 700, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" });
+    // Bara de tre översta arken ligger kvar.
+    const sheets = desk.querySelectorAll(".sheet");
+    for (let i = 0; i < sheets.length - 3; i++) sheets[i].remove();
+
+    // Bokstävernas platser, monospace: lika breda rutor.
+    const cw = lf * 0.62, lh = lf * 1.3;
+    const top = (sheetH - lines.length * lh) / 2 + lf * 0.1;
+    const letters = [];
+    lines.forEach((line, li) => {
+      const chars = [...line];
+      const x0 = (sheetW - chars.length * cw) / 2;
+      chars.forEach((ch, k) => {
+        if (ch === " ") return;
+        letters.push({ ch, x: x0 + k * cw + rnd(-0.04, 0.04) * lf, y: top + li * lh + rnd(-0.05, 0.05) * lf, r: rnd(-5, 5) });
+      });
+    });
+    if (extra) letters.push({ badge: `+${extra}` });
+    return { sheet, letters };
+  }
+
+  function press(sheet, l) {
+    const el = document.createElement("div");
+    if (l.badge) {
+      el.className = "badge"; el.textContent = l.badge;
+    } else {
+      el.className = "letter"; el.textContent = l.ch;
+      el.style.left = l.x + "px"; el.style.top = l.y + "px";
+      el.style.transform = `rotate(${l.r}deg)`;
+      el.style.opacity = rnd(0.82, 1);
+    }
+    sheet.appendChild(el);
+    return el;
+  }
+
+  function stampAll(job, animate) {
+    clearInterval(timer);
+    if (!animate) { job.letters.forEach(l => press(job.sheet, l)); stamp.style.opacity = 0; return; }
+    let i = 0;
+    const step = () => {
+      const l = job.letters[i++];
+      if (!l) { clearInterval(timer); stamp.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" }); return; }
+      // Stämpeln åker till bokstaven, trycks ner och lyfts.
+      const x = l.badge ? sheetW * 0.88 - lf * 0.7 : l.x - lf * 0.15;
+      const y = l.badge ? sheetH * 0.07 : l.y - lf * 0.05;
+      stamp.animate([
+        { transform: `translate(${x - lf * 0.3}px, ${y - lf * 0.9}px) scale(1.25)`, opacity: 1 },
+        { transform: `translate(${x}px, ${y}px) scale(1)`, opacity: 1, offset: 0.45 },
+        { transform: `translate(${x}px, ${y}px) scale(1)`, opacity: 1, offset: 0.6 },
+        { transform: `translate(${x + lf * 0.2}px, ${y - lf * 0.8}px) scale(1.25)`, opacity: 1 },
+      ], { duration: 260, fill: "forwards" });
+      setTimeout(() => {
+        const el = press(job.sheet, l);
+        el.animate([{ opacity: 0 }, { opacity: el.style.opacity || 1 }], { duration: 60 });
+      }, 120);
+    };
+    setTimeout(() => { step(); timer = setInterval(step, 270); }, 650);
+  }
+
+  let sheetNow = null;
+  const clock = S.clock((t, info) => {
+    if (info.wordsChanged || !sheetNow) {
+      const job = newSheet(["KLOCKAN ÄR", ...S.lines(t)], t.extra, !info.first);
+      sheetNow = job.sheet;
+      stampAll(job, true);
+      return;
+    }
+    // Samma ord, ny minut: bara minutstämpeln byts på samma ark.
+    sheetNow.querySelector(".badge")?.remove();
+    if (t.extra) stampAll({ sheet: sheetNow, letters: [{ badge: `+${t.extra}` }] }, true);
+  });
+  addEventListener("resize", () => { resize(); clock.refresh(); });
+  resize();
+  S.choice("ink", "stampel-ink", "svart", v => { document.documentElement.dataset.ink = v; });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/stampel/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

@@ -147,6 +147,17 @@ function clientPageLabel(page) {
   if (page === '/ordklocka/buss') return 'Word clock, bus sign (standalone)';
   if (page === '/ordklocka/texttv') return 'Word clock, teletext (standalone)';
   if (page === '/ordklocka/brickor') return 'Word clock, letter tiles (standalone)';
+  if (page === '/ordklocka/broderi') return 'Word clock, embroidery (standalone)';
+  if (page === '/ordklocka/stampel') return 'Word clock, rubber stamps (standalone)';
+  if (page === '/ordklocka/sattlada') return 'Word clock, type case (standalone)';
+  if (page === '/ordklocka/fonster') return 'Word clock, misty window (standalone)';
+  if (page === '/ordklocka/rakneverk') return 'Word clock, counter drums (standalone)';
+  if (page === '/ordklocka/kvitto') return 'Word clock, receipt (standalone)';
+  if (page === '/ordklocka/domino') return 'Word clock, dominoes (standalone)';
+  if (page === '/ordklocka/ballonger') return 'Word clock, balloons (standalone)';
+  if (page === '/ordklocka/stjarnor') return 'Word clock, constellations (standalone)';
+  if (page === '/ordklocka/dusch') return 'Word clock, steamy shower (standalone)';
+  if (page === '/ordklocka/blod') return 'Word clock, blood on the floor (standalone)';
   if (page === '/themes') return 'Themes';
   if (page === '/info') return 'Info';
   if (page.indexOf('/web-') === 0) return 'Web: ' + page.slice(5);

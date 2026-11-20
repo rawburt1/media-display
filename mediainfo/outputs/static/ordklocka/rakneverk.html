@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Räkneverk</title>
+<style>
+  :root {
+    --drum: #141414; --glyph: #f4f0e6;
+    --panel-bg: rgba(20, 20, 20, 0.9); --panel-fg: #eee; --panel-accent: #e8c25a;
+    --panel-bg-solid: #141414;
+  }
+  [data-drums="vita"] { --drum: #f2eee4; --glyph: #161616; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    display: grid; place-items: center;
+    background: radial-gradient(ellipse at 50% 35%, #3a4148, #15181b 75%);
+    font-family: system-ui, sans-serif;
+  }
+  /* Emaljerad plåt med kromram, som på en gammal mätare */
+  .meter {
+    padding: calc(var(--d) * 0.7) calc(var(--d) * 0.8) calc(var(--d) * 0.55);
+    border-radius: calc(var(--d) * 0.35);
+    background: linear-gradient(180deg, #e9e2cf, #d4ccb6);
+    box-shadow: 0 0 0 calc(var(--d) * 0.14) #9aa1a7, 0 0 0 calc(var(--d) * 0.2) #61676c,
+                0 calc(var(--d) * 0.4) calc(var(--d) * 0.9) rgba(0, 0, 0, 0.55);
+  }
+  .plate { text-align: center; font: 700 calc(var(--d) * 0.32) / 1 system-ui, sans-serif; letter-spacing: 0.4em;
+           color: #6a604c; margin: 0 0 calc(var(--d) * 0.35); }
+  .row { display: flex; justify-content: center; gap: calc(var(--d) * 0.08); margin-bottom: calc(var(--d) * 0.28);
+         padding: calc(var(--d) * 0.1); background: #23211d; border-radius: calc(var(--d) * 0.08);
+         box-shadow: inset 0 calc(var(--d) * 0.06) calc(var(--d) * 0.14) rgba(0, 0, 0, 0.8); }
+  .win { position: relative; width: var(--d); height: calc(var(--d) * 1.35); overflow: hidden; background: var(--drum); border-radius: 2px; }
+  .strip { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+  .strip div { height: calc(var(--d) * 1.35); display: grid; place-items: center; color: var(--glyph);
+               font: 700 calc(var(--d) * 0.9) / 1 "DIN Alternate", "Bahnschrift", "DejaVu Sans Condensed", "Arial Narrow", sans-serif; }
+  /* Trumman är rund: mörkare upptill och nertill, en glasreflex överst */
+  .win::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+                background: linear-gradient(180deg, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0) 28%, rgba(255, 255, 255, 0.06) 50%, rgba(0, 0, 0, 0) 72%, rgba(0, 0, 0, 0.75)); }
+  .lamps { display: flex; justify-content: center; gap: calc(var(--d) * 0.5); }
+  .lamp { width: calc(var(--d) * 0.28); height: calc(var(--d) * 0.28); border-radius: 50%; background: #5a2a14;
+          box-shadow: inset 0 0 0 2px #3b2a20; }
+  .lamp.on { background: radial-gradient(circle at 35% 35%, #fff2b0, #f0a020 60%, #b35a00);
+             box-shadow: 0 0 calc(var(--d) * 0.3) #f0a020; }
+</style>
+</head>
+<body>
+<div class="meter" aria-hidden="true">
+  <div class="plate">KLOCKAN ÄR</div>
+  <div id="rows"></div>
+  <div class="lamps" id="lamps"><i class="lamp"></i><i class="lamp"></i><i class="lamp"></i><i class="lamp"></i></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Trummornas färg">
+      <span class="label">Trummor</span>
+      <button data-drums="svarta">svarta</button>
+      <button data-drums="vita">vita</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const ALPH = [..." ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ"];
+  const N = ALPH.length, COLS = 13, ROWS = 2;
+  const rowsEl = document.getElementById("rows");
+  const lamps = [...document.querySelectorAll(".lamp")];
+  let d = 40;
+
+  // Varje trumma har alfabetet två gånger, så att den alltid kan rulla framåt.
+  const drums = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = document.createElement("div");
+    row.className = "row";
+    for (let c = 0; c < COLS; c++) {
+      const win = document.createElement("div");
+      win.className = "win";
+      const strip = document.createElement("div");
+      strip.className = "strip";
+      for (const ch of [...ALPH, ...ALPH]) { const g = document.createElement("div"); g.textContent = ch; strip.appendChild(g); }
+      win.appendChild(strip);
+      row.appendChild(win);
+      drums.push({ strip, idx: 0 });
+    }
+    rowsEl.appendChild(row);
+  }
+
+  function resize() {
+    d = Math.min(innerWidth * 0.86 / (COLS * 1.08 + 1.8), innerHeight * 0.86 / (ROWS * 1.75 + 2.2));
+    document.documentElement.style.setProperty("--d", d + "px");
+    drums.forEach(dr => { dr.strip.style.transition = "none"; dr.strip.style.transform = `translateY(${-dr.idx * d * 1.35}px)`; });
+  }
+
+  function roll(dr, ch, delay, animate) {
+    const target = Math.max(0, ALPH.indexOf(ch));
+    if (target === dr.idx) return;
+    // Alltid framåt: förbi Ö och runt till början om det behövs.
+    const steps = (target - dr.idx + N) % N;
+    const end = dr.idx + steps;
+    const h = d * 1.35;
+    if (!animate || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      dr.idx = target; dr.strip.style.transition = "none"; dr.strip.style.transform = `translateY(${-target * h}px)`; return;
+    }
+    const dur = 350 + steps * 55;
+    dr.strip.animate([{ transform: `translateY(${-dr.idx * h}px)` }, { transform: `translateY(${-end * h}px)` }],
+                     { duration: dur, delay, easing: "cubic-bezier(0.45, 0.05, 0.3, 1.15)", fill: "backwards" })
+      .finished.then(() => { dr.strip.style.transform = `translateY(${-target * h}px)`; });
+    dr.idx = target;
+    dr.strip.style.transform = `translateY(${-end * h}px)`;
+  }
+
+  const clock = S.clock((t, info) => {
+    const lines = S.lines(t);
+    for (let r = 0; r < ROWS; r++) {
+      const text = lines[r] || "";
+      const pad = Math.floor((COLS - [...text].length) / 2);
+      const cells = (" ".repeat(pad) + text).padEnd(COLS).slice(0, COLS);
+      [...cells].forEach((ch, c) => roll(drums[r * COLS + c], ch, (r * COLS + c) * 45, !info.first));
+    }
+    lamps.forEach((l, i) => l.classList.toggle("on", i < t.extra));
+  });
+  addEventListener("resize", resize);
+  resize();
+  S.choice("drums", "rakneverk-drums", "svarta", v => { document.documentElement.dataset.drums = v; });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/rakneverk/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>
