@@ -94,11 +94,6 @@
 <div class="panel" id="panel">
   <div class="readout" id="readout" aria-live="polite"></div>
   <div class="controls">
-    <div class="group" role="group" aria-label="Tidsformat">
-      <span class="label">Tid</span>
-      <button data-mode="12" aria-pressed="true">12 h</button>
-      <button data-mode="24" aria-pressed="false">24 h</button>
-    </div>
     <div class="group" id="style-group" role="group" aria-label="Uttryck för :20 och :40">
       <span class="label">20 / 40</span>
       <button data-style="tjugo" aria-pressed="true">tjugo över</button>
@@ -121,12 +116,19 @@
   </div>
 </div>
 
-<script src="/ordklocka/layouts.js"></script>
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/rutnat.js"></script>
 <script>
-  // ---------- Ordklockans layout (delas med klassiska versionen, se layouts.js) ----------
-  const LAYOUTS = window.ORDKLOCKA_LAYOUTS;
-  let LAY = LAYOUTS["12"];
-  let NC = LAY.cols, NR = LAY.rows.length;
+  // ---------- Ordklockans rutnät och tidsläsning (samma som /ordklocka, se rutnat.js och tid.js) ----------
+  const R = OrdklockaRutnat;
+  const LAY = {
+    rows: R.ROWS,
+    compute(now, style) {
+      const [cells, t] = R.reading(now.getHours(), now.getMinutes(), style);
+      return { cells, text: OrdklockaTid.spokenSentence({ ...t, extra: 0 }) };
+    },
+  };
+  const NC = R.COLS, NR = R.ROWS.length;
 
   // ---------- Färger ----------
   const COLORS = {
@@ -192,7 +194,7 @@
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const ratio = NR > 8 ? 1.1 : 1.3;      // tätare rader när rutnätet är högt (24 h)
+    const ratio = NR > 8 ? 1.05 : 1.3;     // tätare rader när rutnätet är högt
     CW = Math.min(vw * 0.92 / NC, vh * 0.9 / (NR * ratio));
     CH = CW * ratio;
     cleft = (vw - CW * NC) / 2;
@@ -394,14 +396,6 @@
     style = v; setPressed("style", v); save("ordklocka-style", v);
     if (atlas) updateTime(true);
   }
-  function setMode(v) {
-    if (!LAYOUTS[v]) v = "12";
-    LAY = LAYOUTS[v]; NC = LAY.cols; NR = LAY.rows.length;
-    setPressed("mode", v); save("ordklocka-mode", v);
-    document.getElementById("style-group").hidden = v !== "12";
-    resetLetters();
-    if (atlas) { layout(); updateTime(true); }
-  }
   function setColor(v) {
     if (!COLORS[v]) v = "grön";
     color = COLORS[v]; setPressed("color", v); save("ordklocka-matrix-color", v);
@@ -415,7 +409,6 @@
   }
   speedInput.oninput = () => setSpeed(speedInput.value);
   document.querySelectorAll("button[data-style]").forEach(b => b.onclick = () => setStyle(b.dataset.style));
-  document.querySelectorAll("button[data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
   document.querySelectorAll("button[data-color]").forEach(b => b.onclick = () => setColor(b.dataset.color));
 
   // Helskärm: knapp, dubbelklick eller F
@@ -442,7 +435,6 @@
 
   // ---------- Start ----------
   setColor(load("ordklocka-matrix-color", "grön"));
-  setMode(load("ordklocka-mode", "12"));
   setStyle(load("ordklocka-style", "tjugo"));
   setSpeed(load("ordklocka-matrix-speed", "1"));
   wake();

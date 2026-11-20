@@ -706,10 +706,13 @@ def test_show_wordclouds_is_enabled():
 
 def test_ordklocka_page_is_served():
     out = _output()
-    resp = _client(out).get("/ordklocka")
+    client = _client(out)
+    resp = client.get("/ordklocka")
     assert resp.status_code == 200
     assert resp.mimetype == "text/html"
-    assert "KLOCKANTÄRSO" in resp.data.decode()
+    # The grid itself lives in rutnat.js (shared with the matrix clock).
+    assert '<script src="/ordklocka/rutnat.js">' in resp.data.decode()
+    assert "KLOCKANTÄRSO" in client.get("/ordklocka/rutnat.js").data.decode()
 
 
 def test_ordklocka_missing_page_returns_404(monkeypatch, tmp_path):
@@ -867,14 +870,19 @@ def test_unknown_idle_clock_style_falls_back_to_word_clock(caplog):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("page", ["matrix", "syntavla"])
-def test_matrix_and_syntavla_pages_are_served(page):
+@pytest.mark.parametrize(
+    ("page", "script"),
+    # matrix reads the time like the other clocks (rutnat.js + tid.js);
+    # syntavla keeps its own grids in layouts.js.
+    [("matrix", "rutnat.js"), ("syntavla", "layouts.js")],
+)
+def test_matrix_and_syntavla_pages_are_served(page, script):
     client = _client(_output())
     resp = client.get(f"/ordklocka/{page}")
     assert resp.status_code == 200
     assert resp.mimetype == "text/html"
     body = resp.data.decode()
-    assert '<script src="/ordklocka/layouts.js">' in body
+    assert f'<script src="/ordklocka/{script}">' in body
     assert f"/ordklocka/{page}/ws" in body
     # Every font the page uses is actually served.
     for font in re.findall(r'url\("(/ordklocka/fonts/[^"]+)"\)', body):
@@ -981,3 +989,15 @@ def test_every_clock_page_has_the_clock_menu_listing_every_clock():
     for path in web._CLOCK_LABELS:
         assert f'["{path}", ' in menu_js, path
         assert '<script src="/ordklocka/meny.js">' in client.get(path).data.decode(), path
+
+
+def test_word_clock_and_matrix_share_the_grid_script():
+    client = _client(_output())
+    resp = client.get("/ordklocka/rutnat.js")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/javascript"
+    assert "OrdklockaRutnat" in resp.data.decode()
+    for page in ("/ordklocka", "/ordklocka/matrix"):
+        body = client.get(page).data.decode()
+        assert '<script src="/ordklocka/tid.js">' in body, page
+        assert '<script src="/ordklocka/rutnat.js">' in body, page

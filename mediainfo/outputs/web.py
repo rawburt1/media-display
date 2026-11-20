@@ -117,7 +117,8 @@ _CLOCK_PAGE_FILES = {
 # Scripts shared by the clock pages: tid.js (time reading), sida.js (panel,
 # presence, ticking), layouts.js (grids for matrix/syntavla), meny.js (the
 # clock picker in every clock page's panel), pixelfont.js (5x7 dot font),
-# skrift.js (handwriting that writes itself) and imma.js (misted-up glass).
+# skrift.js (handwriting that writes itself), imma.js (misted-up glass) and
+# rutnat.js (the word clock grid, shared by /ordklocka and the matrix clock).
 _ORDKLOCKA_SCRIPTS = (
     "tid.js",
     "sida.js",
@@ -126,6 +127,7 @@ _ORDKLOCKA_SCRIPTS = (
     "pixelfont.js",
     "skrift.js",
     "imma.js",
+    "rutnat.js",
 )
 # The only font files /ordklocka/fonts/<name> will serve.
 _ORDKLOCKA_FONTS = frozenset({"josefin-sans-latin-600.woff2", "optician-sans.woff2"})
