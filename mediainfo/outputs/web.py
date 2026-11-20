@@ -29,6 +29,7 @@ non-multi-client HTTP clients.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import logging
 import random
 import threading
@@ -68,6 +69,11 @@ _IDLE_CLOCK_URLS = {
     "split_flap": "/ordklocka/tavla",
     "matrix": "/ordklocka/matrix",
     "eye_chart": "/ordklocka/syntavla",
+    "neon": "/ordklocka/neon",
+    "fridge_magnets": "/ordklocka/magneter",
+    "bus_sign": "/ordklocka/buss",
+    "teletext": "/ordklocka/texttv",
+    "word_search": "/ordklocka/ordflata",
 }
 # Clock page path -> its label on /clients. Each page has a presence
 # WebSocket at <path>/ws (/ordklocka/ws for the word clock).
@@ -76,7 +82,19 @@ _CLOCK_LABELS = {
     "/ordklocka/tavla": "Ordklocka (tavla)",
     "/ordklocka/matrix": "Ordklocka (matrix)",
     "/ordklocka/syntavla": "Ordklocka (syntavla)",
+    "/ordklocka/neon": "Ordklocka (neon)",
+    "/ordklocka/magneter": "Ordklocka (magneter)",
+    "/ordklocka/buss": "Ordklocka (busskylt)",
+    "/ordklocka/texttv": "Ordklocka (text-tv)",
+    "/ordklocka/ordflata": "Ordklocka (ordfläta)",
 }
+# Clock pages other than /ordklocka itself: path -> file in _ORDKLOCKA_DIR.
+_CLOCK_PAGE_FILES = {
+    path: path.rsplit("/", 1)[1] + ".html" for path in _CLOCK_LABELS if path != "/ordklocka"
+}
+# Scripts shared by the clock pages: tid.js (time reading), sida.js (panel,
+# presence, ticking) and layouts.js (grids for matrix/syntavla).
+_ORDKLOCKA_SCRIPTS = ("tid.js", "sida.js", "layouts.js")
 # The only font files /ordklocka/fonts/<name> will serve.
 _ORDKLOCKA_FONTS = frozenset({"josefin-sans-latin-600.woff2", "optician-sans.woff2"})
 
@@ -482,33 +500,24 @@ class WebOutput(Output):
                 return "Word clock page is missing from this installation", 404
             return send_file(_ORDKLOCKA_PAGE, mimetype="text/html")
 
-        @bp.get("/ordklocka/tavla")
-        def ordklocka_tavla():
-            return _send_ordklocka_file("tavla.html", "text/html")
-
-        @bp.get("/ordklocka/matrix")
-        def ordklocka_matrix():
-            return _send_ordklocka_file("matrix.html", "text/html")
-
-        @bp.get("/ordklocka/syntavla")
-        def ordklocka_syntavla():
-            return _send_ordklocka_file("syntavla.html", "text/html")
-
-        @bp.get("/ordklocka/layouts.js")
-        def ordklocka_layouts_js():
-            # Grids and reading rules for the matrix and syntavla pages.
-            return _send_ordklocka_file("layouts.js", "text/javascript")
+        for path, file_name in _CLOCK_PAGE_FILES.items():
+            bp.add_url_rule(
+                path,
+                endpoint="ordklocka_" + file_name.removesuffix(".html"),
+                view_func=functools.partial(_send_ordklocka_file, file_name, "text/html"),
+            )
+        for script in _ORDKLOCKA_SCRIPTS:
+            bp.add_url_rule(
+                "/ordklocka/" + script,
+                endpoint="ordklocka_" + script.replace(".", "_"),
+                view_func=functools.partial(_send_ordklocka_file, script, "text/javascript"),
+            )
 
         @bp.get("/ordklocka/fonts/<name>")
         def ordklocka_font(name: str):
             if name not in _ORDKLOCKA_FONTS:
                 return "Not found", 404
             return _send_ordklocka_file("fonts/" + name, "font/woff2")
-
-        @bp.get("/ordklocka/tid.js")
-        def ordklocka_tid_js():
-            # Time-reading logic shared by both clock pages.
-            return _send_ordklocka_file("tid.js", "text/javascript")
 
         @bp.get("/clients")
         def clients_page():

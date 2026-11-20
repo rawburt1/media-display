@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Neon</title>
+<style>
+  :root {
+    --c1: #ff4fd8; --c2: #3ff0ff; --c3: #ff4fd8;
+    --panel-bg: rgba(10, 6, 8, 0.85); --panel-fg: #f3e6ee; --panel-accent: #f3e6ee;
+    --panel-bg-solid: #120a0e;
+  }
+  [data-theme="varm"] { --c1: #ffb13b; --c2: #ff4a2e; --c3: #ffe14d; }
+  [data-theme="kall"] { --c1: #8fa7ff; --c2: #3ff0ff; --c3: #7dff9b; }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background-color: #241512;
+    /* Tegelvägg, mörkare ut mot kanterna */
+    background-image:
+      radial-gradient(ellipse at 50% 45%, transparent 0%, rgba(0, 0, 0, 0.6) 75%),
+      url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='60'><rect width='240' height='60' fill='%23140a08'/><g><rect x='2' y='2' width='56' height='26' fill='%23331d17'/><rect x='62' y='2' width='116' height='26' fill='%232b1814'/><rect x='182' y='2' width='56' height='26' fill='%23331d17'/><rect x='2' y='32' width='116' height='26' fill='%23301a15'/><rect x='122' y='32' width='116' height='26' fill='%23361f18'/></g></svg>");
+    background-size: 100% 100%, 240px 60px;
+    font-family: system-ui, sans-serif;
+  }
+  /* Ljuset från skylten på väggen */
+  .spill {
+    position: fixed; left: 50%; top: 50%; width: 120vmax; height: 90vmax;
+    transform: translate(-50%, -50%); pointer-events: none;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--c2) 22%, transparent), transparent);
+    mix-blend-mode: screen; transition: background 1s;
+  }
+
+  .sign {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2vh;
+  }
+  .line { white-space: nowrap; line-height: 1.1; }
+  .line span { display: inline-block; }
+  .script {
+    font-family: "Brush Script MT", "Segoe Script", "URW Chancery L", "Z003", cursive;
+    font-style: italic; font-size: min(11vw, 15vh); --c: var(--c1);
+    margin-bottom: 1vh; transform: rotate(-4deg);
+  }
+  .tube {
+    font-family: "Arial Rounded MT Bold", "Varela Round", "Nunito", system-ui, sans-serif;
+    font-weight: 800; letter-spacing: 0.08em;
+    font-size: min(11vw, 17vh);
+  }
+  .tube.l1 { --c: var(--c2); }
+  .tube.l2 { --c: var(--c3); }
+
+  /* Tänd: vit kärna och färgat sken. Släckt: matt glasrör. */
+  .lit, .unlit { transition: color 0.4s, text-shadow 0.4s; }
+  .lit {
+    color: color-mix(in srgb, var(--c) 35%, #fff);
+    text-shadow:
+      0 0 0.04em #fff,
+      0 0 0.1em var(--c),
+      0 0 0.25em var(--c),
+      0 0 0.6em var(--c),
+      0 0 1.2em color-mix(in srgb, var(--c) 60%, transparent);
+  }
+  .unlit {
+    color: color-mix(in srgb, var(--c) 12%, #1a1210);
+    text-shadow: 0 0 1px rgba(255, 255, 255, 0.12), 0 0.04em 0.06em rgba(0, 0, 0, 0.6);
+  }
+
+  @keyframes on {
+    0% { opacity: 0.15; } 8% { opacity: 1; } 12% { opacity: 0.2; } 20% { opacity: 0.9; }
+    24% { opacity: 0.25; } 40% { opacity: 0.3; } 46% { opacity: 1; } 52% { opacity: 0.6; }
+    58%, 100% { opacity: 1; }
+  }
+  @keyframes off {
+    0% { opacity: 1; } 15% { opacity: 0.3; } 25% { opacity: 0.9; } 40% { opacity: 0.2; }
+    100% { opacity: 0; }
+  }
+  @keyframes buzz {
+    0%, 100% { opacity: 1; } 20% { opacity: 0.35; } 30% { opacity: 0.9; } 45% { opacity: 0.5; }
+  }
+  .turning-on span { animation: on 1.3s linear both; }
+  .turning-off span { animation: off 0.7s linear both; }
+  .buzz { animation: buzz 0.5s linear; }
+
+  .dots { display: flex; gap: 3vh; margin-top: 3vh; --c: var(--c1); }
+  .dot { width: 2.2vh; height: 2.2vh; border-radius: 50%; }
+  .dot.lit { background: color-mix(in srgb, var(--c) 35%, #fff);
+             box-shadow: 0 0 0.6vh #fff, 0 0 1.5vh var(--c), 0 0 3.5vh var(--c); }
+  .dot.unlit { background: color-mix(in srgb, var(--c) 12%, #1a1210); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .turning-on span, .turning-off span, .buzz { animation-duration: 0.01s; }
+  }
+</style>
+</head>
+<body>
+<div class="spill"></div>
+<div class="sign" id="sign" aria-hidden="true">
+  <div class="line script lit" id="head"></div>
+  <div class="line tube l1" id="l1"></div>
+  <div class="line tube l2" id="l2"></div>
+  <div class="dots" id="dots"><i class="dot unlit"></i><i class="dot unlit"></i><i class="dot unlit"></i><i class="dot unlit"></i></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Färger">
+      <span class="label">Färg</span>
+      <button data-theme="rosa">rosa</button>
+      <button data-theme="varm">varm</button>
+      <button data-theme="kall">kall</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const lineEls = [document.getElementById("l1"), document.getElementById("l2")];
+  const dots = [...document.querySelectorAll(".dot")];
+
+  function letters(el, text) {
+    el.textContent = "";
+    for (const ch of text) {
+      const s = document.createElement("span");
+      s.textContent = ch === " " ? " " : ch;
+      el.appendChild(s);
+    }
+  }
+
+  // Krymp en rad tills den ryms på skärmen.
+  function fit(el) {
+    el.style.fontSize = "";
+    const max = innerWidth * 0.92;
+    const w = el.scrollWidth;
+    if (w > max) el.style.fontSize = parseFloat(getComputedStyle(el).fontSize) * max / w + "px";
+  }
+
+  letters(document.getElementById("head"), "Klockan är");
+
+  function show(el, text, delay) {
+    if (el.dataset.text === text) return;
+    const had = el.dataset.text;
+    el.dataset.text = text;
+    const turnOn = () => {
+      el.classList.remove("turning-off", "unlit");
+      letters(el, text);
+      fit(el);
+      el.classList.add("lit", "turning-on");
+      // Varje bokstav tänds lite olika, som riktiga rör.
+      [...el.children].forEach(s => { s.style.animationDelay = Math.random() * 0.35 + "s"; });
+    };
+    if (had) {
+      el.classList.remove("turning-on");
+      el.classList.add("turning-off");
+      setTimeout(turnOn, 750 + delay);
+    } else {
+      setTimeout(turnOn, delay);
+    }
+  }
+
+  const clock = S.clock((t, info) => {
+    const lines = S.lines(t);
+    show(lineEls[0], lines[0], 0);
+    if (lines[1]) {
+      lineEls[1].style.display = "";
+      show(lineEls[1], lines[1], 250);
+    } else {
+      lineEls[1].style.display = "none";
+      lineEls[1].dataset.text = "";
+    }
+    dots.forEach((d, i) => {
+      d.classList.toggle("lit", i < t.extra);
+      d.classList.toggle("unlit", i >= t.extra);
+    });
+  });
+
+  // Då och då flimrar en bokstav till, som ett rör som börjar bli trött.
+  (function buzz() {
+    const all = [...document.querySelectorAll(".lit > span")];
+    const s = all[Math.floor(Math.random() * all.length)];
+    if (s && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      s.classList.remove("buzz");
+      void s.offsetWidth;
+      s.classList.add("buzz");
+    }
+    setTimeout(buzz, 3000 + Math.random() * 9000);
+  })();
+
+  addEventListener("resize", () => lineEls.forEach(fit));
+
+  S.choice("theme", "neon-theme", "rosa", v => { document.documentElement.dataset.theme = v; });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/neon/ws");
+</script>
+</body>
+</html>

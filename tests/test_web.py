@@ -907,3 +907,53 @@ def test_idle_clock_style_matrix_and_eye_chart(style, url, label):
     body = _client(out).get("/").data.decode()
     assert f'"{url}" + "?embedded=1"' in body
     assert out._summarize({}) == {"mode": "clock", "text": label}
+
+
+# ---------------------------------------------------------------------------
+# Neon, magneter, buss, texttv, ordfläta (all on tid.js + sida.js)
+# ---------------------------------------------------------------------------
+
+_NEW_CLOCKS = [
+    ("neon", "neon", "Ordklocka (neon)"),
+    ("magneter", "fridge_magnets", "Ordklocka (magneter)"),
+    ("buss", "bus_sign", "Ordklocka (busskylt)"),
+    ("texttv", "teletext", "Ordklocka (text-tv)"),
+    ("ordflata", "word_search", "Ordklocka (ordfläta)"),
+]
+
+
+@pytest.mark.parametrize(("page", "style", "label"), _NEW_CLOCKS)
+def test_new_clock_pages_are_served(page, style, label):
+    resp = _client(_output()).get(f"/ordklocka/{page}")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/html"
+    body = resp.data.decode()
+    assert '<script src="/ordklocka/tid.js">' in body
+    assert '<script src="/ordklocka/sida.js">' in body
+    assert f'S.setup("/ordklocka/{page}/ws")' in body
+
+
+@pytest.mark.parametrize(("page", "style", "label"), _NEW_CLOCKS)
+def test_new_clock_idle_styles(page, style, label):
+    out = _output(_config(idle_clock=True, idle_clock_style=style))
+    body = _client(out).get("/").data.decode()
+    assert f'"/ordklocka/{page}" + "?embedded=1"' in body
+    assert out._summarize({}) == {"mode": "clock", "text": label}
+
+
+def test_every_idle_clock_style_has_a_page_and_label():
+    from mediainfo.configui.config_schema import _ENUM_CHOICES  # noqa: PLC0415
+    from mediainfo.outputs import web
+
+    assert set(_ENUM_CHOICES["idle_clock_style"]) == set(web._IDLE_CLOCK_URLS)
+    client = _client(_output())
+    for url in web._IDLE_CLOCK_URLS.values():
+        assert url in web._CLOCK_LABELS
+        assert client.get(url).status_code == 200, url
+
+
+def test_shared_page_script_is_served():
+    resp = _client(_output()).get("/ordklocka/sida.js")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/javascript"
+    assert "OrdklockaSida" in resp.data.decode()

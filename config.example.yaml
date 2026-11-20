@@ -729,8 +729,13 @@ outputs:
     # Which clock idle_clock shows: "words" (the word clock grid),
     # "split_flap" (an old railway departure board whose flaps rattle to
     # each word - also always available at /ordklocka/tavla), "matrix"
-    # (green code rain that writes the words, /ordklocka/matrix) or
-    # "eye_chart" (an optician's eye chart, /ordklocka/syntavla).
+    # (green code rain that writes the words, /ordklocka/matrix),
+    # "eye_chart" (an optician's eye chart, /ordklocka/syntavla), "neon"
+    # (a flickering neon sign, /ordklocka/neon), "fridge_magnets" (letter
+    # magnets on a fridge door, /ordklocka/magneter), "bus_sign" (an LED
+    # bus destination sign, /ordklocka/buss), "teletext" (a Text-TV page,
+    # /ordklocka/texttv) or "word_search" (the words circled in a word
+    # search puzzle, /ordklocka/ordflata).
     idle_clock_style: words
 
   # Multiple web outputs — e.g. one per room. Only the first can mount at

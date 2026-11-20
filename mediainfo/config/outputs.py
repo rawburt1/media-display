@@ -140,10 +140,12 @@ class WebConfig(_OutputFilterMixin):
     # is playing. Off by default.
     idle_clock: bool = False
     # Which clock idle_clock shows: "words" (the word clock grid, also at
-    # /ordklocka) or "split_flap" (an old railway departure board whose
+    # /ordklocka), "split_flap" (an old railway departure board whose
     # flaps rattle to each word, also at /ordklocka/tavla), "matrix"
-    # (code rain that writes the words, /ordklocka/matrix) or "eye_chart"
-    # (an optician's eye chart, /ordklocka/syntavla).
+    # (code rain that writes the words, /ordklocka/matrix), "eye_chart"
+    # (an optician's eye chart, /ordklocka/syntavla), "neon" (/ordklocka/neon),
+    # "fridge_magnets" (/ordklocka/magneter), "bus_sign" (/ordklocka/buss),
+    # "teletext" (/ordklocka/texttv) or "word_search" (/ordklocka/ordflata).
     idle_clock_style: str = "words"
 
 

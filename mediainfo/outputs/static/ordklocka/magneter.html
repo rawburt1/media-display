@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Magneter</title>
+<style>
+  :root {
+    --panel-bg: rgba(250, 250, 248, 0.94); --panel-fg: #333; --panel-accent: #333;
+    --panel-bg-solid: #fafaf8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    /* Kylskåpsdörr: lätt borstad, ljusare mitt, skugga mot kanterna */
+    background:
+      linear-gradient(90deg, rgba(0, 0, 0, 0.07), transparent 12%, transparent 82%, rgba(0, 0, 0, 0.1)),
+      linear-gradient(180deg, #f6f7f5, #e9ebe8 60%, #dfe1de);
+    font-family: system-ui, sans-serif;
+  }
+  body[data-door="mörk"] {
+    background:
+      linear-gradient(90deg, rgba(0, 0, 0, 0.25), transparent 12%, transparent 82%, rgba(0, 0, 0, 0.3)),
+      linear-gradient(180deg, #3b3f44, #2f3337 60%, #26292c);
+  }
+  /* Handtaget */
+  .handle {
+    position: fixed; right: 3.5vw; top: 18vh; width: 1.6vw; min-width: 10px; height: 46vh;
+    border-radius: 1vw;
+    background: linear-gradient(90deg, #b9bcbb, #f4f5f4 45%, #9da09f);
+    box-shadow: -0.4vw 0.6vw 1.2vw rgba(0, 0, 0, 0.25);
+  }
+  #door { position: fixed; inset: 0; }
+  .mag {
+    position: absolute; left: 0; top: 0;
+    font-family: "Arial Rounded MT Bold", "Varela Round", "Nunito", "Comic Sans MS", system-ui, sans-serif;
+    font-weight: 900; line-height: 1; white-space: pre;
+    color: var(--m);
+    /* Plast: lite ljus kant upptill, mörkare under, skugga mot dörren */
+    text-shadow:
+      0 -0.015em 0 rgba(255, 255, 255, 0.55),
+      0 0.035em 0 color-mix(in srgb, var(--m) 60%, #000),
+      0 0.07em 0.08em rgba(0, 0, 0, 0.28);
+    transition: transform 1.3s cubic-bezier(0.5, 0, 0.2, 1);
+    will-change: transform;
+    user-select: none;
+  }
+  .mag.dot {
+    width: 0.42em; height: 0.42em; border-radius: 50%; margin-top: 0.3em;
+    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--m) 50%, #fff), var(--m) 55%,
+                color-mix(in srgb, var(--m) 70%, #000));
+    box-shadow: 0 0.06em 0.08em rgba(0, 0, 0, 0.3);
+  }
+  @media (prefers-reduced-motion: reduce) { .mag { transition-duration: 0.01s; } }
+</style>
+</head>
+<body>
+<div class="handle"></div>
+<div id="door" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Kylskåpets färg">
+      <span class="label">Dörr</span>
+      <button data-door="vit">vit</button>
+      <button data-door="mörk">mörk</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const door = document.getElementById("door");
+  const COLORS = ["#e63b2e", "#f28c28", "#f2c11a", "#2fa84f", "#2a6fdb", "#8e44ad", "#e2458f"];
+  const DOT = "●";
+  const LONGEST = 14;            // längsta raden ("TIO ÖVER HALV", "FEM ÖVER HALV")
+  let size;                      // bokstavshöjd i px
+  const mags = [];               // {el, ch, w, x, y, r, inSentence}
+  let last = null;               // senaste läsningen, för omlayout vid resize
+  let z = 1;
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  function measure(m) {
+    m.w = m.el.getBoundingClientRect().width / (size || 1);   // bredd i "size"-enheter
+  }
+
+  function makeMagnet(ch) {
+    const el = document.createElement("div");
+    el.className = ch === DOT ? "mag dot" : "mag";
+    el.textContent = ch === DOT ? "" : ch;
+    el.style.setProperty("--m", COLORS[Math.floor(Math.random() * COLORS.length)]);
+    el.style.fontSize = size + "px";
+    door.appendChild(el);
+    const m = { el, ch, w: 0, x: 0, y: 0, r: 0, inSentence: false, px: Math.random(), py: Math.random() };
+    measure(m);
+    place(m, pilePos(m), false);
+    mags.push(m);
+    return m;
+  }
+
+  // Högen längst ner (och lite längs sidorna) där oanvända bokstäver ligger.
+  let pileTop = 0;
+  function pilePos(m) {
+    const right = innerWidth * 0.92 - m.w * size;
+    return {
+      x: innerWidth * 0.03 + m.px * (right - innerWidth * 0.03),
+      y: pileTop + m.py * Math.max(0, innerHeight - pileTop - size * 1.1),
+      r: rnd(-35, 35),
+    };
+  }
+
+  function place(m, p, animate, delay) {
+    m.x = p.x; m.y = p.y; m.r = p.r;
+    m.el.style.transitionDelay = animate ? (delay || 0) + "s" : "0s";
+    if (!animate) m.el.style.transition = "none";
+    m.el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${p.r}deg)`;
+    if (!animate) { void m.el.offsetWidth; m.el.style.transition = ""; }
+  }
+
+  function setSize() {
+    size = Math.min(innerWidth * 0.86 / (LONGEST * 0.82), innerHeight * 0.62 / (4 * 1.15));
+    mags.forEach(m => { m.el.style.fontSize = size + "px"; measure(m); });
+  }
+
+  function render(t, animate) {
+    last = t;
+    const lines = ["KLOCKAN ÄR", ...S.lines(t)];
+    if (t.extra) lines.push(DOT.repeat(t.extra));
+
+    // Platser i meningen, centrerat i övre delen.
+    const gap = size * 0.06, space = size * 0.42, lineH = size * 1.15;
+    const top = Math.max(size * 0.4, (innerHeight * 0.66 - lines.length * lineH) / 2);
+    pileTop = top + lines.length * lineH + size * 0.25;
+    const slots = [];
+    lines.forEach((line, li) => {
+      const chars = [...line];
+      const widthOf = ch => ch === " " ? space : (mags.find(m => m.ch === ch)?.w ?? 0.8) * size;
+      const total = chars.reduce((s, ch) => s + widthOf(ch) + gap, -gap);
+      let x = (innerWidth - total) / 2;
+      chars.forEach(ch => {
+        if (ch !== " ") slots.push({ ch, x, y: top + li * lineH });
+        x += widthOf(ch) + gap;
+      });
+    });
+
+    // Ta en bokstav som redan sitter i meningen om det finns, annars närmaste i högen.
+    const free = new Set(mags);
+    const used = new Set();
+    const assign = [];
+    for (const slot of slots) {
+      let best = null, bestScore = Infinity;
+      for (const m of free) {
+        if (m.ch !== slot.ch) continue;
+        const d = Math.hypot(m.x - slot.x, m.y - slot.y) + (m.inSentence ? 0 : 1e5);
+        if (d < bestScore) { best = m; bestScore = d; }
+      }
+      if (!best) best = makeMagnet(slot.ch);
+      free.delete(best);
+      used.add(best);
+      assign.push([best, slot]);
+    }
+
+    let i = 0;
+    for (const [m, slot] of assign) {
+      const moved = !m.inSentence || Math.hypot(m.x - slot.x, m.y - slot.y) > 2;
+      if (moved || !animate) {
+        m.el.style.zIndex = ++z;
+        place(m, { x: slot.x, y: slot.y, r: rnd(-4, 4) }, animate, animate ? 0.6 + i++ * 0.06 : 0);
+      }
+      m.inSentence = true;
+    }
+    // Det som inte behövs åker ner i högen (först, så meningen lämnar plats).
+    for (const m of free) {
+      if (m.inSentence || !animate || m.y < pileTop - size * 0.2) {
+        m.px = Math.random(); m.py = Math.random();
+        place(m, pilePos(m), animate, animate ? rnd(0, 0.3) : 0);
+      }
+      m.inSentence = false;
+    }
+  }
+
+  // En hel bokstavsuppsättning från början, så att högen ser ut som en riktig hög.
+  setSize();
+  for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ" + "AEEIKLNORSTTUV" + "ÅÄÖ") makeMagnet(ch);
+  for (let k = 0; k < 4; k++) makeMagnet(DOT);
+
+  const clock = S.clock(t => render(t, true));
+  let resizeTimer;
+  addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { setSize(); if (last) render(last, false); }, 150);
+  });
+
+  S.choice("door", "magneter-door", "vit", v => { document.body.dataset.door = v; });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/magneter/ws");
+</script>
+</body>
+</html>

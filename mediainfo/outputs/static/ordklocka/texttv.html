@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Text-TV</title>
+<style>
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.9); --panel-fg: #fff; --panel-accent: #ff0;
+    --panel-bg-solid: #000;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  body { display: grid; place-items: center; }
+  .screen {
+    position: relative;
+    font-family: "DejaVu Sans Mono", "Courier New", "Liberation Mono", monospace;
+    font-weight: bold; color: #fff;
+  }
+  .row { position: absolute; left: 0; white-space: pre; }
+  .row span { display: inline-block; height: 100%; vertical-align: top; }
+  .row.dh span { transform: scaleY(2); transform-origin: top; height: 50%; }
+  .screen.searching .row:not(.header) { display: none; }
+  canvas.mosaic { position: absolute; image-rendering: pixelated; }
+  .screen.searching canvas.mosaic { visibility: hidden; }
+  /* Gammal TV: svepande linjer och mörkare hörn */
+  .crt::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.55));
+  }
+  .crt .screen { filter: blur(0.35px) saturate(1.1); text-shadow: 0 0 6px rgba(255, 255, 255, 0.25); }
+</style>
+</head>
+<body>
+<div class="screen" id="screen" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Gammal TV-bild">
+      <span class="label">Bild</span>
+      <button data-crt="tjock">tjock-tv</button>
+      <button data-crt="platt">platt</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const COLS = 40, ROWS = 25;
+  const C = { k: "#000", r: "#f00", g: "#0f0", y: "#ff0", b: "#00f", m: "#f0f", c: "#0ff", w: "#fff" };
+  const screen = document.getElementById("screen");
+  let cw = 16, lh = 20;
+
+  // ---------- Rader ----------
+  // En rad är en lista av [text, förgrund, bakgrund]; fylls ut till 40 tecken.
+  function rowHtml(segs, bgFill) {
+    let len = 0;
+    const out = [];
+    for (const [text, fg, bg] of segs) {
+      const t = [...text].slice(0, COLS - len).join("");
+      len += [...t].length;
+      out.push([t, fg, bg]);
+    }
+    if (len < COLS) out.push([" ".repeat(COLS - len), "w", bgFill || "k"]);
+    return out.map(([t, fg, bg]) => {
+      const s = document.createElement("span");
+      s.textContent = t;
+      s.style.color = C[fg];
+      s.style.background = bg === "k" ? "transparent" : C[bg];   // svart = skärmen
+      return s;
+    });
+  }
+
+  const rowEls = [];
+  for (let r = 0; r < ROWS; r++) {
+    const d = document.createElement("div");
+    d.className = r === 0 ? "row header" : "row";
+    screen.appendChild(d);
+    rowEls.push(d);
+  }
+  function setRow(r, segs, opts = {}) {
+    const d = rowEls[r];
+    d.replaceChildren(...rowHtml(segs, opts.bg));
+    d.classList.toggle("dh", !!opts.double);
+    d.style.visibility = "";
+    // Dubbel höjd tar även nästa rad; den raden ska då inte synas (och täcka över).
+    if (opts.double && rowEls[r + 1]) rowEls[r + 1].style.visibility = "hidden";
+    d.style.top = r * lh + "px";
+    d.style.height = (opts.double ? 2 : 1) * lh + "px";
+  }
+
+  // Ordbrytning till rader på högst `width` tecken.
+  function wrap(text, width) {
+    const lines = [];
+    let line = "";
+    for (const word of text.split(" ")) {
+      if ((line + " " + word).trim().length > width) { lines.push(line); line = word; }
+      else line = (line + " " + word).trim();
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  // ---------- Mosaikgrafik: en urtavla i blocktecken (2x3 bildpunkter per tecken) ----------
+  const mosaic = document.createElement("canvas");
+  mosaic.className = "mosaic";
+  mosaic.width = 16; mosaic.height = 12;     // 8 tecken x 4 rader
+  screen.appendChild(mosaic);
+  function drawMosaic(now) {
+    const g = mosaic.getContext("2d");
+    g.fillStyle = C.b; g.fillRect(0, 0, 16, 12);
+    const cx = 7.5, cy = 5.5;
+    const px = (x, y, col) => { g.fillStyle = col; g.fillRect(Math.round(x), Math.round(y), 1, 1); };
+    for (let a = 0; a < 360; a += 4) {
+      const rad = a * Math.PI / 180;
+      px(cx + Math.sin(rad) * 7, cy - Math.cos(rad) * 5.4, C.w);
+    }
+    const m = now.getMinutes(), h = now.getHours() % 12 + m / 60;
+    const hand = (frac, len, col) => {
+      for (let s = 0; s <= len; s += 0.2) px(cx + Math.sin(frac * 2 * Math.PI) * s * 1.3, cy - Math.cos(frac * 2 * Math.PI) * s, col);
+    };
+    hand(m / 60, 4.6, C.y);
+    hand(h / 12, 2.8, C.y);
+  }
+
+  // ---------- Sidans innehåll ----------
+  const NEWS = [
+    "Minutvisaren fortsätter framåt",
+    "Sekunderna tickar på som vanligt",
+    "Expert: halv kommer före hel",
+    "Kaffepausen närmar sig snabbt",
+    "Ingen ändring i dygnets längd",
+    "Fikarummet rapporterar lugnt läge",
+    "Timvisaren rör sig - men långsamt",
+    "Kvart i och kvart över lika långa",
+    "Rekordmånga minuter i år igen",
+    "Klockan ringer inte - ännu",
+    "Ny minut inledd utan problem",
+    "Pendeln svänger åt båda hållen",
+  ];
+  const DAYS = ["sön", "mån", "tis", "ons", "tor", "fre", "lör"];
+  const MONTHS = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const lower = words => words.map(w => w.toLowerCase()).join(" ");
+
+  function header(now, pageNo) {
+    const p2 = n => String(n).padStart(2, "0");
+    const left = ` P100  ${pageNo} TEXT-TV`;
+    const right = `${DAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]} `;
+    const time = `${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`;
+    const pad = " ".repeat(Math.max(1, COLS - left.length - right.length - time.length));
+    setRow(0, [[left, "w", "k"], [pad, "w", "k"], [right, "w", "k"], [time, "y", "k"]]);
+  }
+
+  let style = "tjugo";
+  function content(t, now) {
+    const words = S.lines(t).join(" ");
+    for (let r = 1; r < ROWS; r++) setRow(r, []);
+    // Blått huvud med urtavla och rubrik
+    for (let r = 1; r <= 4; r++) setRow(r, [], { bg: "b" });
+    setRow(2, [["          ", "y", "b"], ["ORDKLOCKAN", "y", "b"]], { double: true, bg: "b" });
+    setRow(4, [["          ", "c", "b"], ["Tiden i ord - dygnet runt", "c", "b"]], { bg: "b" });
+    drawMosaic(now);
+
+    // Rubrik: tiden, dubbel höjd
+    setRow(6, [[" ", "w", "k"], ["KLOCKAN ÄR", "c", "k"]]);
+    setRow(7, [[" ", "w", "k"], [words, "y", "k"]], { double: true });
+
+    // Artikel
+    const later = new Date(now.getTime() + (5 - t.extra) * 60000);
+    const next = OrdklockaTid.spokenTime(later.getHours(), later.getMinutes(), style);
+    const inMin = 5 - t.extra;
+    const article =
+      `Klockan är nu ${lower(OrdklockaTid.spokenWords(t))}` +
+      (t.extra ? ` och ${t.extra} ${t.extra === 1 ? "minut" : "minuter"}` : " prick") +
+      `, uppger källor. Nästa förändring väntas om ${inMin} ${inMin === 1 ? "minut" : "minuter"},` +
+      ` då klockan blir ${lower(OrdklockaTid.spokenWords(next))}.`;
+    wrap(article, 38).slice(0, 5).forEach((l, i) => setRow(10 + i, [[" " + l, "w", "k"]]));
+
+    // Index med påhittade nyheter som byts var femte minut
+    const slot = now.getHours() * 12 + Math.floor(now.getMinutes() / 5);
+    for (let i = 0; i < 5; i++) {
+      const title = NEWS[(slot + i * 5) % NEWS.length];
+      const no = String(102 + ((slot + i * 7) % 98));
+      const dots = ".".repeat(Math.max(1, COLS - 2 - title.length - no.length - 1));
+      setRow(16 + i, [[" " + title, i % 2 ? "c" : "w", "k"], [dots, "b", "k"], [" " + no, "y", "k"]]);
+    }
+
+    // Snabbval längst ner
+    setRow(23, [[" Inrikes  ", "r", "k"], ["Sport     ", "g", "k"], ["Väder     ", "y", "k"], ["Tid", "c", "k"]]);
+  }
+
+  // ---------- Storlek ----------
+  function resize() {
+    // Text-TV-tecken är lite högre än breda (40x25 tecken på en 4:3-bild).
+    cw = Math.floor(Math.min(innerWidth * 0.96 / COLS, innerHeight * 0.96 / (ROWS * 1.2)));
+    lh = Math.round(cw * 1.2);
+    screen.style.width = cw * COLS + "px";
+    screen.style.height = lh * ROWS + "px";
+    // Teckensnittets bredd: 1ch ska bli exakt en cell.
+    screen.style.fontSize = "100px";
+    const probe = document.createElement("span");
+    probe.textContent = "M".repeat(10);
+    screen.appendChild(probe);
+    const chAt100 = probe.getBoundingClientRect().width / 10;
+    probe.remove();
+    // Tecknet ska rymmas på höjden (prickar över Ä/Ö, nedstaplar); resten
+    // av cellbredden blir teckenavstånd.
+    const font = Math.min(100 * cw / chAt100, lh * 1.05);
+    screen.style.fontSize = font + "px";
+    screen.style.letterSpacing = cw - chAt100 * font / 100 + "px";
+    rowEls.forEach((d, r) => {
+      d.style.top = r * lh + "px";
+      d.style.width = cw * COLS + "px";
+      d.style.lineHeight = lh + "px";
+      d.style.height = (d.classList.contains("dh") ? 2 : 1) * lh + "px";
+    });
+    Object.assign(mosaic.style, { left: cw + "px", top: lh + "px", width: cw * 8 + "px", height: lh * 4 + "px" });
+  }
+
+  // ---------- Klocka ----------
+  let current = null, searching = false;
+  function search(t, now) {
+    // Sidsökning: sidnumret i huvudet rullar innan sidan visas.
+    searching = true;
+    screen.classList.add("searching");
+    const start = performance.now();
+    const roll = () => {
+      const now2 = new Date();
+      if (performance.now() - start < 1400) {
+        header(now2, 100 + Math.floor(Math.random() * 800));
+        setTimeout(roll, 70);
+      } else {
+        searching = false;
+        content(current, now2);
+        header(now2, 100);
+        screen.classList.remove("searching");
+      }
+    };
+    roll();
+  }
+
+  const clock = S.clock((t, info) => {
+    current = t;
+    if (info.first || !info.wordsChanged || searching ||
+        matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      content(t, info.now); header(info.now, 100);
+    } else search(t, info.now);
+  });
+  setInterval(() => { if (!searching) header(new Date(), 100); }, 1000);
+
+  addEventListener("resize", resize);
+  resize();
+  S.choice("crt", "texttv-crt", "tjock", v => document.body.classList.toggle("crt", v === "tjock"));
+  S.choice("style", "ordklocka-style", "tjugo", v => { style = v; clock.setStyle(v); });
+  S.setup("/ordklocka/texttv/ws");
+</script>
+</body>
+</html>

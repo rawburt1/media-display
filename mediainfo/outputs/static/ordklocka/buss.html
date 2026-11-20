@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Busskylt</title>
+<style>
+  :root {
+    --panel-bg: rgba(16, 16, 16, 0.9); --panel-fg: #e8e2d8; --panel-accent: #ffae2a;
+    --panel-bg-solid: #111;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    display: grid; place-items: center;
+    background: radial-gradient(ellipse at 50% 40%, #2a2c2f, #0d0e10 70%);
+    font-family: system-ui, sans-serif;
+  }
+  /* Skylthuset: svart ram, glasruta med reflex */
+  .housing {
+    position: relative; padding: 1.4vmin; border-radius: 1.6vmin;
+    background: linear-gradient(180deg, #2b2b2b, #151515);
+    box-shadow: 0 2vmin 5vmin rgba(0, 0, 0, 0.6), inset 0 0.2vmin 0 rgba(255, 255, 255, 0.08);
+  }
+  .glass { position: relative; border-radius: 0.6vmin; overflow: hidden; background: #070605; line-height: 0; }
+  .glass::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.07), transparent 35%, transparent 70%, rgba(255, 255, 255, 0.03));
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div class="housing" aria-hidden="true"><div class="glass"><canvas id="led"></canvas></div></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Lysdiodernas färg">
+      <span class="label">Färg</span>
+      <button data-led="gul">gul</button>
+      <button data-led="vit">vit</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+
+  // ---------- 5x7-typsnitt (Å/Ä/Ö är 9 rader höga, med prickar/ring ovanför) ----------
+  const G = {
+    A: ".###.|#...#|#...#|#####|#...#|#...#|#...#", B: "####.|#...#|#...#|####.|#...#|#...#|####.",
+    C: ".###.|#...#|#....|#....|#....|#...#|.###.", D: "####.|#...#|#...#|#...#|#...#|#...#|####.",
+    E: "#####|#....|#....|####.|#....|#....|#####", F: "#####|#....|#....|####.|#....|#....|#....",
+    G: ".###.|#...#|#....|#.###|#...#|#...#|.####", H: "#...#|#...#|#...#|#####|#...#|#...#|#...#",
+    I: ".###.|..#..|..#..|..#..|..#..|..#..|.###.", J: "..###|...#.|...#.|...#.|...#.|#..#.|.##..",
+    K: "#...#|#..#.|#.#..|##...|#.#..|#..#.|#...#", L: "#....|#....|#....|#....|#....|#....|#####",
+    M: "#...#|##.##|#.#.#|#.#.#|#...#|#...#|#...#", N: "#...#|#...#|##..#|#.#.#|#..##|#...#|#...#",
+    O: ".###.|#...#|#...#|#...#|#...#|#...#|.###.", P: "####.|#...#|#...#|####.|#....|#....|#....",
+    Q: ".###.|#...#|#...#|#...#|#.#.#|#..#.|.##.#", R: "####.|#...#|#...#|####.|#.#..|#..#.|#...#",
+    S: ".####|#....|#....|.###.|....#|....#|####.", T: "#####|..#..|..#..|..#..|..#..|..#..|..#..",
+    U: "#...#|#...#|#...#|#...#|#...#|#...#|.###.", V: "#...#|#...#|#...#|#...#|#...#|.#.#.|..#..",
+    W: "#...#|#...#|#...#|#.#.#|#.#.#|#.#.#|.#.#.", X: "#...#|#...#|.#.#.|..#..|.#.#.|#...#|#...#",
+    Y: "#...#|#...#|.#.#.|..#..|..#..|..#..|..#..", Z: "#####|....#|...#.|..#..|.#...|#....|#####",
+    0: ".###.|#...#|#..##|#.#.#|##..#|#...#|.###.", 1: "..#..|.##..|..#..|..#..|..#..|..#..|.###.",
+    2: ".###.|#...#|....#|...#.|..#..|.#...|#####", 3: "#####|...#.|..#..|...#.|....#|#...#|.###.",
+    4: "...#.|..##.|.#.#.|#..#.|#####|...#.|...#.", 5: "#####|#....|####.|....#|....#|#...#|.###.",
+    6: "..##.|.#...|#....|####.|#...#|#...#|.###.", 7: "#####|....#|...#.|..#..|.#...|.#...|.#...",
+    8: ".###.|#...#|#...#|.###.|#...#|#...#|.###.", 9: ".###.|#...#|#...#|.####|....#|...#.|.##..",
+    ":": ".....|.....|..#..|.....|..#..|.....|.....", "+": ".....|..#..|..#..|#####|..#..|..#..|.....",
+    ".": ".....|.....|.....|.....|.....|.....|..#..", "-": ".....|.....|.....|#####|.....|.....|.....",
+    " ": ".....|.....|.....|.....|.....|.....|.....",
+  };
+  // 9 rader per tecken: två rader för prickar/ring, sedan 7 rader bokstav.
+  const GLYPHS = {};
+  for (const [ch, s] of Object.entries(G)) GLYPHS[ch] = [".....", ".....", ...s.split("|")];
+  GLYPHS["Ä"] = [".#.#.", ".....", ...G.A.split("|")];
+  GLYPHS["Ö"] = [".#.#.", ".....", ...G.O.split("|")];
+  GLYPHS["Å"] = ["..#..", ".#.#.", "..#..", ".###.", "#...#", "#...#", "#####", "#...#", "#...#"];
+
+  // ---------- Matrisen ----------
+  const W = 150, H = 22;                 // lysdioder
+  const ICON = 21;                       // urtavlan till vänster, ICON x ICON
+  const TX = 24, TW = W - TX - 1;        // textytan
+  const ROW_A = 1, ROW_B = 12;           // två textrader, 9 rader höga
+
+  function textBitmap(top, bottom) {
+    const bm = new Uint8Array(TW * H);
+    [[top, ROW_A], [bottom, ROW_B]].forEach(([text, y0]) => {
+      const chars = [...(text || "")].map(ch => GLYPHS[ch] || GLYPHS[" "]);
+      const width = chars.length * 6 - 1;
+      let x = Math.max(0, Math.floor((TW - width) / 2));
+      for (const g of chars) {
+        for (let r = 0; r < 9; r++) for (let c = 0; c < 5; c++) {
+          if (g[r][c] === "#" && x + c < TW) bm[(y0 + r) * TW + x + c] = 1;
+        }
+        x += 6;
+      }
+    });
+    return bm;
+  }
+
+  // Liten analog urtavla av lysdioder.
+  function iconBitmap(now) {
+    const bm = new Uint8Array(ICON * ICON);
+    const c = (ICON - 1) / 2, R = 9.6;
+    for (let y = 0; y < ICON; y++) for (let x = 0; x < ICON; x++) {
+      const d = Math.hypot(x - c, y - c);
+      if (Math.abs(d - R) < 0.55) bm[y * ICON + x] = 1;
+    }
+    const hand = (angle, len) => {
+      for (let s = 0; s <= len; s += 0.25) {
+        const x = Math.round(c + Math.sin(angle) * s), y = Math.round(c - Math.cos(angle) * s);
+        bm[y * ICON + x] = 1;
+      }
+    };
+    const m = now.getMinutes(), h = now.getHours() % 12 + m / 60;
+    hand(m / 60 * Math.PI * 2, 7.5);
+    hand(h / 12 * Math.PI * 2, 4.8);
+    return bm;
+  }
+
+  const cv = document.getElementById("led");
+  const ctx = cv.getContext("2d");
+  const COLORS = {
+    gul: { on: "#ffae2a", core: "#ffe0a0", off: "#1d150b", glow: "rgba(255, 150, 20, 0.28)" },
+    vit: { on: "#e9eeff", core: "#ffffff", off: "#16171b", glow: "rgba(200, 215, 255, 0.24)" },
+  };
+  let color = COLORS.gul;
+  let pitch = 8;
+
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    pitch = Math.max(3, Math.floor(Math.min(innerWidth * 0.9 / W, innerHeight * 0.6 / H)));
+    cv.style.width = W * pitch + "px"; cv.style.height = H * pitch + "px";
+    cv.width = W * pitch * dpr; cv.height = H * pitch * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  let icon = new Uint8Array(ICON * ICON);
+  let shown = new Uint8Array(TW * H);    // textytan som visas nu
+  let scrollFrom = null, scrollTo = null, scrollStep = 0;
+
+  function lit(x, y) {
+    if (x < ICON && y < ICON) return icon[y * ICON + x];
+    const tx = x - TX;
+    if (tx < 0 || tx >= TW) return 0;
+    if (scrollTo) {
+      // Gammal text rullar upp och ut, ny kommer underifrån.
+      const yy = y + scrollStep;
+      return yy < H ? scrollFrom[yy * TW + tx] : (yy - H - 1 >= 0 ? scrollTo[(yy - H - 1) * TW + tx] : 0);
+    }
+    return shown[y * TW + tx];
+  }
+
+  function draw() {
+    const p = pitch;
+    ctx.fillStyle = "#070605";
+    ctx.fillRect(0, 0, W * p, H * p);
+    const on = [];
+    ctx.fillStyle = color.off;
+    ctx.beginPath();
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (lit(x, y)) { on.push([x, y]); continue; }
+      ctx.moveTo((x + 0.5) * p + p * 0.34, (y + 0.5) * p);
+      ctx.arc((x + 0.5) * p, (y + 0.5) * p, p * 0.34, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    const disc = (r, fill) => {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      for (const [x, y] of on) {
+        ctx.moveTo((x + 0.5) * p + r, (y + 0.5) * p);
+        ctx.arc((x + 0.5) * p, (y + 0.5) * p, r, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    };
+    disc(p * 0.72, color.glow);
+    disc(p * 0.4, color.on);
+    disc(p * 0.17, color.core);
+  }
+
+  // Byt text med en rullning, eller direkt första gången.
+  function showText(top, bottom, instant) {
+    const next = textBitmap(top, bottom);
+    if (instant || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      shown = next; scrollTo = null; draw(); return;
+    }
+    if (scrollTo) shown = scrollTo;       // en pågående rullning hoppar till slutet
+    scrollFrom = shown; scrollTo = next; scrollStep = 0;
+    const step = () => {
+      scrollStep++;
+      if (scrollStep > H) { shown = scrollTo; scrollTo = null; draw(); return; }
+      draw();
+      setTimeout(step, 38);
+    };
+    step();
+  }
+
+  // ---------- Tid och sidor ----------
+  let style = "tjugo";
+  let current = null, page = 0, firstShow = true;
+
+  function nextReading(now) {
+    const t = OrdklockaTid.spokenTime(now.getHours(), now.getMinutes(), style);
+    const later = new Date(now.getTime() + (5 - t.extra) * 60000);
+    return [5 - t.extra, OrdklockaTid.spokenTime(later.getHours(), later.getMinutes(), style)];
+  }
+
+  function showPage() {
+    if (!current) return;
+    if (page === 0) {
+      showText("KLOCKAN ÄR", S.lines(current).join(" "), firstShow);
+    } else {
+      const [inMin, t] = nextReading(new Date());
+      showText(`NÄSTA OM ${inMin} MIN`, S.lines(t).join(" "), false);
+    }
+    firstShow = false;
+  }
+
+  const clock = S.clock((t, info) => {
+    current = t;
+    icon = iconBitmap(info.now);
+    if (info.wordsChanged || page === 0) { page = 0; showPage(); } else draw();
+  });
+
+  // Var 12:e sekund visas nästa tid en stund, som en hållplatsskylt.
+  setInterval(() => {
+    const s = new Date().getSeconds();
+    const want = s % 12 >= 8 ? 1 : 0;
+    if (want !== page) { page = want; showPage(); }
+  }, 500);
+
+  addEventListener("resize", resize);
+  S.choice("led", "buss-led", "gul", v => { color = COLORS[v]; draw(); });
+  S.choice("style", "ordklocka-style", "tjugo", v => { style = v; clock.setStyle(v); });
+  resize();
+  S.setup("/ordklocka/buss/ws");
+</script>
+</body>
+</html>
