@@ -47,3 +47,33 @@ def test_to_wav_bytes_round_trips():
 
     decoded = np.frombuffer(frames, dtype=np.int16)
     assert np.array_equal(decoded, audio)
+
+
+def test_importing_recorder_does_not_initialize_audio():
+    """sounddevice initializes PortAudio on import and raises without an
+    audio server (as on CI runners) - the recorder module must load anyway."""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys\n"
+        "class _Boom:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        if name == 'sounddevice':\n"
+        "            raise OSError('Error initializing PortAudio')\n"
+        "sys.meta_path.insert(0, _Boom())\n"
+        "import vinyl_recognizer.recorder, vinyl_recognizer.service, vinyl_recognizer.server\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_record_clip_uses_sounddevice(monkeypatch):
+    from unittest.mock import MagicMock
+
+    fake = MagicMock()
+    fake.rec.return_value = np.zeros((4, 1), dtype=np.int16)
+    monkeypatch.setitem(__import__("sys").modules, "sounddevice", fake)
+    clip = recorder.record_clip(0.1, sample_rate=40, device=None)
+    fake.rec.assert_called_once_with(4, samplerate=40, channels=1, dtype="int16", device=None)
+    fake.wait.assert_called_once()
+    assert clip.shape == (4,)

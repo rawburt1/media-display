@@ -7,7 +7,6 @@ import wave
 from typing import Union
 
 import numpy as np
-import sounddevice as sd
 
 
 def resolve_device(input_device: str) -> Union[int, str, None]:
@@ -28,6 +27,13 @@ def record_clip(
     duration_seconds: float, sample_rate: int, device: Union[int, str, None]
 ) -> np.ndarray:
     """Record a mono 16-bit clip and return it as a 1-D numpy array."""
+    # Imported here, not at module level: importing sounddevice initializes
+    # PortAudio, which raises when there is no usable audio system (e.g. a
+    # PortAudio built for PulseAudio with no PulseAudio server running). That
+    # must not stop the module - or the HTTP server and tests that never
+    # record - from loading; the recognizer loop logs the error and retries.
+    import sounddevice as sd
+
     frames = int(duration_seconds * sample_rate)
     audio = sd.rec(frames, samplerate=sample_rate, channels=1, dtype="int16", device=device)
     sd.wait()
