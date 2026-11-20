@@ -57,85 +57,187 @@
   const ctx = cv.getContext("2d");
   const dark = document.getElementById("dark");
   const rnd = (a, b) => a + Math.random() * (b - a);
-  const FONT = s => `bold ${s}px "Chiller", "Jokerman", "Z003", ${K.HAND}`;
+  // Fingret: en rundad handstil, ritad med breda drag
+  const FONT = s => `${s}px "Purisa", "Comic Sans MS", ${K.HAND}`;
+  const LH = 1.2;
 
-  let W, H, L = null, lines = null, progress = 0, splats = [];
+  let W, H, dpr = 1, L = null, lines = null, progress = 0, art = null;
 
   function resize() {
-    const r = cv.getBoundingClientRect();
     // Canvasens egen storlek (före perspektivet), inte den lutade bilden.
     W = cv.offsetWidth; H = cv.offsetHeight;
-    const dpr = Math.min(devicePixelRatio || 1, 2);
+    dpr = Math.min(devicePixelRatio || 1, 1.5);
     cv.width = W * dpr; cv.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    L = null;
+    art = null;
   }
 
   // Texten ligger i den del av golvet som syns i ljuskäglan.
   const box = () => ({ x: W * 0.27, y: H * 0.2, w: W * 0.46, h: H * 0.33 });
 
-  function drawText(g, line) {
-    // Mörk kant, blodröd fyllning och en våt glans uppåt vänster
-    g.lineJoin = "round";
-    g.strokeStyle = "#2a0202";
-    g.lineWidth = L.size * 0.09;
-    g.strokeText(line.text, line.x, line.y);
-    g.fillStyle = "#7d0b0b";
-    g.fillText(line.text, line.x, line.y);
-    g.globalAlpha = 0.35;
-    g.fillStyle = "#d8483e";
-    g.fillText(line.text, line.x - L.size * 0.02, line.y - L.size * 0.03);
-    g.globalAlpha = 1;
+  function layer() {
+    const c = document.createElement("canvas");
+    c.width = cv.width; c.height = cv.height;
+    const g = c.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [c, g];
   }
 
-  function splat(x, y, big) {
-    // Stänk: en klump och några droppar runtom
-    const r = L.size * (big ? rnd(0.08, 0.14) : rnd(0.02, 0.05));
-    splats.push({ x, y, r, rot: rnd(0, Math.PI), sx: rnd(0.7, 1.4) });
-    const n = big ? 6 : 2;
-    for (let i = 0; i < n; i++) {
-      const a = rnd(0, Math.PI * 2), d = r * rnd(1.5, 4);
-      splats.push({ x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, r: r * rnd(0.15, 0.4), rot: a, sx: rnd(1, 2.2) });
+  // Blodets färg: fläckigt mörkrött, brunt och nästan svart, med strimmor
+  // där fingerns räfflor dragit ut det.
+  function texture(size) {
+    const [c, g] = layer();
+    const b = box();
+    const x0 = b.x - size, y0 = b.y - size, w = b.w + 2 * size, h = b.h + 2 * size;
+    g.fillStyle = "#6e0909";
+    g.fillRect(x0, y0, w, h);
+    const COLS = ["43, 1, 1", "61, 3, 3", "111, 11, 8", "138, 21, 15", "75, 20, 7", "116, 16, 6", "30, 2, 1"];
+    for (let i = 0; i < 320; i++) {
+      const x = x0 + Math.random() * w, y = y0 + Math.random() * h, r = size * rnd(0.05, 0.5);
+      const grd = g.createRadialGradient(x, y, 0, x, y, r);
+      grd.addColorStop(0, `rgba(${COLS[Math.floor(Math.random() * COLS.length)]}, ${rnd(0.3, 0.8)})`);
+      grd.addColorStop(1, "rgba(0, 0, 0, 0)");
+      g.fillStyle = grd;
+      g.fillRect(x - r, y - r, 2 * r, 2 * r);
     }
+    g.lineCap = "round";
+    for (let i = 0; i < 900; i++) {
+      const x = x0 + Math.random() * w, y = y0 + Math.random() * h;
+      const a = Math.random() < 0.7 ? rnd(-0.35, 0.35) : rnd(1.2, 1.9), len = size * rnd(0.1, 0.45);
+      g.strokeStyle = Math.random() < 0.5 ? `rgba(150, 30, 22, ${rnd(0.1, 0.3)})` : `rgba(18, 0, 0, ${rnd(0.1, 0.35)})`;
+      g.lineWidth = size * rnd(0.004, 0.014);
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke();
+    }
+    return c;
   }
 
+  // Räknas ut en gång per ny tid; sedan avslöjas den bakom fingret.
+  function buildArt() {
+    L = K.layout(ctx, lines, box(), FONT, { lineHeight: LH });
+    const s = L.size;
+    const [mask, m] = layer();
+    const [tmp, t] = layer();
+    const dabs = [];
+    for (const line of L.lines) {
+      t.setTransform(1, 0, 0, 1, 0, 0); t.clearRect(0, 0, tmp.width, tmp.height); t.setTransform(dpr, 0, 0, dpr, 0, 0);
+      t.globalCompositeOperation = "source-over";
+      t.font = L.font; t.textBaseline = "middle"; t.lineJoin = t.lineCap = "round";
+      t.fillStyle = t.strokeStyle = "#000";
+      // Två drag med lite förskjutning: ett finger är ingen penna.
+      for (const [dx, dy, lw] of [[0, 0, 0.075], [rnd(-0.025, 0.025) * s, rnd(-0.025, 0.025) * s, 0.045]]) {
+        t.lineWidth = s * lw;
+        t.strokeText(line.text, line.x + dx, line.y + dy);
+        t.fillText(line.text, line.x + dx, line.y + dy);
+      }
+      // Blodet på fingret tar slut längs ordet; vid nästa ord doppas det igen.
+      const grd = t.createLinearGradient(line.x, 0, line.x + line.w, 0);
+      const chars = [...line.text];
+      let ws = 0;
+      chars.forEach((ch, k) => {
+        if (ch === " ") { ws = k + 1; return; }
+        if (k === ws) {
+          grd.addColorStop(Math.max(0, line.prefix[k] / line.w - 0.001), "rgba(0,0,0,1)");
+          // Fingertoppen trycks ner över ordets första bokstav innan det dras ut.
+          dabs.push({ x: line.x + line.prefix[k] + s * rnd(0.1, 0.2), y: line.y + s * rnd(-0.05, 0.15), r: s * rnd(0.2, 0.26), rot: rnd(-0.6, 0.6) });
+        }
+        const len = chars.slice(ws).join("").split(" ")[0].length;
+        const a = Math.max(0.4, Math.min(1, 1 - 0.55 * (k - ws) / Math.max(1, len) + rnd(-0.08, 0.08)));
+        grd.addColorStop(Math.min(1, (line.prefix[k] + line.prefix[k + 1]) / 2 / line.w), `rgba(0,0,0,${a})`);
+      });
+      t.globalCompositeOperation = "destination-in";
+      t.fillStyle = grd;
+      t.fillRect(0, 0, W, H);
+      m.drawImage(tmp, 0, 0, W, H);
+      // Några droppar som fallit från handen
+      m.fillStyle = "#000";
+      for (let i = 0; i < 5; i++) {
+        m.globalAlpha = rnd(0.5, 1);
+        m.beginPath(); m.arc(line.x + rnd(0, line.w), line.y + rnd(-0.55, 0.55) * s, s * rnd(0.012, 0.035), 0, Math.PI * 2); m.fill();
+      }
+      m.globalAlpha = 1;
+    }
+    // Fingertoppens avtryck där fingret doppats
+    for (const d of dabs) {
+      m.save(); m.translate(d.x, d.y); m.rotate(d.rot);
+      m.globalAlpha = 0.45;
+      m.beginPath(); m.ellipse(0, 0, d.r * 0.8, d.r, 0, 0, Math.PI * 2); m.fill();
+      m.restore();
+    }
+    m.globalAlpha = 1;
+
+    // Färg: texturen där masken säger att det finns blod
+    const [core, c] = layer();
+    c.drawImage(texture(s), 0, 0, W, H);
+    c.globalCompositeOperation = "destination-in";
+    c.drawImage(mask, 0, 0, W, H);
+    // En mörk, suddig rand där blodet sugits in i träet
+    const [halo, h] = layer();
+    h.drawImage(mask, 0, 0, W, H);
+    h.globalCompositeOperation = "source-in";
+    h.fillStyle = "#220202";
+    h.fillRect(0, 0, W, H);
+
+    const [out, o] = layer();
+    o.filter = `blur(${s * 0.05}px)`;
+    o.globalAlpha = 0.6;
+    o.drawImage(halo, 0, 0, W, H);
+    o.filter = `blur(${Math.max(0.6, s * 0.01)}px)`;
+    o.globalAlpha = 1;
+    o.drawImage(core, 0, 0, W, H);
+    o.filter = "none";
+    // Fingeravtryckets räfflor
+    o.strokeStyle = "rgba(20, 0, 0, 0.3)";
+    o.lineWidth = s * 0.011;
+    for (const d of dabs) {
+      o.save(); o.translate(d.x, d.y); o.rotate(d.rot);
+      o.beginPath(); o.ellipse(0, 0, d.r * 0.8, d.r, 0, 0, Math.PI * 2); o.clip();
+      for (let r = d.r * 0.12; r < d.r * 1.1; r += s * 0.028) {
+        o.beginPath(); o.ellipse(rnd(-1, 1), d.r * 0.15, r * 0.75, r, 0, 0, Math.PI * 2); o.stroke();
+      }
+      o.restore();
+    }
+    return out;
+  }
+
+  // Visar det som skrivits hittills: rad för rad, fram till fingret.
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    if (!lines) return null;
-    if (!L) {
-      L = K.layout(ctx, lines, box(), FONT, { lineHeight: 1.15 });
-      if (progress > L.chars) progress = L.chars;
-    }
-    ctx.font = L.font;
-    ctx.textBaseline = "middle";
-    for (const s of splats) {
-      ctx.save();
-      ctx.translate(s.x, s.y); ctx.rotate(s.rot); ctx.scale(s.sx, 1);
-      ctx.fillStyle = "#6a0808";
-      ctx.beginPath(); ctx.arc(0, 0, s.r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "rgba(216, 72, 62, 0.35)";
-      ctx.beginPath(); ctx.arc(-s.r * 0.25, -s.r * 0.25, s.r * 0.45, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    }
-    return K.drawPartial(ctx, L, progress, drawText);
+    if (!lines) return;
+    if (!art) art = buildArt();
+    if (progress > L.chars) progress = L.chars;
+    const s = L.size, half = s * LH / 2;
+    ctx.save();
+    ctx.beginPath();
+    let left = progress;
+    L.lines.forEach((line, i) => {
+      if (left <= 0) return;
+      const n = line.text.length, k = Math.min(n, left), whole = Math.floor(k);
+      const next = line.prefix[Math.min(n, whole + 1)];
+      const xEnd = k >= n ? W : line.x + line.prefix[whole] + (k - whole) * (next - line.prefix[whole]);
+      const top = i === 0 ? 0 : line.y - half;
+      const bottom = i === L.lines.length - 1 ? H : line.y + half;
+      ctx.rect(0, top, xEnd, bottom - top);
+      left -= n;
+    });
+    ctx.clip();
+    ctx.drawImage(art, 0, 0, W, H);
+    ctx.restore();
   }
 
   let prev = performance.now(), writing = false;
   function frame(now) {
     const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
-    if (writing && L) {
-      const before = Math.floor(progress);
-      progress = Math.min(L.chars, progress + dt * 4);
-      const pen = draw();
-      if (pen && Math.floor(progress) > before && Math.random() < 0.3) splat(pen.x, pen.y + rnd(-0.3, 0.5) * L.size, Math.random() < 0.3);
-      if (progress >= L.chars) writing = false;
+    if (writing && lines) {
+      progress = Math.min(L ? L.chars : 1, progress + dt * 3.5);
+      draw();
+      if (L && progress >= L.chars) writing = false;
     }
     requestAnimationFrame(frame);
   }
 
   function write(newLines, animate) {
     const begin = () => {
-      lines = newLines; L = null; splats = []; progress = animate ? 0 : 9999;
+      lines = newLines; art = null; progress = animate ? 0 : 9999;
       draw();
       writing = animate;
     };
@@ -168,7 +270,7 @@
   S.setup("/ordklocka/blod/ws");
   requestAnimationFrame(t => { prev = t; frame(t); });
   // Första gången skrivs texten fram långsamt.
-  setTimeout(() => { if (lines) { progress = 0; splats = []; writing = true; } }, 300);
+  setTimeout(() => { if (lines) { progress = 0; writing = true; } }, 300);
 </script>
 <script src="/ordklocka/meny.js"></script>
 </body>
