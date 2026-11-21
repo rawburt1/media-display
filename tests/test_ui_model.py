@@ -368,6 +368,16 @@ def test_brightness_schedule_widget_marker_carries_through(config_path):
     assert field.widget == "brightness_schedule"
 
 
+def test_word_clock_choices_are_shown_up_front(config_path):
+    components = _components(config_path)
+    pixoo = _by_id(components, "outputs.pixoo")
+    essential = {f.name: f for f in pixoo.essential_fields}
+    assert {"idle_clock", "idle_clock_theme", "idle_clock_phrase"} <= essential.keys()
+    assert essential["idle_clock_theme"].choices == ["plain", "neon"]
+    web = _by_id(components, "outputs.web")
+    assert {"idle_clock", "idle_clock_style"} <= {f.name for f in web.essential_fields}
+
+
 # ---------------------------------------------------------------------------
 # filter_fields: _OutputFilterMixin fields as their own block (H5 M3)
 # ---------------------------------------------------------------------------

@@ -503,6 +503,12 @@ _ESSENTIAL_FIELD_NAMES = frozenset(
         "poll_interval_seconds",
         "rotation_interval_seconds",
         "nothing_playing_grace_seconds",
+        # The word clock shown while nothing plays (web pages and the
+        # Pixoo64) - picking a clock is a headline feature, not a tweak.
+        "idle_clock",
+        "idle_clock_style",
+        "idle_clock_theme",
+        "idle_clock_phrase",
     }
 )
 
