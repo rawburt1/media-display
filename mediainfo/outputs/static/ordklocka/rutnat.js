@@ -1,7 +1,6 @@
 // Ordklockornas rutnät och vilka ord som tänds. Vad som sägs avgörs av
 // tid.js; här finns bara var orden sitter.
-//   OrdklockaRutnat          - ordklockans 12 x 14 (/ordklocka, /ordklocka/matrix)
-//   OrdklockaRutnat.SYNTAVLA - syntavlans rader, längre nedåt (/ordklocka/syntavla)
+//   OrdklockaRutnat - ordklockans 12 x 14 (/ordklocka, /ordklocka/matrix)
 (function (global) {
   // Ett rutnät: rader + var orden sitter, [rad, kolumn, längd].
   //   W: KLOCKAN/ÄR (om de står i rutnätet) och minutorden för vanlig läsning
@@ -80,41 +79,5 @@
   };
   const WORD_CLOCK = grid("ordklocka", ROWS, W, H, M);
 
-  // Syntavlan: "KLOCKAN ÄR" står som rubrik ovanför, och raderna blir
-  // längre (och bokstäverna mindre) nedåt. Samma läsordning som ovan:
-  // vanliga minutord i rad 0-4, timord i rad 5-11, digitala minutord sist.
-  const SYNTAVLA = grid("syntavla", [
-    "FEM",
-    "TIOD",
-    "KVART",
-    "TJUGOI",
-    "ÖVERHALV",
-    "TJUGOETTN",
-    "TVÅTRETTON",
-    "FYRAFEMTONB",
-    "SEXTONNITTON",
-    "SJUTTONZÅTTAP",
-    "FJORTONELVATOLV",
-    "ARTONNIOTIOTJUGO",
-    "TRETTIOFYRTIOKSDH",
-    "FEMTIONOLLFEMTONUR",
-  ], {
-    FEM: [0, 0, 3], TIO: [1, 0, 3], KVART: [2, 0, 5],
-    TJUGO: [3, 0, 5], I: [3, 5, 1], ÖVER: [4, 0, 4], HALV: [4, 4, 4],
-  }, {
-    TJUGO: [5, 0, 5], ETT: [5, 5, 3],
-    TVÅ: [6, 0, 3], TRE: [6, 3, 3], TRETTON: [6, 3, 7],
-    FYRA: [7, 0, 4], FEM: [7, 4, 3], FEMTON: [7, 4, 6],
-    SEX: [8, 0, 3], SEXTON: [8, 0, 6], NITTON: [8, 6, 6],
-    SJU: [9, 0, 3], SJUTTON: [9, 0, 7], ÅTTA: [9, 8, 4],
-    FJORTON: [10, 0, 7], ELVA: [10, 7, 4], TOLV: [10, 11, 4],
-    ARTON: [11, 0, 5], NIO: [11, 5, 3], TIO: [11, 8, 3],
-  }, {
-    // TIO delas med timordet TIO - alla timmar 13-23 står före det.
-    TIO: [11, 8, 3], TJUGO: [11, 11, 5],
-    TRETTIO: [12, 0, 7], FYRTIO: [12, 7, 6],
-    FEMTIO: [13, 0, 6], NOLL: [13, 6, 4], FEM: [13, 10, 3], FEMTON: [13, 10, 6],
-  }, { ragged: true, ruleAfter: 4 });
-
-  global.OrdklockaRutnat = { ...WORD_CLOCK, SYNTAVLA };
+  global.OrdklockaRutnat = WORD_CLOCK;
 })(window);

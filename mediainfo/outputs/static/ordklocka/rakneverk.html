@@ -103,6 +103,19 @@
     drums.forEach(dr => { dr.strip.style.transition = "none"; dr.strip.style.transform = `translateY(${-dr.idx * d * 1.35}px)`; });
   }
 
+  const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Ett helt varv: trumman snurrar runt och landar på samma tecken igen
+  // (alfabetet finns två gånger på remsan). Hoppar över trummor som rullar.
+  function spin(dr, delay = 0, dur = 1100) {
+    if (dr.busy || reduced()) return;
+    const h = d * 1.35;
+    dr.busy = true;
+    dr.strip.animate([{ transform: `translateY(${-dr.idx * h}px)` }, { transform: `translateY(${-(dr.idx + N) * h}px)` }],
+                     { duration: dur, delay, easing: "cubic-bezier(0.5, 0, 0.3, 1.08)" })
+      .finished.finally(() => { dr.busy = false; });
+  }
+
   function roll(dr, ch, delay, animate) {
     const target = Math.max(0, ALPH.indexOf(ch));
     if (target === dr.idx) return;
@@ -110,13 +123,15 @@
     const steps = (target - dr.idx + N) % N;
     const end = dr.idx + steps;
     const h = d * 1.35;
-    if (!animate || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (!animate || reduced()) {
       dr.idx = target; dr.strip.style.transition = "none"; dr.strip.style.transform = `translateY(${-target * h}px)`; return;
     }
     const dur = 350 + steps * 55;
+    dr.busy = true;
     dr.strip.animate([{ transform: `translateY(${-dr.idx * h}px)` }, { transform: `translateY(${-end * h}px)` }],
                      { duration: dur, delay, easing: "cubic-bezier(0.45, 0.05, 0.3, 1.15)", fill: "backwards" })
-      .finished.then(() => { dr.strip.style.transform = `translateY(${-target * h}px)`; });
+      .finished.then(() => { dr.strip.style.transform = `translateY(${-target * h}px)`; })
+      .finally(() => { dr.busy = false; });
     dr.idx = target;
     dr.strip.style.transform = `translateY(${-end * h}px)`;
   }
@@ -127,10 +142,16 @@
       const text = lines[r] || "";
       const pad = Math.floor((COLS - [...text].length) / 2);
       const cells = (" ".repeat(pad) + text).padEnd(COLS).slice(0, COLS);
-      [...cells].forEach((ch, c) => roll(drums[r * COLS + c], ch, (r * COLS + c) * 45, !info.first));
+      // Också vid start rullar trummorna fram från tomt.
+      [...cells].forEach((ch, c) => roll(drums[r * COLS + c], ch, (r * COLS + c) * 45, true));
     }
+    // Ny minut utan nya ord: en våg av hela varv genom alla trummor.
+    if (!info.wordsChanged) drums.forEach((dr, i) => spin(dr, (i % COLS) * 60 + Math.floor(i / COLS) * 180, 900));
     lamps.forEach((l, i) => l.classList.toggle("on", i < t.extra));
   });
+  // Mellan minuterna: då och då snurrar en slumpvis trumma ett varv,
+  // som ett räkneverk som tickar.
+  setInterval(() => { if (!document.hidden) spin(drums[Math.floor(Math.random() * drums.length)]); }, 2500);
   addEventListener("resize", resize);
   resize();
   S.choice("drums", "rakneverk-drums", "svarta", v => { document.documentElement.dataset.drums = v; });

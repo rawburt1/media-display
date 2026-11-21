@@ -140,7 +140,9 @@
     function idleClockUrl() {
       let picked = null;
       try { picked = localStorage.getItem("ordklocka-idle-klocka"); } catch {}
-      return picked && /^\/ordklocka(\/[a-z0-9]+)?$/.test(picked) ? picked : {{ idle_clock_url|tojson }};
+      // Only clocks that still exist - a removed one would show a 404.
+      const known = {{ idle_clock_paths|tojson }};
+      return known.includes(picked) ? picked : {{ idle_clock_url|tojson }};
     }
 
     // "Enligt inställningarna" in the idle clock's picker: back to the

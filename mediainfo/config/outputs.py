@@ -155,16 +155,13 @@ class WebConfig(_OutputFilterMixin):
     # Which clock idle_clock shows: "words" (the word clock grid, also at
     # /ordklocka), "split_flap" (an old railway departure board whose
     # flaps rattle to each word, also at /ordklocka/tavla), "matrix"
-    # (code rain that writes the words, /ordklocka/matrix), "eye_chart"
-    # (an optician's eye chart, /ordklocka/syntavla), "neon" (/ordklocka/neon),
-    # "fridge_magnets" (/ordklocka/magneter), "bus_sign" (/ordklocka/buss),
-    # "teletext" (/ordklocka/texttv), "letter_tiles" (/ordklocka/brickor),
-    # "embroidery", "rubber_stamps", "type_case", "misty_window",
-    # "counter_drums", "receipt", "dominoes", "balloons", "constellations",
-    # "steamy_shower", "blood", "typographic", "circles", "terminal",
-    # "e_paper", "art", "narrative", "swiss", "zen", "brutalist", "art_deco",
-    # "nixie", "led_matrix", "typewriter", "synthwave", "waves", "spiral",
-    # "particles", "word_cloud", "three_d", "poetic", "day_line", "calendar",
+    # (code rain that writes the words, /ordklocka/matrix), "neon"
+    # (/ordklocka/neon), "fridge_magnets" (/ordklocka/magneter), "bus_sign"
+    # (/ordklocka/buss), "teletext" (/ordklocka/texttv), "letter_tiles"
+    # (/ordklocka/brickor), "embroidery", "counter_drums", "balloons",
+    # "constellations", "typographic", "terminal", "e_paper", "art",
+    # "narrative", "swiss", "zen", "brutalist", "nixie", "led_matrix",
+    # "waves", "word_cloud", "three_d", "poetic", "day_line", "calendar",
     # "circadian", "pixel" or "chalkboard" - see config.example.yaml for their pages.
     idle_clock_style: str = "words"
     # Read the afternoon the classic way too ("fem i halv tre" at 14:25)

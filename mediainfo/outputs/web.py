@@ -68,25 +68,16 @@ _IDLE_CLOCK_URLS = {
     "words": "/ordklocka",
     "split_flap": "/ordklocka/tavla",
     "matrix": "/ordklocka/matrix",
-    "eye_chart": "/ordklocka/syntavla",
     "neon": "/ordklocka/neon",
     "fridge_magnets": "/ordklocka/magneter",
     "bus_sign": "/ordklocka/buss",
     "teletext": "/ordklocka/texttv",
     "letter_tiles": "/ordklocka/brickor",
     "embroidery": "/ordklocka/broderi",
-    "rubber_stamps": "/ordklocka/stampel",
-    "type_case": "/ordklocka/sattlada",
-    "misty_window": "/ordklocka/fonster",
     "counter_drums": "/ordklocka/rakneverk",
-    "receipt": "/ordklocka/kvitto",
-    "dominoes": "/ordklocka/domino",
     "balloons": "/ordklocka/ballonger",
     "constellations": "/ordklocka/stjarnor",
-    "steamy_shower": "/ordklocka/dusch",
-    "blood": "/ordklocka/blod",
     "typographic": "/ordklocka/typografi",
-    "circles": "/ordklocka/cirklar",
     "terminal": "/ordklocka/terminal",
     "e_paper": "/ordklocka/epapper",
     "art": "/ordklocka/konst",
@@ -94,14 +85,9 @@ _IDLE_CLOCK_URLS = {
     "swiss": "/ordklocka/schweiz",
     "zen": "/ordklocka/zen",
     "brutalist": "/ordklocka/brutal",
-    "art_deco": "/ordklocka/artdeco",
     "nixie": "/ordklocka/nixie",
     "led_matrix": "/ordklocka/ledmatris",
-    "typewriter": "/ordklocka/skrivmaskin",
-    "synthwave": "/ordklocka/synthwave",
     "waves": "/ordklocka/vagor",
-    "spiral": "/ordklocka/spiral",
-    "particles": "/ordklocka/partiklar",
     "word_cloud": "/ordklocka/ordmoln",
     "three_d": "/ordklocka/3d",
     "poetic": "/ordklocka/poetisk",
@@ -117,25 +103,16 @@ _CLOCK_LABELS = {
     "/ordklocka": "Ordklocka",
     "/ordklocka/tavla": "Ordklocka (tavla)",
     "/ordklocka/matrix": "Ordklocka (matrix)",
-    "/ordklocka/syntavla": "Ordklocka (syntavla)",
     "/ordklocka/neon": "Ordklocka (neon)",
     "/ordklocka/magneter": "Ordklocka (magneter)",
     "/ordklocka/buss": "Ordklocka (busskylt)",
     "/ordklocka/texttv": "Ordklocka (text-tv)",
     "/ordklocka/brickor": "Ordklocka (brickor)",
     "/ordklocka/broderi": "Ordklocka (broderi)",
-    "/ordklocka/stampel": "Ordklocka (stämplar)",
-    "/ordklocka/sattlada": "Ordklocka (sättlåda)",
-    "/ordklocka/fonster": "Ordklocka (fönster)",
     "/ordklocka/rakneverk": "Ordklocka (räkneverk)",
-    "/ordklocka/kvitto": "Ordklocka (kvitto)",
-    "/ordklocka/domino": "Ordklocka (domino)",
     "/ordklocka/ballonger": "Ordklocka (ballonger)",
     "/ordklocka/stjarnor": "Ordklocka (stjärnhimmel)",
-    "/ordklocka/dusch": "Ordklocka (duschvägg)",
-    "/ordklocka/blod": "Ordklocka (blod)",
     "/ordklocka/typografi": "Ordklocka (typografi)",
-    "/ordklocka/cirklar": "Ordklocka (cirklar)",
     "/ordklocka/terminal": "Ordklocka (terminal)",
     "/ordklocka/epapper": "Ordklocka (e-papper)",
     "/ordklocka/konst": "Ordklocka (konst)",
@@ -143,14 +120,9 @@ _CLOCK_LABELS = {
     "/ordklocka/schweiz": "Ordklocka (schweizisk)",
     "/ordklocka/zen": "Ordklocka (zen)",
     "/ordklocka/brutal": "Ordklocka (brutalistisk)",
-    "/ordklocka/artdeco": "Ordklocka (art déco)",
     "/ordklocka/nixie": "Ordklocka (nixie)",
     "/ordklocka/ledmatris": "Ordklocka (LED-matris)",
-    "/ordklocka/skrivmaskin": "Ordklocka (skrivmaskin)",
-    "/ordklocka/synthwave": "Ordklocka (synthwave)",
     "/ordklocka/vagor": "Ordklocka (vågor)",
-    "/ordklocka/spiral": "Ordklocka (spiral)",
-    "/ordklocka/partiklar": "Ordklocka (partiklar)",
     "/ordklocka/ordmoln": "Ordklocka (ordmoln)",
     "/ordklocka/3d": "Ordklocka (3D)",
     "/ordklocka/poetisk": "Ordklocka (poetisk)",
@@ -167,21 +139,19 @@ _CLOCK_PAGE_FILES = {
 # Scripts shared by the clock pages: tid.js (time reading), sida.js (panel,
 # presence, ticking), meny.js (the clock picker in every clock page's
 # panel), pixelfont.js (5x7 dot font), skrift.js (handwriting that writes
-# itself), imma.js (misted-up glass), rutnat.js (the word clock and
-# syntavla grids, shared by /ordklocka, the matrix clock, syntavla and art
-# deco) and dygn.js (the parts of the day).
+# itself), rutnat.js (the word clock grid, shared by /ordklocka and the
+# matrix clock) and dygn.js (the parts of the day).
 _ORDKLOCKA_SCRIPTS = (
     "tid.js",
     "sida.js",
     "meny.js",
     "pixelfont.js",
     "skrift.js",
-    "imma.js",
     "rutnat.js",
     "dygn.js",
 )
 # The only font files /ordklocka/fonts/<name> will serve.
-_ORDKLOCKA_FONTS = frozenset({"josefin-sans-latin-600.woff2", "optician-sans.woff2"})
+_ORDKLOCKA_FONTS = frozenset({"josefin-sans-latin-600.woff2"})
 
 # How often the background thread checks for clients due to rotate to
 # their next image. Independent of (and much finer-grained than)
@@ -575,6 +545,7 @@ class WebOutput(Output):
                 rotation_interval_seconds=self.rotation_interval_seconds,
                 idle_clock=self.config.idle_clock,
                 idle_clock_url=self._idle_clock_url,
+                idle_clock_paths=list(_CLOCK_LABELS),
                 idle_clock_hours="&h=12" if self.config.idle_clock_12h else "&h=24",
             )
 

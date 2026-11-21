@@ -69,16 +69,22 @@
   // Mönstren: [namn, funktion(ord) -> mål]. Läsordningen bevaras alltid.
   const PATTERNS = {
     mening(list) {
-      // Som en vanlig mening, radbruten och centrerad.
-      const size = Math.min(W, H) * 0.13;
-      const rows = [];
-      let row = [];
-      for (const w of list) {
-        const test = [...row, w];
-        const width = test.reduce((s, x) => s + measure(x.text, size), 0) + size * 0.5 * (test.length - 1);
-        if (row.length && width > W * 0.85) { rows.push(row); row = [w]; } else row = test;
+      // Som en vanlig mening, radbruten och centrerad. Så stor som får
+      // plats: krymper tills raderna ryms på höjden.
+      let size = Math.min(W, H) * 0.22, rows;
+      for (;;) {
+        rows = [];
+        let row = [];
+        for (const w of list) {
+          const test = [...row, w];
+          const width = test.reduce((s, x) => s + measure(x.text, size), 0) + size * 0.5 * (test.length - 1);
+          if (row.length && width > W * 0.9) { rows.push(row); row = [w]; } else row = test;
+        }
+        rows.push(row);
+        const widest = Math.max(...rows.map(r => r.reduce((s, x) => s + measure(x.text, size), 0) + size * 0.5 * (r.length - 1)));
+        if ((rows.length * size * 1.15 <= H * 0.86 && widest <= W * 0.92) || size < 12) break;
+        size *= 0.92;
       }
-      rows.push(row);
       const lh = size * 1.15;
       rows.forEach((r, ri) => {
         const widths = r.map(w => measure(w.text, size));
@@ -95,32 +101,32 @@
       const n = list.length;
       list.forEach((w, i) => {
         const f = n > 1 ? i / (n - 1) : 0.5;
-        w.tsize = Math.min(W, H) * (0.06 + 0.1 * f);
+        w.tsize = Math.min(W, H) * (0.09 + 0.13 * f);
         w.tx = W * (0.2 + 0.6 * f); w.ty = H * (0.18 + 0.64 * f); w.trot = -0.12;
       });
     },
     cirkel(list) {
       // Runt en cirkel, medurs från klockan tio.
-      const n = list.length, R = Math.min(W, H) * 0.3;
+      const n = list.length, R = Math.min(W, H) * 0.32;
       list.forEach((w, i) => {
         const a = -Math.PI * 0.8 + (i / n) * Math.PI * 2;
         w.tx = W / 2 + Math.cos(a) * R * 1.25; w.ty = H / 2 + Math.sin(a) * R;
-        w.tsize = Math.min(W, H) * (i < 2 ? 0.06 : 0.11); w.trot = 0;
+        w.tsize = Math.min(W, H) * (i < 2 ? 0.09 : 0.16); w.trot = 0;
       });
     },
     kolumn(list) {
       // Staplade på höjden, som en dikt.
-      const n = list.length, lh = H * 0.8 / n;
+      const n = list.length, lh = H * 0.86 / n;
       list.forEach((w, i) => {
-        w.tsize = Math.min(lh * 0.8, W * 0.8 / Math.max(3, w.text.length) * 1.7);
-        w.tx = W * (0.5 + (i % 2 ? 0.06 : -0.06)); w.ty = H * 0.1 + lh * (i + 0.5); w.trot = 0;
+        w.tsize = Math.min(lh * 0.95, W * 0.85 / Math.max(3, w.text.length) * 1.7);
+        w.tx = W * (0.5 + (i % 2 ? 0.06 : -0.06)); w.ty = H * 0.07 + lh * (i + 0.5); w.trot = 0;
       });
     },
     spridd(list) {
       // Spridda över skärmen i olika storlekar, men fortfarande i ordning uppifrån.
       const n = list.length;
       list.forEach((w, i) => {
-        w.tsize = Math.min(W, H) * (0.05 + Math.random() * 0.12);
+        w.tsize = Math.min(W, H) * (0.08 + Math.random() * 0.14);
         w.tx = W * (0.18 + Math.random() * 0.64); w.ty = H * (0.12 + 0.76 * (i + 0.5) / n);
         w.trot = (Math.random() - 0.5) * 0.5;
       });

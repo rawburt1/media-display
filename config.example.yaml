@@ -736,26 +736,17 @@ outputs:
     # Which clock idle_clock shows: "words" (the word clock grid),
     # "split_flap" (an old railway departure board whose flaps rattle to
     # each word - also always available at /ordklocka/tavla), "matrix"
-    # (green code rain that writes the words, /ordklocka/matrix),
-    # "eye_chart" (an optician's eye chart, /ordklocka/syntavla), "neon"
+    # (green code rain that writes the words, /ordklocka/matrix), "neon"
     # (a flickering neon sign, /ordklocka/neon), "fridge_magnets" (letter
     # magnets on a fridge door, /ordklocka/magneter), "bus_sign" (an LED
     # bus destination sign, /ordklocka/buss), "teletext" (a Text-TV page,
     # /ordklocka/texttv), "letter_tiles" (word game letter tiles on a
     # board, /ordklocka/brickor),
     # "embroidery" (cross-stitch embroidery in a hoop, stitched letter by letter, /ordklocka/broderi),
-    # "rubber_stamps" (rubber letter stamps on kraft paper, /ordklocka/stampel),
-    # "type_case" (metal type picked from a type case and printed, /ordklocka/sattlada),
-    # "misty_window" (written with a finger on a misted-up winter window, /ordklocka/fonster),
     # "counter_drums" (rolling letter drums like an old mechanical counter, /ordklocka/rakneverk),
-    # "receipt" (printed on a till receipt, /ordklocka/kvitto),
-    # "dominoes" (dominoes that topple in a chain to form the words, /ordklocka/domino),
     # "balloons" (letter balloons floating in the sky, /ordklocka/ballonger),
     # "constellations" (the words as constellations in a night sky, /ordklocka/stjarnor),
-    # "steamy_shower" (written in the steam on a shower wall, /ordklocka/dusch),
-    # "blood" (a spooky scrawl in blood on the floor, /ordklocka/blod),
     # "typographic" (huge type showing only the current words, which glide to their new places when the time changes, /ordklocka/typografi),
-    # "circles" (hours, minutes and phrases on slowly rotating concentric rings, the current words lit, /ordklocka/cirklar),
     # "terminal" (green or amber text typed on an old computer terminal, with optional blinking cursor and CRT effect, /ordklocka/terminal),
     # "e_paper" (black text on white or warm grey paper, like an e-book reader, /ordklocka/epapper),
     # "art" (the words drift across the screen, change size and form new patterns, like living digital art, /ordklocka/konst),
@@ -763,14 +754,9 @@ outputs:
     # "swiss" (Swiss graphic design: big black letters on white, one accent colour, placed asymmetrically in a strict grid, /ordklocka/schweiz),
     # "zen" (a single quiet phrase in the middle of an empty screen, with slow fades, /ordklocka/zen),
     # "brutalist" (huge letters, hard contrasts and words broken over several lines, /ordklocka/brutal),
-    # "art_deco" (the word clock grid in black and gold with geometric 1920s frames, lit words shimmering like jewellery, /ordklocka/artdeco),
     # "nixie" (glowing orange letters inside old nixie tubes, with glass reflections, /ordklocka/nixie),
     # "led_matrix" (words made of small LED dots on a railway station timetable sign, /ordklocka/ledmatris),
-    # "typewriter" (typed letter by letter on a sheet of paper, a new log line every minute, /ordklocka/skrivmaskin),
-    # "synthwave" (neon pink, turquoise and purple 1980s retro-futurism with a striped sun and moving grid, /ordklocka/synthwave),
     # "waves" (words float across the screen like waves; the current ones rise out of the motion, /ordklocka/vagor),
-    # "spiral" (every time expression along a slowly rotating spiral, the current ones lit, /ordklocka/spiral),
-    # "particles" (thousands of small points of light gather into the words and dissolve when the time changes, /ordklocka/partiklar),
     # "word_cloud" (all time words scattered as a word cloud; the current ones grow and light up, /ordklocka/ordmoln),
     # "three_d" (three-dimensional letters casting shadows, with light that changes through the day, /ordklocka/3d),
     # "poetic" (short poetic lines such as "Morgonen har just passerat nio" or "Midnatten närmar sig", /ordklocka/poetisk),

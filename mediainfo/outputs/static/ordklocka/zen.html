@@ -17,7 +17,8 @@
   .stage { position: fixed; inset: 0; display: grid; place-items: center; }
   .phrase {
     grid-area: 1 / 1; font-family: "Avenir Next", "Helvetica Neue", "DejaVu Sans", system-ui, sans-serif;
-    font-weight: 300; font-size: 4.2vmin; letter-spacing: 0.32em; text-transform: lowercase;
+    /* Stort men luftigt; begränsat av bredden så att "fem över halv tolv" ryms */
+    font-weight: 300; font-size: min(9vmin, 5.2vw); letter-spacing: 0.32em; white-space: nowrap; text-transform: lowercase;
     transition: opacity 3s ease, letter-spacing 3s ease;
   }
   .phrase.hidden { opacity: 0; letter-spacing: 0.5em; }

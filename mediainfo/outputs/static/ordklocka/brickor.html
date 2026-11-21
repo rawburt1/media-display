@@ -21,7 +21,7 @@
     font-family: system-ui, sans-serif;
     display: grid; place-items: center;
   }
-  .table { display: flex; align-items: flex-start; gap: calc(var(--cell) * 0.5); }
+  .table { display: flex; align-items: flex-start; gap: calc(var(--cell) * 0.4); }
   .board {
     position: relative; padding: calc(var(--cell) * 0.18);
     background: #22304a; border-radius: calc(var(--cell) * 0.12);
@@ -49,7 +49,7 @@
     box-shadow: inset 0 calc(var(--cell) * -0.05) 0 var(--tile-edge),
                 0 calc(var(--cell) * 0.05) calc(var(--cell) * 0.08) rgba(0, 0, 0, 0.4);
     color: var(--tile-ink);
-    font: 800 calc(var(--cell) * 0.6) / 1 "Georgia", "DejaVu Serif", serif;
+    font: 800 calc(var(--cell) * 0.68) / 1 "Georgia", "DejaVu Serif", serif;
     display: grid; place-items: center; padding-bottom: calc(var(--cell) * 0.06);
   }
   .tile small {
@@ -69,12 +69,12 @@
 
   /* Poänglistan: läser upp tiden ord för ord */
   .pad {
-    width: calc(var(--cell) * 4.2); padding: calc(var(--cell) * 0.35) calc(var(--cell) * 0.4);
+    width: calc(var(--cell) * 3.4); padding: calc(var(--cell) * 0.3) calc(var(--cell) * 0.3);
     background: #fbf8ee repeating-linear-gradient(transparent 0 calc(var(--cell) * 0.55 - 1px), #c7d6e6 calc(var(--cell) * 0.55 - 1px) calc(var(--cell) * 0.55));
     background-position: 0 calc(var(--cell) * 0.95);
     box-shadow: 0 calc(var(--cell) * 0.15) calc(var(--cell) * 0.4) rgba(0, 0, 0, 0.4);
     transform: rotate(1.5deg);
-    color: #23325e; font: italic calc(var(--cell) * 0.36) / calc(var(--cell) * 0.55) "Segoe Print", "Comic Sans MS", "URW Chancery L", cursive;
+    color: #23325e; font: italic calc(var(--cell) * 0.3) / calc(var(--cell) * 0.55) "Segoe Print", "Comic Sans MS", "URW Chancery L", cursive;
   }
   .pad h2 { margin: 0 0 calc(var(--cell) * 0.2); font: 700 calc(var(--cell) * 0.32) / 1.2 system-ui, sans-serif;
             letter-spacing: 0.12em; color: #5a5a5a; text-transform: uppercase; }
@@ -119,7 +119,9 @@
 <script src="/ordklocka/sida.js"></script>
 <script>
   const S = OrdklockaSida;
-  const COLS = 15, ROWS = 9;
+  // Bara så många rader som behövs (KLOCKAN ÄR + två tidsrader med
+  // tomma rader emellan och runt), så att brickorna blir så stora som möjligt.
+  const COLS = 15, ROWS = 7;
   // Poäng per bokstav: vanliga bokstäver är billiga, ovanliga dyra.
   const POINTS = {
     A: 1, E: 1, N: 1, R: 1, S: 1, T: 1, I: 1, L: 1, O: 2, K: 2, D: 2, M: 2, G: 2,
@@ -128,7 +130,7 @@
   // Bonusrutor, spegelvända runt mitten: l2/l3 = bokstavspoäng x2/x3, w2/w3 = ordpoäng x2/x3.
   const BONUS = {};
   [[0, 0, "w3"], [7, 0, "w3"], [3, 0, "l2"], [1, 1, "w2"], [5, 1, "l3"], [2, 2, "l2"], [6, 2, "l2"],
-   [3, 3, "w2"], [0, 4, "l2"], [4, 4, "l3"], [7, 4, "star"]].forEach(([c, r, kind]) => {
+   [0, 3, "l2"], [4, 3, "l3"], [7, 3, "star"]].forEach(([c, r, kind]) => {
     for (const [cc, rr] of [[c, r], [COLS - 1 - c, r], [c, ROWS - 1 - r], [COLS - 1 - c, ROWS - 1 - r]]) {
       BONUS[rr * COLS + cc] = kind;
     }
@@ -169,7 +171,7 @@
     const gap = 0.04, pad = 0.18;
     const boardW = COLS * (1 + gap) + 2 * pad, boardH = ROWS * (1 + gap) + 2 * pad;
     // Bredd: brädet + mellanrum + poänglistan; höjd: brädet + hyllan.
-    cell = Math.floor(Math.min(innerWidth * 0.94 / (boardW + 0.5 + 4.2), innerHeight * 0.94 / (boardH + 1.9)));
+    cell = Math.floor(Math.min(innerWidth * 0.97 / (boardW + 0.4 + 3.4), innerHeight * 0.94 / (boardH + 1.9)));
     document.documentElement.style.setProperty("--cell", cell + "px");
   }
   const pos = i => {

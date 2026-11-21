@@ -53,7 +53,7 @@
     ...["tretton", "fjorton", "femton", "sexton", "sjutton", "arton", "nitton", "tjugo", "tjugoett", "tjugotvå", "tjugotre"].map(w => ["dh", w]),
     ...["noll fem", "tio", "femton", "tjugo", "tjugofem", "trettio", "trettiofem", "fyrtio", "fyrtiofem", "femtio", "femtiofem"].map(w => ["dm", w]),
   ];
-  const LIT = 1.45;   // hur mycket de aktuella orden förstoras
+  const LIT = 1.35;   // hur mycket de aktuella orden förstoras
   let seed = 7;
   const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
@@ -71,8 +71,8 @@
   function layout() {
     seed = 7;
     const W = innerWidth, H = innerHeight;
-    let base = Math.min(W, H) * 0.075;
-    for (let attempt = 0; attempt < 12; attempt++) {
+    let base = Math.min(W, H) * 0.12;
+    for (let attempt = 0; attempt < 30; attempt++) {
       const boxes = [];
       let ok = true;
       for (const it of items) {
@@ -82,9 +82,9 @@
         let placed = false;
         for (let k = 0; k < 2500 && !placed; k++) {
           const a = k * 0.35, r = k * base * 0.03;
-          const cx = W / 2 + Math.cos(a) * r * 1.5, cy = H / 2 + Math.sin(a) * r;
+          const cx = W / 2 + Math.cos(a) * r * Math.max(1, W / H), cy = H / 2 + Math.sin(a) * r * Math.max(1, H / W);
           const b = { x: cx - w / 2, y: cy - h / 2, w, h };
-          if (b.x < W * 0.03 || b.y < H * 0.03 || b.x + w > W * 0.97 || b.y + h > H * 0.97) continue;
+          if (b.x < W * 0.02 || b.y < H * 0.02 || b.x + w > W * 0.98 || b.y + h > H * 0.98) continue;
           if (boxes.some(o => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y)) continue;
           boxes.push(b);
           it.cx = cx; it.cy = cy; it.w = it.el.offsetWidth; it.h = it.el.offsetHeight;
@@ -93,7 +93,7 @@
         if (!placed) { ok = false; break; }
       }
       if (ok) break;
-      base *= 0.9;
+      base *= 0.95;
     }
     items.forEach(it => { it.el.style.left = it.cx - it.w / 2 + "px"; it.el.style.top = it.cy - it.h / 2 + "px"; });
     light();

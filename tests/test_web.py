@@ -882,6 +882,8 @@ def test_idle_clock_panel_has_the_clock_picker_and_remembers_it():
     assert "ordklocka-idle-klocka" in menu
     body = _client(_output(_config(idle_clock=True))).get("/").data.decode()
     assert 'localStorage.getItem("ordklocka-idle-klocka")' in body
+    # A remembered clock that has since been removed falls back.
+    assert '"/ordklocka/tavla"' in body and '"/ordklocka/syntavla"' not in body
     assert "ordklocka-idle-reset" in body
 
 
@@ -892,16 +894,16 @@ def test_unknown_idle_clock_style_falls_back_to_word_clock(caplog):
 
 
 # ---------------------------------------------------------------------------
-# Matrix and syntavla clocks (/ordklocka/matrix, /ordklocka/syntavla)
+# Matrix clock (/ordklocka/matrix)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     ("page", "script"),
-    # Both read the time like the other clocks (rutnat.js + tid.js).
-    [("matrix", "rutnat.js"), ("syntavla", "rutnat.js")],
+    # Reads the time like the other clocks (rutnat.js + tid.js).
+    [("matrix", "rutnat.js")],
 )
-def test_matrix_and_syntavla_pages_are_served(page, script):
+def test_matrix_page_is_served(page, script):
     client = _client(_output())
     resp = client.get(f"/ordklocka/{page}")
     assert resp.status_code == 200
@@ -925,10 +927,9 @@ def test_font_route_only_serves_known_fonts(name):
     ("style", "url", "label"),
     [
         ("matrix", "/ordklocka/matrix", "Ordklocka (matrix)"),
-        ("eye_chart", "/ordklocka/syntavla", "Ordklocka (syntavla)"),
     ],
 )
-def test_idle_clock_style_matrix_and_eye_chart(style, url, label):
+def test_idle_clock_style_matrix(style, url, label):
     out = _output(_config(idle_clock=True, idle_clock_style=style))
     body = _client(out).get("/").data.decode()
     assert f'? picked : "{url}";' in body
@@ -946,18 +947,10 @@ _NEW_CLOCKS = [
     ("texttv", "teletext", "Ordklocka (text-tv)"),
     ("brickor", "letter_tiles", "Ordklocka (brickor)"),
     ("broderi", "embroidery", "Ordklocka (broderi)"),
-    ("stampel", "rubber_stamps", "Ordklocka (stämplar)"),
-    ("sattlada", "type_case", "Ordklocka (sättlåda)"),
-    ("fonster", "misty_window", "Ordklocka (fönster)"),
     ("rakneverk", "counter_drums", "Ordklocka (räkneverk)"),
-    ("kvitto", "receipt", "Ordklocka (kvitto)"),
-    ("domino", "dominoes", "Ordklocka (domino)"),
     ("ballonger", "balloons", "Ordklocka (ballonger)"),
     ("stjarnor", "constellations", "Ordklocka (stjärnhimmel)"),
-    ("dusch", "steamy_shower", "Ordklocka (duschvägg)"),
-    ("blod", "blood", "Ordklocka (blod)"),
     ("typografi", "typographic", "Ordklocka (typografi)"),
-    ("cirklar", "circles", "Ordklocka (cirklar)"),
     ("terminal", "terminal", "Ordklocka (terminal)"),
     ("epapper", "e_paper", "Ordklocka (e-papper)"),
     ("konst", "art", "Ordklocka (konst)"),
@@ -965,14 +958,9 @@ _NEW_CLOCKS = [
     ("schweiz", "swiss", "Ordklocka (schweizisk)"),
     ("zen", "zen", "Ordklocka (zen)"),
     ("brutal", "brutalist", "Ordklocka (brutalistisk)"),
-    ("artdeco", "art_deco", "Ordklocka (art déco)"),
     ("nixie", "nixie", "Ordklocka (nixie)"),
     ("ledmatris", "led_matrix", "Ordklocka (LED-matris)"),
-    ("skrivmaskin", "typewriter", "Ordklocka (skrivmaskin)"),
-    ("synthwave", "synthwave", "Ordklocka (synthwave)"),
     ("vagor", "waves", "Ordklocka (vågor)"),
-    ("spiral", "spiral", "Ordklocka (spiral)"),
-    ("partiklar", "particles", "Ordklocka (partiklar)"),
     ("ordmoln", "word_cloud", "Ordklocka (ordmoln)"),
     ("3d", "three_d", "Ordklocka (3D)"),
     ("poetisk", "poetic", "Ordklocka (poetisk)"),
@@ -1034,13 +1022,13 @@ def test_every_clock_page_has_the_clock_menu_listing_every_clock():
         assert '<script src="/ordklocka/meny.js">' in client.get(path).data.decode(), path
 
 
-def test_word_clock_matrix_and_syntavla_share_the_grid_script():
+def test_word_clock_and_matrix_share_the_grid_script():
     client = _client(_output())
     resp = client.get("/ordklocka/rutnat.js")
     assert resp.status_code == 200
     assert resp.mimetype == "text/javascript"
     assert "OrdklockaRutnat" in resp.data.decode()
-    for page in ("/ordklocka", "/ordklocka/matrix", "/ordklocka/syntavla"):
+    for page in ("/ordklocka", "/ordklocka/matrix"):
         body = client.get(page).data.decode()
         assert '<script src="/ordklocka/tid.js">' in body, page
         assert '<script src="/ordklocka/rutnat.js">' in body, page
