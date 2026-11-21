@@ -130,9 +130,26 @@
       frame.classList.toggle("visible", show);
       // embedded=1: the clock page skips its own presence connection -
       // this page is already listed on /clients.
-      // h=12/24: outputs.web.idle_clock_12h, ahead of the page's own toggle.
-      frame.src = show ? {{ idle_clock_url|tojson }} + "?embedded=1" + {{ idle_clock_hours|tojson }} : "about:blank";
+      // h=12/24: outputs.web.idle_clock_12h, until the clock's own
+      // 12 h / 24 h toggle is used on this screen.
+      frame.src = show ? idleClockUrl() + "?embedded=1" + {{ idle_clock_hours|tojson }} : "about:blank";
     }
+
+    // The clock picked in the idle clock's own panel (meny.js) on this
+    // screen, else outputs.web.idle_clock_style.
+    function idleClockUrl() {
+      let picked = null;
+      try { picked = localStorage.getItem("ordklocka-idle-klocka"); } catch {}
+      return picked && /^\/ordklocka(\/[a-z0-9]+)?$/.test(picked) ? picked : {{ idle_clock_url|tojson }};
+    }
+
+    // "Enligt inställningarna" in the idle clock's picker: back to the
+    // configured clock.
+    addEventListener("message", e => {
+      if (e.origin !== location.origin || e.data !== "ordklocka-idle-reset") return;
+      const frame = document.getElementById("idle-clock");
+      if (idleClockVisible()) frame.src = idleClockUrl() + "?embedded=1" + {{ idle_clock_hours|tojson }};
+    });
 
     // Payloads only arrive on item changes and rotation ticks, so the bar
     // advances locally at 1s/s from the last reported position; each new

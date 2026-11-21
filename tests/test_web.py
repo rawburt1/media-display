@@ -849,13 +849,13 @@ def test_tavla_missing_file_returns_404(monkeypatch, tmp_path):
 def test_idle_clock_style_defaults_to_word_clock():
     assert WebConfig().idle_clock_style == "words"
     body = _client(_output(_config(idle_clock=True))).get("/").data.decode()
-    assert '"/ordklocka" + "?embedded=1"' in body
+    assert '? picked : "/ordklocka";' in body
 
 
 def test_idle_clock_style_split_flap_embeds_tavla():
     out = _output(_config(idle_clock=True, idle_clock_style="split_flap"))
     body = _client(out).get("/").data.decode()
-    assert '"/ordklocka/tavla" + "?embedded=1"' in body
+    assert '? picked : "/ordklocka/tavla";' in body
     assert out._summarize({}) == {"mode": "clock", "text": "Ordklocka (tavla)"}
 
 
@@ -874,6 +874,15 @@ def test_clock_pages_share_the_twelve_hour_toggle():
     assert 'get("h")' in tid
     menu = client.get("/ordklocka/meny.js").data.decode()
     assert "setTwelveHour" in menu
+
+
+def test_idle_clock_panel_has_the_clock_picker_and_remembers_it():
+    menu = _client(_output()).get("/ordklocka/meny.js").data.decode()
+    assert "Enligt inställningarna" in menu
+    assert "ordklocka-idle-klocka" in menu
+    body = _client(_output(_config(idle_clock=True))).get("/").data.decode()
+    assert 'localStorage.getItem("ordklocka-idle-klocka")' in body
+    assert "ordklocka-idle-reset" in body
 
 
 def test_unknown_idle_clock_style_falls_back_to_word_clock(caplog):
@@ -922,7 +931,7 @@ def test_font_route_only_serves_known_fonts(name):
 def test_idle_clock_style_matrix_and_eye_chart(style, url, label):
     out = _output(_config(idle_clock=True, idle_clock_style=style))
     body = _client(out).get("/").data.decode()
-    assert f'"{url}" + "?embedded=1"' in body
+    assert f'? picked : "{url}";' in body
     assert out._summarize({}) == {"mode": "clock", "text": label}
 
 
@@ -990,7 +999,7 @@ def test_new_clock_pages_are_served(page, style, label):
 def test_new_clock_idle_styles(page, style, label):
     out = _output(_config(idle_clock=True, idle_clock_style=style))
     body = _client(out).get("/").data.decode()
-    assert f'"/ordklocka/{page}" + "?embedded=1"' in body
+    assert f'? picked : "/ordklocka/{page}";' in body
     assert out._summarize({}) == {"mode": "clock", "text": label}
 
 

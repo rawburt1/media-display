@@ -1,6 +1,8 @@
-// Klockväljare i panelen på varje ordklocka: byter till en annan klocka.
-// Visas inte när sidan är inbäddad (idle-klockan på startsidan), där
-// klockan väljs med outputs.web.idle_clock_style i stället.
+// Klockväljare och 12/24 h-val i panelen på varje ordklocka.
+// Inbäddad (idle-klockan på startsidan, ?embedded=1) gäller valen bara
+// idle-klockan i den här webbläsaren: klockan sparas i IDLE_KEY och läses
+// av startsidan, och "Enligt inställningarna" går tillbaka till
+// outputs.web.idle_clock_style.
 (function () {
   const CLOCKS = [
     ["/ordklocka", "Ordklocka"],
@@ -49,7 +51,8 @@
     ["/ordklocka/pixel", "Pixel (8-bit)"],
     ["/ordklocka/griffeltavla", "Griffeltavla"],
   ];
-  if (new URLSearchParams(location.search).has("embedded")) return;
+  const embedded = new URLSearchParams(location.search).has("embedded");
+  const IDLE_KEY = "ordklocka-idle-klocka";
   const controls = document.querySelector(".panel .controls");
   if (!controls) return;
 
@@ -74,11 +77,26 @@
   const select = document.createElement("select");
   select.id = "clock-menu";
   select.className = "clock-menu";
+  let override = null;
+  if (embedded) {
+    try { override = localStorage.getItem(IDLE_KEY); } catch {}
+    select.add(new Option("Enligt inställningarna", "", false, !override));
+  }
   for (const [path, name] of CLOCKS) {
-    const opt = new Option(name, path, false, path === here);
+    const opt = new Option(name, path, false, path === here && (!embedded || !!override));
     select.add(opt);
   }
-  select.onchange = () => { location.href = select.value; };
+  select.onchange = () => {
+    if (!embedded) { location.href = select.value; return; }
+    // Startsidan väljer sidan nästa gång idle-klockan visas; byt direkt
+    // här också. Tomt val = tillbaka till inställningarnas klocka.
+    try {
+      if (select.value) localStorage.setItem(IDLE_KEY, select.value);
+      else localStorage.removeItem(IDLE_KEY);
+    } catch {}
+    if (select.value) location.href = select.value + location.search;
+    else parent.postMessage("ordklocka-idle-reset", location.origin);
+  };
   group.append(label, select);
   controls.prepend(group);
 
@@ -102,9 +120,7 @@
     b.onclick = () => {
       if (T.twelveHour === value) return;
       T.setTwelveHour(value);
-      const url = new URL(location.href);
-      url.searchParams.delete("h");
-      location.href = url.toString();
+      location.reload();
     };
     hours.appendChild(b);
   }

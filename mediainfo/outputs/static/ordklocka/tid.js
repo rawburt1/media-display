@@ -42,13 +42,16 @@
     }
   }
 
-  // 12-timmarsläge. ?h=12 eller ?h=24 i adressen (idle-klockan, styrd av
-  // outputs.web.idle_clock_12h) går före valet i klockpanelen (meny.js).
-  const HOURS_KEY = "ordklocka-timmar";
+  // 12-timmarsläge, valt i klockpanelen (meny.js). Idle-klockan på
+  // startsidan (?embedded=1) har ett eget val; tills det gjorts gäller
+  // ?h=12 eller ?h=24 från outputs.web.idle_clock_12h.
+  const params = new URLSearchParams(location.search);
+  const HOURS_KEY = params.has("embedded") ? "ordklocka-idle-timmar" : "ordklocka-timmar";
   function loadTwelveHour() {
-    const q = new URLSearchParams(location.search).get("h");
-    if (q === "12" || q === "24") return q === "12";
-    try { return localStorage.getItem(HOURS_KEY) === "12"; } catch { return false; }
+    let saved = null;
+    try { saved = localStorage.getItem(HOURS_KEY); } catch {}
+    const v = saved || params.get("h");
+    return v === "12";
   }
   let twelveHour = loadTwelveHour();
   function setTwelveHour(on) {
