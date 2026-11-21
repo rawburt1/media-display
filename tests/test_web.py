@@ -936,6 +936,25 @@ _NEW_CLOCKS = [
     ("epapper", "e_paper", "Ordklocka (e-papper)"),
     ("konst", "art", "Ordklocka (konst)"),
     ("berattande", "narrative", "Ordklocka (berättande)"),
+    ("schweiz", "swiss", "Ordklocka (schweizisk)"),
+    ("zen", "zen", "Ordklocka (zen)"),
+    ("brutal", "brutalist", "Ordklocka (brutalistisk)"),
+    ("artdeco", "art_deco", "Ordklocka (art déco)"),
+    ("nixie", "nixie", "Ordklocka (nixie)"),
+    ("ledmatris", "led_matrix", "Ordklocka (LED-matris)"),
+    ("skrivmaskin", "typewriter", "Ordklocka (skrivmaskin)"),
+    ("synthwave", "synthwave", "Ordklocka (synthwave)"),
+    ("vagor", "waves", "Ordklocka (vågor)"),
+    ("spiral", "spiral", "Ordklocka (spiral)"),
+    ("partiklar", "particles", "Ordklocka (partiklar)"),
+    ("ordmoln", "word_cloud", "Ordklocka (ordmoln)"),
+    ("3d", "three_d", "Ordklocka (3D)"),
+    ("poetisk", "poetic", "Ordklocka (poetisk)"),
+    ("dagslinje", "day_line", "Ordklocka (dagslinjen)"),
+    ("kalender", "calendar", "Ordklocka (kalender)"),
+    ("dygnsrytm", "circadian", "Ordklocka (dygnsrytm)"),
+    ("pixel", "pixel", "Ordklocka (pixel)"),
+    ("griffeltavla", "chalkboard", "Ordklocka (griffeltavla)"),
 ]
 
 
@@ -999,6 +1018,17 @@ def test_word_clock_matrix_and_syntavla_share_the_grid_script():
         body = client.get(page).data.decode()
         assert '<script src="/ordklocka/tid.js">' in body, page
         assert '<script src="/ordklocka/rutnat.js">' in body, page
+
+
+def test_parts_of_day_script_is_shared():
+    client = _client(_output())
+    resp = client.get("/ordklocka/dygn.js")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/javascript"
+    assert "OrdklockaDygn" in resp.data.decode()
+    for page in ("berattande", "poetisk", "dagslinje", "dygnsrytm", "schweiz"):
+        body = client.get(f"/ordklocka/{page}").data.decode()
+        assert '<script src="/ordklocka/dygn.js">' in body, page
 
 
 def test_layouts_script_is_gone():

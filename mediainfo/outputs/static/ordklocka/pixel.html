@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Pixel</title>
+<style>
+  :root { --panel-bg: rgba(16, 16, 48, 0.95); --panel-fg: #fcfcfc; --panel-accent: #f8b800; --panel-bg-solid: #101030; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101030; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; object-fit: contain; }
+</style>
+</head>
+<body>
+<canvas id="cv" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/pixelfont.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const G = OrdklockaPixelfont.GLYPHS;
+  const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+  // Liten upplösning som skalas upp med skarpa pixlar, som en gammal konsol
+  const VW = 160, VH = 100;
+  cv.width = VW; cv.height = VH;
+  const PAL = { sky: "#101030", star: "#fcfcfc", ground: "#00a800", dirt: "#ac7c00", text: "#f8b800", shade: "#a81000",
+                light: "#fcfcfc", small: "#3cbcfc", heart: "#f83800" };
+  const HEART = [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."];
+
+  const stars = Array.from({ length: 40 }, () => ({ x: Math.random() * VW, y: Math.random() * 60, p: Math.random() * 6 }));
+
+  // Bokstäverna är "sprites" som faller ned och studsar på plats; gamla
+  // bokstäver hoppar upp och faller ut ur bild, som besegrade fiender.
+  let letters = [];
+  function setText(lines) {
+    const now = performance.now();
+    letters.forEach(l => { if (!l.dying) { l.dying = true; l.vy = -1.6 - Math.random(); l.vx = (Math.random() - 0.5) * 1.5; } });
+    const total = lines.length;
+    lines.forEach((line, li) => {
+      const scale = line.length * 6 * 2 <= VW - 8 ? 2 : 1;
+      const w = line.length * 6 * scale - scale;
+      const x0 = Math.floor((VW - w) / 2);
+      const y0 = 30 + (li - (total - 1) / 2) * 22 * (scale === 2 ? 1 : 0.8);
+      [...line].forEach((ch, i) => {
+        if (ch === " ") return;
+        letters.push({ ch, scale, tx: x0 + i * 6 * scale, ty: Math.round(y0), x: x0 + i * 6 * scale, y: -20 - i * 6 - li * 20,
+                       vy: 0, vx: 0, born: now + (li * 8 + i) * 60, landed: false });
+      });
+    });
+  }
+
+  function glyph(ch, x, y, s, color, shade) {
+    const rows = G[ch] || G[" "];
+    rows.forEach((row, dy) => [...row].forEach((b, dx) => {
+      if (b !== "#") return;
+      ctx.fillStyle = shade; ctx.fillRect(x + dx * s + 1, y + dy * s + 1, s, s);
+      ctx.fillStyle = color; ctx.fillRect(x + dx * s, y + dy * s, s, s);
+    }));
+  }
+
+  let extra = 0;
+  function frame(now) {
+    const t = now / 1000;
+    ctx.fillStyle = PAL.sky; ctx.fillRect(0, 0, VW, VH);
+    for (const s of stars) if (Math.sin(t * 2 + s.p) > -0.3) { ctx.fillStyle = PAL.star; ctx.fillRect(Math.floor(s.x), Math.floor(s.y), 1, 1); }
+    // Marken med gräs och jord, som i ett plattformsspel
+    ctx.fillStyle = PAL.ground; ctx.fillRect(0, 84, VW, 3);
+    ctx.fillStyle = PAL.dirt; ctx.fillRect(0, 87, VW, 13);
+    for (let x = 0; x < VW; x += 8) { ctx.fillStyle = "#7c5400"; ctx.fillRect(x + ((x / 8) % 2 ? 4 : 0), 92, 3, 2); }
+    "KLOCKAN ÄR".split("").forEach((ch, i) => glyph(ch, 4 + i * 6, 2, 1, PAL.small, "#0058f8"));
+    // Hjärtan för extraminuterna, som liv i ett spel
+    for (let i = 0; i < 4; i++) HEART.forEach((row, dy) => [...row].forEach((b, dx) => {
+      if (b !== "#") return;
+      ctx.fillStyle = i < extra ? PAL.heart : "#383838";
+      ctx.fillRect(VW - 36 + i * 8 + dx, 3 + dy, 1, 1);
+    }));
+    for (const l of letters) {
+      if (now < l.born) continue;
+      if (l.dying) { l.vy += 0.12; l.y += l.vy; l.x += l.vx; }
+      else if (!l.landed) {
+        l.vy += 0.25; l.y += l.vy;
+        if (l.y >= l.ty) { l.y = l.ty; l.vy = -l.vy * 0.45; if (Math.abs(l.vy) < 0.6) { l.landed = true; l.vy = 0; } }
+      }
+      // Landade bokstäver guppar lätt i takt, var och en lite förskjuten
+      const bob = l.landed ? Math.round(Math.sin(t * 3 + l.tx * 0.2) * 0.6) : 0;
+      glyph(l.ch, Math.round(l.x), Math.round(l.y) + bob, l.scale, PAL.text, PAL.shade);
+    }
+    letters = letters.filter(l => !(l.dying && l.y > VH + 20));
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    extra = t.extra;
+    if (info.wordsChanged) setText(S.lines(t));
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/pixel/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

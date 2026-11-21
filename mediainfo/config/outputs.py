@@ -135,6 +135,9 @@ class PixooConfig(_OutputFilterMixin):
     # How the clock looks: "plain" (warm white letters on black) or "neon"
     # (glowing pink and cyan tubes on a dark brick wall, like /ordklocka/neon).
     idle_clock_theme: str = "plain"
+    # Read the afternoon the classic way too ("fem i halv tre" at 14:25)
+    # instead of digitally ("fjorton tjugofem").
+    idle_clock_12h: bool = False
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
@@ -159,7 +162,10 @@ class WebConfig(_OutputFilterMixin):
     # "embroidery", "rubber_stamps", "type_case", "misty_window",
     # "counter_drums", "receipt", "dominoes", "balloons", "constellations",
     # "steamy_shower", "blood", "typographic", "circles", "terminal",
-    # "e_paper", "art" or "narrative" - see config.example.yaml for their pages.
+    # "e_paper", "art", "narrative", "swiss", "zen", "brutalist", "art_deco",
+    # "nixie", "led_matrix", "typewriter", "synthwave", "waves", "spiral",
+    # "particles", "word_cloud", "three_d", "poetic", "day_line", "calendar",
+    # "circadian", "pixel" or "chalkboard" - see config.example.yaml for their pages.
     idle_clock_style: str = "words"
 
 

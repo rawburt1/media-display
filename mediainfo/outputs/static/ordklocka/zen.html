@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Zen</title>
+<style>
+  :root {
+    --bg: #eeebe4; --fg: #5d5a55;
+    --panel-bg: rgba(238, 235, 228, 0.92); --panel-fg: #5d5a55; --panel-accent: #5d5a55; --panel-bg-solid: #eeebe4;
+  }
+  [data-mode="natt"] { --bg: #1a1a1a; --fg: #9a968e; --panel-bg: rgba(26, 26, 26, 0.92);
+                       --panel-fg: #9a968e; --panel-accent: #9a968e; --panel-bg-solid: #1a1a1a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
+               transition: background 4s, color 4s; }
+  .stage { position: fixed; inset: 0; display: grid; place-items: center; }
+  .phrase {
+    grid-area: 1 / 1; font-family: "Avenir Next", "Helvetica Neue", "DejaVu Sans", system-ui, sans-serif;
+    font-weight: 300; font-size: 4.2vmin; letter-spacing: 0.32em; text-transform: lowercase;
+    transition: opacity 3s ease, letter-spacing 3s ease;
+  }
+  .phrase.hidden { opacity: 0; letter-spacing: 0.5em; }
+  @media (prefers-reduced-motion: reduce) { .phrase { transition: opacity 0.5s; } }
+</style>
+</head>
+<body>
+<div class="stage" id="stage" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Ljus">
+      <span class="label">Ljus</span>
+      <button data-mode="dag">dag</button>
+      <button data-mode="natt">natt</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const stage = document.getElementById("stage");
+
+  // Bara uttrycket - inga prickar, inga extraminuter. Det gamla tonas
+  // långsamt bort samtidigt som det nya tonas fram.
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    const el = document.createElement("div");
+    el.className = "phrase hidden";
+    el.textContent = OrdklockaTid.spokenWords(t).join(" ");
+    stage.querySelectorAll(".phrase:not(.hidden)").forEach(old => {
+      old.classList.add("hidden");
+      setTimeout(() => old.remove(), 3200);
+    });
+    stage.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("hidden")));
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("mode", "ordklocka-zen-ljus", "dag", v => { document.documentElement.dataset.mode = v; });
+  S.setup("/ordklocka/zen/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

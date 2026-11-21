@@ -2,7 +2,8 @@
 
 Reads the time exactly like the web word clocks (mediainfo/outputs/static/
 ordklocka/tid.js): 00:00-12:59 the classic way ("fem i halv ett") with
-12-hour names, from 13:00 digitally ("arton tjugofem"), in 5-minute steps
+12-hour names, from 13:00 digitally ("arton tjugofem") unless twelve_hour
+is set (then always the classic way), in 5-minute steps
 with the minutes beyond shown as up to four dots. The letters use the same
 5x7 dot font as the bus sign and domino clocks, parsed from pixelfont.js so
 there is only one copy of it.
@@ -73,12 +74,15 @@ class Reading(NamedTuple):
     digital: bool = False
 
 
-def spoken_lines(hour: int, minute: int, phrase: str = "tjugo") -> Reading:
+def spoken_lines(
+    hour: int, minute: int, phrase: str = "tjugo", twelve_hour: bool = False
+) -> Reading:
     """The lines shown after "KLOCKAN ÄR", like sida.js's lines():
-    classic ("FEM I HALV", "TRE"), digital ("FJORTON", "TJUGOFEM")."""
+    classic ("FEM I HALV", "TRE"), digital ("FJORTON", "TJUGOFEM").
+    With twelve_hour the afternoon reads classic too (14:25 "FEM I HALV TRE")."""
     m5 = minute - minute % 5
     extra = minute % 5
-    if hour >= 13:
+    if hour >= 13 and not twelve_hour:
         hour_word = "".join(_HOUR_WORDS[hour])
         minutes = " ".join("".join(parts) for parts in _DIGITAL_MINUTES[m5])
         return Reading((hour_word, minutes) if minutes else (hour_word,), extra, True)
@@ -237,7 +241,8 @@ def render_now(
     size: int = 64,
     now: Optional[datetime.datetime] = None,
     theme: str = "plain",
+    twelve_hour: bool = False,
 ) -> Tuple[Reading, Image.Image]:
     now = now or datetime.datetime.now()
-    reading = spoken_lines(now.hour, now.minute, phrase)
+    reading = spoken_lines(now.hour, now.minute, phrase, twelve_hour)
     return reading, render(reading, size, theme)

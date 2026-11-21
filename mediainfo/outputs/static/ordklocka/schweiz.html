@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Schweizisk</title>
+<style>
+  :root {
+    --paper: #f7f6f2; --ink: #111; --accent: #e30613;
+    --panel-bg: rgba(255, 255, 255, 0.95); --panel-fg: #111; --panel-accent: #111; --panel-bg-solid: #fff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); color: var(--ink); }
+  .sheet {
+    position: fixed; inset: 0; padding: 6vmin 6vmin 6vmin 7vmin;
+    display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(8, 1fr); column-gap: 1.6vmin;
+    font-family: "Helvetica Neue", "Helvetica", "Arial", "Nimbus Sans", "Liberation Sans", sans-serif;
+  }
+  /* Rutnätet, svagt synligt som på ett skissark */
+  .grid { position: fixed; inset: 6vmin 6vmin 6vmin 7vmin; pointer-events: none; display: grid;
+          grid-template-columns: repeat(12, 1fr); column-gap: 1.6vmin; opacity: 0.03; }
+  .grid i { background: var(--ink); }
+  .label { grid-column: 1 / 4; grid-row: 1; align-self: start; font-size: 2.1vmin; font-weight: 700;
+           line-height: 1.25; letter-spacing: 0.01em; }
+  .label span { display: block; font-weight: 400; }
+  .bar { grid-column: 1 / 2; grid-row: 2 / 9; background: var(--accent); width: 1.6vmin; justify-self: start; }
+  .words { grid-column: 4 / 13; grid-row: 2 / 9; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; overflow: hidden; }
+  .word { width: fit-content; font-weight: 700; letter-spacing: -0.035em; line-height: 0.86; white-space: nowrap;
+          transition: opacity 0.5s, transform 0.5s; }
+  .word.accent { color: var(--accent); }
+  .word.out { opacity: 0; transform: translateX(-2vmin); }
+  .meta { grid-column: 10 / 13; grid-row: 1; justify-self: end; text-align: right; font-size: 2.1vmin; line-height: 1.25; }
+  .squares { display: inline-flex; gap: 0.8vmin; margin-top: 0.8vmin; }
+  .squares i { width: 1.4vmin; height: 1.4vmin; border: 0.25vmin solid var(--ink); }
+  .squares i.on { background: var(--accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="grid" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<div class="sheet" aria-hidden="true">
+  <div class="label">Klockan är<span id="part"></span></div>
+  <div class="meta">Ordklocka<br><span class="squares" id="squares"><i></i><i></i><i></i><i></i></span></div>
+  <div class="bar"></div>
+  <div class="words" id="words"></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Accentfärg">
+      <span class="label">Accent</span>
+      <button data-accent="röd">röd</button>
+      <button data-accent="blå">blå</button>
+      <button data-accent="gul">gul</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/dygn.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const wordsEl = document.getElementById("words");
+  const squares = [...document.querySelectorAll("#squares i")];
+  const ACCENTS = { röd: "#e30613", blå: "#0047bb", gul: "#f5b700" };
+  let current = [];
+
+  // En rad per ord, vänsterställt och flush mot rutnätets nederkant.
+  // Storleken sätts så att det längsta ordet fyller kolumnerna 4-12.
+  function draw() {
+    wordsEl.textContent = "";
+    const els = current.map(w => {
+      const el = document.createElement("div");
+      el.className = "word" + (w.accent ? " accent" : "");
+      el.textContent = w.text;
+      wordsEl.appendChild(el);
+      return el;
+    });
+    const box = wordsEl.getBoundingClientRect();
+    let size = 100;
+    wordsEl.style.fontSize = size + "px";
+    const widest = Math.max(...els.map(e => e.scrollWidth));
+    size = Math.min(size * box.width / widest, box.height / (els.length * 0.86 + 0.14));
+    wordsEl.style.fontSize = size + "px";
+    // Asymmetri: varannan rad indragen en kolumn när det finns plats.
+    const col = box.width / 9;
+    els.forEach((e, i) => {
+      if (i % 2 && e.scrollWidth + col <= box.width) e.style.marginLeft = col + "px";
+    });
+  }
+
+  const clock = S.clock((t, info) => {
+    squares.forEach((q, i) => q.classList.toggle("on", i < t.extra));
+    document.getElementById("part").textContent = OrdklockaDygn.part(info.now.getHours()).name;
+    if (!info.wordsChanged) return;
+    const words = OrdklockaTid.spokenWords(t).map(w => w.toLowerCase());
+    const hourIndex = t.digital ? 0 : words.length - 1;
+    current = words.map((text, i) => ({ text, accent: i === hourIndex }));
+    if (info.first) { draw(); return; }
+    wordsEl.querySelectorAll(".word").forEach(e => e.classList.add("out"));
+    setTimeout(draw, 450);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("accent", "ordklocka-schweiz-accent", "röd", v => document.documentElement.style.setProperty("--accent", ACCENTS[v]));
+  addEventListener("resize", draw);
+  S.setup("/ordklocka/schweiz/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

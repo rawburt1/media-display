@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Brutalistisk</title>
+<style>
+  :root {
+    --bg: #000; --fg: #fff; --hot: #ffe600;
+    --panel-bg: #000; --panel-fg: #fff; --panel-accent: #ffe600; --panel-bg-solid: #000;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg); }
+  .frame { position: fixed; inset: 2vmin; border: 1.4vmin solid var(--fg); }
+  .head {
+    position: fixed; left: 2vmin; right: 2vmin; top: 2vmin; height: 9vmin;
+    background: var(--fg); color: var(--bg); display: flex; align-items: center; justify-content: space-between;
+    padding: 0 3vmin; font: 900 5.5vmin/1 "Arial Black", "Helvetica Neue", "DejaVu Sans", sans-serif;
+    letter-spacing: -0.04em; text-transform: uppercase;
+  }
+  .head .extra { font-size: 0.8em; }
+  .slab {
+    position: fixed; left: 5vmin; right: 5vmin; top: 14vmin; bottom: 5vmin;
+    font-family: "Arial Black", "Helvetica Neue", "Impact", "DejaVu Sans", sans-serif; font-weight: 900;
+    text-transform: uppercase; line-height: 0.8; letter-spacing: -0.06em; overflow: hidden;
+  }
+  .row { white-space: nowrap; display: block; width: fit-content; }
+  .row.hot { background: var(--hot); color: #000; padding: 0 0.04em; }
+  .row.out { color: transparent; -webkit-text-stroke: 0.025em var(--fg); }
+  /* Ett hårt hack när tiden byts */
+  .slab.jolt { animation: jolt 0.35s steps(3) 1; }
+  @keyframes jolt { 0% { transform: translate(1.5vmin, -1vmin); } 50% { transform: translate(-1vmin, 0.8vmin); filter: invert(1); } 100% { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .slab.jolt { animation: none; } }
+</style>
+</head>
+<body>
+<div class="head" aria-hidden="true"><span>KLOCKAN ÄR</span><span class="extra" id="extra"></span></div>
+<div class="frame" aria-hidden="true"></div>
+<div class="slab" id="slab" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const slab = document.getElementById("slab");
+  let words = [];
+
+  // Bryter orden i bitar och fyller ytan med så stora bokstäver som går.
+  // Långa ord bryts mitt i ("FYRTIO-/FEM" utan bindestreck), korta får
+  // stå ihop. Ett av orden (timmen) får ett gult block.
+  function rowsFor(maxChars) {
+    const rows = [];
+    words.forEach((w, wi) => {
+      const chunks = [];
+      for (let i = 0; i < w.text.length; i += maxChars) chunks.push(w.text.slice(i, i + maxChars));
+      // Sista biten får inte bli en ensam bokstav
+      if (chunks.length > 1 && chunks.at(-1).length < 2) {
+        const last = chunks.pop();
+        chunks[chunks.length - 1] += last;
+      }
+      chunks.forEach(c => rows.push({ text: c, hot: w.hot }));
+    });
+    // Slå ihop korta ord på samma rad ("FEM I")
+    const merged = [];
+    for (const r of rows) {
+      const prev = merged.at(-1);
+      if (prev && !prev.hot && !r.hot && prev.text.length + 1 + r.text.length <= maxChars) prev.text += " " + r.text;
+      else merged.push({ ...r });
+    }
+    return merged;
+  }
+
+  function draw() {
+    const W = slab.clientWidth, H = slab.clientHeight;
+    let best = null;
+    // Prova olika radlängder, ta den som ger störst bokstäver.
+    for (let maxChars = 3; maxChars <= 14; maxChars++) {
+      const rows = rowsFor(maxChars);
+      slab.textContent = "";
+      const els = rows.map(r => {
+        const el = document.createElement("span");
+        el.className = "row" + (r.hot ? " hot" : "");
+        el.textContent = r.text;
+        slab.appendChild(el);
+        return el;
+      });
+      slab.style.fontSize = "100px";
+      const widest = Math.max(...els.map(e => e.getBoundingClientRect().width));
+      const size = Math.min(100 * W / widest, H / (rows.length * 0.8)) * 0.98;
+      if (!best || size > best.size) best = { size, rows };
+    }
+    slab.textContent = "";
+    best.rows.forEach((r, i) => {
+      const el = document.createElement("span");
+      // Varannan icke-gul rad som kontur, för hårdare kontrast
+      el.className = "row" + (r.hot ? " hot" : i % 3 === 1 ? " out" : "");
+      el.textContent = r.text;
+      slab.appendChild(el);
+    });
+    slab.style.fontSize = best.size + "px";
+  }
+
+  const clock = S.clock((t, info) => {
+    document.getElementById("extra").textContent = t.extra ? "+" + "■".repeat(t.extra) : "";
+    if (!info.wordsChanged) return;
+    const list = OrdklockaTid.spokenWords(t);
+    const hourIndex = t.digital ? 0 : list.length - 1;
+    words = list.map((text, i) => ({ text, hot: i === hourIndex }));
+    draw();
+    if (!info.first) { slab.classList.remove("jolt"); void slab.offsetWidth; slab.classList.add("jolt"); }
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", draw);
+  S.setup("/ordklocka/brutal/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

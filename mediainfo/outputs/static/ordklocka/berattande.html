@@ -61,6 +61,7 @@
 
 <script src="/ordklocka/tid.js"></script>
 <script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/dygn.js"></script>
 <script>
   const S = OrdklockaSida;
   const stack = document.getElementById("stack");
@@ -73,14 +74,7 @@
   const MINUTES = { 0: "", 5: "noll fem", 10: "tio", 15: "femton", 20: "tjugo", 25: "tjugofem",
     30: "trettio", 35: "trettiofem", 40: "fyrtio", 45: "fyrtiofem", 50: "femtio", 55: "femtiofem" };
 
-  function partOfDay(h) {
-    if (h < 5) return "på natten";
-    if (h < 9) return "på morgonen";
-    if (h < 12) return "på förmiddagen";
-    if (h < 13) return "mitt på dagen";
-    if (h < 18) return "på eftermiddagen";
-    return "på kvällen";
-  }
+  const partOfDay = h => OrdklockaDygn.part(h).phrase;
 
   // "Klockan är snart halv fyra på eftermiddagen" / "... strax efter femton trettio".
   // Närmaste femminutersmark: precis, strax efter (1-2 min) eller snart (3-4 min).

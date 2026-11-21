@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Dagslinjen</title>
+<style>
+  :root {
+    --bg: #101317; --fg: #e9edf2; --dim: #4b5561; --accent: #ffb347;
+    --panel-bg: rgba(16, 19, 23, 0.92); --panel-fg: #e9edf2; --panel-accent: #ffb347; --panel-bg-solid: #101317;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
+               font-family: "Avenir Next", "Helvetica Neue", "DejaVu Sans", system-ui, sans-serif; }
+  .time { position: fixed; left: 0; right: 0; top: 18vh; text-align: center; }
+  .time .small { font-size: 3vmin; letter-spacing: 0.35em; text-transform: uppercase; opacity: 0.55; }
+  .time .big { font-size: 11vmin; white-space: nowrap; font-weight: 600; line-height: 1.1; margin-top: 2vmin; transition: opacity 0.8s; }
+  .time .big.fade { opacity: 0; }
+  .track { position: fixed; left: 6vw; right: 6vw; top: 66vh; height: 0; }
+  .line { position: absolute; left: 0; right: 0; top: -0.25vmin; height: 0.5vmin; border-radius: 1vmin;
+          background: linear-gradient(90deg, #1d2a4a 0%, #e9a36b 22%, #f4e3a1 40%, #9fd3f2 55%, #f6b26b 75%, #34305a 88%, #1d2a4a 100%); }
+  .tick { position: absolute; top: -1.2vmin; width: 1px; height: 2.4vmin; background: var(--dim); }
+  .tick.major { top: -2vmin; height: 4vmin; background: #6b7683; }
+  .seg { position: absolute; top: 4vmin; transform: translateX(-50%); font-size: 2.6vmin; letter-spacing: 0.18em;
+         text-transform: uppercase; color: var(--dim); white-space: nowrap; transition: color 1s, font-size 1s; }
+  .seg.now { color: var(--accent); font-size: 3.3vmin; font-weight: 700; }
+  .span { position: absolute; top: 2.4vmin; height: 0.3vmin; background: var(--dim); opacity: 0.4; transition: background 1s, opacity 1s; }
+  .span.now { background: var(--accent); opacity: 1; }
+  .marker { position: absolute; top: 0; width: 3.4vmin; height: 3.4vmin; margin: -1.7vmin 0 0 -1.7vmin; border-radius: 50%;
+            background: #fff; box-shadow: 0 0 0 0.6vmin rgba(255, 179, 71, 0.4), 0 0 3vmin rgba(255, 179, 71, 0.9);
+            transition: left 1s linear; }
+  .marker::after { content: ""; position: absolute; left: 50%; bottom: 100%; width: 1px; height: 8vmin; background: linear-gradient(transparent, #fff); }
+  .dots { display: inline-flex; gap: 1.6vmin; margin-top: 2.4vmin; }
+  .dots i { width: 1.2vmin; height: 1.2vmin; border-radius: 50%; background: var(--dim); }
+  .dots i.on { background: var(--accent); }
+</style>
+</head>
+<body>
+<div class="time" aria-hidden="true">
+  <div class="small">Klockan är</div>
+  <div class="big" id="big"></div>
+  <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
+</div>
+<div class="track" id="track" aria-hidden="true">
+  <div class="line"></div>
+  <div class="marker" id="marker"></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/dygn.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const D = OrdklockaDygn;
+  const track = document.getElementById("track");
+  const marker = document.getElementById("marker");
+  const big = document.getElementById("big");
+  const dots = [...document.querySelectorAll("#dots i")];
+
+  // Streck för varje timme (längre var sjätte), och dygnets delar under
+  // linjen. Natten finns i båda ändar; bara den första får en etikett.
+  for (let h = 0; h <= 24; h++) {
+    const t = document.createElement("div");
+    t.className = "tick" + (h % 6 === 0 ? " major" : "");
+    t.style.left = (h / 24) * 100 + "%";
+    track.appendChild(t);
+  }
+  const PARTS = D.PARTS.map(p => {
+    const span = document.createElement("div");
+    span.className = "span";
+    span.style.left = `calc(${(p.from / 24) * 100}% + 0.4vmin)`;
+    span.style.width = `calc(${((p.to - p.from) / 24) * 100}% - 0.8vmin)`;
+    const seg = document.createElement("div");
+    seg.className = "seg";
+    seg.textContent = p.name;
+    seg.style.left = (((p.from + p.to) / 2) / 24) * 100 + "%";
+    // MIDDAG får en egen rad så att den inte krockar med grannarna
+    if (p.key === "middag") seg.style.top = "8.5vmin";
+    track.append(span, seg);
+    return { p, span, seg };
+  });
+
+  function setText(text) {
+    big.textContent = text;
+    big.style.fontSize = "";
+    const max = innerWidth * 0.9;
+    if (big.scrollWidth > max) big.style.fontSize = parseFloat(getComputedStyle(big).fontSize) * max / big.scrollWidth + "px";
+  }
+
+  const clock = S.clock((t, info) => {
+    const now = info.now, h = now.getHours() + now.getMinutes() / 60;
+    marker.style.left = (h / 24) * 100 + "%";
+    const part = D.part(now.getHours());
+    PARTS.forEach(x => { const on = x.p === part; x.seg.classList.toggle("now", on); x.span.classList.toggle("now", on); });
+    dots.forEach((d, i) => d.classList.toggle("on", i < t.extra));
+    if (!info.wordsChanged) return;
+    const text = OrdklockaTid.spokenWords(t).join(" ").toLowerCase() + " " + part.phrase;
+    if (info.first) { setText(text); return; }
+    big.classList.add("fade");
+    setTimeout(() => { setText(text); big.classList.remove("fade"); }, 800);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/dagslinje/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

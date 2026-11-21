@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Spiral</title>
+<style>
+  :root {
+    --dim: rgba(200, 220, 255, 0.2); --lit: #ffffff; --glow: #7fd4ff;
+    --panel-bg: rgba(6, 10, 22, 0.9); --panel-fg: #dfe8ff; --panel-accent: #7fd4ff; --panel-bg-solid: #060a16;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle, #101a33 0%, #050811 70%); }
+  svg { position: fixed; inset: 0; width: 100%; height: 100%; }
+  text { font-family: "Avenir Next", "Futura", "DejaVu Sans", system-ui, sans-serif; font-weight: 600;
+         letter-spacing: 0.08em; fill: var(--dim); transition: fill 1.2s, filter 1.2s; }
+  text.lit { fill: var(--lit); filter: url(#glow); }
+  #spin { animation: spin 240s linear infinite; transform-origin: 0 0; }
+  @keyframes spin { to { transform: rotate(-360deg); } }
+  .center { font-size: 26px; letter-spacing: 0.3em; fill: rgba(220, 235, 255, 0.85); }
+  .dot { fill: var(--dim); transition: fill 0.8s; }
+  .dot.on { fill: var(--glow); }
+  @media (prefers-reduced-motion: reduce) { #spin { animation: none; } }
+</style>
+</head>
+<body>
+<svg viewBox="-500 -500 1000 1000" preserveAspectRatio="xMidYMid meet" aria-hidden="true" id="svg">
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feFlood flood-color="#7fd4ff" result="c"/><feComposite in="c" in2="b" operator="in" result="g"/>
+      <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="arm" fill="none"/>
+  </defs>
+  <g id="spin"></g>
+  <text class="center" text-anchor="middle" y="-4">KLOCKAN</text>
+  <text class="center" text-anchor="middle" y="26">ÄR</text>
+  <g id="dots"></g>
+</svg>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const NS = "http://www.w3.org/2000/svg";
+  const spin = document.getElementById("spin");
+
+  // Alla uttryck längs spiralen, inifrån och ut: vanliga timmar, uttryck,
+  // digitala timmar och digitala minuter. [grupp, ord]
+  const WORDS = [
+    ...["ETT", "TVÅ", "TRE", "FYRA", "FEM", "SEX", "SJU", "ÅTTA", "NIO", "TIO", "ELVA", "TOLV"].map(w => ["h", w]),
+    ...["FEM ÖVER", "TIO ÖVER", "KVART ÖVER", "TJUGO ÖVER", "TIO I HALV", "FEM I HALV", "HALV", "FEM ÖVER HALV",
+        "TIO ÖVER HALV", "TJUGO I", "KVART I", "TIO I", "FEM I"].map(w => ["m", w]),
+    ...["TRETTON", "FJORTON", "FEMTON", "SEXTON", "SJUTTON", "ARTON", "NITTON", "TJUGO", "TJUGOETT", "TJUGOTVÅ", "TJUGOTRE"].map(w => ["dh", w]),
+    ...["NOLL FEM", "TIO", "FEMTON", "TJUGO", "TJUGOFEM", "TRETTIO", "TRETTIOFEM", "FYRTIO", "FYRTIOFEM", "FEMTIO", "FEMTIOFEM"].map(w => ["dm", w]),
+  ];
+
+  // Arkimedisk spiral r = a + bθ från mitten och ut. Orden blir större utåt.
+  const R0 = 70, R1 = 480, TURNS = 4.2;
+  const pts = [];
+  for (let i = 0; i <= 900; i++) {
+    const th = (i / 900) * TURNS * 2 * Math.PI;
+    const r = R0 + (R1 - R0) * i / 900;
+    pts.push(`${(Math.sin(th) * r).toFixed(1)},${(-Math.cos(th) * r).toFixed(1)}`);
+  }
+  const arm = document.getElementById("arm");
+  arm.setAttribute("d", "M " + pts.join(" L "));
+  const total = arm.getTotalLength();
+
+  const items = WORDS.map(([group, word]) => {
+    const t = document.createElementNS(NS, "text");
+    const tp = document.createElementNS(NS, "textPath");
+    tp.setAttribute("href", "#arm");
+    tp.textContent = word;
+    t.appendChild(tp);
+    spin.appendChild(t);
+    return { group, word, t, tp };
+  });
+
+  // Lägg ut orden längs spiralen med storlek efter avståndet från mitten,
+  // och skala om alltihop så att det fyller spiralen.
+  function place(scale) {
+    let at = 0;
+    for (const x of items) {
+      const p = arm.getPointAtLength(Math.min(at, total));
+      const r = Math.hypot(p.x, p.y);
+      const size = (8 + r * 0.06) * scale;
+      x.t.setAttribute("font-size", size);
+      x.tp.setAttribute("startOffset", at);
+      at += x.tp.getComputedTextLength() + size * 1.4;
+    }
+    return at;
+  }
+  // Taket hindrar att orden blir högre än avståndet mellan spiralvarven.
+  let lo = 0.3, hi = 2.2;
+  for (let i = 0; i < 16; i++) { const mid = (lo + hi) / 2; if (place(mid) <= total) lo = mid; else hi = mid; }
+  place(lo);
+
+  const dotGroup = document.getElementById("dots");
+  const dots = [0, 1, 2, 3].map(i => {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("class", "dot"); c.setAttribute("cx", (i - 1.5) * 18); c.setAttribute("cy", 52); c.setAttribute("r", 4);
+    dotGroup.appendChild(c);
+    return c;
+  });
+
+  const light = (group, word) => items.forEach(x => { if (x.group === group && x.word === word) x.t.classList.add("lit"); });
+  const clock = S.clock(t => {
+    items.forEach(x => x.t.classList.remove("lit"));
+    const hour = t.hourWords.join("");
+    if (t.digital) {
+      light("dh", hour);
+      if (t.minutes.length) light("dm", t.minutes.map(p => p.join("")).join(" "));
+    } else {
+      light("h", hour);
+      if (t.minuteWords.length) light("m", t.minuteWords.join(" "));
+    }
+    dots.forEach((d, i) => d.classList.toggle("on", i < t.extra));
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/spiral/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

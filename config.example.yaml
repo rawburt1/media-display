@@ -530,6 +530,8 @@ outputs:
     #   nothing is playing, instead of idle wallpapers. Off by default.
     # idle_clock_phrase: tjugo  # tjugo ("tjugo över tre") | halv ("tio i halv tre")
     # idle_clock_theme: plain   # plain (warm white on black) | neon (glowing tubes)
+    # idle_clock_12h: false     # true: 12-hour clock, the afternoon reads classic
+    #   too ("fem i halv tre" at 14:25 instead of "fjorton tjugofem")
 
   # LED-preparation settings (optional) — how artwork is cropped, enhanced,
   # and reduced to a small palette before being sent to the display. Shown
@@ -756,8 +758,27 @@ outputs:
     # "circles" (hours, minutes and phrases on slowly rotating concentric rings, the current words lit, /ordklocka/cirklar),
     # "terminal" (green or amber text typed on an old computer terminal, with optional blinking cursor and CRT effect, /ordklocka/terminal),
     # "e_paper" (black text on white or warm grey paper, like an e-book reader, /ordklocka/epapper),
-    # "art" (the words drift across the screen, change size and form new patterns, like living digital art, /ordklocka/konst) or
-    # "narrative" (natural language, e.g. "Klockan är snart halv fyra på eftermiddagen" or "... snart femton trettio", /ordklocka/berattande).
+    # "art" (the words drift across the screen, change size and form new patterns, like living digital art, /ordklocka/konst),
+    # "narrative" (natural language, e.g. "Klockan är snart halv fyra på eftermiddagen" or "... snart femton trettio", /ordklocka/berattande),
+    # "swiss" (Swiss graphic design: big black letters on white, one accent colour, placed asymmetrically in a strict grid, /ordklocka/schweiz),
+    # "zen" (a single quiet phrase in the middle of an empty screen, with slow fades, /ordklocka/zen),
+    # "brutalist" (huge letters, hard contrasts and words broken over several lines, /ordklocka/brutal),
+    # "art_deco" (the word clock grid in black and gold with geometric 1920s frames, lit words shimmering like jewellery, /ordklocka/artdeco),
+    # "nixie" (glowing orange letters inside old nixie tubes, with glass reflections, /ordklocka/nixie),
+    # "led_matrix" (words made of small LED dots on a railway station timetable sign, /ordklocka/ledmatris),
+    # "typewriter" (typed letter by letter on a sheet of paper, a new log line every minute, /ordklocka/skrivmaskin),
+    # "synthwave" (neon pink, turquoise and purple 1980s retro-futurism with a striped sun and moving grid, /ordklocka/synthwave),
+    # "waves" (words float across the screen like waves; the current ones rise out of the motion, /ordklocka/vagor),
+    # "spiral" (every time expression along a slowly rotating spiral, the current ones lit, /ordklocka/spiral),
+    # "particles" (thousands of small points of light gather into the words and dissolve when the time changes, /ordklocka/partiklar),
+    # "word_cloud" (all time words scattered as a word cloud; the current ones grow and light up, /ordklocka/ordmoln),
+    # "three_d" (three-dimensional letters casting shadows, with light that changes through the day, /ordklocka/3d),
+    # "poetic" (short poetic lines such as "Morgonen har just passerat nio" or "Midnatten närmar sig", /ordklocka/poetisk),
+    # "day_line" (a horizontal line for the whole day with the parts of the day marked, /ordklocka/dagslinje),
+    # "calendar" (a tear-off calendar with weekday, date and time in words, /ordklocka/kalender),
+    # "circadian" (the background slowly shifts from warm morning tones to deep night blue, with the parts of the day, /ordklocka/dygnsrytm),
+    # "pixel" (classic 8-bit style with big pixel letters that bounce into place, /ordklocka/pixel) or
+    # "chalkboard" (written in chalk on a blackboard, wiped and rewritten when the time changes, /ordklocka/griffeltavla).
     idle_clock_style: words
 
   # Multiple web outputs — e.g. one per room. Only the first can mount at

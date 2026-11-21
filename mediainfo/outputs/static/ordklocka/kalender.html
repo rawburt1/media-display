@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Kalender</title>
+<style>
+  :root {
+    --red: #c8102e;
+    --panel-bg: rgba(255, 255, 255, 0.95); --panel-fg: #222; --panel-accent: #c8102e; --panel-bg-solid: #fff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: linear-gradient(180deg, #d9d3c7, #bfb6a6); display: grid; place-items: center;
+         font-family: "Helvetica Neue", "Arial", "DejaVu Sans", sans-serif; }
+  /* Rivblocket: en bunt blad på en kartongbaksida */
+  .block { position: relative; width: min(64vw, 92vh); height: min(78vh, 112vw); perspective: 200vmin; }
+  .backing { position: absolute; inset: -2.2vmin -2.2vmin -6vmin; background: linear-gradient(#8a6b4e, #6b5039);
+             border-radius: 0.8vmin; box-shadow: 0 2vmin 4vmin rgba(0, 0, 0, 0.35); }
+  .stack { position: absolute; inset: 0; background: #f3efe6;
+           box-shadow: 0 0.3vmin 0 #e6e0d2, 0 0.6vmin 0 #dcd5c5, 0 0.9vmin 0 #d1c9b8; }
+  .page { position: absolute; inset: 0; background: #fbf8f1; display: flex; flex-direction: column; text-align: center;
+          transform-origin: 50% 0; backface-visibility: hidden; }
+  .page.tear { animation: tear 1.6s cubic-bezier(.5, 0, .7, .4) forwards; }
+  @keyframes tear {
+    0% { transform: none; }
+    25% { transform: rotateX(-25deg) rotateZ(-3deg); }
+    100% { transform: translateY(120vh) rotateX(-70deg) rotateZ(-25deg); opacity: 0.6; }
+  }
+  .top { background: var(--red); color: #fff; padding: 2.2vmin 0 1.6vmin; font-weight: 700; letter-spacing: 0.35em;
+         font-size: 4.4vmin; text-transform: uppercase; position: relative; }
+  /* Perforeringen och fästet upptill */
+  .top::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1vmin;
+                 background: radial-gradient(circle, rgba(0, 0, 0, 0.35) 0.3vmin, transparent 0.35vmin) 0 0 / 2vmin 1vmin; }
+  .weekday { font-size: 8vmin; font-weight: 800; margin-top: 4vmin; letter-spacing: 0.06em; text-transform: uppercase; }
+  .weekday.sun { color: var(--red); }
+  .day { font-family: "Georgia", "DejaVu Serif", serif; font-size: 6vmin; font-style: italic; margin-top: 1.4vmin; color: #333; }
+  .rule { width: 50%; height: 0.3vmin; background: #222; margin: 4vmin auto 3vmin; opacity: 0.8; }
+  .time { font-size: 9vmin; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.1; color: #111;
+          transition: opacity 0.6s; padding: 0 4%; }
+  .time.fade { opacity: 0; }
+  .klockan { font-size: 2.4vmin; letter-spacing: 0.4em; text-transform: uppercase; color: #777; }
+  .foot { margin-top: auto; padding-bottom: 2.4vmin; font-size: 2.1vmin; color: #888; letter-spacing: 0.1em; }
+  .dots { display: inline-flex; gap: 1.2vmin; margin-left: 1.4vmin; vertical-align: middle; }
+  .dots i { width: 1.1vmin; height: 1.1vmin; border-radius: 50%; border: 0.2vmin solid #999; }
+  .dots i.on { background: var(--red); border-color: var(--red); }
+</style>
+</head>
+<body>
+<div class="block" aria-hidden="true">
+  <div class="backing"></div>
+  <div class="stack"></div>
+  <div id="pages"></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const pagesEl = document.getElementById("pages");
+  const DAYS = ["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"];
+  const MONTHS = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
+  const ORDINALS = ["", "första", "andra", "tredje", "fjärde", "femte", "sjätte", "sjunde", "åttonde", "nionde", "tionde",
+    "elfte", "tolfte", "trettonde", "fjortonde", "femtonde", "sextonde", "sjuttonde", "artonde", "nittonde", "tjugonde",
+    "tjugoförsta", "tjugoandra", "tjugotredje", "tjugofjärde", "tjugofemte", "tjugosjätte", "tjugosjunde", "tjugoåttonde",
+    "tjugonionde", "trettionde", "trettioförsta"];
+  // Veckonummer enligt ISO 8601, skrivet i ord på sidans fot
+  const NUM = ["noll", "ett", "två", "tre", "fyra", "fem", "sex", "sju", "åtta", "nio", "tio", "elva", "tolv", "tretton",
+    "fjorton", "femton", "sexton", "sjutton", "arton", "nitton"];
+  const TENS = ["", "", "tjugo", "trettio", "fyrtio", "femtio"];
+  const inWords = n => n < 20 ? NUM[n] : TENS[Math.floor(n / 10)] + (n % 10 ? NUM[n % 10] : "");
+  function isoWeek(d) {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = t.getUTCDay() || 7;
+    t.setUTCDate(t.getUTCDate() + 4 - day);
+    const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return Math.ceil(((t - y0) / 86400000 + 1) / 7);
+  }
+
+  let page = null, dateKey = "";
+  function newPage(now) {
+    const el = document.createElement("div");
+    el.className = "page";
+    el.innerHTML = `
+      <div class="top"></div>
+      <div class="weekday"></div>
+      <div class="day"></div>
+      <div class="rule"></div>
+      <div class="klockan">Klockan är</div>
+      <div class="time"></div>
+      <div class="foot"><span class="week"></span><span class="dots"><i></i><i></i><i></i><i></i></span></div>`;
+    el.querySelector(".top").textContent = MONTHS[now.getMonth()];
+    const wd = el.querySelector(".weekday");
+    wd.textContent = DAYS[now.getDay()];
+    wd.classList.toggle("sun", now.getDay() === 0);
+    el.querySelector(".day").textContent = "den " + ORDINALS[now.getDate()];
+    el.querySelector(".week").textContent = "vecka " + inWords(isoWeek(now));
+    return el;
+  }
+
+  // Ny dag: översta bladet rivs av och faller, nästa ligger redan under.
+  function ensurePage(now, animate) {
+    const key = now.toDateString();
+    if (key === dateKey) return;
+    dateKey = key;
+    const fresh = newPage(now);
+    pagesEl.prepend(fresh);
+    if (page && animate) {
+      const old = page;
+      old.classList.add("tear");
+      setTimeout(() => old.remove(), 1700);
+    } else if (page) {
+      page.remove();
+    }
+    page = fresh;
+  }
+
+  function fit(el) {
+    el.style.fontSize = "";
+    const max = el.parentElement.clientWidth * 0.92;
+    for (const span of el.children) {
+      if (span.scrollWidth > max) el.style.fontSize = parseFloat(getComputedStyle(el).fontSize) * max / span.scrollWidth + "px";
+    }
+  }
+
+  const clock = S.clock((t, info) => {
+    ensurePage(info.now, !info.first);
+    page.querySelectorAll(".dots i").forEach((d, i) => d.classList.toggle("on", i < t.extra));
+    if (!info.wordsChanged && page.dataset.words) return;
+    const el = page.querySelector(".time");
+    const set = () => {
+      el.textContent = "";
+      for (const l of S.lines(t)) { const s = document.createElement("div"); s.style.whiteSpace = "nowrap"; s.style.display = "inline-block"; s.textContent = l; el.append(s, document.createElement("br")); }
+      fit(el);
+      page.dataset.words = "1";
+    };
+    if (!page.dataset.words) { set(); return; }
+    el.classList.add("fade");
+    setTimeout(() => { set(); el.classList.remove("fade"); }, 600);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/kalender/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

@@ -110,7 +110,10 @@ class PixooOutput(Output):
         """Draw the word clock if its reading changed since the last draw."""
         self._clock_showing = True
         reading, image = word_clock.render_now(
-            self._clock_phrase, self.config.size, theme=self._clock_theme
+            self._clock_phrase,
+            self.config.size,
+            theme=self._clock_theme,
+            twelve_hour=self.config.idle_clock_12h,
         )
         if reading == self._clock_drawn:
             return

@@ -35,11 +35,28 @@ def test_classic_lines_wrap_to_fit_while_digital_keeps_the_hour_apart():
     assert w.display_lines(w.spoken_lines(18, 35)) == ["ARTON", "TRETTIOFEM"]
 
 
+@pytest.mark.parametrize(
+    ("hour", "minute", "lines"),
+    [
+        (14, 25, ("FEM I HALV", "TRE")),
+        (13, 0, ("ETT",)),
+        (23, 45, ("KVART I", "TOLV")),
+        (12, 40, ("TJUGO I", "ETT")),
+        (9, 10, ("TIO ÖVER", "NIO")),
+    ],
+)
+def test_twelve_hour_reads_the_afternoon_the_classic_way(hour, minute, lines):
+    reading = w.spoken_lines(hour, minute, twelve_hour=True)
+    assert reading.lines == lines
+    assert not reading.digital
+
+
+@pytest.mark.parametrize("twelve_hour", [False, True])
 @pytest.mark.parametrize("phrase", w.PHRASES)
-def test_every_minute_fits_on_a_64_pixel_display(phrase):
+def test_every_minute_fits_on_a_64_pixel_display(phrase, twelve_hour):
     for hour in range(24):
         for minute in range(60):
-            lines = w.display_lines(w.spoken_lines(hour, minute, phrase))
+            lines = w.display_lines(w.spoken_lines(hour, minute, phrase, twelve_hour))
             assert 1 <= len(lines) <= 2
             assert all(w.text_width(line) <= 64 for line in lines), (hour, minute, lines)
 

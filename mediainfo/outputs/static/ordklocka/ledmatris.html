@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka LED-matris</title>
+<style>
+  :root {
+    --panel-bg: rgba(20, 22, 26, 0.92); --panel-fg: #e8e8e8; --panel-accent: #ffb030; --panel-bg-solid: #14161a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: linear-gradient(180deg, #4b5560 0%, #2b3137 100%); display: grid; place-items: center; }
+  /* Skylthuset: lackerad plåt med skruvar, upphängd i taket */
+  .housing { position: relative; padding: 2.4vmin; border-radius: 1.4vmin;
+             background: linear-gradient(180deg, #1d3557, #14243c); box-shadow: 0 2vmin 4vmin rgba(0, 0, 0, 0.5),
+             inset 0 0.3vmin 0 rgba(255, 255, 255, 0.15); }
+  .housing::before, .housing::after { content: ""; position: absolute; top: -40vh; width: 0.5vmin; height: 40vh; background: #222; }
+  .housing::before { left: 15%; } .housing::after { right: 15%; }
+  .label { position: absolute; left: 2.4vmin; top: 0.4vmin; font: 700 1.5vmin/1.4 "DejaVu Sans", system-ui, sans-serif;
+           color: rgba(255, 255, 255, 0.75); letter-spacing: 0.1em; }
+  canvas { display: block; background: #050505; border-radius: 0.4vmin; }
+</style>
+</head>
+<body>
+<div class="housing" aria-hidden="true">
+  <div class="label">TIDTABELL · SPÅR 1</div>
+  <canvas id="sign"></canvas>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Lysdioder">
+      <span class="label">LED</span>
+      <button data-led="bärnsten">bärnsten</button>
+      <button data-led="vit">vit</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/pixelfont.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const G = OrdklockaPixelfont.GLYPHS;
+  const COLS = 100, LINE = 9, GAP = 2;
+  const ROWS = 4 * LINE + 3 * GAP;   // rubrik, två tidsrader, rullande text
+  const COLORS = { bärnsten: ["#ffb030", "#2a1a08", "rgba(255,150,30,0.22)"], vit: ["#f4f7ff", "#1b1d22", "rgba(210,225,255,0.2)"] };
+  let [ON, OFF, GLOW] = COLORS.bärnsten;
+  const cv = document.getElementById("sign"), ctx = cv.getContext("2d");
+  const grid = document.createElement("canvas"); // de släckta dioderna, förritade
+  let pitch = 10;
+
+  function resize() {
+    pitch = Math.floor(Math.min(innerWidth * 0.88 / COLS, innerHeight * 0.6 / ROWS));
+    cv.width = COLS * pitch; cv.height = ROWS * pitch;
+    grid.width = cv.width; grid.height = cv.height;
+    const g = grid.getContext("2d");
+    g.fillStyle = OFF;
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      g.beginPath(); g.arc((x + 0.5) * pitch, (y + 0.5) * pitch, pitch * 0.36, 0, Math.PI * 2); g.fill();
+    }
+  }
+
+  // Text -> lista av tända punkter [x, y] i 5x7-typsnittet (9 rader).
+  function bitmap(text) {
+    const pts = [];
+    [...text].forEach((ch, i) => {
+      (G[ch] || G[" "]).forEach((row, y) => [...row].forEach((b, x) => { if (b === "#") pts.push([i * 6 + x, y]); }));
+    });
+    return { pts, w: text.length * 6 - 1 };
+  }
+
+  // Varje rad har en text, och vid byte rullar den gamla upp och ut
+  // medan den nya rullar in underifrån, som på en riktig tidtabell.
+  const lines = [0, 1, 2].map(() => ({ cur: bitmap(""), old: null, t0: 0 }));
+  function setLine(i, text, center) {
+    const L = lines[i];
+    const b = bitmap(text);
+    b.x = center ? Math.floor((COLS - b.w) / 2) : 0;
+    if (L.text === text) return;
+    L.text = text; L.old = L.cur; L.cur = b; L.t0 = performance.now();
+  }
+  let ticker = bitmap(""), tickerX = COLS;
+
+  // Tända dioder samlas och ritas i två pass: först ett svagt sken
+  // (billigare än shadowBlur per punkt), sedan själva dioderna.
+  let batch = [];
+  function lit(x, y) {
+    if (x >= 0 && x < COLS && y >= 0 && y < ROWS) batch.push([x, y]);
+  }
+  function flush() {
+    for (const [r, color] of [[0.75, GLOW], [0.38, ON]]) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      for (const [x, y] of batch) {
+        ctx.moveTo((x + 0.5 + r) * pitch, (y + 0.5) * pitch);
+        ctx.arc((x + 0.5) * pitch, (y + 0.5) * pitch, pitch * r, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    }
+    batch = [];
+  }
+
+  function frame(now) {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(grid, 0, 0);
+    lines.forEach((L, i) => {
+      const top = i * (LINE + GAP);
+      const p = Math.min(1, (now - L.t0) / 700);
+      const shift = Math.round((1 - p) * (LINE + 1));
+      const draw = (b, dy) => b && b.pts.forEach(([x, y]) => {
+        const yy = y + dy;
+        if (yy >= 0 && yy < LINE) lit(b.x + x, top + yy);
+      });
+      draw(L.cur, shift);
+      if (p < 1) draw(L.old, shift - LINE - 1);
+    });
+    // Rullande rad längst ned
+    const top = 3 * (LINE + GAP);
+    tickerX -= 0.5;
+    if (tickerX < -ticker.w) tickerX = COLS;
+    ticker.pts.forEach(([x, y]) => lit(Math.floor(tickerX) + x, top + y));
+    flush();
+    requestAnimationFrame(frame);
+  }
+
+  let style = "tjugo";
+  const clock = S.clock((t, info) => {
+    setLine(0, "KLOCKAN ÄR", false);
+    const ls = S.lines(t);
+    setLine(1, ls[0], true);
+    setLine(2, ls[1] || "", true);
+    // Nästa läsning på den rullande raden
+    const next = new Date(info.now.getTime() + (5 - info.now.getMinutes() % 5) * 60000);
+    const n = OrdklockaTid.spokenTime(next.getHours(), next.getMinutes(), style);
+    const extra = t.extra ? `  +${t.extra} MIN` : "";
+    ticker = bitmap(`NÄSTA: ${OrdklockaTid.spokenWords(n).join(" ")}${extra}  ***  SPÅR 1  ***`);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => { style = v; clock.setStyle(v); });
+  S.choice("led", "ordklocka-ledmatris-farg", "bärnsten", v => { [ON, OFF, GLOW] = COLORS[v]; resize(); });
+  addEventListener("resize", resize);
+  resize();
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/ledmatris/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

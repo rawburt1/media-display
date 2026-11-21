@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Vågor</title>
+<style>
+  :root { --panel-bg: rgba(4, 18, 32, 0.9); --panel-fg: #d8f3ff; --panel-accent: #d8f3ff; --panel-bg-solid: #041220; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #03101d; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<canvas id="sea" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const cv = document.getElementById("sea"), ctx = cv.getContext("2d");
+  const FONT = '"Avenir Next", "Helvetica Neue", "DejaVu Sans", system-ui, sans-serif';
+  // Alla ord klockan kan säga flyter i havet
+  const VOCAB = ["klockan", "är", "fem", "tio", "kvart", "tjugo", "över", "i", "halv", "ett", "två", "tre", "fyra",
+    "sex", "sju", "åtta", "nio", "elva", "tolv", "tretton", "fjorton", "femton", "sexton", "sjutton", "arton",
+    "nitton", "trettio", "fyrtio", "femtio", "noll"];
+  let W = 0, H = 0, bands = [];
+
+  function resize() {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Vågband: rader av ord som driver åt sidan i olika fart och storlek
+    const n = 9;
+    bands = Array.from({ length: n }, (_, i) => {
+      const words = [];
+      for (let k = 0; k < 40; k++) words.push(VOCAB[Math.floor(Math.random() * VOCAB.length)]);
+      const size = H * (0.025 + 0.012 * (i % 3));
+      return { y: H * (0.06 + 0.9 * i / (n - 1)), text: words.join("  ·  "), size, speed: (i % 2 ? -1 : 1) * (14 + i * 3),
+               phase: Math.random() * 10, amp: H * (0.012 + 0.01 * (i % 3)), off: Math.random() * 1000 };
+    });
+  }
+
+  // Ritar text bokstav för bokstav längs en våg.
+  function waveText(text, x0, y0, size, amp, k, t, phase, color, alpha) {
+    ctx.font = `500 ${size}px ${FONT}`;
+    ctx.fillStyle = color;
+    let x = x0;
+    for (const ch of text) {
+      const w = ctx.measureText(ch).width;
+      if (x > -size && x < W + size) {
+        const y = y0 + Math.sin(x * k - t + phase) * amp;
+        ctx.globalAlpha = alpha;
+        ctx.fillText(ch, x, y);
+      }
+      x += w;
+      if (x > W + size) break;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // De aktuella orden stiger upp ur vågorna; gamla sjunker tillbaka.
+  let phrases = [];   // {lines, born, sinking}
+  function setPhrase(lines) {
+    phrases.forEach(p => { if (!p.sinking) p.sinking = performance.now(); });
+    phrases.push({ lines, born: performance.now(), sinking: 0 });
+  }
+
+  function frame(now) {
+    const t = now / 1000;
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#03101d"); g.addColorStop(1, "#06304a");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    for (const b of bands) {
+      ctx.font = `500 ${b.size}px ${FONT}`;
+      const len = ctx.measureText(b.text).width;
+      const x = -(((b.off + t * b.speed) % len) + len) % len;
+      waveText(b.text, x, b.y, b.size, b.amp, 0.006, t * 1.1, b.phase, "#5fb3d6", 0.16);
+      waveText(b.text, x + len, b.y, b.size, b.amp, 0.006, t * 1.1, b.phase, "#5fb3d6", 0.16);
+    }
+    // Den aktuella tiden
+    phrases = phrases.filter(p => !p.sinking || now - p.sinking < 3000);
+    for (const p of phrases) {
+      const rise = Math.min(1, (now - p.born) / 2600), ease = 1 - Math.pow(1 - rise, 3);
+      const sink = p.sinking ? Math.min(1, (now - p.sinking) / 2600) : 0, sinkE = sink * sink;
+      const alpha = ease * (1 - sinkE);
+      const size = Math.min(H * 0.15, W * 0.11);
+      ctx.font = `600 ${size}px ${FONT}`;
+      p.lines.forEach((line, i) => {
+        const w = ctx.measureText(line).width;
+        let s = size;
+        if (w > W * 0.9) s = size * W * 0.9 / w;
+        ctx.font = `600 ${s}px ${FONT}`;
+        const lw = ctx.measureText(line).width;
+        const y = H * 0.5 + (i - (p.lines.length - 1) / 2) * size * 1.1 + (1 - ease) * H * 0.25 + sinkE * H * 0.3;
+        ctx.shadowColor = "rgba(150, 230, 255, 0.7)"; ctx.shadowBlur = s * 0.25;
+        waveText(line, (W - lw) / 2, y, s, s * 0.08, 0.008, t * 1.4, i, "#eafaff", alpha);
+        ctx.shadowBlur = 0;
+      });
+    }
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener("resize", resize);
+  resize();
+  const clock = S.clock((t, info) => {
+    const extra = t.extra ? ["·".repeat(t.extra)] : [];
+    if (info.wordsChanged) setPhrase(["klockan är", ...S.lines(t).map(l => l.toLowerCase()), ...extra]);
+    else phrases.at(-1).lines = ["klockan är", ...S.lines(t).map(l => l.toLowerCase()), ...extra];
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/vagor/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

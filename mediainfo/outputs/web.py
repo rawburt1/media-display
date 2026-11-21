@@ -91,6 +91,25 @@ _IDLE_CLOCK_URLS = {
     "e_paper": "/ordklocka/epapper",
     "art": "/ordklocka/konst",
     "narrative": "/ordklocka/berattande",
+    "swiss": "/ordklocka/schweiz",
+    "zen": "/ordklocka/zen",
+    "brutalist": "/ordklocka/brutal",
+    "art_deco": "/ordklocka/artdeco",
+    "nixie": "/ordklocka/nixie",
+    "led_matrix": "/ordklocka/ledmatris",
+    "typewriter": "/ordklocka/skrivmaskin",
+    "synthwave": "/ordklocka/synthwave",
+    "waves": "/ordklocka/vagor",
+    "spiral": "/ordklocka/spiral",
+    "particles": "/ordklocka/partiklar",
+    "word_cloud": "/ordklocka/ordmoln",
+    "three_d": "/ordklocka/3d",
+    "poetic": "/ordklocka/poetisk",
+    "day_line": "/ordklocka/dagslinje",
+    "calendar": "/ordklocka/kalender",
+    "circadian": "/ordklocka/dygnsrytm",
+    "pixel": "/ordklocka/pixel",
+    "chalkboard": "/ordklocka/griffeltavla",
 }
 # Clock page path -> its label on /clients. Each page has a presence
 # WebSocket at <path>/ws (/ordklocka/ws for the word clock).
@@ -121,6 +140,25 @@ _CLOCK_LABELS = {
     "/ordklocka/epapper": "Ordklocka (e-papper)",
     "/ordklocka/konst": "Ordklocka (konst)",
     "/ordklocka/berattande": "Ordklocka (berättande)",
+    "/ordklocka/schweiz": "Ordklocka (schweizisk)",
+    "/ordklocka/zen": "Ordklocka (zen)",
+    "/ordklocka/brutal": "Ordklocka (brutalistisk)",
+    "/ordklocka/artdeco": "Ordklocka (art déco)",
+    "/ordklocka/nixie": "Ordklocka (nixie)",
+    "/ordklocka/ledmatris": "Ordklocka (LED-matris)",
+    "/ordklocka/skrivmaskin": "Ordklocka (skrivmaskin)",
+    "/ordklocka/synthwave": "Ordklocka (synthwave)",
+    "/ordklocka/vagor": "Ordklocka (vågor)",
+    "/ordklocka/spiral": "Ordklocka (spiral)",
+    "/ordklocka/partiklar": "Ordklocka (partiklar)",
+    "/ordklocka/ordmoln": "Ordklocka (ordmoln)",
+    "/ordklocka/3d": "Ordklocka (3D)",
+    "/ordklocka/poetisk": "Ordklocka (poetisk)",
+    "/ordklocka/dagslinje": "Ordklocka (dagslinjen)",
+    "/ordklocka/kalender": "Ordklocka (kalender)",
+    "/ordklocka/dygnsrytm": "Ordklocka (dygnsrytm)",
+    "/ordklocka/pixel": "Ordklocka (pixel)",
+    "/ordklocka/griffeltavla": "Ordklocka (griffeltavla)",
 }
 # Clock pages other than /ordklocka itself: path -> file in _ORDKLOCKA_DIR.
 _CLOCK_PAGE_FILES = {
@@ -129,8 +167,9 @@ _CLOCK_PAGE_FILES = {
 # Scripts shared by the clock pages: tid.js (time reading), sida.js (panel,
 # presence, ticking), meny.js (the clock picker in every clock page's
 # panel), pixelfont.js (5x7 dot font), skrift.js (handwriting that writes
-# itself), imma.js (misted-up glass) and rutnat.js (the word clock and
-# syntavla grids, shared by /ordklocka, the matrix clock and syntavla).
+# itself), imma.js (misted-up glass), rutnat.js (the word clock and
+# syntavla grids, shared by /ordklocka, the matrix clock, syntavla and art
+# deco) and dygn.js (the parts of the day).
 _ORDKLOCKA_SCRIPTS = (
     "tid.js",
     "sida.js",
@@ -139,6 +178,7 @@ _ORDKLOCKA_SCRIPTS = (
     "skrift.js",
     "imma.js",
     "rutnat.js",
+    "dygn.js",
 )
 # The only font files /ordklocka/fonts/<name> will serve.
 _ORDKLOCKA_FONTS = frozenset({"josefin-sans-latin-600.woff2", "optician-sans.woff2"})

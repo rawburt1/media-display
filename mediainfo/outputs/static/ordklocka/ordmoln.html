@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Ordmoln</title>
+<style>
+  :root {
+    --bg: #14161c; --dim: #3b4150; --lit: #ffd166; --line: rgba(255, 209, 102, 0.35);
+    --panel-bg: rgba(20, 22, 28, 0.92); --panel-fg: #e8eaf0; --panel-accent: #ffd166; --panel-bg-solid: #14161c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+  .cloud { position: fixed; inset: 0; }
+  .w { position: absolute; left: 0; top: 0; white-space: nowrap; line-height: 1;
+       font-family: "Avenir Next", "Helvetica Neue", "DejaVu Sans", system-ui, sans-serif; font-weight: 700;
+       color: var(--dim); transform-origin: center; transition: transform 1.2s cubic-bezier(.3, .7, .3, 1), color 1.2s, opacity 1.2s; }
+  .w.v { writing-mode: vertical-rl; }
+  .w.lit { color: var(--lit); text-shadow: 0 0 0.25em rgba(255, 209, 102, 0.35); z-index: 2; }
+  .cloud.has-lit .w:not(.lit) { opacity: 0.6; }
+  svg { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  svg polyline { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 2 8; stroke-linecap: round;
+                 transition: opacity 1s; }
+</style>
+</head>
+<body>
+<svg aria-hidden="true"><polyline id="path"/></svg>
+<div class="cloud" id="cloud" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const cloud = document.getElementById("cloud");
+  // Varje ord i molnet: [grupp, text]. Samma ord kan finnas i flera grupper
+  // (FEM som minut och som timme), så att t.ex. "fem över halv fem" går.
+  const WORDS = [
+    ["k", "klockan"], ["k", "är"], ["x", "• • • •"],
+    ...["fem", "tio", "kvart", "tjugo", "över", "i", "halv"].map(w => ["m", w]),
+    ...["ett", "två", "tre", "fyra", "fem", "sex", "sju", "åtta", "nio", "tio", "elva", "tolv"].map(w => ["h", w]),
+    ...["tretton", "fjorton", "femton", "sexton", "sjutton", "arton", "nitton", "tjugo", "tjugoett", "tjugotvå", "tjugotre"].map(w => ["dh", w]),
+    ...["noll fem", "tio", "femton", "tjugo", "tjugofem", "trettio", "trettiofem", "fyrtio", "fyrtiofem", "femtio", "femtiofem"].map(w => ["dm", w]),
+  ];
+  const LIT = 1.45;   // hur mycket de aktuella orden förstoras
+  let seed = 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  const items = WORDS.map(([group, text]) => {
+    const el = document.createElement("span");
+    el.className = "w";
+    el.textContent = text;
+    cloud.appendChild(el);
+    return { group, text, el, weight: group === "k" ? 1.5 : 0.65 + rand() * 0.8, vertical: group !== "k" && rand() < 0.18 };
+  });
+
+  // Klassisk ordmolnslayout: varje ord provas längs en spiral från mitten
+  // tills det inte krockar med något. Lådorna räknas i förstorad storlek,
+  // så att ett ord kan växa utan att täcka grannarna.
+  function layout() {
+    seed = 7;
+    const W = innerWidth, H = innerHeight;
+    let base = Math.min(W, H) * 0.075;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const boxes = [];
+      let ok = true;
+      for (const it of items) {
+        it.el.classList.toggle("v", it.vertical);
+        it.el.style.fontSize = base * it.weight + "px";
+        const w = it.el.offsetWidth * LIT, h = it.el.offsetHeight * LIT;
+        let placed = false;
+        for (let k = 0; k < 2500 && !placed; k++) {
+          const a = k * 0.35, r = k * base * 0.03;
+          const cx = W / 2 + Math.cos(a) * r * 1.5, cy = H / 2 + Math.sin(a) * r;
+          const b = { x: cx - w / 2, y: cy - h / 2, w, h };
+          if (b.x < W * 0.03 || b.y < H * 0.03 || b.x + w > W * 0.97 || b.y + h > H * 0.97) continue;
+          if (boxes.some(o => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y)) continue;
+          boxes.push(b);
+          it.cx = cx; it.cy = cy; it.w = it.el.offsetWidth; it.h = it.el.offsetHeight;
+          placed = true;
+        }
+        if (!placed) { ok = false; break; }
+      }
+      if (ok) break;
+      base *= 0.9;
+    }
+    items.forEach(it => { it.el.style.left = it.cx - it.w / 2 + "px"; it.el.style.top = it.cy - it.h / 2 + "px"; });
+    light();
+  }
+
+  let lit = [];   // aktuella ord i läsordning
+  function light() {
+    items.forEach(it => { it.el.classList.remove("lit"); it.el.style.transform = ""; });
+    lit.forEach(it => { it.el.classList.add("lit"); it.el.style.transform = `scale(${LIT})`; });
+    cloud.classList.toggle("has-lit", lit.length > 0);
+    // Streckad linje genom orden i den ordning de ska läsas
+    document.getElementById("path").setAttribute("points", lit.map(it => `${it.cx},${it.cy}`).join(" "));
+  }
+
+  const find = (group, text) => items.find(it => it.group === group && it.text === text);
+  const clock = S.clock(t => {
+    const words = [find("k", "klockan"), find("k", "är")];
+    const hour = t.hourWords.join("").toLowerCase();
+    if (t.digital) {
+      words.push(find("dh", hour));
+      if (t.minutes.length) words.push(find("dm", t.minutes.map(p => p.join("")).join(" ").toLowerCase()));
+    } else {
+      t.minuteWords.forEach(w => words.push(find("m", w.toLowerCase())));
+      words.push(find("h", hour));
+    }
+    const x = find("x", "• • • •");
+    x.el.textContent = t.extra ? "• ".repeat(t.extra).trim() : "• • • •";
+    if (t.extra) words.push(x);
+    lit = words.filter(Boolean);
+    light();
+  });
+  // Molnet läggs ut innan klockan tänder något i det
+  layout();
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", layout);
+  document.fonts?.ready.then(layout);
+  S.setup("/ordklocka/ordmoln/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

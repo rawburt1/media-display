@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Nixie</title>
+<style>
+  :root {
+    --glow: #ff8a2a; --core: #ffd2a0;
+    --panel-bg: rgba(14, 10, 8, 0.92); --panel-fg: #f0d8c0; --panel-accent: #ff8a2a; --panel-bg-solid: #0e0a08;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: radial-gradient(ellipse at 50% 30%, #2a1d14 0%, #120c08 60%, #070504 100%);
+         display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  /* Träsockel med mässingsskylt */
+  .plate { font: 600 2.4vmin/1 "Copperplate", "Didot", "Georgia", serif; letter-spacing: 0.4em; color: #3a2610;
+           background: linear-gradient(180deg, #e9c46f, #a8782b 55%, #d9ae58); padding: 1vmin 3vmin 1vmin 3.4vmin;
+           border-radius: 0.6vmin; box-shadow: 0 0.4vmin 1vmin rgba(0, 0, 0, 0.6), inset 0 0.2vmin 0 rgba(255, 255, 255, 0.5);
+           margin-bottom: 4vmin; }
+  .row { display: flex; justify-content: center; gap: var(--gap); margin: calc(var(--gap) * 0.9) 0; }
+  .space { width: calc(var(--tw) * 0.5); }
+  .tube {
+    position: relative; width: var(--tw); height: calc(var(--tw) * 1.75);
+    border-radius: calc(var(--tw) * 0.48) calc(var(--tw) * 0.48) calc(var(--tw) * 0.12) calc(var(--tw) * 0.12);
+    background:
+      radial-gradient(circle, rgba(255, 140, 60, 0.1) 0.6px, transparent 1.2px) 0 0 / calc(var(--tw) * 0.09) calc(var(--tw) * 0.09),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 30%, rgba(0, 0, 0, 0.2) 70%, rgba(255, 255, 255, 0.06)),
+      rgba(40, 28, 20, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(255, 230, 200, 0.18), inset 0 calc(var(--tw) * -0.05) calc(var(--tw) * 0.2) rgba(0, 0, 0, 0.6),
+                0 calc(var(--tw) * 0.1) calc(var(--tw) * 0.2) rgba(0, 0, 0, 0.6);
+    display: grid; place-items: center; overflow: hidden;
+  }
+  /* Glasreflexen */
+  .tube::after { content: ""; position: absolute; left: 14%; top: 6%; width: 18%; height: 70%; border-radius: 50%;
+                 background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0)); filter: blur(1px); }
+  /* Sockeln under röret */
+  .tube::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 9%;
+                  background: linear-gradient(#2b2b2b, #0c0c0c); }
+  .tube span { grid-area: 1 / 1; font: 400 calc(var(--tw) * 1.05)/1 "DIN Condensed", "Arial Narrow", "Liberation Sans Narrow", "DejaVu Sans Condensed", sans-serif; }
+  .tube .ghost { color: transparent; -webkit-text-stroke: 1px rgba(150, 120, 100, 0.22); }
+  .tube .lit { color: var(--core); -webkit-text-stroke: 0; text-shadow: 0 0 0.04em #fff3e0, 0 0 0.12em var(--glow), 0 0 0.35em var(--glow), 0 0 0.8em rgba(255, 110, 20, 0.6); }
+  .tube.flicker .lit { animation: flick 0.12s steps(2) 3; }
+  @keyframes flick { 50% { opacity: 0.6; } }
+  .dots { display: flex; gap: 3vmin; margin-top: 3vmin; }
+  .dots i { width: 1.6vmin; height: 1.6vmin; border-radius: 50%; background: #2a1a10; box-shadow: inset 0 0 0 1px rgba(255, 200, 150, 0.15); }
+  .dots i.on { background: var(--core); box-shadow: 0 0 1vmin var(--glow), 0 0 2.4vmin rgba(255, 110, 20, 0.6); }
+</style>
+</head>
+<body>
+<div class="plate" aria-hidden="true">KLOCKAN ÄR</div>
+<div id="rows" aria-hidden="true"></div>
+<div class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const rowsEl = document.getElementById("rows");
+  const dots = [...document.querySelectorAll("#dots i")];
+  const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ";
+  const rnd = () => LETTERS[Math.floor(Math.random() * LETTERS.length)];
+
+  // Ett rör per bokstav. Bakom den tända katoden syns ett par släckta,
+  // som i riktiga nixierör där alla tecken sitter staplade.
+  function tube(ch) {
+    const el = document.createElement("div");
+    el.className = "tube";
+    for (const g of [rnd(), rnd(), "8"]) {
+      const s = document.createElement("span");
+      s.className = "ghost";
+      s.textContent = g;
+      el.appendChild(s);
+    }
+    const lit = document.createElement("span");
+    lit.className = "lit";
+    lit.textContent = ch;
+    el.appendChild(lit);
+    return el;
+  }
+
+  function build(lines) {
+    const longest = Math.max(...lines.map(l => l.length));
+    const tw = Math.min(innerWidth * 0.86 / (longest * 1.12), innerHeight * 0.62 / (lines.length * 1.95));
+    document.documentElement.style.setProperty("--tw", tw + "px");
+    document.documentElement.style.setProperty("--gap", tw * 0.12 + "px");
+    rowsEl.textContent = "";
+    const lits = [];
+    for (const line of lines) {
+      const row = document.createElement("div");
+      row.className = "row";
+      for (const ch of line) {
+        if (ch === " ") { const sp = document.createElement("div"); sp.className = "space"; row.appendChild(sp); continue; }
+        const t = tube(ch);
+        row.appendChild(t);
+        lits.push([t, ch]);
+      }
+      rowsEl.appendChild(row);
+    }
+    return lits;
+  }
+
+  // Katodbyte: varje rör bläddrar snabbt genom tecken innan det landar.
+  function cycle(lits) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    lits.forEach(([t, ch], i) => {
+      const lit = t.querySelector(".lit");
+      let n = 6 + i * 2;
+      const iv = setInterval(() => {
+        if (--n <= 0) { clearInterval(iv); lit.textContent = ch; t.classList.add("flicker"); return; }
+        lit.textContent = rnd();
+      }, 55);
+    });
+  }
+
+  let lines = [];
+  const clock = S.clock((t, info) => {
+    dots.forEach((d, i) => d.classList.toggle("on", i < t.extra));
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    cycle(build(lines));
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", () => lines.length && build(lines));
+  S.setup("/ordklocka/nixie/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>
