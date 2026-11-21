@@ -513,7 +513,7 @@ def test_idle_clock_redraws_on_tick_only_when_the_reading_changes(tmp_path):
     second = word_clock.spoken_lines(10, 21)
     readings = iter([first, first, second])
 
-    def fake_render_now(phrase, size):
+    def fake_render_now(phrase, size, theme):
         reading = next(readings)
         return reading, word_clock.render(reading, size)
 
@@ -547,3 +547,20 @@ def test_idle_clock_is_ignored_on_the_16x16_frame(tmp_path):
 def test_unknown_idle_clock_phrase_falls_back_to_tjugo(tmp_path):
     output = PixooOutput(_config(idle_clock=True, idle_clock_phrase="x"), _cache(tmp_path))
     assert output._clock_phrase == "tjugo"
+
+
+def test_idle_clock_theme_is_passed_to_the_renderer(tmp_path):
+    from mediainfo.imaging import word_clock
+
+    output = PixooOutput(_config(idle_clock=True, idle_clock_theme="neon"), _cache(tmp_path))
+    reading = word_clock.spoken_lines(10, 20)
+    with patch.object(
+        word_clock, "render_now", return_value=(reading, word_clock.render(reading))
+    ) as render_now:
+        _sent_frames(output, output.on_idle)
+    assert render_now.call_args.kwargs["theme"] == "neon"
+
+
+def test_unknown_idle_clock_theme_falls_back_to_plain(tmp_path):
+    output = PixooOutput(_config(idle_clock=True, idle_clock_theme="x"), _cache(tmp_path))
+    assert output._clock_theme == "plain"

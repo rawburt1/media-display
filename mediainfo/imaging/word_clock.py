@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
-from PIL import Image
+from PIL import Image, ImageChops, ImageEnhance, ImageFilter
 
 _FONT_JS = (
     Path(__file__).resolve().parent.parent / "outputs" / "static" / "ordklocka" / "pixelfont.js"
@@ -141,32 +141,103 @@ def display_lines(reading: Reading, size: int = 64) -> List[str]:
     return lines
 
 
-def render(reading: Reading, size: int = 64) -> Image.Image:
-    """Draw "KLOCKAN ÄR" and the time's lines centered, with the minutes past
-    the 5-minute step as 1-4 dots in the corners, like a classic word clock."""
-    img = Image.new("RGB", (size, size), (0, 0, 0))
-    lines = [(_HEADER, _HEADER_COLOR)] + [
-        (line, _TIME_COLOR) for line in display_lines(reading, size)
-    ]
-    # Spread the lines over the height, but keep them together as one text.
+Color = Tuple[int, int, int]
+
+# Looks for the clock: "plain" (warm white on black) and "neon" (glowing
+# tubes on a dark brick wall, like /ordklocka/neon).
+THEMES = ("plain", "neon")
+
+# Neon tube colors, same as neon.html's default theme.
+_NEON_HEADER = (63, 240, 255)
+_NEON_TIME = (255, 79, 216)
+
+
+def _layout(reading: Reading, size: int) -> List[Tuple[str, int, int, bool]]:
+    """(text, x, y, is_header) for "KLOCKAN ÄR" and the time's lines,
+    centered and spread over the height but kept together as one text."""
+    lines = [_HEADER] + display_lines(reading, size)
     gap = min(9, (size - 12 - len(lines) * _GLYPH_H) // max(1, len(lines) - 1))
     block = len(lines) * _GLYPH_H + (len(lines) - 1) * gap
     y = (size - block) // 2
-    for text, color in lines:
-        _draw_text(img, text, (size - text_width(text)) // 2, y, color)
+    placed = []
+    for i, text in enumerate(lines):
+        placed.append((text, (size - text_width(text)) // 2, y, i == 0))
         y += _GLYPH_H + gap
-    # Corner dots clockwise from the top left: 1 = top left, 2 = + top right ...
+    return placed
+
+
+def _corner_dots(img: Image.Image, extra: int, color: Color) -> None:
+    """Minutes past the 5-minute step as 2x2 dots in the corners, clockwise
+    from the top left, like a classic word clock."""
+    size = img.width
     corners = [(1, 1), (size - 3, 1), (size - 3, size - 3), (1, size - 3)]
-    for cx, cy in corners[: reading.extra]:
+    for cx, cy in corners[:extra]:
         for dx in range(2):
             for dy in range(2):
-                img.putpixel((cx + dx, cy + dy), _TIME_COLOR)
+                img.putpixel((cx + dx, cy + dy), color)
+
+
+def _draw(reading: Reading, img: Image.Image, header: Color, time: Color) -> None:
+    for text, x, y, is_header in _layout(reading, img.width):
+        _draw_text(img, text, x, y, header if is_header else time)
+    _corner_dots(img, reading.extra, time)
+
+
+def _mix_white(color: Color, amount: float) -> Color:
+    r, g, b = color
+    return (
+        round(r * amount + 255 * (1 - amount)),
+        round(g * amount + 255 * (1 - amount)),
+        round(b * amount + 255 * (1 - amount)),
+    )
+
+
+def _brick_wall(size: int) -> Image.Image:
+    """A very dark brick wall: 4-pixel courses with offset joints."""
+    img = Image.new("RGB", (size, size), (26, 12, 10))
+    pixels = img.load()
+    assert pixels is not None
+    for y in range(size):
+        course, row = divmod(y, 4)
+        for x in range(size):
+            joint = (x + (4 if course % 2 else 0)) % 8 == 0
+            if row == 3 or joint:
+                pixels[x, y] = (8, 4, 4)
+            elif (x * 7 + course * 13) % 11 == 0:
+                pixels[x, y] = (32, 15, 12)  # a little texture in the brick
+    return img
+
+
+def _render_neon(reading: Reading, size: int) -> Image.Image:
+    # The glow: the tubes in full color, blurred and added onto the wall.
+    tubes = Image.new("RGB", (size, size))
+    _draw(reading, tubes, _NEON_HEADER, _NEON_TIME)
+    glow = tubes.filter(ImageFilter.GaussianBlur(1.6))
+    glow = ImageEnhance.Brightness(glow).enhance(1.8)
+    img = ImageChops.add(_brick_wall(size), glow)
+    # The tubes themselves: almost white-hot, tinted by their gas.
+    core = Image.new("RGB", (size, size))
+    _draw(reading, core, _mix_white(_NEON_HEADER, 0.45), _mix_white(_NEON_TIME, 0.45))
+    img.paste(core, mask=core.convert("L").point(lambda v: 255 if v else 0))
+    return img
+
+
+def render(reading: Reading, size: int = 64, theme: str = "plain") -> Image.Image:
+    """Draw "KLOCKAN ÄR" and the time's lines centered, with the minutes past
+    the 5-minute step as 1-4 dots in the corners."""
+    if theme == "neon":
+        return _render_neon(reading, size)
+    img = Image.new("RGB", (size, size), (0, 0, 0))
+    _draw(reading, img, _HEADER_COLOR, _TIME_COLOR)
     return img
 
 
 def render_now(
-    phrase: str = "tjugo", size: int = 64, now: Optional[datetime.datetime] = None
+    phrase: str = "tjugo",
+    size: int = 64,
+    now: Optional[datetime.datetime] = None,
+    theme: str = "plain",
 ) -> Tuple[Reading, Image.Image]:
     now = now or datetime.datetime.now()
     reading = spoken_lines(now.hour, now.minute, phrase)
-    return reading, render(reading, size)
+    return reading, render(reading, size, theme)

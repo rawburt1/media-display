@@ -68,3 +68,21 @@ def test_render_now_uses_the_given_time():
     reading, image = w.render_now("tjugo", 64, datetime.datetime(2026, 11, 21, 14, 31))
     assert reading == w.Reading(("FJORTON", "TRETTIO"), 1, True)
     assert image.size == (64, 64)
+
+
+def test_neon_glows_on_a_brick_wall():
+    reading = w.spoken_lines(10, 23)
+    neon = w.render(reading, 64, "neon")
+    plain = w.render(reading, 64)
+    assert neon.size == (64, 64)
+    # The wall shows where the plain clock is black ...
+    assert neon.getpixel((32, 1)) != (0, 0, 0)
+    # ... the tubes glow around the letters, and the minute dots are drawn.
+    x, y = next(
+        (x, y)
+        for y in range(64)
+        for x in range(64)
+        if plain.getpixel((x, y)) != (0, 0, 0) and 4 < x < 60 and 4 < y < 60
+    )
+    assert sum(neon.getpixel((x, y))) > sum(neon.getpixel((32, 1)))
+    assert neon.getpixel((61, 1)) != neon.getpixel((1, 61))

@@ -76,6 +76,15 @@ class PixooOutput(Output):
                 word_clock.PHRASES[0],
             )
             self._clock_phrase = word_clock.PHRASES[0]
+        self._clock_theme = config.idle_clock_theme
+        if self._clock_theme not in word_clock.THEMES:
+            logger.warning(
+                "outputs.pixoo.idle_clock_theme %r is not one of %s - using %r",
+                self._clock_theme,
+                ", ".join(word_clock.THEMES),
+                word_clock.THEMES[0],
+            )
+            self._clock_theme = word_clock.THEMES[0]
         # Showing the word clock right now (idle), and what it last drew -
         # on_schedule_tick() redraws only when the reading changes.
         self._clock_showing = False
@@ -100,7 +109,9 @@ class PixooOutput(Output):
     def _show_clock(self) -> None:
         """Draw the word clock if its reading changed since the last draw."""
         self._clock_showing = True
-        reading, image = word_clock.render_now(self._clock_phrase, self.config.size)
+        reading, image = word_clock.render_now(
+            self._clock_phrase, self.config.size, theme=self._clock_theme
+        )
         if reading == self._clock_drawn:
             return
         self._send_image(image)

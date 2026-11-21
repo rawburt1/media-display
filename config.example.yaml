@@ -529,6 +529,7 @@ outputs:
     #   ("KLOCKAN ÄR / FEM I HALV / TRE", same reading as /ordklocka) while
     #   nothing is playing, instead of idle wallpapers. Off by default.
     # idle_clock_phrase: tjugo  # tjugo ("tjugo över tre") | halv ("tio i halv tre")
+    # idle_clock_theme: plain   # plain (warm white on black) | neon (glowing tubes)
 
   # LED-preparation settings (optional) — how artwork is cropped, enhanced,
   # and reduced to a small palette before being sent to the display. Shown

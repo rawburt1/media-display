@@ -132,6 +132,9 @@ class PixooConfig(_OutputFilterMixin):
     # How the clock says :20 and :40 - "tjugo" ("tjugo över tre", "tjugo
     # i fyra") or "halv" ("tio i halv fyra", "tio över halv fyra").
     idle_clock_phrase: str = "tjugo"
+    # How the clock looks: "plain" (warm white letters on black) or "neon"
+    # (glowing pink and cyan tubes on a dark brick wall, like /ordklocka/neon).
+    idle_clock_theme: str = "plain"
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
