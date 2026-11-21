@@ -222,11 +222,6 @@
 <div class="panel" id="panel">
   <div class="readout" id="readout" aria-live="polite"></div>
   <div class="controls">
-    <div class="group" role="group" aria-label="Tidsformat">
-      <span class="label">Tid</span>
-      <button data-mode="12" aria-pressed="true">12 h</button>
-      <button data-mode="24" aria-pressed="false">24 h</button>
-    </div>
     <div class="group" id="style-group" role="group" aria-label="Uttryck för :20 och :40">
       <span class="label">20 / 40</span>
       <button data-style="tjugo" aria-pressed="true">tjugo över</button>
@@ -238,29 +233,25 @@
   </div>
 </div>
 
-<script src="/ordklocka/layouts.js"></script>
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/rutnat.js"></script>
 <script>
-  const LAYOUTS = window.ORDKLOCKA_LAYOUTS;
+  // Rutnät och tidsläsning som de andra klockorna (rutnat.js, tid.js).
+  const CHART = OrdklockaRutnat.SYNTAVLA;
   // Marginaltexter per rad: avstånd (m) till vänster, visus till höger
   const LABELS = {
-    syn: {
-      dist:  ["60", "36", "24", "18", "12", "9", "7,5", "6", "5"],
-      visus: ["0,1", "0,15", "0,25", "0,3", "0,5", "0,6", "0,8", "1,0", "1,2"],
-    },
-    syn24: {
-      dist:  ["60", "48", "36", "30", "24", "18", "15", "12", "10", "9", "7,5", "6", "5"],
-      visus: ["0,1", "0,12", "0,16", "0,2", "0,25", "0,3", "0,4", "0,5", "0,6", "0,7", "0,8", "1,0", "1,2"],
-    },
+    dist:  ["60", "48", "36", "30", "24", "18", "15", "12", "10", "9", "7,5", "6", "5", "4"],
+    visus: ["0,1", "0,12", "0,16", "0,2", "0,25", "0,3", "0,4", "0,5", "0,6", "0,7", "0,8", "1,0", "1,2", "1,5"],
   };
 
   const rowsEl = document.getElementById("rows");
   let L, cells = [];
 
-  function buildChart(key) {
-    L = LAYOUTS[key];
-    const lab = LABELS[key];
+  function buildChart() {
+    L = CHART;
+    const lab = LABELS;
     rowsEl.textContent = "";
-    cells = L.rows.map((row, r) => {
+    cells = L.ROWS.map((row, r) => {
       const div = document.createElement("div");
       div.className = "row";
       const letters = [...row];
@@ -291,7 +282,8 @@
   function render() {
     const now = new Date();
     const min = now.getMinutes();
-    const { cells: lit, text } = L.compute(now, style);
+    const [lit, t] = L.reading(now.getHours(), min, style);
+    const text = OrdklockaTid.spokenSentence({ ...t, extra: 0 });
     const key = lit.join("|") + (min % 5);
     if (key === last) return;
     last = key;
@@ -312,18 +304,8 @@
       b.setAttribute("aria-pressed", b.dataset.style === v));
     save("ordklocka-style", v); last = ""; render();
   }
-  function setMode(v) {
-    if (v !== "24") v = "12";
-    document.querySelectorAll("button[data-mode]").forEach(b =>
-      b.setAttribute("aria-pressed", b.dataset.mode === v));
-    document.getElementById("style-group").hidden = v !== "12";
-    save("ordklocka-mode", v);
-    buildChart(v === "24" ? "syn24" : "syn");
-    render();
-  }
   document.querySelectorAll("button[data-style]").forEach(b => b.onclick = () => setStyle(b.dataset.style));
-  document.querySelectorAll("button[data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
-  setMode(load("ordklocka-mode", "12"));
+  buildChart();
   setStyle(load("ordklocka-style", "tjugo"));
   setInterval(render, 1000);
 

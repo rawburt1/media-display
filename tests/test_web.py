@@ -872,9 +872,8 @@ def test_unknown_idle_clock_style_falls_back_to_word_clock(caplog):
 
 @pytest.mark.parametrize(
     ("page", "script"),
-    # matrix reads the time like the other clocks (rutnat.js + tid.js);
-    # syntavla keeps its own grids in layouts.js.
-    [("matrix", "rutnat.js"), ("syntavla", "layouts.js")],
+    # Both read the time like the other clocks (rutnat.js + tid.js).
+    [("matrix", "rutnat.js"), ("syntavla", "rutnat.js")],
 )
 def test_matrix_and_syntavla_pages_are_served(page, script):
     client = _client(_output())
@@ -889,13 +888,6 @@ def test_matrix_and_syntavla_pages_are_served(page, script):
         font_resp = client.get(font)
         assert font_resp.status_code == 200, font
         assert font_resp.mimetype == "font/woff2"
-
-
-def test_layouts_script_is_served():
-    resp = _client(_output()).get("/ordklocka/layouts.js")
-    assert resp.status_code == 200
-    assert resp.mimetype == "text/javascript"
-    assert "ORDKLOCKA_LAYOUTS" in resp.data.decode()
 
 
 @pytest.mark.parametrize("name", ["OFL.txt", "..%2Fmatrix.html", "missing.woff2"])
@@ -991,13 +983,18 @@ def test_every_clock_page_has_the_clock_menu_listing_every_clock():
         assert '<script src="/ordklocka/meny.js">' in client.get(path).data.decode(), path
 
 
-def test_word_clock_and_matrix_share_the_grid_script():
+def test_word_clock_matrix_and_syntavla_share_the_grid_script():
     client = _client(_output())
     resp = client.get("/ordklocka/rutnat.js")
     assert resp.status_code == 200
     assert resp.mimetype == "text/javascript"
     assert "OrdklockaRutnat" in resp.data.decode()
-    for page in ("/ordklocka", "/ordklocka/matrix"):
+    for page in ("/ordklocka", "/ordklocka/matrix", "/ordklocka/syntavla"):
         body = client.get(page).data.decode()
         assert '<script src="/ordklocka/tid.js">' in body, page
         assert '<script src="/ordklocka/rutnat.js">' in body, page
+
+
+def test_layouts_script_is_gone():
+    # Its grids were replaced by rutnat.js; nothing may still load it.
+    assert _client(_output()).get("/ordklocka/layouts.js").status_code == 404

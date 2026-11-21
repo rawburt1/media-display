@@ -115,14 +115,13 @@ _CLOCK_PAGE_FILES = {
     path: path.rsplit("/", 1)[1] + ".html" for path in _CLOCK_LABELS if path != "/ordklocka"
 }
 # Scripts shared by the clock pages: tid.js (time reading), sida.js (panel,
-# presence, ticking), layouts.js (grids for matrix/syntavla), meny.js (the
-# clock picker in every clock page's panel), pixelfont.js (5x7 dot font),
-# skrift.js (handwriting that writes itself), imma.js (misted-up glass) and
-# rutnat.js (the word clock grid, shared by /ordklocka and the matrix clock).
+# presence, ticking), meny.js (the clock picker in every clock page's
+# panel), pixelfont.js (5x7 dot font), skrift.js (handwriting that writes
+# itself), imma.js (misted-up glass) and rutnat.js (the word clock and
+# syntavla grids, shared by /ordklocka, the matrix clock and syntavla).
 _ORDKLOCKA_SCRIPTS = (
     "tid.js",
     "sida.js",
-    "layouts.js",
     "meny.js",
     "pixelfont.js",
     "skrift.js",
