@@ -18,6 +18,7 @@ from PIL import Image
 from mediainfo.cache import ImageCache
 from mediainfo.config import PixooConfig
 from mediainfo.display_schedule import DisplaySchedule, ScheduledDisplay
+from mediainfo.imaging import word_clock
 from mediainfo.imaging.led_image import prepare_led_image
 from mediainfo.models import Artwork, NowPlaying
 from mediainfo.outputs.base import Output
@@ -60,9 +61,50 @@ class PixooOutput(Output):
             set_brightness=self._set_brightness,
             label=f"Pixoo {config.ip}",
         )
+        self._clock_enabled = config.idle_clock and config.size >= 64
+        if config.idle_clock and not self._clock_enabled:
+            logger.warning(
+                "outputs.pixoo idle_clock needs a 64x64 Pixoo (size %d) - ignoring it",
+                config.size,
+            )
+        self._clock_phrase = config.idle_clock_phrase
+        if self._clock_phrase not in word_clock.PHRASES:
+            logger.warning(
+                "outputs.pixoo.idle_clock_phrase %r is not one of %s - using %r",
+                self._clock_phrase,
+                ", ".join(word_clock.PHRASES),
+                word_clock.PHRASES[0],
+            )
+            self._clock_phrase = word_clock.PHRASES[0]
+        # Showing the word clock right now (idle), and what it last drew -
+        # on_schedule_tick() redraws only when the reading changes.
+        self._clock_showing = False
+        self._clock_drawn: word_clock.Reading | None = None
+        self._clock_failing = False
 
     def on_schedule_tick(self) -> None:
         self._scheduler.tick()
+        if not self._clock_showing:
+            return
+        # Must not raise (see Output.on_schedule_tick) - a Pixoo that is
+        # off the network just gets retried on the next tick.
+        try:
+            self._show_clock()
+        except Exception as exc:
+            if not self._clock_failing:
+                logger.warning("Could not update the Pixoo %s word clock: %s", self.config.ip, exc)
+            self._clock_failing = True
+        else:
+            self._clock_failing = False
+
+    def _show_clock(self) -> None:
+        """Draw the word clock if its reading changed since the last draw."""
+        self._clock_showing = True
+        reading, image = word_clock.render_now(self._clock_phrase, self.config.size)
+        if reading == self._clock_drawn:
+            return
+        self._send_image(image)
+        self._clock_drawn = reading
 
     def _set_power(self, on: bool) -> None:
         self._post({"Command": "Channel/OnOffScreen", "OnOff": 1 if on else 0})
@@ -76,16 +118,34 @@ class PixooOutput(Output):
         # health/alerting (see orchestrator.py:_call_output). Swallowing
         # them here used to mean a Pixoo that dropped off the network was
         # silently reported as healthy.
-        size = self.config.size
+        if self._clock_enabled and now_playing.source == "idle":
+            # Idle wallpaper - the word clock is shown instead.
+            self._show_clock()
+            return
+        self._clock_showing = False
+        self._clock_drawn = None
         led_path = self.cache.get_derived_path(
             image_path, self._led_cache_key(), self._build_led_image
         )
-        image = Image.open(led_path).convert("RGB")
-        pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
+        self._send_image(Image.open(led_path).convert("RGB"))
 
-        if self.config.preview_path:
+    def on_idle(self) -> None:
+        if self._clock_enabled:
+            self._show_clock()
+            return
+        # A black image - there's no dedicated "clear" command in the
+        # Pixoo HTTP API. This is what keeps the display from getting
+        # stuck on stale artwork when e.g. every candidate image gets
+        # filtered out for this output (see orchestrator_artwork.py's
+        # show_image_for_output).
+        size = self.config.size
+        self._send_image(Image.new("RGB", (size, size)), preview=False)
+
+    def _send_image(self, image: Image.Image, preview: bool = True) -> None:
+        """Push one size x size RGB frame to the display."""
+        if preview and self.config.preview_path:
             _save_preview(image, Path(self.config.preview_path))
-
+        pixel_data = base64.b64encode(image.tobytes()).decode("ascii")
         # Force the custom channel before every draw - see
         # _CUSTOM_CHANNEL_INDEX for why this can't just be assumed.
         self._post({"Command": "Channel/SetIndex", "SelectIndex": _CUSTOM_CHANNEL_INDEX})
@@ -96,33 +156,11 @@ class PixooOutput(Output):
             {
                 "Command": "Draw/SendHttpGif",
                 "PicNum": 1,
-                "PicWidth": size,
+                "PicWidth": self.config.size,
                 "PicOffset": 0,
                 "PicID": 1,
                 "PicSpeed": 1000,
                 "PicData": pixel_data,
-            }
-        )
-
-    def on_idle(self) -> None:
-        # Same protocol as update(), sent with an all-zero (black) buffer -
-        # there's no dedicated "clear" command in the Pixoo HTTP API. This
-        # is what keeps the display from getting stuck on stale artwork
-        # when e.g. every candidate image gets filtered out for this
-        # output (see orchestrator_artwork.py's show_image_for_output).
-        size = self.config.size
-        blank = base64.b64encode(bytes(size * size * 3)).decode("ascii")
-        self._post({"Command": "Channel/SetIndex", "SelectIndex": _CUSTOM_CHANNEL_INDEX})
-        self._post({"Command": "Draw/ResetHttpGifId"})
-        self._post(
-            {
-                "Command": "Draw/SendHttpGif",
-                "PicNum": 1,
-                "PicWidth": size,
-                "PicOffset": 0,
-                "PicID": 1,
-                "PicSpeed": 1000,
-                "PicData": blank,
             }
         )
 

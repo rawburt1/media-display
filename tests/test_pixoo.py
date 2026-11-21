@@ -456,3 +456,94 @@ def test_config_transforms_default_is_independent_per_instance():
     cfg1.transforms.append({"grayscale": True})
     cfg2 = PixooConfig()
     assert cfg2.transforms == []
+
+
+# ---------------------------------------------------------------------------
+# Idle word clock
+# ---------------------------------------------------------------------------
+
+
+def _idle_now_playing():
+    from mediainfo.models import NowPlaying
+
+    return NowPlaying(source="idle", media_type="wallpaper", title="", subtitle="")
+
+
+def _sent_frames(output, action):
+    sent = []
+    with patch.object(output, "_post", side_effect=sent.append):
+        action()
+    return [base64.b64decode(p["PicData"]) for p in sent if p.get("Command") == "Draw/SendHttpGif"]
+
+
+def test_idle_clock_is_off_by_default(tmp_path):
+    output = PixooOutput(_config(), _cache(tmp_path))
+    assert _sent_frames(output, output.on_idle) == [bytes(64 * 64 * 3)]
+
+
+def test_idle_clock_draws_the_word_clock_on_idle(tmp_path):
+    from mediainfo.imaging import word_clock
+
+    output = PixooOutput(_config(idle_clock=True), _cache(tmp_path))
+    reading = word_clock.spoken_lines(10, 20)
+    with patch.object(word_clock, "render_now", return_value=(reading, word_clock.render(reading))):
+        frames = _sent_frames(output, output.on_idle)
+    assert frames == [word_clock.render(reading).tobytes()]
+
+
+def test_idle_clock_replaces_idle_wallpapers_but_not_real_artwork(tmp_path):
+    img_path = _save_image(tmp_path / "art.jpg")
+    output = PixooOutput(_config(idle_clock=True), _cache(tmp_path))
+    wallpaper = _sent_frames(
+        output, lambda: output.update(_idle_now_playing(), _artwork(), img_path)
+    )
+    assert len(wallpaper) == 1 and wallpaper[0] != bytes(64 * 64 * 3)
+    assert output._clock_showing
+
+    playing = _sent_frames(output, lambda: output.update(_now_playing(), _artwork(), img_path))
+    assert len(playing) == 1
+    assert not output._clock_showing
+
+
+def test_idle_clock_redraws_on_tick_only_when_the_reading_changes(tmp_path):
+    from mediainfo.imaging import word_clock
+
+    output = PixooOutput(_config(idle_clock=True), _cache(tmp_path))
+    first = word_clock.spoken_lines(10, 20)
+    second = word_clock.spoken_lines(10, 21)
+    readings = iter([first, first, second])
+
+    def fake_render_now(phrase, size):
+        reading = next(readings)
+        return reading, word_clock.render(reading, size)
+
+    with patch.object(word_clock, "render_now", side_effect=fake_render_now):
+        assert len(_sent_frames(output, output.on_idle)) == 1
+        assert _sent_frames(output, output.on_schedule_tick) == []
+        assert len(_sent_frames(output, output.on_schedule_tick)) == 1
+
+
+def test_idle_clock_tick_does_nothing_while_media_plays(tmp_path):
+    output = PixooOutput(_config(idle_clock=True), _cache(tmp_path))
+    assert _sent_frames(output, output.on_schedule_tick) == []
+
+
+def test_idle_clock_tick_survives_an_unreachable_pixoo(tmp_path):
+    import requests
+
+    output = PixooOutput(_config(idle_clock=True), _cache(tmp_path))
+    output._clock_showing = True
+    with patch.object(output, "_post", side_effect=requests.ConnectionError("down")):
+        output.on_schedule_tick()
+        output.on_schedule_tick()
+    assert output._clock_drawn is None  # retried on the next tick
+
+
+def test_idle_clock_is_ignored_on_the_16x16_frame(tmp_path):
+    output = PixooOutput(_config(idle_clock=True, size=16), _cache(tmp_path))
+    assert _sent_frames(output, output.on_idle) == [bytes(16 * 16 * 3)]
+
+
+def test_unknown_idle_clock_phrase_falls_back_to_tjugo(tmp_path):
+    output = PixooOutput(_config(idle_clock=True, idle_clock_phrase="x"), _cache(tmp_path))
+    assert output._clock_phrase == "tjugo"

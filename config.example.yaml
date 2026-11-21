@@ -525,6 +525,10 @@ outputs:
     #   final LED-prepped image here after each update - handy for visual
     #   QA of the crop/palette/dithering settings below without needing
     #   the physical device in front of you. Off by default.
+    # idle_clock: true          # Pixoo64 only: show the Swedish word clock
+    #   ("KLOCKAN ÄR / FEM I HALV / TRE", same reading as /ordklocka) while
+    #   nothing is playing, instead of idle wallpapers. Off by default.
+    # idle_clock_phrase: tjugo  # tjugo ("tjugo över tre") | halv ("tio i halv tre")
 
   # LED-preparation settings (optional) — how artwork is cropped, enhanced,
   # and reduced to a small palette before being sent to the display. Shown

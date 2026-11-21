@@ -561,6 +561,7 @@ _ENUM_CHOICES: Dict[str, List[str]] = {
     "contrast_boost": ["off", "low", "medium", "high"],
     "saturation_boost": ["off", "low", "medium", "high"],
     "text_removal_method": ["inpaint", "soft_fill", "crop_preference"],
+    "idle_clock_phrase": ["tjugo", "halv"],
     "idle_clock_style": [
         "words",
         "split_flap",
@@ -630,6 +631,8 @@ _FIELD_HELP_OVERRIDES: Dict[str, str] = {
     "outputs.pixoo.preserve_large_logos": "Keep large titles/logos that remain legible at the final LED size instead of removing them.",
     "outputs.pixoo.text_removal_method": '"inpaint" gives the best reconstruction; "soft_fill" needs no extra dependency; "crop_preference" nudges the crop to avoid text instead of editing pixels.',
     "outputs.pixoo.max_logo_area_percent": "A detected text region larger than this is treated as too big to be a normal logo and left alone.",
+    "outputs.pixoo.idle_clock": 'Show a Swedish word clock ("klockan är fem i halv tre") while nothing is playing, instead of idle wallpapers or a black screen. Pixoo64 only.',
+    "outputs.pixoo.idle_clock_phrase": '"tjugo" says "tjugo över tre" / "tjugo i fyra" at :20 and :40; "halv" says "tio i halv tre" / "tio över halv tre".',
     "outputs.ulanzi.screen_off_hours": "Turn the display off during this daily window, e.g. 23:00-07:00. Leave both times empty to always keep it on.",
     "outputs.mqtt.ha_discovery": "Automatically add a mediainfo device with now-playing sensors to Home Assistant.",
     "outputs.mqtt.qos": "0 = at most once, 1 = at least once, 2 = exactly once. 0 is fine for most setups.",

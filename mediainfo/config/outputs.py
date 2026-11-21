@@ -125,6 +125,13 @@ class PixooConfig(_OutputFilterMixin):
     # rather than being classified as a large logo or removed - see
     # mediainfo/text_removal.py's classify_regions().
     max_logo_area_percent: float = 25.0
+    # Show the Swedish word clock (the same reading as /ordklocka) while
+    # nothing is playing, instead of idle wallpapers or a black screen.
+    # Pixoo64 only (size 64). Off by default.
+    idle_clock: bool = False
+    # How the clock says :20 and :40 - "tjugo" ("tjugo över tre", "tjugo
+    # i fyra") or "halv" ("tio i halv fyra", "tio över halv fyra").
+    idle_clock_phrase: str = "tjugo"
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))
