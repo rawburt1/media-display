@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Skärmsläckare</title>
+<style>
+  :root { --panel-bg: rgba(0, 0, 0, 0.88); --panel-fg: #eee; --panel-accent: #39ff14; --panel-bg-solid: #000; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+  .scene { position: fixed; inset: 0; perspective: 120vmin; display: grid; place-items: center; pointer-events: none; }
+  .text3d { transform-style: preserve-3d; text-align: center; font: 900 12vmin / 1.02 "Arial Black", "Impact", "DejaVu Sans", sans-serif;
+            text-transform: uppercase; white-space: nowrap; }
+  .text3d div { position: relative; transform-style: preserve-3d; }
+  .text3d span.front { position: relative; transform: translateZ(0.01vmin); display: inline-block; }
+  .text3d span.layer { position: absolute; inset: 0; }
+  .bouncer { position: fixed; left: 0; top: 0; text-align: center; font: 900 8vmin / 1.05 "Arial Black", "Impact", "DejaVu Sans", sans-serif;
+             text-transform: uppercase; white-space: nowrap; padding: 1vmin 2vmin; will-change: transform; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+<div class="bouncer" id="bouncer" aria-hidden="true"></div>
+<div class="scene" aria-hidden="true"><div class="text3d" id="t3d"></div></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Läge">
+      <span class="label">Läge</span>
+      <button data-mode="studsa">studsa</button>
+      <button data-mode="3d">3D</button>
+      <button data-mode="stjärnor">stjärnfält</button>
+      <button data-mode="växla">växla</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Som de gamla skärmsläckarna: texten studsar runt och byter färg vid
+  // varje vägg, roterar i 3D som "3D-text", eller flyger genom ett
+  // stjärnfält. "växla" byter läge var femte minut.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const bouncer = document.getElementById("bouncer"), t3d = document.getElementById("t3d");
+  const COLORS = ["#ff3b3b", "#ffd93b", "#3bff6b", "#3bd5ff", "#b03bff", "#ff3bc8", "#ffffff"];
+  let W, H, mode = "studsa", chosen = "studsa", lines = [], colorIdx = 0;
+  let bx = 40, by = 40, vx = 2.2, vy = 1.7, stars = [];
+
+  function build() {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    stars = Array.from({ length: 500 }, () => ({ x: (Math.random() - 0.5) * W * 2, y: (Math.random() - 0.5) * H * 2, z: Math.random() * W }));
+  }
+
+  function setText() {
+    const all = ["Klockan är", ...lines];
+    bouncer.innerHTML = all.map(l => `<div>${l}</div>`).join("");
+    bouncer.style.color = COLORS[colorIdx];
+    // 3D: lager bakåt ger djup, som en extruderad WordArt-text
+    t3d.innerHTML = "";
+    for (const l of all) {
+      const row = document.createElement("div");
+      const front = document.createElement("span");
+      front.className = "front"; front.textContent = l;
+      front.style.color = "#fff8e0";
+      front.style.textShadow = "0 0 0.06em rgba(255,255,255,0.6)";
+      row.appendChild(front);
+      for (let k = 1; k <= 14; k++) {
+        const s = document.createElement("span");
+        s.className = "layer"; s.textContent = l;
+        s.style.transform = `translateZ(${-k * 0.45}vmin)`;
+        s.style.color = `hsl(${(k * 8 + 200) % 360}, 80%, ${45 - k * 2}%)`;
+        row.appendChild(s);
+      }
+      t3d.appendChild(row);
+    }
+    // Storlek: får plats på skärmen
+    t3d.style.fontSize = "12vmin";
+    const widest = Math.max(...[...t3d.querySelectorAll(".front")].map(f => f.offsetWidth));
+    t3d.style.fontSize = Math.min(14, 12 * innerWidth * 0.72 / Math.max(1, widest)) + "vmin";
+  }
+
+  function applyMode() {
+    bouncer.style.display = mode === "studsa" ? "" : "none";
+    t3d.style.display = mode === "3d" ? "" : "none";
+  }
+
+  let last = performance.now();
+  function frame(t) {
+    const dt = Math.min(3, (t - last) / 16.7); last = t;
+    ctx.fillStyle = mode === "stjärnor" ? "rgba(0,0,0,0.35)" : "#000";
+    ctx.fillRect(0, 0, W, H);
+    if (mode === "studsa") {
+      const w = bouncer.offsetWidth, h = bouncer.offsetHeight;
+      bx += vx * dt; by += vy * dt;
+      let hit = false;
+      if (bx < 0) { bx = 0; vx = Math.abs(vx); hit = true; }
+      if (by < 0) { by = 0; vy = Math.abs(vy); hit = true; }
+      if (bx + w > W) { bx = W - w; vx = -Math.abs(vx); hit = true; }
+      if (by + h > H) { by = H - h; vy = -Math.abs(vy); hit = true; }
+      if (hit) { colorIdx = (colorIdx + 1) % COLORS.length; bouncer.style.color = COLORS[colorIdx]; }
+      bouncer.style.transform = `translate(${bx}px, ${by}px)`;
+    } else if (mode === "3d") {
+      const s = t / 1000;
+      t3d.style.transform = `rotateY(${Math.sin(s * 0.45) * 50}deg) rotateX(${Math.sin(s * 0.31) * 18}deg) rotateZ(${Math.sin(s * 0.23) * 6}deg) scale(${0.85 + Math.sin(s * 0.5) * 0.12})`;
+    } else {
+      // Stjärnfält: stjärnorna rusar mot betraktaren, texten flyger in och ut
+      const f = W * 0.6;
+      for (const st of stars) {
+        st.z -= 6 * dt;
+        if (st.z < 1) { st.z = W; st.x = (Math.random() - 0.5) * W * 2; st.y = (Math.random() - 0.5) * H * 2; }
+        const sx = W / 2 + st.x / st.z * f, sy = H / 2 + st.y / st.z * f;
+        const r = Math.max(0.8, 3 * (1 - st.z / W));
+        ctx.fillStyle = `rgba(255,255,255,${Math.min(1, 0.25 + (1 - st.z / W) * 1.3)})`;
+        ctx.fillRect(sx, sy, r, r);
+      }
+      // Texten: kommer långt bortifrån, stannar en stund, och flyger förbi
+      const cycle = 16000, p = (t % cycle) / cycle;
+      const z = p < 0.25 ? 1 - p / 0.25 : p < 0.8 ? 0 : -(p - 0.8) / 0.2;
+      const scale = z >= 0 ? 1 / (1 + z * 12) : 1 - z * 6;
+      const alpha = z >= 0 ? 1 - z * 0.6 : 1 + z * 1.2;
+      const all = ["KLOCKAN ÄR", ...lines];
+      const base = Math.min(H * 0.6 / (all.length * 1.05), W * 0.85 / (Math.max(...all.map(l => l.length)) * 0.75));
+      ctx.save();
+      ctx.translate(W / 2, H / 2); ctx.scale(scale, scale);
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `900 ${base}px "Arial Black", "Impact", "DejaVu Sans", sans-serif`;
+      all.forEach((l, i) => {
+        const y = (i - (all.length - 1) / 2) * base * 1.05;
+        const g = ctx.createLinearGradient(0, y - base / 2, 0, y + base / 2);
+        g.addColorStop(0, "#fff7b0"); g.addColorStop(0.5, "#ffb000"); g.addColorStop(1, "#ff4d00");
+        ctx.fillStyle = g; ctx.fillText(l, 0, y);
+      });
+      ctx.restore();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  const MODES = ["studsa", "3d", "stjärnor"];
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    if (chosen === "växla") { mode = MODES[(info.now.getHours() * 12 + Math.floor(info.now.getMinutes() / 5)) % 3]; applyMode(); }
+    setText();
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("mode", "ordklocka-skarmslackare", "studsa", v => {
+    chosen = v;
+    mode = v === "växla" ? MODES[(new Date().getHours() * 12 + Math.floor(new Date().getMinutes() / 5)) % 3] : v;
+    applyMode();
+  });
+  addEventListener("resize", () => { build(); setText(); });
+  build();
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/skarmslackare/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

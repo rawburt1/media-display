@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Perspektiv</title>
+<style>
+  :root { --panel-bg: rgba(14, 14, 20, 0.9); --panel-fg: #eee; --panel-accent: #ff6f59; --panel-bg-solid: #0e0e14; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: radial-gradient(ellipse at 50% 45%, #2b2d3a, #0b0b10 75%); }
+  .viewport { position: fixed; inset: 0; perspective: var(--P); perspective-origin: 50% 50%; }
+  .world { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; }
+  .world.move { transition: transform 4.2s cubic-bezier(.45, 0, .2, 1); }
+  .ch { position: absolute; left: 0; top: 0; font: 900 var(--fs) / 1 "Avenir Next", "Helvetica Neue", "DejaVu Sans", sans-serif;
+        color: #f4f1ea; white-space: pre; transform-origin: 0 0; text-shadow: 0 0 0.05em rgba(255, 111, 89, 0.4);
+        backface-visibility: hidden; }
+  .ch.k { color: #ff6f59; }
+  /* Golvrutor för rumskänsla */
+  .floor { position: absolute; left: calc(var(--P) * -2); top: calc(var(--P) * 0.5); width: calc(var(--P) * 4); height: calc(var(--P) * 4);
+           transform: rotateX(90deg); transform-origin: 50% 0;
+           background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px calc(var(--P) * 0.2)),
+                       repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px calc(var(--P) * 0.2)); }
+</style>
+</head>
+<body>
+<div class="viewport" aria-hidden="true"><div class="world" id="world"><div class="floor"></div></div></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Varje bokstav står på sitt eget djup i rummet, men är flyttad och
+  // förstorad så att alla hamnar exakt rätt sett rakt framifrån (som en
+  // anamorfos). När tiden ändras står kameran snett och ser bara spridda
+  // bokstäver; sedan glider den till den enda vinkel där orden går att läsa.
+  const world = document.getElementById("world");
+  let W, H, P, lines = [];
+
+  function layout(animate) {
+    W = innerWidth; H = innerHeight; P = Math.min(W, H) * 1.1;
+    document.documentElement.style.setProperty("--P", P + "px");
+    world.querySelectorAll(".ch").forEach(e => e.remove());
+    const all = ["KLOCKAN ÄR", ...lines];
+    const meas = document.createElement("span");
+    meas.className = "ch"; meas.style.visibility = "hidden";
+    world.appendChild(meas);
+    let fs = H * 0.66 / (all.length * 1.12);
+    document.documentElement.style.setProperty("--fs", fs + "px");
+    meas.textContent = all.reduce((a, b) => a.length > b.length ? a : b);
+    fs = Math.min(fs, fs * W * 0.84 / meas.offsetWidth);
+    document.documentElement.style.setProperty("--fs", fs + "px");
+    all.forEach((line, li) => {
+      meas.textContent = line;
+      const lw = meas.offsetWidth;
+      let x = -lw / 2;
+      const y = (li - (all.length - 1) / 2) * fs * 1.12 - fs / 2;
+      for (const ch of line) {
+        meas.textContent = ch === " " ? " " : ch;
+        const cw = meas.offsetWidth;
+        if (ch !== " ") {
+          const el = document.createElement("span");
+          el.className = "ch" + (li === 0 ? " k" : "");
+          el.textContent = ch;
+          // Djup och kompensation: k = (P - z) / P
+          const z = (Math.random() * 1.8 - 1.2) * P, k = (P - z) / P;
+          el.style.transform = `translate3d(${x * k}px, ${y * k}px, ${z}px) scale(${k})`;
+          world.appendChild(el);
+        }
+        x += cw;
+      }
+    });
+    meas.remove();
+    if (!animate) { world.classList.remove("move"); world.style.transform = "none"; return; }
+    // Kameran börjar snett och svänger in
+    world.classList.remove("move");
+    const ry = (Math.random() < 0.5 ? -1 : 1) * (40 + Math.random() * 25), rx = (Math.random() - 0.5) * 40;
+    world.style.transform = `rotateY(${ry}deg) rotateX(${rx}deg)`;
+    world.getBoundingClientRect();
+    world.classList.add("move");
+    world.style.transform = "none";
+  }
+
+  // Lite liv mellan bytena: kameran glider då och då en bit åt sidan och tillbaka.
+  setInterval(() => {
+    if (document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    world.classList.add("move");
+    world.style.transform = `rotateY(${(Math.random() - 0.5) * 50}deg) rotateX(${(Math.random() - 0.5) * 20}deg)`;
+    setTimeout(() => { world.style.transform = "none"; }, 5200);
+  }, 40000);
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    layout(!matchMedia("(prefers-reduced-motion: reduce)").matches);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", () => layout(false));
+  S.setup("/ordklocka/perspektiv/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

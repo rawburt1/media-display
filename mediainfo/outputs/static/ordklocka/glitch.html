@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Glitch</title>
+<style>
+  :root { --panel-bg: rgba(8, 8, 12, 0.92); --panel-fg: #e8e8f0; --panel-accent: #ff2a6d; --panel-bg-solid: #08080c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #07070b; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+  .scan { position: fixed; inset: 0; pointer-events: none;
+          background: repeating-linear-gradient(transparent 0 2px, rgba(0, 0, 0, 0.28) 2px 4px); }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+<div class="scan" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Störningar">
+      <span class="label">Störningar</span>
+      <button data-noise="lugn">lugn</button>
+      <button data-noise="mycket">mycket</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Texten ritas som tre färgkanaler (rött, grönt, blått) som glider isär
+  // lite grann. Då och då kommer korta bildfel: skivor som förskjuts, block
+  // av brus. När orden ändras bryts texten sönder och sätts ihop igen.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  let W, H, dpr, lines = [], extra = 0, noise = "lugn";
+  const layers = { r: document.createElement("canvas"), g: document.createElement("canvas"), b: document.createElement("canvas") };
+  let oldLayers = null, breakStart = -1e9;
+  const BREAK_MS = 1300;
+
+  function renderText(ls, tint) {
+    const c = document.createElement("canvas");
+    c.width = W * dpr; c.height = H * dpr;
+    const g = c.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const all = ["KLOCKAN ÄR", ...ls];
+    let size = H * 0.8 / (all.length * 1.05);
+    g.font = `900 ${size}px "Arial Black", "Helvetica Neue", "DejaVu Sans", sans-serif`;
+    const widest = Math.max(...all.map(l => g.measureText(l).width));
+    size = Math.min(size, size * W * 0.86 / widest);
+    g.textAlign = "center"; g.textBaseline = "middle";
+    const top = H / 2 - (all.length - 1) * size * 1.05 / 2;
+    all.forEach((l, i) => {
+      g.font = `900 ${i ? size : size * 0.55}px "Arial Black", "Helvetica Neue", "DejaVu Sans", sans-serif`;
+      g.fillStyle = tint;
+      g.fillText(l, W / 2, top + i * size * 1.05 + (i ? 0 : size * 0.2));
+    });
+    // Extraminuter: små block nere till höger
+    for (let k = 0; k < extra; k++) g.fillRect(W * 0.9 - k * size * 0.25, H * 0.9, size * 0.15, size * 0.15);
+    return c;
+  }
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (lines.length) paintLayers();
+  }
+  function paintLayers() {
+    layers.r = renderText(lines, "#ff1744");
+    layers.g = renderText(lines, "#00e676");
+    layers.b = renderText(lines, "#2979ff");
+  }
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  let glitchUntil = 0, nextGlitch = 0, slices = [];
+
+  function drawSet(set, spread, alpha) {
+    ctx.globalAlpha = alpha;
+    ctx.globalCompositeOperation = "lighter";
+    const s = spread * dpr;
+    ctx.drawImage(set.r, -s + rnd(-1, 1), rnd(-0.5, 0.5) * s * 0.3);
+    ctx.drawImage(set.g, rnd(-1, 1) * s * 0.2, 0);
+    ctx.drawImage(set.b, s, rnd(-0.5, 0.5) * s * 0.3);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+  }
+
+  function frame(t) {
+    if (!lines.length) { requestAnimationFrame(frame); return; }
+    const sinceBreak = t - breakStart;
+    const breaking = sinceBreak < BREAK_MS;
+    const wild = noise === "mycket";
+    if (t > nextGlitch && !breaking) {
+      glitchUntil = t + rnd(60, wild ? 420 : 220);
+      nextGlitch = t + rnd(wild ? 500 : 1800, wild ? 2500 : 6000);
+      slices = Array.from({ length: (rnd(2, wild ? 9 : 5)) | 0 }, () => ({ y: rnd(0, H), h: rnd(4, H * 0.08), dx: rnd(-W * 0.06, W * 0.06) }));
+    }
+    const glitching = t < glitchUntil || breaking;
+    ctx.fillStyle = "#07070b"; ctx.fillRect(0, 0, cv.width, cv.height);
+
+    // Under brytningen: gamla texten först, sedan den nya, båda sönderhackade.
+    let set = layers, k = 0;
+    if (breaking) {
+      k = Math.sin(Math.PI * sinceBreak / BREAK_MS);           // 0 -> 1 -> 0
+      set = sinceBreak < BREAK_MS / 2 && oldLayers ? oldLayers : layers;
+      if (Math.random() < 0.25) set = Math.random() < 0.5 && oldLayers ? oldLayers : layers;
+    }
+    const spread = (glitching ? (breaking ? 4 + k * 26 : rnd(3, 12)) : 1.6 + Math.sin(t / 900) * 0.8);
+    drawSet(set, spread, 1);
+
+    if (glitching) {
+      // Förskjutna skivor
+      const n = breaking ? 10 + (k * 30 | 0) : slices.length;
+      for (let i = 0; i < n; i++) {
+        const sl = breaking ? { y: rnd(0, H), h: rnd(2, H * 0.06), dx: rnd(-1, 1) * W * 0.25 * k } : slices[i];
+        const y = sl.y * dpr, hh = sl.h * dpr;
+        ctx.drawImage(cv, 0, y, cv.width, hh, sl.dx * dpr, y, cv.width, hh);
+      }
+      // Brusblock i kanalfärger
+      for (let i = 0; i < (breaking ? 30 * k : 4); i++) {
+        ctx.fillStyle = ["rgba(255,23,68,0.5)", "rgba(0,230,118,0.4)", "rgba(41,121,255,0.5)", "rgba(255,255,255,0.35)"][i % 4];
+        ctx.fillRect(rnd(0, cv.width), rnd(0, cv.height), rnd(10, 120) * dpr, rnd(2, 14) * dpr);
+      }
+    }
+    // Rullande ljusare band, som en dålig signal
+    const by = ((t / 14) % (H + 200)) - 100;
+    const gr = ctx.createLinearGradient(0, by * dpr, 0, (by + 100) * dpr);
+    gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(0.5, "rgba(255,255,255,0.04)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = gr; ctx.fillRect(0, by * dpr, cv.width, 100 * dpr);
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    extra = t.extra;
+    const changed = info.wordsChanged;
+    if (changed) { oldLayers = lines.length ? layers && { ...layers } : null; lines = S.lines(t); }
+    if (!W) return;
+    paintLayers();
+    if (changed && !info.first && !matchMedia("(prefers-reduced-motion: reduce)").matches) breakStart = performance.now();
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("noise", "ordklocka-glitch", "lugn", v => { noise = v; });
+  addEventListener("resize", build);
+  build();
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/glitch/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

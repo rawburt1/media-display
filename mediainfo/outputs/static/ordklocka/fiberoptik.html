@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Fiberoptik</title>
+<style>
+  :root { --panel-bg: rgba(6, 8, 16, 0.9); --panel-fg: #dfe6ff; --panel-accent: #9fb8ff; --panel-bg-solid: #060810; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #03040a; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Färg">
+      <span class="label">Färg</span>
+      <button data-hue="skiftande">skiftande</button>
+      <button data-hue="varm">varmvit</button>
+      <button data-hue="blå">blå</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/textmask.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Hundratals tunna glasfibrer går från en kabelbunt nere i mitten ut till
+  // var sin punkt på skärmen. Fibrerna vars ände ligger i texten lyser; när
+  // tiden ändras vandrar ljuset ut genom fibrerna till de nya bokstäverna.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const bg = document.createElement("canvas"), bgx = bg.getContext("2d");
+  let W = 0, H = 0, dpr = 1, step = 10, fibers = [], lines = [];
+  let hueMode = "skiftande";
+
+  // Färgerna: varmvitt, blått och violett som långsamt glider in i varandra.
+  const WARM = [255, 236, 205], BLUE = [120, 175, 255], VIOLET = [190, 130, 255];
+  const mix = (a, b, f) => a.map((v, i) => v + (b[i] - v) * f);
+  function color(t, offset) {
+    if (hueMode === "varm") return WARM;
+    if (hueMode === "blå") return BLUE;
+    const p = ((t / 20000 + offset) % 3 + 3) % 3;   // 0..3: varm -> blå -> violett -> varm
+    return p < 1 ? mix(WARM, BLUE, p) : p < 2 ? mix(BLUE, VIOLET, p - 1) : mix(VIOLET, WARM, p - 2);
+  }
+
+  // Fiberns väg: en kvadratisk kurva från bunten till änden.
+  function curve(f, s) {
+    const u = 1 - s;
+    return [u * u * f.x0 + 2 * u * s * f.cx + s * s * f.x, u * u * f.y0 + 2 * u * s * f.cy + s * s * f.y];
+  }
+
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = bg.width = W * dpr; cv.height = bg.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); bgx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    step = Math.max(6, Math.min(W, H) / 75);
+    const old = new Map(fibers.map(f => [f.key, f]));
+    fibers = [];
+    const bx = W / 2, by = H + 40;
+    for (let y = step / 2; y < H * 0.97; y += step) {
+      for (let x = step / 2; x < W; x += step) {
+        const jx = x + (Math.random() - 0.5) * step * 0.3, jy = y + (Math.random() - 0.5) * step * 0.3;
+        const key = Math.round(x / step) + "," + Math.round(y / step);
+        const prev = old.get(key);
+        fibers.push({
+          key, x: jx, y: jy, x0: bx + (Math.random() - 0.5) * W * 0.06, y0: by,
+          cx: bx + (jx - bx) * (0.15 + Math.random() * 0.2), cy: jy + (by - jy) * (0.55 + Math.random() * 0.3),
+          on: prev ? prev.on : 0, target: 0, start: 0, offset: Math.random() * 0.25,
+        });
+      }
+    }
+    // Den släckta fiberväven ritas en gång.
+    bgx.fillStyle = "#03040a"; bgx.fillRect(0, 0, W, H);
+    bgx.lineWidth = 0.6;
+    for (const f of fibers) {
+      if (Math.random() < 0.55) continue;
+      bgx.strokeStyle = `rgba(150, 170, 220, ${0.035 + Math.random() * 0.03})`;
+      bgx.beginPath(); bgx.moveTo(f.x0, f.y0); bgx.quadraticCurveTo(f.cx, f.cy, f.x, f.y); bgx.stroke();
+    }
+    for (const f of fibers) { bgx.fillStyle = "rgba(170, 185, 230, 0.16)"; bgx.fillRect(f.x - 0.8, f.y - 0.8, 1.6, 1.6); }
+    if (lines.length) light(false);
+  }
+
+  function light(animate) {
+    const m = OrdklockaMask.mask(["KLOCKAN ÄR", ...lines], W, H * 0.92, { pad: 0.07, lineHeight: 1.12 });
+    const now = performance.now();
+    for (const f of fibers) {
+      const want = m.at(f.x, f.y) > 0.45 ? 1 : 0;
+      if (want === f.target) continue;
+      f.target = want;
+      // Ljuset färdas ut genom fibern: längre fibrer tänds lite senare.
+      const dist = Math.hypot(f.x - f.x0, f.y - f.y0) / Math.hypot(W, H);
+      f.start = now + (animate ? (want ? 600 + dist * 1800 + Math.random() * 500 : Math.random() * 500) : -5000);
+    }
+  }
+
+  // Glöden i fiberändarna: fyra förritade sprites per bildruta (lite olika
+  // färgfas), i stället för en gradient per fiber.
+  const sprites = [0, 1, 2, 3].map(() => document.createElement("canvas"));
+  function paintSprites(t) {
+    const r = step * 0.7;
+    sprites.forEach((sp, i) => {
+      const size = Math.ceil(r * 2 * dpr);
+      if (sp.width !== size) { sp.width = sp.height = size; }
+      sp.r = r;
+      const g = sp.getContext("2d");
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, r * 2, r * 2);
+      const c = color(t, i / 16);
+      const gr = g.createRadialGradient(r, r, 0, r, r, r);
+      gr.addColorStop(0, "rgba(255,255,255,1)");
+      gr.addColorStop(0.12, `rgba(${c[0]|0},${c[1]|0},${c[2]|0},0.95)`);
+      gr.addColorStop(0.35, `rgba(${c[0]|0},${c[1]|0},${c[2]|0},0.3)`);
+      gr.addColorStop(1, `rgba(${c[0]|0},${c[1]|0},${c[2]|0},0)`);
+      g.fillStyle = gr; g.fillRect(0, 0, r * 2, r * 2);
+    });
+  }
+
+  function frame(t) {
+    paintSprites(t);
+    ctx.drawImage(bg, 0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+    // Tända fibrer lyser svagt längs hela vägen: en enda bana för alla.
+    const sc = color(t, 0);
+    ctx.strokeStyle = `rgba(${sc[0]|0},${sc[1]|0},${sc[2]|0},0.05)`;
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    for (const f of fibers) {
+      if (f.on < 0.5) continue;
+      ctx.moveTo(f.x0, f.y0); ctx.quadraticCurveTo(f.cx, f.cy, f.x, f.y);
+    }
+    ctx.stroke();
+    for (const f of fibers) {
+      const since = t - f.start;
+      if (f.target) {
+        // Pulsen i fibern på väg ut, sedan tänds änden.
+        const travel = Math.min(1, Math.max(0, (since + 900) / 900));
+        if (travel > 0 && travel < 1) {
+          const [px, py] = curve(f, travel);
+          const c = color(t, f.offset);
+          ctx.strokeStyle = `rgba(${c[0]|0},${c[1]|0},${c[2]|0},0.5)`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          const [qx, qy] = curve(f, Math.max(0, travel - 0.12));
+          ctx.moveTo(qx, qy); ctx.lineTo(px, py); ctx.stroke();
+        }
+        f.on = Math.min(1, f.on + (since > 0 ? 0.06 : 0));
+      } else {
+        f.on = Math.max(0, f.on - (since > 0 ? 0.025 : 0));
+      }
+      if (f.on <= 0.01) continue;
+      const flick = 0.85 + 0.15 * Math.sin(t / 700 + f.offset * 40);
+      ctx.globalAlpha = f.on * flick;
+      const sp = sprites[Math.min(3, (f.offset * 16) | 0)];
+      ctx.drawImage(sp, f.x - sp.r, f.y - sp.r, sp.r * 2, sp.r * 2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    light(!info.first);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("hue", "ordklocka-fiber-farg", "skiftande", v => { hueMode = v; });
+  addEventListener("resize", build);
+  build();
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/fiberoptik/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

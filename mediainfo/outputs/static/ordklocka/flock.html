@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Flock</title>
+<style>
+  :root { --panel-bg: rgba(10, 14, 20, 0.9); --panel-fg: #e8eef6; --panel-accent: #8fd3ff; --panel-bg-solid: #0a0e14; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #16202e, #06090e 75%); }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Hundratals bokstäver rör sig fritt som en flock (sammanhållning,
+  // samordning och avstånd, plus lite slump). De bokstäver som behövs för
+  // tiden letar upp sin plats och stannar där; när tiden ändras löses orden
+  // upp och bokstäverna söker nya platser.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const ALPH = "ABCDEFGHIJKLMNOPRSTUVYÅÄÖ";
+  let W, H, dpr, size = 40, boids = [], slots = [], lines = [];
+  const FONT = s => `800 ${s}px "Avenir Next", "Helvetica Neue", "DejaVu Sans", sans-serif`;
+
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const want = Math.round(Math.min(420, W * H / 3500));
+    while (boids.length < want) boids.push(newBoid(ALPH[Math.floor(Math.random() * ALPH.length)]));
+    if (lines.length) assign(false);
+  }
+  function newBoid(ch) {
+    return { ch, x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2, slot: null, settled: 0 };
+  }
+
+  // Platserna för varje tecken i texten
+  function layoutSlots() {
+    const all = ["KLOCKAN ÄR", ...lines];
+    size = H * 0.72 / (all.length * 1.15);
+    ctx.font = FONT(size);
+    const widest = Math.max(...all.map(l => ctx.measureText(l).width));
+    size = Math.min(size, size * W * 0.86 / widest);
+    ctx.font = FONT(size);
+    const out = [];
+    const top = H / 2 - (all.length - 1) * size * 1.15 / 2;
+    all.forEach((l, i) => {
+      const w = ctx.measureText(l).width;
+      let x = W / 2 - w / 2;
+      for (const ch of l) {
+        const cw = ctx.measureText(ch).width;
+        if (ch !== " ") out.push({ ch, x: x + cw / 2, y: top + i * size * 1.15 });
+        x += cw;
+      }
+    });
+    return out;
+  }
+
+  // Varje plats tar den närmaste lediga bokstaven med rätt tecken; saknas
+  // en sådan föds en ny i kanten av skärmen.
+  function assign(scatter) {
+    for (const b of boids) {
+      if (b.slot && scatter) {
+        const a = Math.random() * Math.PI * 2, v = 4 + Math.random() * 6;
+        b.vx = Math.cos(a) * v; b.vy = Math.sin(a) * v;
+      }
+      b.slot = null; b.settled = 0;
+    }
+    slots = layoutSlots();
+    const delay = scatter ? performance.now() + 1400 : 0;
+    for (const s of slots) {
+      let best = null, bd = Infinity;
+      for (const b of boids) {
+        if (b.slot || b.ch !== s.ch) continue;
+        const d = (b.x - s.x) ** 2 + (b.y - s.y) ** 2;
+        if (d < bd) { bd = d; best = b; }
+      }
+      if (!best) {
+        best = newBoid(s.ch);
+        const edge = Math.random() * 4 | 0;
+        best.x = edge === 0 ? -20 : edge === 1 ? W + 20 : Math.random() * W;
+        best.y = edge === 2 ? -20 : edge === 3 ? H + 20 : Math.random() * H;
+        boids.push(best);
+      }
+      best.slot = s; best.from = delay;
+    }
+  }
+
+  // Rutnät för grannsökning
+  function frame(t) {
+    const cell = 60, grid = new Map();
+    for (const b of boids) {
+      const k = ((b.x / cell) | 0) + "," + ((b.y / cell) | 0);
+      (grid.get(k) || grid.set(k, []).get(k)).push(b);
+    }
+    for (const b of boids) {
+      if (b.slot && t >= b.from) {
+        // Styr mot platsen och bromsa in
+        const dx = b.slot.x - b.x, dy = b.slot.y - b.y, d = Math.hypot(dx, dy);
+        const speed = Math.min(9, d * 0.08);
+        b.vx += ((dx / (d || 1)) * speed - b.vx) * 0.12;
+        b.vy += ((dy / (d || 1)) * speed - b.vy) * 0.12;
+        if (d < 1.5) { b.x = b.slot.x; b.y = b.slot.y; b.vx = b.vy = 0; b.settled = Math.min(1, b.settled + 0.05); continue; }
+      } else {
+        let cx = 0, cy = 0, ax = 0, ay = 0, sx = 0, sy = 0, n = 0;
+        const gx = (b.x / cell) | 0, gy = (b.y / cell) | 0;
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+          for (const o of grid.get((gx + i) + "," + (gy + j)) || []) {
+            if (o === b || o.settled) continue;
+            const dx = o.x - b.x, dy = o.y - b.y, d2 = dx * dx + dy * dy;
+            if (d2 > cell * cell) continue;
+            cx += o.x; cy += o.y; ax += o.vx; ay += o.vy; n++;
+            if (d2 < 1300) { sx -= dx / (d2 || 1) * 30; sy -= dy / (d2 || 1) * 30; }
+          }
+        }
+        if (n) {
+          b.vx += (cx / n - b.x) * 0.0002 + (ax / n - b.vx) * 0.03 + sx * 0.08;
+          b.vy += (cy / n - b.y) * 0.0002 + (ay / n - b.vy) * 0.03 + sy * 0.08;
+        }
+        // Slumpvind och mjuka väggar
+        b.vx += (Math.random() - 0.5) * 0.12; b.vy += (Math.random() - 0.5) * 0.12;
+        const m = 60;
+        if (b.x < m) b.vx += 0.15; if (b.x > W - m) b.vx -= 0.15;
+        if (b.y < m) b.vy += 0.15; if (b.y > H - m) b.vy -= 0.15;
+        const v = Math.hypot(b.vx, b.vy), max = b.slot ? 10 : 2.6;
+        if (v > max) { b.vx *= max / v; b.vy *= max / v; }
+        if (!b.slot && v < 0.8) { b.vx *= 1.05; b.vy *= 1.05; }
+        b.settled = 0;
+      }
+      b.x += b.vx; b.y += b.vy;
+    }
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    // Fria bokstäver: små, dova, vridna i färdriktningen
+    ctx.font = FONT(size * 0.42);
+    ctx.fillStyle = "rgba(150, 180, 215, 0.3)";
+    for (const b of boids) {
+      if (b.settled > 0.9) continue;
+      const grow = b.slot ? Math.min(1, Math.max(0, 1 - Math.hypot(b.slot.x - b.x, b.slot.y - b.y) / 300)) : 0;
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(Math.atan2(b.vy, b.vx) * (1 - grow));
+      if (grow) { ctx.scale(1 + grow * 1.4, 1 + grow * 1.4); ctx.fillStyle = `rgba(${150 + grow * 105}, ${180 + grow * 60}, ${215 + grow * 40}, ${0.3 + grow * 0.6})`; }
+      ctx.fillText(b.ch, 0, 0);
+      ctx.restore();
+      ctx.fillStyle = "rgba(150, 180, 215, 0.3)";
+    }
+    // Bokstäver på plats
+    ctx.font = FONT(size);
+    ctx.shadowColor = "rgba(143, 211, 255, 0.6)"; ctx.shadowBlur = size * 0.25;
+    for (const b of boids) {
+      if (b.settled <= 0.9) continue;
+      ctx.fillStyle = "#f2f8ff";
+      ctx.fillText(b.ch, b.x, b.y);
+    }
+    ctx.shadowBlur = 0;
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    if (W) assign(!info.first);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", build);
+  build();
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/flock/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

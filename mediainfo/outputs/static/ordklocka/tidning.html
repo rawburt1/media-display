@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Tidning</title>
+<style>
+  @font-face { font-family: "Unifraktur"; src: url("/ordklocka/fonts/unifraktur-maguntia.woff2") format("woff2"); }
+  :root { --ink: #1b1915; --paper: #f2ecdc;
+          --panel-bg: rgba(242, 236, 220, 0.96); --panel-fg: #1b1915; --panel-accent: #1b1915; --panel-bg-solid: #f2ecdc; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: #57524a; display: grid; place-items: center; }
+  .paper { position: relative; width: min(96vw, 150vh); height: min(94vh, 62vw); padding: 2.5% 3%; color: var(--ink); overflow: hidden;
+           background: radial-gradient(ellipse at 20% 10%, rgba(255, 255, 255, 0.4), transparent 60%),
+                       radial-gradient(ellipse at 90% 100%, rgba(150, 120, 70, 0.18), transparent 55%), var(--paper);
+           box-shadow: 0 1.5vmin 4vmin rgba(0, 0, 0, 0.5); font-family: "Georgia", "Times New Roman", "DejaVu Serif", serif;
+           display: flex; flex-direction: column; }
+  .mast { text-align: center; border-bottom: 0.35vmin double var(--ink); padding-bottom: 0.6%; }
+  .mast h1 { margin: 0; font: 400 calc(var(--u) * 5.2) / 1 "Unifraktur", "Old English Text MT", "Georgia", serif; letter-spacing: 0.01em; }
+  .meta { display: flex; justify-content: space-between; font-size: calc(var(--u) * 1); padding: 0.5% 0; border-bottom: 0.25vmin solid var(--ink);
+          text-transform: uppercase; letter-spacing: 0.08em; }
+  .extra { position: absolute; right: 4%; top: 5%; transform: rotate(8deg); background: #b3221a; color: #fff;
+           font: 900 calc(var(--u) * 1.4) / 1 "Arial Black", "DejaVu Sans", sans-serif; padding: 0.4em 0.8em; letter-spacing: 0.08em;
+           opacity: 0; transition: opacity 0.6s, transform 0.6s; }
+  .extra.show { opacity: 1; transform: rotate(8deg) scale(1.08); }
+  .head { text-align: center; margin: 1.6% 0 0.6%; font: 900 calc(var(--u) * var(--hs, 8)) / 0.98 "Didot", "Bodoni MT", "Georgia", serif;
+          text-transform: uppercase; letter-spacing: -0.01em; transition: opacity 0.5s; }
+  .sub { text-align: center; font: italic calc(var(--u) * 1.9) / 1.2 "Georgia", serif; margin-bottom: 1.4%; transition: opacity 0.5s; }
+  .cols { flex: 1; display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 2.2%; border-top: 0.25vmin solid var(--ink); padding-top: 1.2%;
+          min-height: 0; }
+  .col { font-size: calc(var(--u) * 1.15); line-height: 1.4; text-align: justify; hyphens: auto; overflow: hidden; }
+  .col + .col { border-left: 1px solid rgba(0, 0, 0, 0.3); padding-left: 6%; }
+  .col h3 { margin: 0 0 0.3em; font: 700 calc(var(--u) * 1.7) / 1.1 "Georgia", serif; text-align: left; }
+  .col p { margin: 0 0 0.6em; }
+  .col p:first-of-type::first-letter { float: left; font-size: 3.1em; line-height: 0.85; margin: 0.05em 0.08em 0 0; font-weight: 700; }
+  .fade { opacity: 0; }
+  .engr { display: block; width: 62%; margin: 0.4em auto 0.2em; filter: sepia(0.3); }
+  .col p.cap { font-size: 0.8em; font-style: italic; text-align: center; opacity: 0.8; }
+</style>
+</head>
+<body>
+<div class="paper" id="paper" aria-hidden="true">
+  <div class="extra" id="extra">EXTRA!</div>
+  <div class="mast"><h1>Dagens Klocka</h1></div>
+  <div class="meta"><span id="date"></span><span id="edition"></span><span>Pris: en stund</span></div>
+  <div class="head" id="head"></div>
+  <div class="sub" id="sub"></div>
+  <div class="cols">
+    <div class="col" id="c1"></div>
+    <div class="col" id="c2"></div>
+    <div class="col" id="c3"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/dygn.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // En gammal tidnings förstasida där huvudrubriken alltid är tiden. Under
+  // rubriken: datum, veckodag och dygnets del. När uttrycket ändras kommer
+  // en ny upplaga med en EXTRA!-stämpel.
+  const D = OrdklockaDygn;
+  const $ = id => document.getElementById(id);
+  const DAYS = ["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"];
+  const MONTHS = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
+  const cap = s => s[0].toUpperCase() + s.slice(1);
+  const NEWS = {
+    natt: ["Staden sover", "Gatlyktorna har ensamma vakten och bara enstaka fönster lyser. Nattbussen glider förbi tom. Det är stunden då tankarna går långsamt och klockan tycks gå ännu långsammare."],
+    morgon: ["Dagen vaknar", "Kaffebryggare puttrar i hela stadsdelen och de första cyklisterna trampar mot jobbet. Fåglarna har varit vakna länge och undrar vart alla andra tagit vägen."],
+    formiddag: ["Arbetet i full gång", "Förmiddagen är dygnets mest produktiva tid, uppger experter. Möten avlöser varandra och kaffekopparna fylls på i stadig takt inför lunchen."],
+    middag: ["Lunchrusning", "Köerna ringlar långa vid stadens restauranger. Dagens rätt tar slut redan halv ett på flera ställen, rapporterar våra utsända."],
+    eftermiddag: ["Skuggorna växer", "Eftermiddagssolen står allt lägre och fikat närmar sig. Många tittar på klockan oftare nu än i morse."],
+    kvall: ["Kvällen sänker sig", "Lamporna tänds i fönster efter fönster. Middagen är uppäten och soffan lockar. Nyhetsredaktionen konstaterar att ännu en dag snart är till ända."],
+  };
+  const ORD = ["", "första", "andra", "tredje", "fjärde", "femte", "sjätte", "sjunde", "åttonde", "nionde", "tionde", "elfte", "tolfte",
+    "trettonde", "fjortonde", "femtonde", "sextonde", "sjuttonde", "artonde", "nittonde", "tjugonde", "tjugoförsta", "tjugoandra",
+    "tjugotredje", "tjugofjärde", "tjugofemte", "tjugosjätte", "tjugosjunde", "tjugoåttonde", "tjugonionde", "trettionde", "trettioförsta"];
+  let edition = 0;
+
+  // Tidningsbild: en urtavla i kopparsticksstil som visar den riktiga tiden.
+  function engraving(now) {
+    const h = now.getHours() % 12 + now.getMinutes() / 60, m = now.getMinutes();
+    const hand = (a, len, w) => `<line x1="50" y1="50" x2="${50 + Math.sin(a) * len}" y2="${50 - Math.cos(a) * len}" stroke="#1b1915" stroke-width="${w}" stroke-linecap="round"/>`;
+    let ticks = "";
+    for (let i = 0; i < 60; i++) {
+      const a = i / 60 * Math.PI * 2, r0 = i % 5 ? 41 : 37;
+      ticks += `<line x1="${50 + Math.sin(a) * r0}" y1="${50 - Math.cos(a) * r0}" x2="${50 + Math.sin(a) * 43}" y2="${50 - Math.cos(a) * 43}" stroke="#1b1915" stroke-width="${i % 5 ? 0.5 : 1.6}"/>`;
+    }
+    let hatch = "";
+    for (let i = -50; i < 150; i += 3) hatch += `<line x1="${i}" y1="0" x2="${i - 100}" y2="100" stroke="#1b1915" stroke-width="0.35" opacity="0.45"/>`;
+    return `<svg class="engr" viewBox="0 0 100 100"><defs><clipPath id="ring"><path d="M0,0H100V100H0Z M50,4a46,46 0 1,0 0.01,0Z" clip-rule="evenodd"/></clipPath></defs>
+      <rect width="100" height="100" fill="none"/><g clip-path="url(#ring)">${hatch}</g>
+      <circle cx="50" cy="50" r="46" fill="none" stroke="#1b1915" stroke-width="2"/><circle cx="50" cy="50" r="44" fill="none" stroke="#1b1915" stroke-width="0.6"/>
+      ${ticks}${hand(h / 12 * Math.PI * 2, 24, 3)}${hand(m / 60 * Math.PI * 2, 34, 1.8)}<circle cx="50" cy="50" r="2.4" fill="#1b1915"/></svg>`;
+  }
+
+  function sizeUnits() {
+    const r = $("paper").getBoundingClientRect();
+    document.documentElement.style.setProperty("--u", r.height / 60 + "px");
+  }
+  function fitHead() {
+    const h = $("head");
+    let s = 8.5;
+    h.style.setProperty("--hs", s);
+    while ((h.scrollWidth > h.clientWidth + 1 || h.offsetHeight > $("paper").clientHeight * 0.36) && s > 3) { s -= 0.25; h.style.setProperty("--hs", s); }
+  }
+
+  function publish(t, now, animate) {
+    const part = D.part(now.getHours());
+    const words = OrdklockaTid.spokenWords(t).map(w => w.toLowerCase());
+    const set = () => {
+      $("head").textContent = "Klockan är " + words.join(" ") + "!";
+      $("sub").textContent = `${cap(DAYS[now.getDay()])} ${part.phrase} – ${NEWS[part.key][0].toLowerCase()}`;
+      fitHead();
+      const [title, body] = NEWS[part.key];
+      const next = OrdklockaTid.spokenWords(OrdklockaTid.spokenTime((now.getHours() + (now.getMinutes() >= 55 ? 1 : 0)) % 24, (Math.floor(now.getMinutes() / 5) * 5 + 5) % 60, "tjugo")).join(" ").toLowerCase();
+      $("c1").innerHTML = `<h3>${title}</h3><p>${body}</p><p>Klockan ${words.join(" ")} rapporterades läget som lugnt. Redaktionen återkommer med fler uppdateringar inom fem minuter.</p>`;
+      $("c2").innerHTML = `<h3>Kalendern</h3><p>I dag är det ${DAYS[now.getDay()]} den ${ORD[now.getDate()]} ${MONTHS[now.getMonth()]}. Året är ${now.getFullYear()}.</p><p>Dygnets del: ${part.name}.</p>${engraving(now)}<p class="cap">Bild: Klockan på torget, fotograferad i dag.</p>`;
+      $("c3").innerHTML = `<h3>Prognos</h3><p>Om fem minuter väntas klockan bli ${next} – sedan fortsätter den som vanligt. Meteorologerna lovar ${t.extra ? t.extra + " extra minut" + (t.extra > 1 ? "er" : "") : "inga extra minuter"} just nu.</p>`;
+    };
+    $("date").textContent = `${cap(DAYS[now.getDay()])} ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+    edition = (now.getHours() * 12 + Math.floor(now.getMinutes() / 5)) + 1;
+    $("edition").textContent = `Upplaga ${edition}`;
+    if (!animate) { set(); return; }
+    $("head").classList.add("fade"); $("sub").classList.add("fade");
+    setTimeout(() => { set(); $("head").classList.remove("fade"); $("sub").classList.remove("fade"); }, 500);
+    $("extra").classList.add("show");
+    setTimeout(() => $("extra").classList.remove("show"), 6000);
+  }
+
+  let last = null;
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged && last) { last = [t, info.now]; publish(t, info.now, false); return; }
+    last = [t, info.now];
+    publish(t, info.now, !info.first);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  sizeUnits();
+  addEventListener("resize", () => { sizeUnits(); if (last) publish(last[0], last[1], false); });
+  S.setup("/ordklocka/tidning/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

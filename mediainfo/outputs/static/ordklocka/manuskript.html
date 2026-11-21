@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Manuskript</title>
+<style>
+  @font-face { font-family: "Unifraktur"; src: url("/ordklocka/fonts/unifraktur-maguntia.woff2") format("woff2"); font-display: block; }
+  :root { --ink: #2b1a10; --red: #a3201b; --blue: #1f3f8f; --gold: #c9a13b;
+          --panel-bg: rgba(243, 230, 200, 0.95); --panel-fg: #2b1a10; --panel-accent: #a3201b; --panel-bg-solid: #f3e6c8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: radial-gradient(ellipse at 50% 40%, #3a2a1c, #120c07 80%); display: grid; place-items: center; }
+  .page { position: relative; width: min(94vw, 125vh); height: min(88vh, 70vw); padding: 7% 9% 6% 15%;
+          background:
+            radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.35), transparent 50%),
+            radial-gradient(ellipse at 80% 90%, rgba(120, 80, 30, 0.25), transparent 55%),
+            radial-gradient(circle at 10% 80%, rgba(140, 100, 50, 0.18), transparent 30%),
+            linear-gradient(135deg, #f1e2bd, #e6d2a2 60%, #dcc38c);
+          box-shadow: 0 2vmin 6vmin rgba(0, 0, 0, 0.6), inset 0 0 8vmin rgba(120, 80, 30, 0.35);
+          border-radius: 0.6vmin; color: var(--ink); overflow: hidden; }
+  svg.border { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .rubric { font: italic 600 calc(var(--u) * 0.9) / 1.3 "Georgia", "DejaVu Serif", serif; color: var(--red);
+            letter-spacing: 0.04em; margin-bottom: calc(var(--u) * 0.8); }
+  .text { font-family: "Unifraktur", "UnifrakturMaguntia", "Old English Text MT", serif; font-size: calc(var(--u) * var(--size, 3.4));
+          line-height: 1.18; }
+  .initial { float: left; width: 2.3em; height: 2.3em; margin: 0.08em 0.22em 0 0; position: relative;
+             border: 0.07em solid var(--gold); background: var(--ground);
+             box-shadow: inset 0 0 0 0.05em #fff6, 0 0.04em 0.08em rgba(0, 0, 0, 0.35); }
+  .initial svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .initial b { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 400; font-size: 1.9em; line-height: 1;
+               color: transparent; background: linear-gradient(160deg, #fff3b0, #d8a92e 45%, #8a6210 60%, #f5d46a);
+               -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0.02em 0 rgba(0, 0, 0, 0.5)); padding-top: 0.08em; }
+  .ch { opacity: 0; transition: opacity 0.5s; }
+  .ch.on { opacity: 1; }
+  .amen { display: block; margin-top: calc(var(--u) * 0.7); color: var(--red); font-size: 0.55em; }
+</style>
+</head>
+<body>
+<div class="page" id="page" aria-hidden="true">
+  <svg class="border" id="border"></svg>
+  <div class="rubric" id="rubric"></div>
+  <div class="text" id="text"></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Tiden skriven på pergament med gotiska bokstäver. Stycket börjar med en
+  // illuminerad initial i guld; varje timme får den ny färg och nya
+  // rankor, liksom marginalens dekor. Texten skrivs fram bokstav för bokstav.
+  const page = document.getElementById("page"), textEl = document.getElementById("text");
+  const rubric = document.getElementById("rubric"), border = document.getElementById("border");
+  const DAYS = ["söndagen", "måndagen", "tisdagen", "onsdagen", "torsdagen", "fredagen", "lördagen"];
+  const MONTHS = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
+  // [botten, ranka, prick] per timme (0-11)
+  const PALETTES = [
+    ["#1f3f8f", "#e8d9a8", "#a3201b"], ["#a3201b", "#f0dca0", "#1f3f8f"], ["#2f6b3a", "#f1e2b0", "#a3201b"],
+    ["#5a2a7a", "#efd9a0", "#2f6b3a"], ["#1f3f8f", "#f3c7c0", "#c9a13b"], ["#8a1c3a", "#e9e0b8", "#1f3f8f"],
+    ["#22555e", "#f0d79a", "#a3201b"], ["#6b3a12", "#f6e3b4", "#1f3f8f"], ["#a3201b", "#dfe8c8", "#2f6b3a"],
+    ["#1d2f6b", "#f0c8d0", "#c9a13b"], ["#4a6b1f", "#f3dcae", "#5a2a7a"], ["#7a1f5a", "#ead8a6", "#22555e"],
+  ];
+  const roman = n => [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]
+    .reduce((s, [v, r]) => { while (n >= v) { s += r; n -= v; } return s; }, "");
+  let seed = 1;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  function sizePage() {
+    const r = page.getBoundingClientRect();
+    document.documentElement.style.setProperty("--u", r.height / 40 + "px");
+  }
+
+  // Marginalens rankor: en slingrande stjälk med blad och guldprickar.
+  function vines(hour) {
+    const r = page.getBoundingClientRect(), w = r.width, h = r.height;
+    const [ground, leaf, dot] = PALETTES[hour % 12];
+    seed = hour * 977 + 13;
+    let out = "";
+    const stem = (pts, horizontal) => {
+      let d = `M${pts[0][0]},${pts[0][1]}`;
+      for (let i = 1; i < pts.length; i++) {
+        const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+        const bend = (i % 2 ? 1 : -1) * (horizontal ? h : w) * 0.018;
+        d += horizontal ? ` Q${(x0 + x1) / 2},${y0 + bend} ${x1},${y1}` : ` Q${x0 + bend},${(y0 + y1) / 2} ${x1},${y1}`;
+      }
+      out += `<path d="${d}" fill="none" stroke="${ground}" stroke-width="${w * 0.004}" stroke-linecap="round"/>`;
+      pts.forEach(([x, y], i) => {
+        if (!i) return;
+        const a = rand() * 360, s = w * (0.012 + rand() * 0.01);
+        out += `<path d="M0,0 C${s},${-s} ${s * 2},${-s * 0.2} ${s * 2.4},0 C${s * 2},${s * 0.2} ${s},${s} 0,0Z" transform="translate(${x},${y}) rotate(${a})" fill="${i % 3 ? leaf : dot}" stroke="${ground}" stroke-width="${w * 0.0015}"/>`;
+        out += `<circle cx="${x + (rand() - 0.5) * w * 0.03}" cy="${y + (rand() - 0.5) * w * 0.03}" r="${w * 0.004}" fill="#d4af37" stroke="#7a5a10" stroke-width="${w * 0.0008}"/>`;
+      });
+    };
+    // Vänstra marginalen: en färgad list med ranka, och en ranka längs foten
+    out += `<rect x="${w * 0.055}" y="${h * 0.06}" width="${w * 0.012}" height="${h * 0.86}" fill="${ground}"/>`;
+    out += `<rect x="${w * 0.071}" y="${h * 0.06}" width="${w * 0.004}" height="${h * 0.86}" fill="#c9a13b"/>`;
+    const left = [...Array(14)].map((_, i) => [w * (0.045 + (i % 2 ? 0.05 : 0)), h * (0.06 + i * 0.066)]);
+    stem(left, false);
+    const bottom = [...Array(12)].map((_, i) => [w * (0.12 + i * 0.075), h * (0.95 + (i % 2 ? -0.025 : 0))]);
+    stem(bottom, true);
+    border.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    border.innerHTML = out;
+  }
+
+  function initial(ch, hour) {
+    const [ground, leaf, dot] = PALETTES[hour % 12];
+    const el = document.createElement("span");
+    el.className = "initial";
+    el.style.setProperty("--ground", ground);
+    // Filigran i bottenfältet
+    let svg = `<svg viewBox="0 0 100 100">`;
+    for (let i = 0; i < 4; i++) {
+      svg += `<path d="M${50},${50} q${20 - i * 6},${-30 + i * 4} ${42 - i * 8},${-38 + i * 10}" fill="none" stroke="${leaf}" stroke-opacity="0.55" stroke-width="2" transform="rotate(${i * 90} 50 50)"/>`;
+      svg += `<circle cx="${50 + Math.cos(i * 1.57 + 0.8) * 38}" cy="${50 + Math.sin(i * 1.57 + 0.8) * 38}" r="4" fill="${dot}" stroke="${leaf}" stroke-width="1.2"/>`;
+    }
+    svg += `</svg>`;
+    el.innerHTML = svg + `<b>${ch}</b>`;
+    return el;
+  }
+
+  function write(sentence, now, animate) {
+    const hour = now.getHours();
+    rubric.textContent = `${DAYS[now.getDay()][0].toUpperCase() + DAYS[now.getDay()].slice(1)} den ${roman(now.getDate())} ${MONTHS[now.getMonth()]}, anno ${roman(now.getFullYear())}`;
+    textEl.textContent = "";
+    textEl.appendChild(initial(sentence[0], hour));
+    const chars = [];
+    for (const c of sentence.slice(1)) {
+      const s = document.createElement("span"); s.className = "ch"; s.textContent = c; textEl.appendChild(s); chars.push(s);
+    }
+    const amen = document.createElement("span"); amen.className = "amen ch"; amen.textContent = "❧"; textEl.appendChild(amen); chars.push(amen);
+    // Storleken: så stor som ryms på sidan
+    let size = 7;
+    textEl.style.setProperty("--size", size);
+    const room = page.clientHeight * 0.72;
+    while (textEl.scrollHeight > room && size > 1.2) { size -= 0.15; textEl.style.setProperty("--size", size); }
+    vines(hour);
+    if (!animate) { chars.forEach(c => c.classList.add("on")); return; }
+    chars.forEach((c, i) => setTimeout(() => c.classList.add("on"), 400 + i * 110));
+  }
+
+  let last = null;
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    const words = OrdklockaTid.spokenWords(t).map(w => w.toLowerCase());
+    last = { sentence: "Klockan är " + words.join(" "), now: info.now };
+    write(last.sentence, info.now, !info.first);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  sizePage();
+  addEventListener("resize", () => { sizePage(); if (last) write(last.sentence, last.now, false); });
+  document.fonts && document.fonts.ready.then(() => { if (last) write(last.sentence, last.now, false); });
+  S.setup("/ordklocka/manuskript/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

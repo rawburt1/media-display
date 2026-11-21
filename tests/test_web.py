@@ -969,6 +969,79 @@ _NEW_CLOCKS = [
     ("dygnsrytm", "circadian", "Ordklocka (dygnsrytm)"),
     ("pixel", "pixel", "Ordklocka (pixel)"),
     ("griffeltavla", "chalkboard", "Ordklocka (griffeltavla)"),
+    ("fiberoptik", "fiber_optic", "Ordklocka (fiberoptik)"),
+    ("glasmosaik", "stained_glass", "Ordklocka (glasmosaik)"),
+    ("sand", "sand", "Ordklocka (sand)"),
+    ("kugghjul", "gears", "Ordklocka (kugghjul)"),
+    ("rullband", "roller_bands", "Ordklocka (rullband)"),
+    ("glitch", "glitch", "Ordklocka (glitch)"),
+    ("tessellation", "tessellation", "Ordklocka (tessellation)"),
+    ("fraktal", "fractal", "Ordklocka (fraktal)"),
+    ("voronoi", "voronoi", "Ordklocka (voronoi)"),
+    ("smalt", "melting", "Ordklocka (smältande)"),
+    ("vader", "weather", "Ordklocka (väder)"),
+    ("ordletare", "word_search", "Ordklocka (ordletare)"),
+    ("flock", "flocking", "Ordklocka (flock)"),
+    ("manuskript", "manuscript", "Ordklocka (manuskript)"),
+    ("tidning", "newspaper", "Ordklocka (tidning)"),
+    ("skarmslackare", "screensaver", "Ordklocka (skärmsläckare)"),
+    ("ascii", "ascii", "Ordklocka (ASCII)"),
+    ("perspektiv", "perspective", "Ordklocka (perspektiv)"),
+    ("kalejdoskop", "kaleidoscope", "Ordklocka (kalejdoskop)"),
+    ("tangram", "tangram", "Ordklocka (tangram)"),
+    ("kalligrafi", "calligraphy", "Ordklocka (kalligrafi)"),
+    ("variabel", "variable_font", "Ordklocka (variabelt typsnitt)"),
+    ("urklipp", "cut_outs", "Ordklocka (urklipp)"),
+    ("timglas", "hourglass", "Ordklocka (timglas)"),
+    ("norrsken", "aurora", "Ordklocka (norrsken)"),
+    ("betong", "concrete", "Ordklocka (betong)"),
+    ("binar", "binary", "Ordklocka (binär)"),
+    ("biograf", "cinema", "Ordklocka (biograf)"),
+    ("bioluminiscens", "bioluminescence", "Ordklocka (bioluminiscens)"),
+    ("bokhylla", "bookshelf", "Ordklocka (bokhylla)"),
+    ("cylinder", "cylinder", "Ordklocka (cylinder)"),
+    ("dna", "dna", "Ordklocka (DNA)"),
+    ("dos", "dos", "Ordklocka (DOS)"),
+    ("eldflugor", "fireflies", "Ordklocka (eldflugor)"),
+    ("fasad", "kinetic_facade", "Ordklocka (kinetisk fasad)"),
+    ("flipper", "pinball", "Ordklocka (flipperspel)"),
+    ("frost", "frost", "Ordklocka (frost)"),
+    ("gravitation", "gravity", "Ordklocka (gravitation)"),
+    ("halkort", "punch_card", "Ordklocka (hålkort)"),
+    ("hojdkurvor", "contour_lines", "Ordklocka (höjdkurvor)"),
+    ("hologram", "hologram", "Ordklocka (hologram)"),
+    ("hud", "hud", "Ordklocka (HUD)"),
+    ("kakel", "ceramic_tiles", "Ordklocka (kakelplattor)"),
+    ("kalenderord", "calendar_words", "Ordklocka (kalenderord)"),
+    ("keramik", "ceramic", "Ordklocka (keramik)"),
+    ("korsord", "crossword", "Ordklocka (korsord)"),
+    ("kristall", "crystal", "Ordklocka (kristall)"),
+    ("labyrint", "maze", "Ordklocka (labyrint)"),
+    ("lava", "lava", "Ordklocka (lava)"),
+    ("ljudvag", "sound_wave", "Ordklocka (ljudvåg)"),
+    ("ljusmalning", "light_painting", "Ordklocka (ljusmålning)"),
+    ("lov", "leaves", "Ordklocka (löv)"),
+    ("manfas", "moon_phase", "Ordklocka (månfas)"),
+    ("marmorering", "marbling", "Ordklocka (marmorering)"),
+    ("mekanisk", "mechanical_flip", "Ordklocka (mekanisk blädderklocka)"),
+    ("moln", "clouds", "Ordklocka (moln)"),
+    ("mossa", "moss", "Ordklocka (mossa)"),
+    ("optisk", "optical_illusion", "Ordklocka (optisk illusion)"),
+    ("ordbok", "dictionary", "Ordklocka (ordbok)"),
+    ("origami", "origami", "Ordklocka (origami)"),
+    ("oversattning", "translation", "Ordklocka (översättning)"),
+    ("planeter", "planets", "Ordklocka (planeter)"),
+    ("pointillism", "pointillism", "Ordklocka (pointillism)"),
+    ("praglad", "embossed_metal", "Ordklocka (präglad metall)"),
+    ("rispapper", "rice_paper", "Ordklocka (rispapper)"),
+    ("romersk", "roman_inscription", "Ordklocka (romersk inskription)"),
+    ("skuggor", "shadows", "Ordklocka (skuggor)"),
+    ("stad", "city_builder", "Ordklocka (stadsbyggare)"),
+    ("station", "station_clock", "Ordklocka (stationsklocka)"),
+    ("trasnideri", "wood_carving", "Ordklocka (träsnideri)"),
+    ("varld", "world_clock", "Ordklocka (världsklocka)"),
+    ("vatten", "water_mirror", "Ordklocka (vattenspegel)"),
+    ("viktoriansk", "victorian", "Ordklocka (viktoriansk)"),
 ]
 
 
@@ -980,7 +1053,9 @@ def test_new_clock_pages_are_served(page, style, label):
     body = resp.data.decode()
     assert '<script src="/ordklocka/tid.js">' in body
     assert '<script src="/ordklocka/sida.js">' in body
-    assert f'S.setup("/ordklocka/{page}/ws")' in body
+    # Gallery clocks: galleri-render.js calls S.setup("/ordklocka/<slug>/ws")
+    gallery = '<script src="/ordklocka/galleri-render.js">' in body and f'"slug": "{page}"' in body
+    assert f'S.setup("/ordklocka/{page}/ws")' in body or gallery
 
 
 @pytest.mark.parametrize(("page", "style", "label"), _NEW_CLOCKS)
@@ -1048,3 +1123,74 @@ def test_parts_of_day_script_is_shared():
 def test_layouts_script_is_gone():
     # Its grids were replaced by rutnat.js; nothing may still load it.
     assert _client(_output()).get("/ordklocka/layouts.js").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Weather clock (/ordklocka/vader) and the fonts the clock pages use
+# ---------------------------------------------------------------------------
+
+
+def test_weather_json_without_provider_or_entity_is_unavailable():
+    assert _client(_output()).get("/ordklocka/vader.json").get_json() == {"available": False}
+    out = _output(_config(weather_entity="weather.smhi_home"))
+    assert _client(out).get("/ordklocka/vader.json").get_json() == {"available": False}
+
+
+def test_weather_json_reads_the_configured_entity():
+    from mediainfo.app_services import AppServices
+
+    seen = []
+
+    def provider(entity):
+        seen.append(entity)
+        return {"condition": "snowy", "temperature": -2.0, "unit": "°C"}
+
+    out = _output(_config(weather_entity="weather.smhi_home"))
+    out.attach(AppServices(weather=provider))
+    data = _client(out).get("/ordklocka/vader.json").get_json()
+    assert data == {"available": True, "condition": "snowy", "temperature": -2.0, "unit": "°C"}
+    assert seen == ["weather.smhi_home"]
+
+
+def test_weather_json_survives_a_failing_provider():
+    from mediainfo.app_services import AppServices
+
+    def provider(entity):
+        raise RuntimeError("boom")
+
+    out = _output(_config(weather_entity="weather.smhi_home"))
+    out.attach(AppServices(weather=provider))
+    assert _client(out).get("/ordklocka/vader.json").get_json() == {"available": False}
+
+
+def test_every_font_a_clock_page_uses_is_served():
+    from mediainfo.outputs import web
+
+    client = _client(_output())
+    for path in web._CLOCK_LABELS:
+        body = client.get(path).data.decode()
+        for font in re.findall(r'url\("(/ordklocka/fonts/[^"]+)"\)', body):
+            resp = client.get(font)
+            assert resp.status_code == 200, (path, font)
+            assert resp.mimetype == "font/woff2"
+
+
+def test_text_mask_script_is_shared():
+    client = _client(_output())
+    assert "OrdklockaMask" in client.get("/ordklocka/textmask.js").data.decode()
+    for page in ("fiberoptik", "sand", "voronoi", "norrsken", "timglas"):
+        body = client.get(f"/ordklocka/{page}").data.decode()
+        assert '<script src="/ordklocka/textmask.js">' in body, page
+
+
+def test_gallery_clocks_share_their_renderer_and_stylesheet():
+    client = _client(_output())
+    css = client.get("/ordklocka/galleri-stil.css")
+    assert css.status_code == 200
+    assert css.mimetype == "text/css"
+    assert "CLOCK_DESIGN" in client.get("/ordklocka/galleri-render.js").data.decode()
+    for page in ("lava", "hud", "korsord", "manfas", "viktoriansk"):
+        body = client.get(f"/ordklocka/{page}").data.decode()
+        assert '<link rel="stylesheet" href="/ordklocka/galleri-stil.css">' in body, page
+        assert '<script src="/ordklocka/galleri-render.js">' in body, page
+        assert f'"slug": "{page}"' in body, page

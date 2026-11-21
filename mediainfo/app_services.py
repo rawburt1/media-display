@@ -80,6 +80,9 @@ class AppServices:
     # Hitster-safe get/set, artwork refresh, and rotate-now - see
     # OrchestratorCommands above.
     commands: Optional[OrchestratorCommands] = None
+    # Current weather for a Home Assistant weather entity id (see
+    # mediainfo/weather.py) - None when Home Assistant isn't set up.
+    weather: Optional[Callable[[str], Optional[dict]]] = None
     # Every other live HTTP output's own top-level page, for the config
     # UI dashboard's quick-open links - see PageLink above.
     page_links: List[PageLink] = dataclasses.field(default_factory=list)

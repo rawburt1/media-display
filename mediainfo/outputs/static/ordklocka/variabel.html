@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Variabelt typsnitt</title>
+<style>
+  @font-face { font-family: "Flex"; src: url("/ordklocka/fonts/roboto-flex.woff2") format("woff2");
+               font-weight: 100 1000; font-stretch: 25% 151%; font-display: block; }
+  :root { --bg: #f1ede4; --fg: #111; --accent: #ff4f1f;
+          --panel-bg: rgba(241, 237, 228, 0.95); --panel-fg: #111; --panel-accent: #111; --panel-bg-solid: #f1ede4; }
+  [data-tone="mörk"] { --bg: #0f0f12; --fg: #f3f1ea; --accent: #ffb14f; --panel-bg: rgba(15, 15, 18, 0.92); --panel-fg: #eee; --panel-accent: #eee; --panel-bg-solid: #0f0f12; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg); transition: background 1s, color 1s; }
+  .stage { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .line { position: relative; display: flex; justify-content: center; white-space: pre; font-family: "Flex", sans-serif;
+          line-height: 0.95; text-transform: uppercase; }
+  .line.small { color: var(--accent); margin-bottom: 1vmin; }
+  .line span { display: inline-block; will-change: font-variation-settings; }
+  .old { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Ton">
+      <span class="label">Ton</span>
+      <button data-tone="ljus">ljus</button>
+      <button data-tone="mörk">mörk</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Varje bokstav har egen bredd, vikt och lutning (Roboto Flex är ett
+  // variabelt typsnitt). En långsam våg går genom texten så att bokstäverna
+  // andas. När tiden ändras sträcks de gamla orden ut och tunnas av tills de
+  // försvinner, och de nya pressas fram ur ingenting.
+  const stage = document.getElementById("stage");
+  let size = 80, groups = [], lines = [];
+
+  function makeGroup(ls) {
+    const wrap = document.createElement("div");
+    wrap.className = "old";
+    const spans = [];
+    ["klockan är", ...ls].forEach((l, li) => {
+      const row = document.createElement("div");
+      row.className = "line" + (li === 0 ? " small" : "");
+      row.style.fontSize = (li === 0 ? size * 0.42 : size) + "px";
+      [...l].forEach((ch, ci) => {
+        const s = document.createElement("span");
+        s.textContent = ch;
+        s.dataset.i = ci + li * 3;
+        row.appendChild(s); spans.push(s);
+      });
+      wrap.appendChild(row);
+    });
+    stage.appendChild(wrap);
+    return { wrap, spans, born: performance.now(), dying: 0 };
+  }
+
+  // Storleken: den bredaste raden ska få plats även när bokstäverna är som bredast.
+  function fit(ls) {
+    const probe = document.createElement("div");
+    probe.className = "line"; probe.style.visibility = "hidden"; probe.style.position = "absolute";
+    probe.style.fontSize = "100px"; probe.style.fontVariationSettings = '"wght" 900, "wdth" 125';
+    stage.appendChild(probe);
+    let widest = 1;
+    for (const l of ls) { probe.textContent = l; widest = Math.max(widest, probe.offsetWidth); }
+    probe.remove();
+    size = Math.min(100 * innerWidth * 0.9 / widest, innerHeight * 0.72 / (ls.length + 0.6));
+  }
+
+  function setLines(ls, animate) {
+    fit(ls);
+    const now = performance.now();
+    groups.forEach(g => { if (!g.dying) g.dying = animate ? now : now - 5000; });
+    const g = makeGroup(ls);
+    g.born = animate ? now : now - 5000;
+    groups.push(g);
+  }
+
+  const ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x);
+  function frame(t) {
+    const T = t / 1000;
+    groups = groups.filter(g => {
+      if (g.dying && t - g.dying > 1600) { g.wrap.remove(); return false; }
+      return true;
+    });
+    for (const g of groups) {
+      const enter = ease((t - g.born - 700) / 1300);
+      const leave = g.dying ? ease((t - g.dying) / 1300) : 0;
+      for (const s of g.spans) {
+        const i = +s.dataset.i;
+        const w1 = Math.sin(T * 0.9 - i * 0.55), w2 = Math.sin(T * 0.53 + i * 0.8);
+        let wght = 640 + w1 * 260, wdth = 100 + w2 * 22, slnt = -5 - Math.sin(T * 0.4 + i * 0.3) * 5;
+        // Ut: sträcks ut och tunnas; in: pressas fram från smal och tunn
+        if (leave) { wdth += (151 - wdth) * leave; wght += (100 - wght) * leave; }
+        if (enter < 1) { const k = enter; wdth = 25 + (wdth - 25) * k; wght = 1000 + (wght - 1000) * k; }
+        s.style.fontVariationSettings = `"wght" ${wght.toFixed(0)}, "wdth" ${wdth.toFixed(1)}, "slnt" ${slnt.toFixed(1)}`;
+        s.style.opacity = Math.min(enter * 1.5, 1 - leave);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t).map(l => l.toLowerCase());
+    setLines(lines, !info.first && !matchMedia("(prefers-reduced-motion: reduce)").matches);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("tone", "ordklocka-variabel-ton", "ljus", v => { document.documentElement.dataset.tone = v; });
+  addEventListener("resize", () => { if (lines.length) setLines(lines, false); });
+  document.fonts && document.fonts.load('100px "Flex"').then(() => { if (lines.length) setLines(lines, false); });
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/variabel/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

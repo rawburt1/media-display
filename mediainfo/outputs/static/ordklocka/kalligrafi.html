@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Kalligrafi</title>
+<style>
+  @font-face { font-family: "Unifraktur"; src: url("/ordklocka/fonts/unifraktur-maguntia.woff2") format("woff2"); }
+  :root { --panel-bg: rgba(246, 241, 228, 0.95); --panel-fg: #1d1a16; --panel-accent: #8c1c13; --panel-bg-solid: #f6f1e4; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #f4eee0; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Stil">
+      <span class="label">Stil</span>
+      <button data-pen="kursiv">kursiv</button>
+      <button data-pen="bredpenna">bredpenna</button>
+      <button data-pen="pensel">pensel</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/skrift.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // En osynlig kalligraf skriver tiden. Tre stilar: kursiv (snabb och
+  // lätt), bredpenna (gotisk, långsam och noggrann) och pensel (tusch med
+  // tjocka drag och stänk). Pennspetsen syns där den skriver. När tiden
+  // ändras bleknar bläcket och arket skrivs om.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const paper = document.createElement("canvas"), px = paper.getContext("2d");
+  const K = OrdklockaSkrift;
+  const PENS = {
+    kursiv: { font: s => `italic 400 ${s}px "Segoe Script", "Z003", "URW Chancery L", "Apple Chancery", ${K.HAND}`, speed: 7.5, ink: "#1d2a4a" },
+    bredpenna: { font: s => `400 ${s}px "Unifraktur", "Old English Text MT", serif`, speed: 4.2, ink: "#1d1a16" },
+    pensel: { font: s => `700 ${s}px "Brush Script MT", "Segoe Script", "Z003", ${K.HAND}`, speed: 5.5, ink: "#111" },
+  };
+  let W, H, dpr, pen = "kursiv", lines = [], L = null, startAt = 0, fadeOld = null, fadeAt = 0, splats = [];
+
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = paper.width = W * dpr; cv.height = paper.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); px.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Rispapper: ljus botten med fibrer
+    px.fillStyle = "#f4eee0"; px.fillRect(0, 0, W, H);
+    for (let i = 0; i < 900; i++) {
+      px.strokeStyle = `rgba(150, 130, 90, ${0.04 + Math.random() * 0.06})`;
+      px.lineWidth = 0.5 + Math.random();
+      const x = Math.random() * W, y = Math.random() * H, a = Math.random() * 6.28, l = 10 + Math.random() * 40;
+      px.beginPath(); px.moveTo(x, y); px.quadraticCurveTo(x + Math.cos(a) * l / 2 + 5, y + Math.sin(a) * l / 2, x + Math.cos(a) * l, y + Math.sin(a) * l); px.stroke();
+    }
+    const vg = px.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(90,70,30,0.18)");
+    px.fillStyle = vg; px.fillRect(0, 0, W, H);
+    if (lines.length) relayout(false);
+  }
+
+  function relayout(animate) {
+    const P = PENS[pen];
+    L = K.layout(ctx, ["Klockan är", ...lines.map(l => l.toLowerCase())], { x: W * 0.08, y: H * 0.1, w: W * 0.84, h: H * 0.74 }, P.font, { lineHeight: 1.3 });
+    startAt = animate ? performance.now() : -1e9;
+    splats = pen === "pensel" ? Array.from({ length: 14 }, () => ({ x: W * (0.1 + Math.random() * 0.8), y: H * (0.1 + Math.random() * 0.75), r: 1 + Math.random() * 4, at: Math.random() })) : [];
+  }
+
+  function inkDraw(c, line) {
+    const P = PENS[pen];
+    c.font = L.font; c.textBaseline = "middle"; c.fillStyle = P.ink;
+    if (pen === "pensel") {
+      // Tuschen flyter ut lite i papperet
+      // Penseldrag: texten stämplas flera gånger med små förskjutningar, så
+      // att dragen blir tjocka och ojämna, och tuschen flyter ut lite.
+      c.shadowColor = "rgba(0,0,0,0.3)"; c.shadowBlur = L.size * 0.05;
+      const OFF = [[0, 0], [0.018, 0.006], [-0.012, 0.01], [0.01, -0.014], [-0.016, -0.006], [0.024, 0.016]];
+      for (const [dx, dy] of OFF) c.fillText(line.text, line.x + dx * L.size, line.y + dy * L.size);
+      c.shadowBlur = 0;
+      c.globalAlpha = 0.18;
+      c.fillText(line.text, line.x + L.size * 0.04, line.y + L.size * 0.03);
+      c.globalAlpha = 1;
+    } else {
+      c.shadowColor = "rgba(0,0,0,0.2)"; c.shadowBlur = L.size * 0.02;
+      c.fillText(line.text, line.x, line.y);
+      c.shadowBlur = 0;
+    }
+  }
+
+  function frame(t) {
+    ctx.drawImage(paper, 0, 0, W, H);
+    // Det gamla bläcket bleknar bort
+    if (fadeOld) {
+      const k = (t - fadeAt) / 1200;
+      if (k >= 1) fadeOld = null;
+      else { ctx.globalAlpha = 1 - k; ctx.drawImage(fadeOld, 0, 0, W, H); ctx.globalAlpha = 1; }
+    }
+    if (L && !fadeOld) {
+      const P = PENS[pen];
+      // Skrivtakten varierar lite: penna lyfts mellan orden
+      const progress = Math.max(0, (t - startAt) / 1000 * P.speed);
+      const pos = K.drawPartial(ctx, L, progress, inkDraw);
+      for (const s of splats) {
+        if (progress / L.chars < s.at) continue;
+        ctx.fillStyle = "rgba(10,10,10,0.75)"; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill();
+      }
+      if (pos && progress < L.chars) {
+        // Pennspetsen
+        ctx.save();
+        ctx.translate(pos.x, pos.y + Math.sin(t / 60) * L.size * 0.08);
+        ctx.rotate(-0.7);
+        ctx.fillStyle = "#3a2a1a";
+        ctx.fillRect(0, -L.size * 0.03, L.size * 1.6, L.size * 0.06);
+        ctx.fillStyle = "#c9a13b";
+        ctx.beginPath(); ctx.moveTo(-L.size * 0.02, 0); ctx.lineTo(L.size * 0.25, -L.size * 0.05); ctx.lineTo(L.size * 0.25, L.size * 0.05); ctx.fill();
+        ctx.restore();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function snapshot() {
+    const c = document.createElement("canvas");
+    c.width = cv.width; c.height = cv.height;
+    const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (L) K.drawPartial(g, L, 1e9, inkDraw);
+    return c;
+  }
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    if (!W) return;
+    const animate = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!info.first && L && animate) { fadeOld = snapshot(); fadeAt = performance.now(); }
+    relayout(animate);
+    if (fadeOld) startAt += 1300;
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("pen", "ordklocka-kalligrafi", "kursiv", v => { pen = v; if (W && lines.length) relayout(true); });
+  addEventListener("resize", build);
+  build();
+  document.fonts && document.fonts.load('40px "Unifraktur"').then(() => { if (lines.length) relayout(false); });
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/kalligrafi/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

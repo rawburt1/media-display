@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Glasmosaik</title>
+<style>
+  :root { --panel-bg: rgba(18, 12, 10, 0.9); --panel-fg: #f3e4c8; --panel-accent: #e8b860; --panel-bg-solid: #120c0a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0807; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/rutnat.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Ordklockans bokstavsrutnät som ett blyinfattat kyrkfönster. Varje ruta
+  // är skärvor av färgat glas med bokstaven i ljusare glas; de aktuella
+  // orden genomlyses av varmt ljus, resten ligger i skugga.
+  const R = OrdklockaRutnat, NROWS = R.ROWS.length;
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const JEWELS = ["#7a1022", "#123a7a", "#1d5e34", "#5a1a6e", "#8a4a0c", "#0e5560", "#6e0f3c", "#22306e"];
+  let W, H, dpr, cell, ox, oy, shards = [], level = [], target = [], style = "tjugo";
+  let seed = 11;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  // Skärvorna i varje ruta: ett solfjädersmönster från en punkt nära mitten.
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const archTop = 0.09;
+    cell = Math.min(W * 0.9 / R.COLS, H * (0.92 - archTop) / NROWS);
+    ox = (W - cell * R.COLS) / 2; oy = H * archTop + (H * (0.92 - archTop) - cell * NROWS) / 2;
+    seed = 11;
+    shards = [];
+    for (let r = 0; r < NROWS; r++) for (let c = 0; c < R.COLS; c++) {
+      const cx = 0.35 + rand() * 0.3, cy = 0.35 + rand() * 0.3;
+      const edge = [[0, 0], [0.5 + (rand() - 0.5) * 0.4, 0], [1, 0], [1, 0.5 + (rand() - 0.5) * 0.4], [1, 1],
+                    [0.5 + (rand() - 0.5) * 0.4, 1], [0, 1], [0, 0.5 + (rand() - 0.5) * 0.4]];
+      const pieces = edge.map((p, i) => [[cx, cy], p, edge[(i + 1) % edge.length]]);
+      shards.push(pieces.map(poly => ({ poly, color: JEWELS[(rand() * JEWELS.length) | 0], shade: 0.8 + rand() * 0.4 })));
+    }
+  }
+
+  function shadeHex(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    const ch = k => Math.min(255, Math.round(((n >> k) & 255) * f));
+    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  }
+
+  function draw(t) {
+    ctx.fillStyle = "#0b0807"; ctx.fillRect(0, 0, W, H);
+    // Spetsbågen överst och ramen i sten
+    ctx.save();
+    const fw = cell * R.COLS, fx = ox, top = oy - cell * 0.9;
+    ctx.beginPath();
+    ctx.moveTo(fx - cell * 0.3, oy + cell * NROWS + cell * 0.3);
+    ctx.lineTo(fx - cell * 0.3, oy);
+    ctx.quadraticCurveTo(fx - cell * 0.3, top - cell * 0.2, fx + fw / 2, top - cell * 0.6);
+    ctx.quadraticCurveTo(fx + fw + cell * 0.3, top - cell * 0.2, fx + fw + cell * 0.3, oy);
+    ctx.lineTo(fx + fw + cell * 0.3, oy + cell * NROWS + cell * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = "#1c1612"; ctx.fill();
+    ctx.lineWidth = cell * 0.18; ctx.strokeStyle = "#3a3029"; ctx.stroke();
+    ctx.restore();
+
+    const font = `700 ${cell * 0.66}px "Georgia", "DejaVu Serif", serif`;
+    for (let r = 0; r < NROWS; r++) for (let c = 0; c < R.COLS; c++) {
+      const i = r * R.COLS + c;
+      level[i] = (level[i] || 0) + ((target[i] || 0) - (level[i] || 0)) * 0.04;
+      const L = level[i] || 0;
+      const x = ox + c * cell, y = oy + r * cell;
+      // Ljuset flimrar svagt, som sol genom moln
+      const sun = 0.92 + 0.08 * Math.sin(t / 2300 + c * 0.4 + r * 0.25);
+      const light = 0.42 + L * 0.9 * sun;
+      for (const s of shards[i]) {
+        ctx.beginPath();
+        s.poly.forEach(([px, py], k) => k ? ctx.lineTo(x + px * cell, y + py * cell) : ctx.moveTo(x + px * cell, y + py * cell));
+        ctx.closePath();
+        ctx.fillStyle = shadeHex(s.color, light * s.shade * (L > 0.5 ? 1.5 : 1));
+        ctx.fill();
+      }
+      // Blyet runt skärvorna
+      ctx.lineWidth = Math.max(1, cell * 0.035); ctx.strokeStyle = "#141110";
+      for (const s of shards[i]) {
+        ctx.beginPath();
+        s.poly.forEach(([px, py], k) => k ? ctx.lineTo(x + px * cell, y + py * cell) : ctx.moveTo(x + px * cell, y + py * cell));
+        ctx.closePath(); ctx.stroke();
+      }
+      // Bokstaven: ljust bärnstensglas med tjock blyinfattning
+      ctx.font = font; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const ch = [...R.ROWS[r]][c];
+      ctx.lineJoin = "round";
+      ctx.lineWidth = cell * 0.11; ctx.strokeStyle = "#120f0d";
+      ctx.strokeText(ch, x + cell / 2, y + cell * 0.54);
+      const g = Math.round(70 + 185 * Math.min(1, light));
+      ctx.fillStyle = L > 0.05 ? `rgb(${g},${Math.round(g * 0.86)},${Math.round(g * 0.55)})` : `rgb(${g},${Math.round(g * 0.9)},${Math.round(g * 0.75)})`;
+      ctx.fillText(ch, x + cell / 2, y + cell * 0.54);
+      if (L > 0.02) {
+        // Glöd från det genomlysta glaset
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = L * 0.35 * sun;
+        const gr = ctx.createRadialGradient(x + cell / 2, y + cell / 2, 0, x + cell / 2, y + cell / 2, cell);
+        gr.addColorStop(0, "rgba(255, 200, 120, 0.9)"); gr.addColorStop(1, "rgba(255, 160, 60, 0)");
+        ctx.fillStyle = gr; ctx.fillRect(x - cell / 2, y - cell / 2, cell * 2, cell * 2);
+        ctx.restore();
+      }
+    }
+    // Ljusstrålar som faller snett in över fönstret
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let k = 0; k < 4; k++) {
+      const x0 = W * (0.15 + k * 0.22) + Math.sin(t / 9000 + k) * W * 0.03;
+      const gr = ctx.createLinearGradient(x0, 0, x0 + W * 0.25, H);
+      gr.addColorStop(0, "rgba(255, 220, 160, 0.05)"); gr.addColorStop(1, "rgba(255, 220, 160, 0)");
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + W * 0.06, 0); ctx.lineTo(x0 + W * 0.32, H); ctx.lineTo(x0 + W * 0.2, H); ctx.fill();
+    }
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+
+  const clock = S.clock((t, info) => {
+    const [lit] = R.reading(info.now.getHours(), info.now.getMinutes(), style);
+    target = [];
+    for (const [r, c, n] of lit) for (let k = 0; k < n; k++) target[r * R.COLS + c + k] = 1;
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => { style = v; clock.setStyle(v); });
+  addEventListener("resize", build);
+  build();
+  requestAnimationFrame(draw);
+  S.setup("/ordklocka/glasmosaik/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Rullband</title>
+<style>
+  :root { --panel-bg: rgba(28, 30, 33, 0.92); --panel-fg: #eee; --panel-accent: #f0c419; --panel-bg-solid: #1c1e21; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: radial-gradient(ellipse at 50% 40%, #3d4247, #17191b 75%); display: grid; place-items: center;
+         font-family: "DIN Condensed", "Arial Narrow", "Liberation Sans Narrow", "DejaVu Sans Condensed", sans-serif; }
+  .sign { position: relative; padding: calc(var(--r) * 0.5) calc(var(--r) * 0.6); border-radius: calc(var(--r) * 0.15);
+          background: linear-gradient(180deg, #2b2e31, #1f2124); box-shadow: 0 calc(var(--r) * 0.3) calc(var(--r) * 0.9) rgba(0, 0, 0, 0.6),
+          inset 0 0 0 calc(var(--r) * 0.06) #44494e; }
+  .head { color: #f0c419; font-weight: 700; font-size: calc(var(--r) * 0.45); letter-spacing: 0.4em; text-align: center;
+          margin-bottom: calc(var(--r) * 0.35); }
+  .bands { position: relative; display: flex; gap: calc(var(--r) * 0.14); height: calc(var(--r) * 5); }
+  .band { position: relative; overflow: hidden; height: 100%; background: #e9e4d6; border-radius: 2px;
+          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4); }
+  .strip { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+  .cell { height: var(--r); display: grid; place-items: center; padding: 0 calc(var(--r) * 0.25); white-space: nowrap;
+          font-weight: 700; font-size: calc(var(--r) * 0.78); color: #1a1a1a; letter-spacing: 0.03em;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.12); }
+  /* Bandet buktar: mörkare uppåt och nedåt */
+  .band::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+                 background: linear-gradient(180deg, rgba(10, 10, 10, 0.92), rgba(10, 10, 10, 0.55) 30%, transparent 40%, transparent 60%, rgba(10, 10, 10, 0.55) 70%, rgba(10, 10, 10, 0.92)); }
+  /* Läsfönstret i mitten */
+  .window { position: absolute; left: calc(var(--r) * -0.2); right: calc(var(--r) * -0.2); top: calc(50% - var(--r) * 0.56);
+            height: calc(var(--r) * 1.12); border: calc(var(--r) * 0.05) solid #f0c419; border-radius: calc(var(--r) * 0.08);
+            box-shadow: 0 0 calc(var(--r) * 0.3) rgba(240, 196, 25, 0.25); pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 40%); }
+  .dots { display: flex; justify-content: center; gap: calc(var(--r) * 0.35); margin-top: calc(var(--r) * 0.35); }
+  .dots i { width: calc(var(--r) * 0.2); height: calc(var(--r) * 0.2); border-radius: 50%; background: #3a3d40; }
+  .dots i.on { background: #f0c419; box-shadow: 0 0 calc(var(--r) * 0.2) #f0c419; }
+</style>
+</head>
+<body>
+<div class="sign" aria-hidden="true">
+  <div class="head">KLOCKAN ÄR</div>
+  <div class="bands" id="bands"><div class="window"></div></div>
+  <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Ett vertikalt band per ord i tidsuttrycket. Varje band har alla ord
+  // som kan stå på just den platsen tryckta efter varandra och rullar upp
+  // eller ned (den kortaste vägen) tills rätt ord står i läsfönstret.
+  const T = OrdklockaTid;
+  const bandsEl = document.getElementById("bands");
+  const dots = [...document.querySelectorAll("#dots i")];
+
+  // Ordförrådet per plats, i den ordning orden dyker upp under dygnet.
+  const vocab = [[], [], [], []];
+  for (const style of ["tjugo", "halv"]) for (let h = 0; h < 24; h++) for (let m = 0; m < 60; m += 5) {
+    T.spokenWords(T.spokenTime(h, m, style)).forEach((w, i) => { if (!vocab[i].includes(w)) vocab[i].push(w); });
+  }
+  vocab.forEach(v => v.push(""));   // tomt fält när uttrycket är kortare
+
+  const bands = vocab.map(words => {
+    const band = document.createElement("div");
+    band.className = "band";
+    const strip = document.createElement("div");
+    strip.className = "strip";
+    // Tre varv av bandet, så att det alltid kan rulla åt båda hållen.
+    for (let k = 0; k < 3; k++) for (const w of words) {
+      const c = document.createElement("div"); c.className = "cell"; c.textContent = w || " "; strip.appendChild(c);
+    }
+    band.appendChild(strip);
+    band.style.width = `calc(var(--r) * ${Math.max(...words.map(w => w.length)) * 0.56 + 0.6})`;
+    bandsEl.insertBefore(band, bandsEl.querySelector(".window"));
+    return { words, strip, pos: words.length * 1 + words.length - 1 };   // börjar på tomt
+  });
+
+  let r = 40;
+  function resize() {
+    // Bandens bredd: det längsta ordet; storleken så att allt får plats.
+    const chars = vocab.reduce((s, v) => s + Math.max(...v.map(w => w.length)) + 1.07, 0);
+    r = Math.min(innerWidth * 0.9 / (chars * 0.56 + vocab.length * 0.14 + 1.2), innerHeight * 0.84 / 7.4);
+    document.documentElement.style.setProperty("--r", r + "px");
+    bands.forEach(b => place(b, b.pos, false));
+  }
+  function place(b, pos, animate, delay = 0) {
+    const y = -(pos * r) + 2 * r;          // rad `pos` mitt i fönstret (5 rader högt)
+    if (!animate) { b.strip.style.transition = "none"; b.strip.style.transform = `translateY(${y}px)`; return; }
+    b.strip.style.transition = `transform ${1.2 + Math.random() * 0.6}s cubic-bezier(.45, .05, .25, 1.12) ${delay}ms`;
+    b.strip.style.transform = `translateY(${y}px)`;
+  }
+
+  function roll(words, animate) {
+    bands.forEach((b, i) => {
+      const n = b.words.length;
+      const idx = b.words.indexOf(words[i] || "");
+      const cur = ((b.pos % n) + n) % n;
+      let diff = idx - cur;
+      if (diff > n / 2) diff -= n;
+      if (diff < -n / 2) diff += n;
+      if (!diff) return;
+      // Från mittvarvet, kortaste vägen; efteråt tillbaka till mittvarvet
+      // (samma ord står där, så det syns inte).
+      place(b, n + cur, false);
+      b.strip.getBoundingClientRect();
+      place(b, n + cur + diff, animate, i * 220);
+      b.pos = n + idx;
+      clearTimeout(b.snap);
+      b.snap = setTimeout(() => place(b, b.pos, false), animate ? 2300 + i * 220 : 0);
+    });
+  }
+
+  const clock = S.clock((t, info) => {
+    dots.forEach((d, i) => d.classList.toggle("on", i < t.extra));
+    if (info.wordsChanged) roll(T.spokenWords(t), !info.first && !matchMedia("(prefers-reduced-motion: reduce)").matches);
+  });
+  addEventListener("resize", resize);
+  resize();
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.setup("/ordklocka/rullband/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

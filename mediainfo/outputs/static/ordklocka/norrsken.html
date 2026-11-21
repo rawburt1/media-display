@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Norrsken</title>
+<style>
+  :root { --panel-bg: rgba(4, 10, 20, 0.88); --panel-fg: #dff7ee; --panel-accent: #5dffb0; --panel-bg-solid: #040a14; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #020612; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/textmask.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Norrskensband rör sig över en stjärnhimmel: gröna, blå och violetta
+  // ljusgardiner som veckar sig. Där texten står lyser norrskenet starkt;
+  // utanför syns det svagare. Längst ned en siluett av granskog.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const aur = document.createElement("canvas"), ax = aur.getContext("2d");
+  const txt = document.createElement("canvas"), tx = txt.getContext("2d");
+  const sky = document.createElement("canvas"), sx = sky.getContext("2d");
+  const RES = 4;
+  let W, H, dpr, aw, ah, lines = [], textAlpha = 1;
+
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    aw = Math.ceil(W / RES); ah = Math.ceil(H / RES);
+    aur.width = aw; aur.height = ah;
+    txt.width = aw; txt.height = ah;
+    sky.width = W * dpr; sky.height = H * dpr;
+    // Himmel, stjärnor och skog ritas en gång
+    sx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = sx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#01030a"); g.addColorStop(0.6, "#061426"); g.addColorStop(1, "#0b2236");
+    sx.fillStyle = g; sx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 380; i++) {
+      sx.fillStyle = `rgba(255,255,255,${0.2 + Math.random() * 0.7})`;
+      const r = Math.random() < 0.08 ? 1.6 : 0.9;
+      sx.fillRect(Math.random() * W, Math.random() * H * 0.85, r, r);
+    }
+    sx.fillStyle = "#01040a";
+    sx.beginPath(); sx.moveTo(0, H);
+    let x = 0;
+    while (x < W + 40) {
+      const h = H * (0.06 + Math.random() * 0.08), w = h * 0.38;
+      sx.lineTo(x, H - H * 0.03); sx.lineTo(x + w / 2, H - h - H * 0.03); sx.lineTo(x + w, H - H * 0.03);
+      x += w * (0.55 + Math.random() * 0.4);
+    }
+    sx.lineTo(W, H); sx.closePath(); sx.fill();
+    if (lines.length) paintText();
+  }
+
+  function paintText() {
+    const m = OrdklockaMask.mask(["KLOCKAN ÄR", ...lines], aw, ah * 0.8, { pad: 0.06, lineHeight: 1.1, blur: 1 });
+    tx.clearRect(0, 0, aw, ah);
+    tx.drawImage(m.canvas, 0, ah * 0.02);
+  }
+
+  // Norrskenet: flera gardiner längs vågiga kurvor. Varje gardin ritas som
+  // lodräta strimmor (en förritad färgremsa per gardin, utsträckt och med
+  // fladdrande styrka), grönt nertill och violett upptill, med ett svagt
+  // sken under den nedre kanten.
+  const BANDS = [
+    { y: 0.42, amp: 0.1, f: 1.7, sp: 0.11, h: 0.35, hue: 150 },
+    { y: 0.3, amp: 0.08, f: 2.6, sp: -0.08, h: 0.3, hue: 175 },
+    { y: 0.55, amp: 0.07, f: 1.2, sp: 0.06, h: 0.28, hue: 140 },
+  ];
+  for (const b of BANDS) {
+    b.strip = document.createElement("canvas");
+    b.strip.width = 1; b.strip.height = 256;
+    const g = b.strip.getContext("2d");
+    const gr = g.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, `hsla(${b.hue + 140}, 80%, 60%, 0)`);
+    gr.addColorStop(0.55, `hsla(${b.hue + 60}, 85%, 60%, 0.45)`);
+    gr.addColorStop(0.82, `hsla(${b.hue}, 95%, 62%, 0.95)`);
+    gr.addColorStop(0.86, `hsla(${b.hue}, 95%, 62%, 0.5)`);
+    gr.addColorStop(1, `hsla(${b.hue}, 95%, 62%, 0)`);
+    g.fillStyle = gr; g.fillRect(0, 0, 1, 256);
+  }
+  function paintAurora(T) {
+    ax.globalCompositeOperation = "source-over";
+    ax.clearRect(0, 0, aw, ah);
+    ax.globalCompositeOperation = "lighter";
+    for (const b of BANDS) {
+      for (let x = 0; x < aw; x++) {
+        const u = x / aw;
+        const base = ah * (b.y + b.amp * Math.sin(u * Math.PI * b.f + T * b.sp * 3) + 0.03 * Math.sin(u * 23 + T * 0.7));
+        const i = 0.5 + 0.5 * Math.sin(u * 90 + T * 1.3) * Math.sin(u * 37 - T * 0.9);
+        const len = ah * b.h * (0.6 + 0.4 * i);
+        ax.globalAlpha = 0.18 + 0.22 * i;
+        // Remsans nedre 18 % hamnar under kanten som ett mjukt sken
+        ax.drawImage(b.strip, x, base - len * 0.82, 1, len);
+      }
+    }
+    ax.globalAlpha = 1;
+  }
+
+  const lit = document.createElement("canvas"), lx = lit.getContext("2d");
+  function frame(t) {
+    const T = t / 1000;
+    paintAurora(T);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(sky, 0, 0);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.imageSmoothingEnabled = true;
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(aur, 0, 0, cv.width, cv.height);
+    // Texten fylls med samma norrsken, mycket förstärkt, ovanpå en jämn
+    // grönblå botten så att bokstäverna alltid syns.
+    if (lit.width !== aw || lit.height !== ah) { lit.width = aw; lit.height = ah; }
+    lx.globalCompositeOperation = "source-over";
+    lx.globalAlpha = 1;
+    lx.clearRect(0, 0, aw, ah);
+    lx.drawImage(txt, 0, 0);
+    lx.globalCompositeOperation = "source-in";
+    const s = Math.sin(T * 0.2);
+    const g = lx.createLinearGradient(0, 0, aw, 0);
+    g.addColorStop(0, `hsla(${150 + s * 20}, 90%, 45%, 1)`);
+    g.addColorStop(0.5, `hsla(${180 + s * 20}, 85%, 45%, 1)`);
+    g.addColorStop(1, `hsla(${270 + s * 20}, 80%, 50%, 1)`);
+    lx.fillStyle = g; lx.fillRect(0, 0, aw, ah);
+    lx.globalCompositeOperation = "lighter";
+    lx.filter = "brightness(2.6) saturate(1.3)";
+    lx.drawImage(aur, 0, 0);
+    lx.filter = "none";
+    lx.globalCompositeOperation = "destination-in";
+    lx.drawImage(txt, 0, 0);
+    textAlpha = Math.min(1, textAlpha + 0.01);
+    ctx.globalAlpha = textAlpha * 0.6;
+    ctx.filter = `blur(${3 * dpr}px)`;
+    ctx.drawImage(lit, 0, 0, cv.width, cv.height);
+    ctx.filter = "none";
+    ctx.globalAlpha = textAlpha;
+    ctx.drawImage(lit, 0, 0, cv.width, cv.height);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    if (!W) return;
+    paintText();
+    if (!info.first) textAlpha = 0;
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", build);
+  build();
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/norrsken/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

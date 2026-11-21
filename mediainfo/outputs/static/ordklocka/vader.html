@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Väder</title>
+<style>
+  :root { --fg: #fff; --accent: #ffe08a;
+          --panel-bg: rgba(10, 20, 34, 0.85); --panel-fg: #eef4ff; --panel-accent: #9cc8ff; --panel-bg-solid: #0a1422; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #24364f; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+  .text { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          text-align: center; color: var(--fg); font-family: "Avenir Next", "Helvetica Neue", "DejaVu Sans", system-ui, sans-serif;
+          text-shadow: 0 0.04em 0.25em rgba(0, 0, 0, 0.45); padding: 0 5vw; }
+  .small { font-size: 4.2vmin; letter-spacing: 0.4em; font-weight: 600; opacity: 0.85; }
+  .time { font-weight: 800; line-height: 1.02; margin: 1.5vmin 0; transition: opacity 0.8s; text-transform: uppercase; }
+  .wx { font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.03em; transition: opacity 0.8s; }
+  .temp { margin-top: 2vmin; font-size: 4vmin; font-weight: 600; opacity: 0.9; }
+  .fade { opacity: 0; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+<div class="text" aria-hidden="true">
+  <div class="small">KLOCKAN ÄR</div>
+  <div class="time" id="time"></div>
+  <div class="wx" id="wx"></div>
+  <div class="temp" id="temp"></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Tid och väder i en mening: "KLOCKAN ÄR HALV NIO OCH DET REGNAR".
+  // Vädret kommer från servern (/ordklocka/vader.json, som läser Home
+  // Assistants väderentitet - outputs.web.weather_entity). Bakgrunden
+  // speglar vädret: regn, snö, sol, moln, dimma, åska eller stjärnor.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const timeEl = document.getElementById("time"), wxEl = document.getElementById("wx"), tempEl = document.getElementById("temp");
+  const PHRASE = {
+    "clear-night": "det är stjärnklart", sunny: "solen skiner", partlycloudy: "det är halvklart", cloudy: "det är mulet",
+    fog: "det är dimmigt", rainy: "det regnar", pouring: "det ösregnar", snowy: "det snöar",
+    "snowy-rainy": "det kommer snöblandat regn", hail: "det haglar", lightning: "det åskar",
+    "lightning-rainy": "det åskar och regnar", windy: "det blåser", "windy-variant": "det blåser", exceptional: "vädret är ovanligt",
+  };
+  let W, H, dpr, weather = null, parts = [], clouds = [], flash = 0;
+
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    scene();
+  }
+  const cond = () => (weather && weather.condition) || "";
+  const isNight = () => { const h = new Date().getHours(); return cond() === "clear-night" || h < 7 || h >= 18; };
+
+  // Partiklar och moln efter vädret
+  function scene() {
+    const c = cond();
+    const rain = /rain|pouring/.test(c), snow = /snow/.test(c), hail = c === "hail";
+    const n = c === "pouring" ? 700 : rain ? 380 : snow ? 260 : hail ? 200 : 0;
+    parts = Array.from({ length: n }, (_, i) => ({
+      x: Math.random() * W, y: Math.random() * H, z: 0.4 + Math.random() * 0.6,
+      kind: snow && (c !== "snowy-rainy" || i % 2) ? "snow" : hail ? "hail" : "rain",
+    }));
+    const nClouds = /cloudy|rain|pouring|snow|lightning|hail|windy|fog/.test(c) ? (c === "partlycloudy" ? 4 : 8) : 0;
+    clouds = Array.from({ length: nClouds }, () => ({ x: Math.random() * W, y: H * (0.05 + Math.random() * 0.3), s: 0.6 + Math.random() * 0.9 }));
+  }
+
+  function sky() {
+    const c = cond(), night = isNight();
+    const grey = /cloudy|rain|pouring|snow|lightning|hail|fog/.test(c) && c !== "partlycloudy";
+    const top = night ? (grey ? "#1a2230" : "#0b1430") : grey ? "#5d6b7a" : "#3d8fe0";
+    const bottom = night ? (grey ? "#2c3442" : "#1d2f5a") : grey ? "#a9b4bf" : "#a8d6ff";
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, top); g.addColorStop(1, bottom);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+
+  function frame(t) {
+    const c = cond(), night = isNight(), T = t / 1000;
+    sky();
+    const windy = /windy/.test(c);
+    // Stjärnor eller sol
+    if (night && !/cloudy|rain|pouring|snow|lightning|hail|fog/.test(c)) {
+      for (let i = 0; i < 140; i++) {
+        const x = (i * 97.3) % W, y = (i * 53.7) % (H * 0.75);
+        ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.35 * Math.sin(T * 1.3 + i)})`;
+        ctx.fillRect(x, y, 1.6, 1.6);
+      }
+    } else if (!night && /sunny|partlycloudy|windy|exceptional|^$/.test(c)) {
+      const sx = W * 0.82, sy = H * 0.2, r = Math.min(W, H) * 0.09;
+      ctx.save(); ctx.translate(sx, sy); ctx.rotate(T * 0.05);
+      for (let k = 0; k < 12; k++) {
+        ctx.rotate(Math.PI / 6);
+        ctx.fillStyle = "rgba(255, 236, 160, 0.16)";
+        ctx.beginPath(); ctx.moveTo(0, -r * 1.2); ctx.lineTo(r * 0.25, -r * 3); ctx.lineTo(-r * 0.25, -r * 3); ctx.fill();
+      }
+      ctx.restore();
+      const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 2.2);
+      g.addColorStop(0, "#fff8d0"); g.addColorStop(0.4, "#ffd75e"); g.addColorStop(0.45, "rgba(255,215,94,0.5)"); g.addColorStop(1, "rgba(255,215,94,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, r * 2.2, 0, 7); ctx.fill();
+    }
+    // Moln
+    for (const cl of clouds) {
+      cl.x += (windy ? 1.6 : 0.25) * cl.s;
+      if (cl.x > W + 300 * cl.s) cl.x = -300 * cl.s;
+      const r = Math.min(W, H) * 0.08 * cl.s;
+      ctx.fillStyle = night ? "rgba(80, 90, 110, 0.55)" : /rain|pouring|lightning|hail/.test(c) ? "rgba(120, 128, 140, 0.75)" : "rgba(255, 255, 255, 0.8)";
+      ctx.beginPath();
+      [[0, 0, 1], [r * 1.1, -r * 0.3, 1.2], [r * 2.2, 0, 0.95], [r * 1.1, r * 0.25, 1]].forEach(([dx, dy, k]) => {
+        ctx.moveTo(cl.x + dx + r * k, cl.y + dy); ctx.arc(cl.x + dx, cl.y + dy, r * k, 0, 7);
+      });
+      ctx.fill();
+    }
+    // Nederbörd
+    const slant = windy ? 0.6 : 0.15;
+    for (const p of parts) {
+      if (p.kind === "snow") {
+        p.y += 0.7 * p.z; p.x += Math.sin(T + p.z * 10) * 0.5 + slant;
+        ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 * p.z, 0, 7); ctx.fill();
+      } else if (p.kind === "hail") {
+        p.y += 9 * p.z; p.x += slant * 3;
+        ctx.fillStyle = "rgba(240,248,255,0.95)"; ctx.beginPath(); ctx.arc(p.x, p.y, 2.6 * p.z, 0, 7); ctx.fill();
+      } else {
+        const v = (c === "pouring" ? 16 : 11) * p.z;
+        p.y += v; p.x += v * slant;
+        ctx.strokeStyle = `rgba(200, 220, 255, ${0.35 * p.z})`; ctx.lineWidth = 1.2 * p.z;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - v * slant * 1.4, p.y - v * 1.4); ctx.stroke();
+      }
+      if (p.y > H + 10) { p.y = -10; p.x = Math.random() * W; }
+      if (p.x > W + 10) p.x = -10;
+    }
+    // Dimma: breda band som glider
+    if (c === "fog") {
+      for (let k = 0; k < 5; k++) {
+        const y = H * (0.25 + k * 0.15), x = ((T * 12 * (k % 2 ? 1 : -1)) % W);
+        const g = ctx.createLinearGradient(0, y - H * 0.1, 0, y + H * 0.1);
+        g.addColorStop(0, "rgba(220,225,230,0)"); g.addColorStop(0.5, "rgba(220,225,230,0.35)"); g.addColorStop(1, "rgba(220,225,230,0)");
+        ctx.fillStyle = g; ctx.fillRect(x - W, y - H * 0.1, W * 3, H * 0.2);
+      }
+    }
+    // Blixtar
+    if (/lightning/.test(c)) {
+      if (flash <= 0 && Math.random() < 0.004) flash = 1;
+      if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.6})`; ctx.fillRect(0, 0, W, H); flash -= 0.08; }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function fit() {
+    const lines = timeEl.querySelectorAll("div");
+    let size = Math.min(H * 0.5 / Math.max(1, lines.length + 0.8), W * 0.16);
+    timeEl.style.fontSize = size + "px";
+    const widest = Math.max(...[...lines].map(l => l.scrollWidth), 1);
+    if (widest > W * 0.9) timeEl.style.fontSize = size * W * 0.9 / widest + "px";
+    wxEl.style.fontSize = parseFloat(timeEl.style.fontSize) * 0.5 + "px";
+    if (wxEl.scrollWidth > W * 0.9) wxEl.style.fontSize = parseFloat(wxEl.style.fontSize) * W * 0.9 / wxEl.scrollWidth + "px";
+  }
+
+  function showWeather() {
+    const p = weather ? PHRASE[weather.condition] : null;
+    wxEl.textContent = p ? "och " + p : "";
+    const temp = weather && weather.temperature != null ? `${String(Math.round(weather.temperature * 10) / 10).replace(".", ",")} ${weather.unit}` : "";
+    tempEl.textContent = temp;
+    fit();
+  }
+
+  async function loadWeather() {
+    try {
+      const r = await fetch("/ordklocka/vader.json", { cache: "no-store" });
+      const data = await r.json();
+      const next = data.available ? data : null;
+      const changed = cond() !== ((next && next.condition) || "");
+      weather = next;
+      if (changed) scene();
+    } catch { /* behåll det senaste vädret */ }
+    showWeather();
+  }
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    const set = () => {
+      timeEl.textContent = "";
+      for (const l of S.lines(t)) { const d = document.createElement("div"); d.textContent = l; d.style.whiteSpace = "nowrap"; timeEl.appendChild(d); }
+      fit();
+    };
+    if (info.first) { set(); return; }
+    timeEl.classList.add("fade");
+    setTimeout(() => { set(); timeEl.classList.remove("fade"); }, 800);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", () => { build(); fit(); });
+  build();
+  loadWeather();
+  setInterval(loadWeather, 10 * 60 * 1000);
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/vader/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

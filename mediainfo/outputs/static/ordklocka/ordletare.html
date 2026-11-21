@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Ordletare</title>
+<style>
+  :root { --ink: #1f2a44; --paper: #fbf7ec; --mark: rgba(255, 196, 0, 0.45); --found: rgba(80, 200, 120, 0.45);
+          --panel-bg: rgba(251, 247, 236, 0.95); --panel-fg: #1f2a44; --panel-accent: #1f2a44; --panel-bg-solid: #fbf7ec; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: #d9d2c0 repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.02) 0 6px, transparent 6px 12px);
+         display: grid; place-items: center; font-family: "Courier New", "DejaVu Sans Mono", monospace; color: var(--ink); }
+  .sheet { position: relative; background: var(--paper); padding: calc(var(--c) * 0.6); border-radius: 4px;
+           box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, 0.25); transform: rotate(-0.6deg); }
+  .title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: calc(var(--c) * 0.35);
+           font: 700 calc(var(--c) * 0.42) / 1 "Georgia", "DejaVu Serif", serif; letter-spacing: 0.05em; }
+  .title small { font: 400 calc(var(--c) * 0.3) / 1 "Georgia", serif; opacity: 0.7; }
+  .grid { position: relative; display: grid; touch-action: none; user-select: none; }
+  .grid span { width: var(--c); height: var(--c); display: grid; place-items: center; font-weight: 700;
+               font-size: calc(var(--c) * 0.62); position: relative; z-index: 1; cursor: pointer; }
+  svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  svg .mark { fill: none; stroke: var(--mark); stroke-linecap: round; transition: opacity 0.8s; }
+  svg .mark.hidden { opacity: 0; }
+  svg .found { stroke: var(--found); }
+  svg .drag { stroke: rgba(31, 42, 68, 0.25); }
+  .dots { display: inline-flex; gap: calc(var(--c) * 0.15); margin-left: calc(var(--c) * 0.3); }
+  .dots i { width: calc(var(--c) * 0.18); height: calc(var(--c) * 0.18); border-radius: 50%; border: 2px solid var(--ink); opacity: 0.6; }
+  .dots i.on { background: var(--ink); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="sheet" aria-hidden="true">
+  <div class="title"><span>Hitta tiden!<span class="dots" id="dots"><i></i><i></i><i></i><i></i></span></span><small id="count"></small></div>
+  <div class="grid" id="grid"><svg id="svg"></svg></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Markera orden">
+      <span class="label">Markera</span>
+      <button data-reveal="direkt">direkt</button>
+      <button data-reveal="efter">efter 1 min</button>
+      <button data-reveal="aldrig">själv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Tidsorden göms i ett ordsökspussel: vågrätt, lodrätt eller på snedden,
+  // ibland baklänges. Orden markeras automatiskt (direkt eller efter en
+  // minut), men man kan också dra över bokstäverna för att hitta dem själv.
+  const gridEl = document.getElementById("grid"), svg = document.getElementById("svg");
+  const countEl = document.getElementById("count");
+  const dots = [...document.querySelectorAll("#dots i")];
+  const FILL = "AAAAEEEEEENNNNRRRRSSSTTTTIIILLLOOOKKDDMMGGUUÄVVHFFÅPÖBJY";
+  let COLS = 14, ROWS = 9, cells = [], placed = [], found = new Set(), reveal = "direkt", revealTimer = 0, size = 40;
+  let seed = 1;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1], [-1, 0], [0, -1]];
+
+  function layoutSize() {
+    const portrait = innerHeight > innerWidth * 1.1;
+    [COLS, ROWS] = portrait ? [9, 14] : [14, 9];
+    size = Math.min(innerWidth * 0.9 / (COLS + 1.2), innerHeight * 0.82 / (ROWS + 2.2));
+    document.documentElement.style.setProperty("--c", size + "px");
+    gridEl.style.gridTemplateColumns = `repeat(${COLS}, var(--c))`;
+  }
+
+  // Lägger orden (längst först) på slumpade platser utan krockar, och
+  // fyller resten med vanliga bokstäver. Samma tid ger samma pussel.
+  function build(words, key) {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      seed = key * 7919 + attempt * 104729 + 1;
+      const g = Array(COLS * ROWS).fill("");
+      const out = [];
+      let ok = true;
+      for (const w of [...words].sort((a, b) => b.length - a.length)) {
+        const chars = [...w];
+        let done = false;
+        for (let tries = 0; tries < 300 && !done; tries++) {
+          // Baklänges och uppåt bara ibland: lättare att läsa
+          const d = DIRS[Math.floor(rand() * (rand() < 0.75 ? 4 : DIRS.length))];
+          const x0 = Math.floor(rand() * COLS), y0 = Math.floor(rand() * ROWS);
+          const xe = x0 + d[0] * (chars.length - 1), ye = y0 + d[1] * (chars.length - 1);
+          if (xe < 0 || xe >= COLS || ye < 0 || ye >= ROWS) continue;
+          if (chars.some((ch, k) => { const v = g[(y0 + d[1] * k) * COLS + x0 + d[0] * k]; return v && v !== ch; })) continue;
+          chars.forEach((ch, k) => { g[(y0 + d[1] * k) * COLS + x0 + d[0] * k] = ch; });
+          out.push({ word: w, x0, y0, xe, ye });
+          done = true;
+        }
+        if (!done) { ok = false; break; }
+      }
+      if (!ok) continue;
+      for (let i = 0; i < g.length; i++) if (!g[i]) g[i] = FILL[Math.floor(rand() * FILL.length)];
+      return [g, out];
+    }
+    return [Array(COLS * ROWS).fill("·"), []];
+  }
+
+  function center(x, y) { return [(x + 0.5) * size, (y + 0.5) * size]; }
+  function line(cls, x0, y0, xe, ye) {
+    const [ax, ay] = center(x0, y0), [bx, by] = center(xe, ye);
+    const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    l.setAttribute("x1", ax); l.setAttribute("y1", ay); l.setAttribute("x2", bx); l.setAttribute("y2", by);
+    l.setAttribute("class", cls); l.setAttribute("stroke-width", size * 0.78);
+    svg.appendChild(l);
+    return l;
+  }
+
+  function render() {
+    gridEl.querySelectorAll("span").forEach(s => s.remove());
+    svg.textContent = "";
+    for (const ch of cells) { const s = document.createElement("span"); s.textContent = ch; gridEl.appendChild(s); }
+    for (const p of placed) {
+      p.el = line("mark" + (found.has(p.word + p.x0 + p.y0) ? " found" : ""), p.x0, p.y0, p.xe, p.ye);
+      p.el.classList.toggle("hidden", !shouldShow(p));
+    }
+    countEl.textContent = `${found.size} / ${placed.length} hittade`;
+  }
+  let shownAt = 0;
+  const shouldShow = p => found.has(p.word + p.x0 + p.y0) || reveal === "direkt" || (reveal === "efter" && performance.now() - shownAt > 60000);
+
+  let words = [], key = 0;
+  function newPuzzle(t, now) {
+    words = ["KLOCKAN", "ÄR", ...OrdklockaTid.spokenWords(t)];
+    key = now.getHours() * 12 + Math.floor(now.getMinutes() / 5);
+    found = new Set(); shownAt = performance.now();
+    layoutSize();
+    [cells, placed] = build(words, key);
+    render();
+    clearTimeout(revealTimer);
+    if (reveal === "efter") revealTimer = setTimeout(render, 60000);
+  }
+
+  // Dra över bokstäverna för att markera ett ord själv.
+  let drag = null;
+  const cellAt = e => {
+    const r = gridEl.getBoundingClientRect();
+    return [Math.floor((e.clientX - r.left) / size), Math.floor((e.clientY - r.top) / size)];
+  };
+  gridEl.addEventListener("pointerdown", e => { const [x, y] = cellAt(e); drag = { x0: x, y0: y, el: line("mark drag", x, y, x, y) }; gridEl.setPointerCapture(e.pointerId); });
+  gridEl.addEventListener("pointermove", e => {
+    if (!drag) return;
+    let [x, y] = cellAt(e);
+    // Bara raka linjer: vågrätt, lodrätt eller 45 grader
+    const dx = x - drag.x0, dy = y - drag.y0, n = Math.max(Math.abs(dx), Math.abs(dy));
+    const sx = Math.round(dx / (n || 1)), sy = Math.round(dy / (n || 1));
+    drag.xe = drag.x0 + sx * n; drag.ye = drag.y0 + sy * n;
+    const [bx, by] = center(drag.xe, drag.ye);
+    drag.el.setAttribute("x2", bx); drag.el.setAttribute("y2", by);
+  });
+  gridEl.addEventListener("pointerup", () => {
+    if (!drag) return;
+    const d = drag; drag = null; d.el.remove();
+    const hit = placed.find(p => (p.x0 === d.x0 && p.y0 === d.y0 && p.xe === d.xe && p.ye === d.ye) ||
+                                 (p.xe === d.x0 && p.ye === d.y0 && p.x0 === d.xe && p.y0 === d.ye));
+    if (hit) { found.add(hit.word + hit.x0 + hit.y0); render(); }
+  });
+
+  let lastT = null;
+  const clock = S.clock((t, info) => {
+    dots.forEach((d, i) => d.classList.toggle("on", i < t.extra));
+    lastT = t;
+    if (info.wordsChanged) newPuzzle(t, info.now);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("reveal", "ordklocka-ordletare", "direkt", v => {
+    reveal = v;
+    clearTimeout(revealTimer);
+    if (v === "efter") revealTimer = setTimeout(render, Math.max(0, 60000 - (performance.now() - shownAt)));
+    if (cells.length) render();
+  });
+  addEventListener("resize", () => {
+    if (!lastT) return;
+    const dims = COLS + "x" + ROWS;
+    layoutSize();
+    if (dims !== COLS + "x" + ROWS) { found = new Set(); [cells, placed] = build(words, key); }   // stående/liggande: nytt pussel
+    render();
+  });
+  S.setup("/ordklocka/ordletare/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

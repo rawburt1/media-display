@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Kalejdoskop</title>
+<style>
+  :root { --panel-bg: rgba(10, 6, 18, 0.9); --panel-fg: #f2ecff; --panel-accent: #ff7ad9; --panel-bg-solid: #0a0612; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #07040d; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Speglar">
+      <span class="label">Speglar</span>
+      <button data-seg="6">6</button>
+      <button data-seg="8">8</button>
+      <button data-seg="12">12</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Tidsorden ligger som färgade glasbitar i kalejdoskopets ena kil och
+  // speglas runt mitten. Kalejdoskopet vrids sakta; när tiden ändras ger
+  // det ett ryck och bitarna faller om till ett nytt mönster. I mitten
+  // syns tiden i klartext, som genom ett runt fönster.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const src = document.createElement("canvas"), sx = src.getContext("2d");
+  const HUES = [330, 280, 200, 170, 45, 15];
+  let W, H, dpr, R, seg = 8, lines = [], words = [], pieces = [], rot = 0, spin = 0;
+
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    R = Math.hypot(W, H) / 2;
+    src.width = src.height = Math.ceil(R * dpr);
+    scatter();
+  }
+
+  // Bitarna i källbilden: orden i olika storlekar, färger och vinklar.
+  function scatter() {
+    pieces = [];
+    const n = 26;
+    for (let i = 0; i < n; i++) {
+      const w = words.length ? words[i % words.length] : "•";
+      const a = Math.random() * Math.PI * 2 / seg, d = R * (0.12 + Math.random() * 0.88);
+      pieces.push({
+        text: w, x: Math.cos(a) * d, y: Math.sin(a) * d, size: R * (0.05 + Math.random() * 0.11),
+        rot: Math.random() * Math.PI * 2, hue: HUES[(Math.random() * HUES.length) | 0], drift: (Math.random() - 0.5) * 0.3,
+      });
+    }
+  }
+
+  function paintSource(T) {
+    sx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = sx.createRadialGradient(0, 0, 0, 0, 0, R);
+    g.addColorStop(0, "#1a0f2e"); g.addColorStop(1, "#05030a");
+    sx.fillStyle = g; sx.fillRect(0, 0, R, R);
+    sx.textAlign = "center"; sx.textBaseline = "middle";
+    sx.globalCompositeOperation = "lighter";
+    for (const p of pieces) {
+      sx.save();
+      sx.translate(p.x + Math.sin(T * 0.2 + p.rot) * R * 0.04, p.y + Math.cos(T * 0.17 + p.rot) * R * 0.03);
+      sx.rotate(p.rot + T * p.drift * 0.2);
+      sx.font = `800 ${p.size}px "Avenir Next", "Helvetica Neue", "DejaVu Sans", sans-serif`;
+      sx.fillStyle = `hsla(${p.hue}, 90%, 60%, 0.55)`;
+      sx.fillText(p.text, 0, 0);
+      sx.restore();
+    }
+    sx.globalCompositeOperation = "source-over";
+  }
+
+  function frame(t) {
+    const T = t / 1000;
+    spin *= 0.96;
+    rot += 0.0015 + spin;
+    paintSource(T);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#07040d"; ctx.fillRect(0, 0, W, H);
+    const wedge = Math.PI * 2 / seg;
+    for (let i = 0; i < seg; i++) {
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      // Varannan kil speglad: vrid till kilens bortre kant och vänd
+      if (i % 2) { ctx.rotate(rot + (i + 1) * wedge); ctx.scale(1, -1); } else ctx.rotate(rot + i * wedge);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R, -0.002, wedge + 0.002); ctx.closePath(); ctx.clip();
+      ctx.drawImage(src, 0, 0, R, R);
+      ctx.restore();
+    }
+    // Fönstret i mitten med tiden i klartext
+    const all = ["klockan är", ...lines.map(l => l.toLowerCase())];
+    const rr = Math.min(W, H) * 0.3;
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    const g = ctx.createRadialGradient(0, 0, rr * 0.6, 0, 0, rr * 1.08);
+    g.addColorStop(0, "rgba(7,4,13,0.86)"); g.addColorStop(0.9, "rgba(7,4,13,0.86)"); g.addColorStop(1, "rgba(7,4,13,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rr * 1.08, 0, 7); ctx.fill();
+    ctx.strokeStyle = "rgba(255, 122, 217, 0.45)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, rr, 0, 7); ctx.stroke();
+    let size = rr * 1.5 / (all.length * 1.1);
+    ctx.font = `800 ${size}px "Avenir Next", "Helvetica Neue", "DejaVu Sans", sans-serif`;
+    const widest = Math.max(...all.map(l => ctx.measureText(l).width));
+    size = Math.min(size, size * rr * 1.7 / widest);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    all.forEach((l, i) => {
+      ctx.font = `800 ${i ? size : size * 0.6}px "Avenir Next", "Helvetica Neue", "DejaVu Sans", sans-serif`;
+      ctx.fillStyle = i ? "#fff" : "rgba(255, 200, 240, 0.8)";
+      ctx.fillText(l, 0, (i - (all.length - 1) / 2) * size * 1.1);
+    });
+    ctx.restore();
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    words = OrdklockaTid.spokenWords(t);
+    if (!W) return;
+    scatter();
+    if (!info.first && !matchMedia("(prefers-reduced-motion: reduce)").matches) spin = 0.08;
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("seg", "ordklocka-kalejdoskop", "8", v => { seg = +v; if (W) scatter(); });
+  addEventListener("resize", build);
+  build();
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/kalejdoskop/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

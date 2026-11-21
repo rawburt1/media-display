@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Bioluminiscens</title>
+<style>
+  /* Bioluminiscens: en enklare galleriklocka, ritad av galleri-render.js. */
+  :root { --bg:#041526;
+          --ink:#4bf6dc;
+          --panel-bg:#041526ee;
+          --panel-fg:#4bf6dc;
+          --panel-accent:#4bf6dc;
+          --panel-bg-solid:#041526; }
+</style>
+<link rel="stylesheet" href="/ordklocka/galleri-stil.css">
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+<main id="scene">
+  <div id="grid" aria-hidden="true"></div>
+  <div id="phrase" aria-hidden="true"></div>
+  <div id="sub" aria-hidden="true"></div>
+  <div id="dots" aria-hidden="true"></div>
+</main>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Ljus">
+      <span class="label">Ljus</span>
+      <button data-mode="dag">dag</button>
+      <button data-mode="natt">natt</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script src="/ordklocka/dygn.js"></script>
+<script>
+  // Utseendet: effekt (se galleri-stil.css / galleri-render.js) och färg.
+  window.CLOCK_DESIGN = {"slug": "bioluminiscens", "mode": "particles", "ink": "#4bf6dc"};
+</script>
+<script src="/ordklocka/galleri-render.js"></script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Urklipp</title>
+<style>
+  @font-face { font-family: "Flex"; src: url("/ordklocka/fonts/roboto-flex.woff2") format("woff2"); font-weight: 100 1000; font-stretch: 25% 151%; }
+  @font-face { font-family: "Josefin"; src: url("/ordklocka/fonts/josefin-sans-latin-600.woff2") format("woff2"); }
+  :root { --panel-bg: rgba(40, 36, 30, 0.92); --panel-fg: #f2ece0; --panel-accent: #f2ece0; --panel-bg-solid: #28241e; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: #3a332b; background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px); background-size: 6px 6px;
+         display: grid; place-items: center; }
+  .board { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.35); }
+  .row { display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; gap: calc(var(--u) * 0.06); }
+  .gap { width: calc(var(--u) * 0.45); }
+  .cut { display: inline-grid; place-items: center; line-height: 1; padding: 0.06em 0.12em 0.02em; white-space: pre;
+         box-shadow: 0.04em 0.06em 0.1em rgba(0, 0, 0, 0.45); transform-origin: 50% 60%; }
+  .tape { position: absolute; }
+</style>
+</head>
+<body>
+<div class="board" id="board" aria-hidden="true"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // Orden sätts ihop av bokstäver urklippta ur olika tidningar: varje
+  // bokstav har eget typsnitt, egen färg, storlek och lite sned klippning.
+  // När tiden ändras plockas de gamla urklippen bort och nya glider in.
+  const board = document.getElementById("board");
+  const FONTS = [
+    ["Flex", 900, ""], ["Flex", 600, ""], ["Flex", 300, "italic"], ["Georgia", 700, ""], ["Georgia", 400, "italic"],
+    ["Josefin", 600, ""], ["Courier New", 700, ""], ["Impact", 400, ""], ["DejaVu Serif", 700, ""], ["DejaVu Sans Mono", 700, ""],
+    ["Flex", 1000, ""], ["Times New Roman", 400, ""],
+  ];
+  const PAPERS = [
+    ["#f4f0e6", "#111"], ["#111", "#f4f0e6"], ["#ffe14a", "#111"], ["#d6302b", "#fff"], ["#fdfdfd", "#1d4ed8"],
+    ["#e9dfc9", "#3b2a1a"], ["#bfe3f5", "#0b2545"], ["#f7c6d0", "#5a0b25"], ["#ffffff", "#d6302b"], ["#2a2a2a", "#ffe14a"],
+    ["#cde8c1", "#143d14"], ["#f9f2d0", "#222"],
+  ];
+  let seed = 1;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  let u = 40;
+
+  function cutout(ch) {
+    const el = document.createElement("span");
+    el.className = "cut";
+    el.textContent = ch;
+    const [fam, wt, st] = FONTS[(rand() * FONTS.length) | 0];
+    const [bg, fg] = PAPERS[(rand() * PAPERS.length) | 0];
+    el.style.fontFamily = `"${fam}", serif`; el.style.fontWeight = wt; el.style.fontStyle = st;
+    el.style.background = bg; el.style.color = fg;
+    el.style.fontSize = `calc(var(--u) * ${0.85 + rand() * 0.45})`;
+    if (fam === "Flex") el.style.fontStretch = `${60 + rand() * 80}%`;
+    // Sned klippning: varje hörn lite inåt
+    const c = () => (rand() * 9).toFixed(1) + "%";
+    el.style.clipPath = `polygon(${c()} ${c()}, calc(100% - ${c()}) ${c()}, calc(100% - ${c()}) calc(100% - ${c()}), ${c()} calc(100% - ${c()}))`;
+    el.dataset.rot = ((rand() - 0.5) * 16).toFixed(1);
+    el.dataset.dy = ((rand() - 0.5) * 0.25).toFixed(2);
+    el.style.transform = `translateY(calc(var(--u) * ${el.dataset.dy})) rotate(${el.dataset.rot}deg)`;
+    return el;
+  }
+
+  function compose(ls, now, animate) {
+    const all = ["KLOCKAN ÄR", ...ls];
+    const longest = Math.max(...all.map(l => l.length));
+    u = Math.min(innerWidth * 0.9 / (longest * 0.95), innerHeight * 0.78 / (all.length * 1.55));
+    document.documentElement.style.setProperty("--u", u + "px");
+    const old = [...board.querySelectorAll(".cut")];
+    old.forEach((el, i) => {
+      if (!animate) return;
+      el.animate([{ transform: el.style.transform, opacity: 1 },
+                  { transform: `translate(${(Math.random() - 0.5) * 60}vw, -80vh) rotate(${(Math.random() - 0.5) * 120}deg)`, opacity: 0 }],
+                 { duration: 700, delay: i * 25, easing: "ease-in", fill: "forwards" });
+    });
+    const build = () => {
+      board.textContent = "";
+      // Samma tid ger samma urklipp (ingen ny slump vid omritning)
+      seed = (now.getHours() * 60 + now.getMinutes() - now.getMinutes() % 5) * 7919 + 17;
+      let k = 0;
+      all.forEach(line => {
+        const row = document.createElement("div");
+        row.className = "row";
+        for (const w of line.split(" ")) {
+          if (row.children.length) { const gap = document.createElement("span"); gap.className = "gap"; row.appendChild(gap); }
+          for (const ch of w) {
+            const el = cutout(ch);
+            row.appendChild(el);
+            if (animate) el.animate([{ transform: `translate(${(rand() - 0.5) * 40}vw, 90vh) rotate(${(rand() - 0.5) * 90}deg)`, opacity: 0 },
+                                     { transform: el.style.transform, opacity: 1 }],
+                                    { duration: 900, delay: 300 + k * 60, easing: "cubic-bezier(.2, .8, .3, 1.1)", fill: "backwards" });
+            k++;
+          }
+        }
+        board.appendChild(row);
+      });
+    };
+    if (animate && old.length) setTimeout(build, 700 + old.length * 25); else build();
+  }
+
+  let last = null;
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    last = [S.lines(t), info.now];
+    compose(last[0], info.now, !info.first && !matchMedia("(prefers-reduced-motion: reduce)").matches);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", () => last && compose(last[0], last[1], false));
+  S.setup("/ordklocka/urklipp/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

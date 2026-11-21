@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Fraktal</title>
+<style>
+  :root { --panel-bg: rgba(6, 6, 14, 0.9); --panel-fg: #e8e6ff; --panel-accent: #ffb347; --panel-bg-solid: #06060e; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  // En Mandelbrotmängd som långsamt zoomar in mot en intressant punkt. Orden
+  // växer fram ur fraktalen: de är fyllda med samma mönster, fast ljusare.
+  // Vid varje tidsändring zoomar bilden ut och sedan in mot en ny punkt.
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const low = document.createElement("canvas"), lx = low.getContext("2d");
+  const textC = document.createElement("canvas"), tx = textC.getContext("2d");
+  const TARGETS = [
+    [-0.743643887037151, 0.13182590420533], [-0.1011, 0.9563], [-1.25066, 0.02012], [0.285, 0.0113],
+    [-0.77568377, 0.13646737], [-1.768778833, -0.001738996], [0.360240443437, -0.641313061064], [-0.0452407411, 0.9868162204],
+  ];
+  let W, H, dpr, lw, lh, img, lines = [];
+  let target = 0, zoomStart = performance.now(), textAlpha = 0, outStart = -1e9;
+  let RES = 3.2;                   // en fraktalpixel per RES skärmpixlar (ökar på långsamma skärmar)
+
+  function build() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    textC.width = cv.width; textC.height = cv.height;
+    lw = Math.ceil(W / RES); lh = Math.ceil(H / RES);
+    low.width = lw; low.height = lh;
+    img = lx.createImageData(lw, lh);
+  }
+
+  // Färgskala: djupblått -> turkos -> guld -> vitt, cyklisk
+  const PAL = [];
+  for (let i = 0; i < 256; i++) {
+    const t = i / 256, a = 2 * Math.PI * t;
+    PAL.push([
+      Math.round(128 + 127 * Math.cos(a * 1.0 + 3.6)),
+      Math.round(128 + 127 * Math.cos(a * 1.0 + 4.4)),
+      Math.round(128 + 127 * Math.cos(a * 1.0 + 5.4)),
+    ]);
+  }
+
+  function render(cxr, cyi, scale, shift) {
+    const d = img.data;
+    const maxIt = Math.min(900, 90 + Math.floor(45 * Math.log10(1 / scale)));
+    const aspect = lw / lh;
+    for (let py = 0; py < lh; py++) {
+      const ci = cyi + (py / lh - 0.5) * scale;
+      for (let px = 0; px < lw; px++) {
+        const cr = cxr + (px / lw - 0.5) * scale * aspect;
+        let zr = 0, zi = 0, it = 0, zr2 = 0, zi2 = 0;
+        while (it < maxIt && zr2 + zi2 < 64) {
+          zi = 2 * zr * zi + ci; zr = zr2 - zi2 + cr;
+          zr2 = zr * zr; zi2 = zi * zi; it++;
+        }
+        const k = (py * lw + px) * 4;
+        if (it >= maxIt) { d[k] = 4; d[k + 1] = 3; d[k + 2] = 12; }
+        else {
+          const smooth = it + 1 - Math.log2(Math.log2(zr2 + zi2) / 2);
+          const c = PAL[(Math.floor(smooth * 6 + shift) % 256 + 256) % 256];
+          // Långt ute är det mörkt; ljuset sitter i trådarna nära kanten.
+          const f = Math.pow(Math.min(1, smooth / (12 + maxIt * 0.06)), 0.8);
+          d[k] = c[0] * f; d[k + 1] = c[1] * f; d[k + 2] = c[2] * f;
+        }
+        d[k + 3] = 255;
+      }
+    }
+    lx.putImageData(img, 0, 0);
+  }
+
+  function textMask(ls, alpha) {
+    tx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    tx.globalCompositeOperation = "source-over";
+    tx.clearRect(0, 0, W, H);
+    const all = ["klockan är", ...ls.map(l => l.toLowerCase())];
+    let size = H * 0.78 / (all.length * 1.08);
+    const font = s => `800 ${s}px "Avenir Next", "Helvetica Neue", "DejaVu Sans", sans-serif`;
+    tx.font = font(size);
+    const widest = Math.max(...all.map(l => tx.measureText(l).width));
+    size = Math.min(size, size * W * 0.88 / widest);
+    tx.font = font(size); tx.textAlign = "center"; tx.textBaseline = "middle";
+    const top = H / 2 - (all.length - 1) * size * 1.08 / 2;
+    tx.fillStyle = "#fff";
+    all.forEach((l, i) => tx.fillText(l, W / 2, top + i * size * 1.08));
+    // Fyll texten med fraktalen, ljusare och blandad med vitt så att den
+    // syns även där fraktalen är svart.
+    tx.globalCompositeOperation = "source-atop";
+    tx.globalAlpha = 0.7;
+    tx.filter = "brightness(2.2) saturate(1.4)";
+    tx.drawImage(low, 0, 0, W, H);
+    tx.filter = "none";
+    tx.globalAlpha = 1;
+    tx.globalCompositeOperation = "source-over";
+    return size;
+  }
+
+  let last = performance.now(), fpsSlow = 0;   // andel långsamma bildrutor
+  function frame(t) {
+    const sec = (t - zoomStart) / 1000;
+    const [cxr, cyi] = TARGETS[target];
+    // Utzoomning efter ett byte (1,5 s), sedan inzoomning mot nästa punkt.
+    const outK = Math.min(1, (t - outStart) / 1500);
+    let scale = 3.2 * Math.exp(-sec * 0.09);
+    if (scale < 2e-11) { zoomStart = t; scale = 3.2; }
+    let cx = cxr, cy = cyi;
+    if (outK < 1) { scale = Math.min(3.2, scale / Math.max(0.0001, Math.pow(outK, 3))); cx = cxr * outK - 0.5 * (1 - outK); cy = cyi * outK; }
+    render(cx, cy, Math.min(3.2, scale), t / 60);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.globalAlpha = 1;
+    ctx.drawImage(low, 0, 0, cv.width, cv.height);
+    // Mörkare bakom texten så att den går att läsa
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)"; ctx.fillRect(0, 0, cv.width, cv.height);
+    textAlpha = Math.min(1, textAlpha + 0.012);
+    const size = textMask(lines, textAlpha);
+    ctx.save();
+    ctx.globalAlpha = textAlpha;
+    ctx.shadowColor = "rgba(0,0,0,0.9)"; ctx.shadowBlur = size * 0.25 * dpr;
+    ctx.drawImage(textC, 0, 0);
+    ctx.shadowColor = "transparent";
+    ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = textAlpha * 0.2;
+    ctx.drawImage(textC, 0, 0);
+    ctx.restore();
+    // Långsamma datorer: sänk upplösningen hellre än att hacka
+    const dt = t - last; last = t;
+    fpsSlow = fpsSlow * 0.95 + (dt > 50 ? 1 : 0) * 0.05;
+    if (fpsSlow > 0.6 && RES < 7) { RES += 1; fpsSlow = 0; build(); }
+    requestAnimationFrame(frame);
+  }
+
+  const clock = S.clock((t, info) => {
+    if (!info.wordsChanged) return;
+    lines = S.lines(t);
+    if (info.first) {
+      target = (info.now.getHours() * 12 + Math.floor(info.now.getMinutes() / 5)) % TARGETS.length;
+      return;
+    }
+    // Nytt uttryck: zooma ut, byt punkt, zooma in igen och låt texten växa fram.
+    target = (target + 1) % TARGETS.length;
+    zoomStart = performance.now(); outStart = performance.now(); textAlpha = 0;
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  addEventListener("resize", build);
+  build();
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/fraktal/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>
