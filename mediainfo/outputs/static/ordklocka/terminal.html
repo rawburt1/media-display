@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Terminal</title>
+<style>
+  :root {
+    --fg: #39ff7a; --glow: rgba(57, 255, 122, 0.55); --bg: #020703;
+    --panel-bg: rgba(2, 10, 4, 0.92); --panel-fg: var(--fg); --panel-accent: var(--fg);
+    --panel-bg-solid: #020703;
+  }
+  [data-color="bärnsten"] { --fg: #ffb02e; --glow: rgba(255, 160, 30, 0.55); --bg: #070400; --panel-bg-solid: #070400; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  .screen {
+    position: fixed; inset: 0; background: var(--bg); color: var(--fg);
+    font-family: "VT323", "IBM Plex Mono", "DejaVu Sans Mono", "Courier New", monospace;
+    font-size: clamp(16px, 4.6vmin, 64px); line-height: 1.35;
+    padding: 5vmin 6vmin; display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  .lines { white-space: pre-wrap; word-break: break-word; }
+  .line.old { opacity: 0.55; }
+  .line.answer { font-size: 1.55em; line-height: 1.15; margin: 0.15em 0 0.4em; letter-spacing: 0.04em; }
+  .status {
+    margin-top: 0.6em; padding: 0.1em 0.5em; background: var(--fg); color: var(--bg);
+    display: flex; justify-content: space-between; font-size: 0.8em;
+  }
+  .cursor { display: inline-block; width: 0.6em; height: 1.05em; vertical-align: -0.15em; background: var(--fg);
+            animation: blink 1.06s steps(1) infinite; margin-left: 0.05em; }
+  body:not(.has-cursor) .cursor { visibility: hidden; animation: none; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* CRT: fosforglöd, sveplinjer, vinjett, välvd ruta och ett svagt flimmer */
+  body.crt .screen { text-shadow: 0 0 2px var(--fg), 0 0 10px var(--glow); border-radius: 3vmin;
+                     animation: flicker 6s infinite; }
+  body.crt .screen::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px);
+  }
+  body.crt .screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.75) 100%);
+    box-shadow: inset 0 0 6vmin rgba(0, 0, 0, 0.9);
+  }
+  body.crt .sweep {
+    position: fixed; left: 0; right: 0; height: 18vh; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.035), transparent);
+    animation: sweep 7s linear infinite;
+  }
+  body:not(.crt) .sweep { display: none; }
+  @keyframes sweep { from { top: -20vh; } to { top: 110vh; } }
+  @keyframes flicker { 0%, 100% { opacity: 1; } 47% { opacity: 0.985; } 48% { opacity: 0.94; } 49% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { body.crt .screen, body.crt .sweep { animation: none; } }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="lines" id="lines" aria-hidden="true"></div>
+  <div class="status" aria-hidden="true"><span>ORDKLOCKA/SV</span><span id="extra"></span></div>
+</div>
+<div class="sweep"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Färg">
+      <span class="label">Färg</span>
+      <button data-color="grön">grön</button>
+      <button data-color="bärnsten">bärnsten</button>
+    </div>
+    <div class="group" role="group" aria-label="Markör">
+      <span class="label">Markör</span>
+      <button data-cursor="på">på</button>
+      <button data-cursor="av">av</button>
+    </div>
+    <div class="group" role="group" aria-label="CRT-effekt">
+      <span class="label">CRT</span>
+      <button data-crt="på">på</button>
+      <button data-crt="av">av</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const linesEl = document.getElementById("lines");
+  const extraEl = document.getElementById("extra");
+  const cursor = document.createElement("span");
+  cursor.className = "cursor";
+
+  // Skrivkö: rader skrivs ut ett tecken i taget, som på en seriell terminal.
+  const queue = [];
+  let busy = false;
+  function print(text, opts = {}) {
+    queue.push({ text, ...opts });
+    if (!busy) next();
+  }
+  function next() {
+    const job = queue.shift();
+    if (!job) { busy = false; return; }
+    busy = true;
+    // En ny fråga skrivs på den tomma prompten i stället för under den.
+    const last = linesEl.lastElementChild;
+    if (job.atPrompt && last && last.textContent.trim() === ">") last.remove();
+    const line = document.createElement("div");
+    line.className = "line" + (job.cls ? " " + job.cls : "");
+    linesEl.appendChild(line);
+    trim();
+    let i = 0;
+    const step = () => {
+      line.textContent = job.text.slice(0, i);
+      line.appendChild(cursor);
+      if (i++ < job.text.length) setTimeout(step, job.speed ?? 45 + Math.random() * 40);
+      else setTimeout(next, job.pause ?? 250);
+    };
+    step();
+  }
+  // Behåll bara så många rader som ryms; äldre svar tonas ned.
+  function trim() {
+    const screen = document.querySelector(".screen");
+    while (linesEl.children.length > 2 && linesEl.scrollHeight > screen.clientHeight * 0.82) {
+      linesEl.firstElementChild.remove();
+    }
+  }
+
+  let booted = false;
+  function boot() {
+    print("ORDKLOCKA BIOS 1.0   64K RAM OK", { speed: 8, pause: 120 });
+    print("LADDAR SVENSKA.TXT ...  KLAR", { speed: 8, pause: 500 });
+    print("", { speed: 0, pause: 100 });
+  }
+
+  const clock = S.clock((t, info) => {
+    extraEl.textContent = t.extra ? "+" + t.extra + " MIN " + "■".repeat(t.extra) : "";
+    if (!info.wordsChanged) return;
+    if (!booted) { boot(); booted = true; }
+    linesEl.querySelectorAll(".line.answer").forEach(el => el.classList.add("old"));
+    print("> vad är klockan?", { pause: 600, atPrompt: true });
+    print("KLOCKAN ÄR " + OrdklockaTid.spokenWords(t).join(" "), { cls: "answer", speed: 70, pause: 400 });
+    print("> ", { speed: 0 });
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("color", "ordklocka-terminal-farg", "grön", v => { document.documentElement.dataset.color = v; });
+  S.choice("cursor", "ordklocka-terminal-markor", "på", v => document.body.classList.toggle("has-cursor", v === "på"));
+  S.choice("crt", "ordklocka-terminal-crt", "på", v => document.body.classList.toggle("crt", v === "på"));
+  S.setup("/ordklocka/terminal/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

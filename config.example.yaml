@@ -750,8 +750,14 @@ outputs:
     # "dominoes" (dominoes that topple in a chain to form the words, /ordklocka/domino),
     # "balloons" (letter balloons floating in the sky, /ordklocka/ballonger),
     # "constellations" (the words as constellations in a night sky, /ordklocka/stjarnor),
-    # "steamy_shower" (written in the steam on a shower wall, /ordklocka/dusch) or
-    # "blood" (a spooky scrawl in blood on the floor, /ordklocka/blod).
+    # "steamy_shower" (written in the steam on a shower wall, /ordklocka/dusch),
+    # "blood" (a spooky scrawl in blood on the floor, /ordklocka/blod),
+    # "typographic" (huge type showing only the current words, which glide to their new places when the time changes, /ordklocka/typografi),
+    # "circles" (hours, minutes and phrases on slowly rotating concentric rings, the current words lit, /ordklocka/cirklar),
+    # "terminal" (green or amber text typed on an old computer terminal, with optional blinking cursor and CRT effect, /ordklocka/terminal),
+    # "e_paper" (black text on white or warm grey paper, like an e-book reader, /ordklocka/epapper),
+    # "art" (the words drift across the screen, change size and form new patterns, like living digital art, /ordklocka/konst) or
+    # "narrative" (natural language, e.g. "Klockan är snart halv fyra på eftermiddagen" or "... snart femton trettio", /ordklocka/berattande).
     idle_clock_style: words
 
   # Multiple web outputs — e.g. one per room. Only the first can mount at

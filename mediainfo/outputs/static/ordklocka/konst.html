@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Konstverk</title>
+<style>
+  :root {
+    --panel-bg: rgba(12, 10, 20, 0.85); --panel-fg: #eee8ff; --panel-accent: #eee8ff;
+    --panel-bg-solid: #0c0a14;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0a14; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<canvas id="art" aria-hidden="true"></canvas>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Färger">
+      <span class="label">Palett</span>
+      <button data-palette="skymning">skymning</button>
+      <button data-palette="hav">hav</button>
+      <button data-palette="glöd">glöd</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const canvas = document.getElementById("art");
+  const ctx = canvas.getContext("2d");
+  const FONT = '"Playfair Display", "Didot", "Bodoni 72", "Georgia", "DejaVu Serif", serif';
+  const PALETTES = {
+    skymning: { bg: [12, 10, 20], hues: [[255, 120, 160], [255, 190, 120], [170, 140, 255], [120, 210, 255]] },
+    hav: { bg: [4, 14, 22], hues: [[90, 220, 210], [140, 190, 255], [230, 250, 255], [60, 160, 200]] },
+    glöd: { bg: [18, 8, 4], hues: [[255, 170, 60], [255, 90, 50], [255, 220, 150], [200, 60, 90]] },
+  };
+  let palette = PALETTES.skymning;
+  let W = 0, H = 0, dpr = 1;
+  function resize() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paintBg(1);
+  }
+  function paintBg(a) {
+    const [r, g, b] = palette.bg;
+    ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Varje ord är en kropp som glider mot sitt mål i det aktuella mönstret,
+  // med en långsam egen drift ovanpå.
+  let words = [];   // {text, x, y, size, alpha, tx, ty, tsize, rot, trot, hue, seed, dying}
+  const measure = (text, size) => { ctx.font = `600 ${size}px ${FONT}`; return ctx.measureText(text).width; };
+
+  // Mönstren: [namn, funktion(ord) -> mål]. Läsordningen bevaras alltid.
+  const PATTERNS = {
+    mening(list) {
+      // Som en vanlig mening, radbruten och centrerad.
+      const size = Math.min(W, H) * 0.13;
+      const rows = [];
+      let row = [];
+      for (const w of list) {
+        const test = [...row, w];
+        const width = test.reduce((s, x) => s + measure(x.text, size), 0) + size * 0.5 * (test.length - 1);
+        if (row.length && width > W * 0.85) { rows.push(row); row = [w]; } else row = test;
+      }
+      rows.push(row);
+      const lh = size * 1.15;
+      rows.forEach((r, ri) => {
+        const widths = r.map(w => measure(w.text, size));
+        let x = W / 2 - (widths.reduce((a, b) => a + b, 0) + size * 0.5 * (r.length - 1)) / 2;
+        r.forEach((w, i) => {
+          w.tx = x + widths[i] / 2; w.ty = H / 2 + (ri - (rows.length - 1) / 2) * lh;
+          w.tsize = size; w.trot = 0;
+          x += widths[i] + size * 0.5;
+        });
+      });
+    },
+    trappa(list) {
+      // En trappa diagonalt över skärmen, orden växer nedåt.
+      const n = list.length;
+      list.forEach((w, i) => {
+        const f = n > 1 ? i / (n - 1) : 0.5;
+        w.tsize = Math.min(W, H) * (0.06 + 0.1 * f);
+        w.tx = W * (0.2 + 0.6 * f); w.ty = H * (0.18 + 0.64 * f); w.trot = -0.12;
+      });
+    },
+    cirkel(list) {
+      // Runt en cirkel, medurs från klockan tio.
+      const n = list.length, R = Math.min(W, H) * 0.3;
+      list.forEach((w, i) => {
+        const a = -Math.PI * 0.8 + (i / n) * Math.PI * 2;
+        w.tx = W / 2 + Math.cos(a) * R * 1.25; w.ty = H / 2 + Math.sin(a) * R;
+        w.tsize = Math.min(W, H) * (i < 2 ? 0.06 : 0.11); w.trot = 0;
+      });
+    },
+    kolumn(list) {
+      // Staplade på höjden, som en dikt.
+      const n = list.length, lh = H * 0.8 / n;
+      list.forEach((w, i) => {
+        w.tsize = Math.min(lh * 0.8, W * 0.8 / Math.max(3, w.text.length) * 1.7);
+        w.tx = W * (0.5 + (i % 2 ? 0.06 : -0.06)); w.ty = H * 0.1 + lh * (i + 0.5); w.trot = 0;
+      });
+    },
+    spridd(list) {
+      // Spridda över skärmen i olika storlekar, men fortfarande i ordning uppifrån.
+      const n = list.length;
+      list.forEach((w, i) => {
+        w.tsize = Math.min(W, H) * (0.05 + Math.random() * 0.12);
+        w.tx = W * (0.18 + Math.random() * 0.64); w.ty = H * (0.12 + 0.76 * (i + 0.5) / n);
+        w.trot = (Math.random() - 0.5) * 0.5;
+      });
+    },
+  };
+  // Varannan gång meningen, så att klockan går att läsa ofta.
+  const ORDER = ["mening", "trappa", "mening", "cirkel", "mening", "kolumn", "mening", "spridd"];
+  let patternIndex = 0, patternSince = 0;
+  // Hur mycket orden driver på egen hand: lite när de bildar en mening
+  // (så att de inte glider in i varandra), mer i de fria mönstren.
+  let drift = 0.15;
+  const driftFor = () => (ORDER[patternIndex] === "mening" ? 0.15 : 1);
+  const live = () => words.filter(w => !w.dying);
+  function applyPattern() { PATTERNS[ORDER[patternIndex]](live()); }
+
+  function setWords(texts) {
+    const left = live();
+    const next = texts.map((text, i) => {
+      const j = left.findIndex(w => w.text === text);
+      if (j >= 0) return left.splice(j, 1)[0];
+      // Nya ord föds någonstans på skärmen och glider in.
+      return {
+        text, x: Math.random() * W, y: Math.random() * H, size: 4, alpha: 0, rot: 0,
+        hue: palette.hues[i % palette.hues.length], seed: Math.random() * 1000,
+      };
+    });
+    left.forEach(w => { w.dying = true; });
+    words = [...next, ...words.filter(w => w.dying)];
+    applyPattern();
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    paintBg(1);
+    // Svaga färgfält i paletten som sakta driver runt bakom orden.
+    palette.hues.forEach(([r, g, b], i) => {
+      const t = now / 1000 * 0.03 + i * 1.7;
+      const x = W * (0.5 + 0.4 * Math.sin(t * 1.3 + i)), y = H * (0.5 + 0.4 * Math.cos(t + i * 2));
+      const R = Math.max(W, H) * 0.45;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, R);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0.10)`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    });
+    if (now - patternSince > 24000) {
+      patternSince = now;
+      patternIndex = (patternIndex + 1) % ORDER.length;
+      applyPattern();
+    }
+    const k = 1 - Math.exp(-dt * 0.55);
+    drift += (driftFor() - drift) * k;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const w of words) {
+      const t = now / 1000 + w.seed;
+      const driftX = (Math.sin(t * 0.21) * 18 + Math.sin(t * 0.07) * 30) * drift;
+      const driftY = Math.cos(t * 0.17) * 14 * drift;
+      w.x += ((w.tx ?? w.x) + driftX - w.x) * k;
+      w.y += ((w.ty ?? w.y) + driftY - w.y) * k;
+      w.size += ((w.tsize ?? w.size) * (1 + Math.sin(t * 0.3) * 0.06 * drift) - w.size) * k;
+      w.rot += ((w.trot ?? 0) + Math.sin(t * 0.13) * 0.04 * drift - w.rot) * k;
+      w.alpha += ((w.dying ? 0 : 1) - w.alpha) * (1 - Math.exp(-dt * 0.8));
+      const [r, g, b] = w.hue;
+      ctx.save();
+      ctx.translate(w.x, w.y); ctx.rotate(w.rot);
+      ctx.font = `600 ${w.size}px ${FONT}`;
+      ctx.shadowColor = `rgba(${r},${g},${b},${0.6 * w.alpha})`;
+      ctx.shadowBlur = w.size * 0.35;
+      ctx.fillStyle = `rgba(${r},${g},${b},${0.9 * w.alpha})`;
+      ctx.fillText(w.text, 0, 0);
+      ctx.restore();
+    }
+    words = words.filter(w => !(w.dying && w.alpha < 0.01));
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener("resize", () => { resize(); applyPattern(); });
+  resize();
+
+  const clock = S.clock((t, info) => {
+    const extra = t.extra ? ["·".repeat(t.extra)] : [];
+    const texts = ["klockan", "är", ...OrdklockaTid.spokenWords(t).map(w => w.toLowerCase()), ...extra];
+    setWords(texts);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("palette", "ordklocka-konst-palett", "skymning", v => {
+    palette = PALETTES[v];
+    words.forEach((w, i) => { w.hue = palette.hues[i % palette.hues.length]; });
+    paintBg(1);
+  });
+  requestAnimationFrame(frame);
+  S.setup("/ordklocka/konst/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

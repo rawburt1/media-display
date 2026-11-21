@@ -930,6 +930,12 @@ _NEW_CLOCKS = [
     ("stjarnor", "constellations", "Ordklocka (stjärnhimmel)"),
     ("dusch", "steamy_shower", "Ordklocka (duschvägg)"),
     ("blod", "blood", "Ordklocka (blod)"),
+    ("typografi", "typographic", "Ordklocka (typografi)"),
+    ("cirklar", "circles", "Ordklocka (cirklar)"),
+    ("terminal", "terminal", "Ordklocka (terminal)"),
+    ("epapper", "e_paper", "Ordklocka (e-papper)"),
+    ("konst", "art", "Ordklocka (konst)"),
+    ("berattande", "narrative", "Ordklocka (berättande)"),
 ]
 
 

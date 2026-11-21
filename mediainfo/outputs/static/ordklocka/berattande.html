@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka Berättande</title>
+<style>
+  :root {
+    --panel-bg: rgba(28, 22, 16, 0.9); --panel-fg: #f1e6d2; --panel-accent: #f1e6d2;
+    --panel-bg-solid: #1c1610;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(ellipse at 50% 40%, #2b2219 0%, #15110c 70%, #0d0a07 100%);
+    color: #f1e6d2; display: flex; align-items: center; justify-content: center;
+  }
+  .story {
+    position: relative; width: min(86vw, 150vh); text-align: center;
+    font-family: "Cormorant Garamond", "EB Garamond", "Garamond", "Georgia", "DejaVu Serif", serif;
+  }
+  .sentence {
+    font-size: 8vmin; line-height: 1.25; font-style: italic; font-weight: 400;
+    transition: opacity 1.6s ease, filter 1.6s ease, transform 1.6s ease;
+  }
+  .sentence.out { opacity: 0; filter: blur(6px); transform: translateY(-1.5vmin); }
+  .sentence.in { opacity: 0; filter: blur(6px); transform: translateY(1.5vmin); }
+  .sentence .time { font-style: normal; color: #ffd79a; }
+  .ornament { margin: 4vmin auto 0; width: 22vmin; height: 2.4vmin; opacity: 0.45;
+              background:
+                linear-gradient(#f1e6d2, #f1e6d2) left 50% / 40% 1px no-repeat,
+                linear-gradient(#f1e6d2, #f1e6d2) right 50% / 40% 1px no-repeat,
+                radial-gradient(circle, #f1e6d2 0 0.5vmin, transparent 0.55vmin) center / 2.4vmin 2.4vmin no-repeat; }
+  .stack { display: grid; }
+  .stack > * { grid-area: 1 / 1; }
+  @media (prefers-reduced-motion: reduce) { .sentence { transition: none; } }
+</style>
+</head>
+<body>
+<div class="story" aria-hidden="true">
+  <div class="stack" id="stack"></div>
+  <div class="ornament"></div>
+</div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Sätt att säga tiden">
+      <span class="label">Säg</span>
+      <button data-say="vardagligt">halv fyra på eftermiddagen</button>
+      <button data-say="digitalt">femton trettio</button>
+    </div>
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const stack = document.getElementById("stack");
+  let say = "vardagligt", style = "tjugo";
+
+  // Digital läsning hela dygnet, med timnamnen 0-23.
+  const HOURS = ["noll", "ett", "två", "tre", "fyra", "fem", "sex", "sju", "åtta", "nio", "tio", "elva",
+    "tolv", "tretton", "fjorton", "femton", "sexton", "sjutton", "arton", "nitton", "tjugo",
+    "tjugoett", "tjugotvå", "tjugotre"];
+  const MINUTES = { 0: "", 5: "noll fem", 10: "tio", 15: "femton", 20: "tjugo", 25: "tjugofem",
+    30: "trettio", 35: "trettiofem", 40: "fyrtio", 45: "fyrtiofem", 50: "femtio", 55: "femtiofem" };
+
+  function partOfDay(h) {
+    if (h < 5) return "på natten";
+    if (h < 9) return "på morgonen";
+    if (h < 12) return "på förmiddagen";
+    if (h < 13) return "mitt på dagen";
+    if (h < 18) return "på eftermiddagen";
+    return "på kvällen";
+  }
+
+  // "Klockan är snart halv fyra på eftermiddagen" / "... strax efter femton trettio".
+  // Närmaste femminutersmark: precis, strax efter (1-2 min) eller snart (3-4 min).
+  function narrate(now) {
+    let h = now.getHours(), m = now.getMinutes();
+    const r = m % 5;
+    let when = r === 0 ? "precis" : r <= 2 ? "strax efter" : "snart";
+    m -= r;
+    if (r > 2) { m += 5; if (m === 60) { m = 0; h = (h + 1) % 24; } }
+    let time;
+    if (m === 0 && h === 0) {
+      time = "midnatt";
+    } else if (say === "digitalt") {
+      // Hel timme: bara timmen ("snart sju"), annars "femton trettio".
+      time = `${HOURS[h]} ${MINUTES[m]}`.trim();
+    } else {
+      // Vanlig läsning med 12-timmarsnamn hela dygnet, plus tid på dygnet.
+      const t = OrdklockaTid.spokenTime(h % 12, m, style);
+      time = OrdklockaTid.spokenWords(t).join(" ").toLowerCase() + " " + partOfDay(h);
+    }
+    if (when === "precis" && time === "midnatt") when = "";
+    return { when, time };
+  }
+
+  let lastText = "";
+  function show() {
+    const { when, time } = narrate(new Date());
+    const text = `${when} ${time}`;
+    document.getElementById("readout").textContent = `Klockan är ${when ? when + " " : ""}${time}`;
+    if (text === lastText) return;
+    lastText = text;
+    const el = document.createElement("div");
+    el.className = "sentence in";
+    el.append("Klockan är " + (when ? when + " " : ""));
+    const span = document.createElement("span");
+    span.className = "time";
+    span.textContent = time;
+    el.append(span, ".");
+    stack.querySelectorAll(".sentence:not(.out)").forEach(old => {
+      old.classList.add("out");
+      setTimeout(() => old.remove(), 1700);
+    });
+    stack.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("in")));
+  }
+
+  // S.clock anropar när minuten (läsningen eller extraminuterna) ändras.
+  const clock = S.clock(() => show());
+  S.choice("style", "ordklocka-style", "tjugo", v => { style = v; lastText = ""; clock.setStyle(v); });
+  S.choice("say", "ordklocka-berattande-satt", "vardagligt", v => { say = v; lastText = ""; show(); });
+  S.setup("/ordklocka/berattande/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

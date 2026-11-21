@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordklocka E-papper</title>
+<style>
+  :root {
+    --paper: #f4f4f1; --ink: #1b1b1b; --faint: #8b8b86;
+    --panel-bg: rgba(255, 255, 255, 0.95); --panel-fg: #1b1b1b; --panel-accent: #1b1b1b;
+    --panel-bg-solid: #fff;
+  }
+  [data-paper="varmgrå"] { --paper: #dedad0; --ink: #23211d; --faint: #85807a; --panel-bg-solid: #dedad0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); color: var(--ink); }
+  /* E-papper: ingen mjuk övergång, bara en svag kornighet i "pappret" */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.35;
+    background-image: radial-gradient(rgba(0, 0, 0, 0.06) 0.5px, transparent 0.6px);
+    background-size: 3px 3px;
+  }
+  .page {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    padding: 3vmin 8vmin; font-family: "Literata", "Bookerly", "Georgia", "DejaVu Serif", serif;
+  }
+  .bar { display: flex; justify-content: space-between; align-items: center;
+         font: 2.2vmin/1 "Helvetica Neue", "DejaVu Sans", system-ui, sans-serif; color: var(--faint); }
+  .battery { display: inline-flex; align-items: center; gap: 0.6vmin; }
+  .battery i { display: inline-block; width: 4.2vmin; height: 2vmin; border: 0.25vmin solid currentColor; border-radius: 0.3vmin;
+               position: relative; padding: 0.25vmin; }
+  .battery i::after { content: ""; position: absolute; right: -0.8vmin; top: 0.45vmin; width: 0.45vmin; height: 0.8vmin; background: currentColor; }
+  .battery b { display: block; height: 100%; background: currentColor; }
+  .body { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+  .chapter { font-variant: small-caps; letter-spacing: 0.25em; font-size: 3.4vmin; color: var(--faint); margin-bottom: 3vmin; }
+  .rule { width: 12vmin; height: 0.2vmin; background: var(--faint); margin: 0 auto 4vmin; opacity: 0.7; }
+  .text { font-size: 11vmin; line-height: 1.12; font-weight: 500; hyphens: none; }
+  .text .line { display: block; }
+  .foot { display: flex; justify-content: space-between; align-items: center;
+          font: 2.2vmin/1 "Helvetica Neue", "DejaVu Sans", system-ui, sans-serif; color: var(--faint); gap: 3vmin; }
+  .progress { flex: 1; height: 0.35vmin; background: color-mix(in srgb, var(--faint) 35%, transparent); position: relative; }
+  .progress b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); }
+  .dots { display: inline-flex; gap: 1vmin; }
+  .dots i { width: 1.1vmin; height: 1.1vmin; border-radius: 50%; border: 0.2vmin solid var(--ink); }
+  .dots i.on { background: var(--ink); }
+  /* Helskärmsuppdateringen: sidan blinkar svart och vit innan ny text ritas */
+  .flash { position: fixed; inset: 0; pointer-events: none; background: #000; opacity: 0; }
+  .flash.black { opacity: 1; }
+  .flash.white { opacity: 1; background: var(--paper); }
+  /* Spökbild av den förra texten, som på riktigt e-bläck */
+  .ghost { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
+           text-align: center; opacity: 0.05; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="page" aria-hidden="true">
+  <div class="bar">
+    <span>Ordklockan</span>
+    <span class="battery"><span id="battery-pct"></span><i><b id="battery"></b></i></span>
+  </div>
+  <div class="body" style="position:relative">
+    <div class="chapter" id="chapter"></div>
+    <div class="rule"></div>
+    <div class="text" id="text"></div>
+  </div>
+  <div class="foot">
+    <span id="location"></span>
+    <span class="progress"><b id="progress"></b></span>
+    <span class="dots" id="dots"><i></i><i></i><i></i><i></i></span>
+  </div>
+</div>
+<div class="flash" id="flash"></div>
+
+<div class="panel">
+  <div class="readout" id="readout" aria-live="polite"></div>
+  <div class="controls">
+    <div class="group" role="group" aria-label="Uttryck för :20 och :40">
+      <span class="label">20 / 40</span>
+      <button data-style="tjugo">tjugo över</button>
+      <button data-style="halv">tio i halv</button>
+    </div>
+    <div class="group" role="group" aria-label="Papper">
+      <span class="label">Papper</span>
+      <button data-paper="vit">vit</button>
+      <button data-paper="varmgrå">varmgrå</button>
+    </div>
+    <div class="group"><button id="fs" aria-pressed="false">helskärm</button></div>
+  </div>
+</div>
+
+<script src="/ordklocka/tid.js"></script>
+<script src="/ordklocka/sida.js"></script>
+<script>
+  const S = OrdklockaSida;
+  const $ = id => document.getElementById(id);
+  const textEl = $("text"), flash = $("flash");
+  const dots = [...document.querySelectorAll(".dots i")];
+  const CHAPTERS = ["natten", "natten", "natten", "natten", "natten", "morgonen", "morgonen", "morgonen",
+    "morgonen", "förmiddagen", "förmiddagen", "förmiddagen", "middagen", "eftermiddagen", "eftermiddagen",
+    "eftermiddagen", "eftermiddagen", "eftermiddagen", "kvällen", "kvällen", "kvällen", "kvällen", "kvällen", "natten"];
+
+  function fit() {
+    textEl.style.fontSize = "";
+    const max = textEl.parentElement.clientWidth;
+    for (const line of textEl.children) {
+      const w = line.scrollWidth;
+      if (w > max) textEl.style.fontSize = parseFloat(getComputedStyle(textEl).fontSize) * max / w * 0.97 + "px";
+    }
+  }
+
+  function draw(t, now) {
+    const old = textEl.cloneNode(true);
+    textEl.textContent = "";
+    for (const l of ["Klockan är", ...S.lines(t).map(x => x.toLowerCase())]) {
+      const span = document.createElement("span");
+      span.className = "line";
+      span.textContent = l;
+      textEl.appendChild(span);
+    }
+    fit();
+    // Spökbild av förra sidan, svagt kvar efter uppdateringen
+    document.querySelector(".ghost")?.remove();
+    if (old.children.length) {
+      const ghost = document.createElement("div");
+      ghost.className = "ghost";
+      old.removeAttribute("id");
+      old.style.fontSize = textEl.style.fontSize;
+      ghost.appendChild(old);
+      textEl.parentElement.appendChild(ghost);
+    }
+    $("chapter").textContent = "Kapitel " + (now.getHours() + 1) + " · " + CHAPTERS[now.getHours()];
+  }
+
+  // Statusraden: plats i "boken" = minut på dygnet, batteriet laddas ur under dagen.
+  function status(t, now) {
+    const minute = now.getHours() * 60 + now.getMinutes();
+    $("location").textContent = `Plats ${minute + 1} av 1440 · ${Math.floor(minute / 14.4)} %`;
+    $("progress").style.width = (minute / 1440) * 100 + "%";
+    const battery = 100 - Math.floor(minute / 1440 * 80);
+    $("battery").style.width = battery + "%";
+    $("battery-pct").textContent = battery + " %";
+    dots.forEach((d, i) => d.classList.toggle("on", i < t.extra));
+  }
+
+  const clock = S.clock((t, info) => {
+    status(t, info.now);
+    if (!info.wordsChanged) return;
+    if (info.first || matchMedia("(prefers-reduced-motion: reduce)").matches) { draw(t, info.now); return; }
+    // Helskärmsuppdatering: svart, vit, sedan ny text, med e-bläckets ryck.
+    flash.className = "flash black";
+    setTimeout(() => { flash.className = "flash white"; }, 140);
+    setTimeout(() => { draw(t, info.now); flash.className = "flash black"; }, 300);
+    setTimeout(() => { flash.className = "flash"; }, 400);
+  });
+  S.choice("style", "ordklocka-style", "tjugo", v => clock.setStyle(v));
+  S.choice("paper", "ordklocka-epapper-papper", "vit", v => { document.documentElement.dataset.paper = v; });
+  addEventListener("resize", fit);
+  S.setup("/ordklocka/epapper/ws");
+</script>
+<script src="/ordklocka/meny.js"></script>
+</body>
+</html>

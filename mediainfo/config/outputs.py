@@ -158,7 +158,8 @@ class WebConfig(_OutputFilterMixin):
     # "teletext" (/ordklocka/texttv), "letter_tiles" (/ordklocka/brickor),
     # "embroidery", "rubber_stamps", "type_case", "misty_window",
     # "counter_drums", "receipt", "dominoes", "balloons", "constellations",
-    # "steamy_shower" or "blood" - see config.example.yaml for their pages.
+    # "steamy_shower", "blood", "typographic", "circles", "terminal",
+    # "e_paper", "art" or "narrative" - see config.example.yaml for their pages.
     idle_clock_style: str = "words"
 
 

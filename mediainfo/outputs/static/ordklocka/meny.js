@@ -23,6 +23,12 @@
     ["/ordklocka/stjarnor", "Stjärnhimmel"],
     ["/ordklocka/dusch", "Duschvägg"],
     ["/ordklocka/blod", "Blod på golvet"],
+    ["/ordklocka/typografi", "Typografisk"],
+    ["/ordklocka/cirklar", "Cirklar"],
+    ["/ordklocka/terminal", "Terminal"],
+    ["/ordklocka/epapper", "E-papper"],
+    ["/ordklocka/konst", "Konstverk"],
+    ["/ordklocka/berattande", "Berättande"],
   ];
   if (new URLSearchParams(location.search).has("embedded")) return;
   const controls = document.querySelector(".panel .controls");

@@ -158,6 +158,12 @@ function clientPageLabel(page) {
   if (page === '/ordklocka/stjarnor') return 'Word clock, constellations (standalone)';
   if (page === '/ordklocka/dusch') return 'Word clock, steamy shower (standalone)';
   if (page === '/ordklocka/blod') return 'Word clock, blood on the floor (standalone)';
+  if (page === '/ordklocka/typografi') return 'Word clock, typographic (standalone)';
+  if (page === '/ordklocka/cirklar') return 'Word clock, circles (standalone)';
+  if (page === '/ordklocka/terminal') return 'Word clock, terminal (standalone)';
+  if (page === '/ordklocka/epapper') return 'Word clock, e-paper (standalone)';
+  if (page === '/ordklocka/konst') return 'Word clock, living art (standalone)';
+  if (page === '/ordklocka/berattande') return 'Word clock, narrative (standalone)';
   if (page === '/themes') return 'Themes';
   if (page === '/info') return 'Info';
   if (page.indexOf('/web-') === 0) return 'Web: ' + page.slice(5);

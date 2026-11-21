@@ -85,6 +85,12 @@ _IDLE_CLOCK_URLS = {
     "constellations": "/ordklocka/stjarnor",
     "steamy_shower": "/ordklocka/dusch",
     "blood": "/ordklocka/blod",
+    "typographic": "/ordklocka/typografi",
+    "circles": "/ordklocka/cirklar",
+    "terminal": "/ordklocka/terminal",
+    "e_paper": "/ordklocka/epapper",
+    "art": "/ordklocka/konst",
+    "narrative": "/ordklocka/berattande",
 }
 # Clock page path -> its label on /clients. Each page has a presence
 # WebSocket at <path>/ws (/ordklocka/ws for the word clock).
@@ -109,6 +115,12 @@ _CLOCK_LABELS = {
     "/ordklocka/stjarnor": "Ordklocka (stjärnhimmel)",
     "/ordklocka/dusch": "Ordklocka (duschvägg)",
     "/ordklocka/blod": "Ordklocka (blod)",
+    "/ordklocka/typografi": "Ordklocka (typografi)",
+    "/ordklocka/cirklar": "Ordklocka (cirklar)",
+    "/ordklocka/terminal": "Ordklocka (terminal)",
+    "/ordklocka/epapper": "Ordklocka (e-papper)",
+    "/ordklocka/konst": "Ordklocka (konst)",
+    "/ordklocka/berattande": "Ordklocka (berättande)",
 }
 # Clock pages other than /ordklocka itself: path -> file in _ORDKLOCKA_DIR.
 _CLOCK_PAGE_FILES = {
