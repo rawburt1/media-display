@@ -81,4 +81,32 @@
   select.onchange = () => { location.href = select.value; };
   group.append(label, select);
   controls.prepend(group);
+
+  // 12- eller 24-timmarsläge (tid.js). Sidan laddas om så att varje klocka
+  // ritar om från början med den nya läsningen.
+  const T = window.OrdklockaTid;
+  if (!T || !T.setTwelveHour) return;
+  const hours = document.createElement("div");
+  hours.className = "group";
+  hours.setAttribute("role", "group");
+  hours.setAttribute("aria-label", "12- eller 24-timmarsklocka");
+  const hoursLabel = document.createElement("span");
+  hoursLabel.className = "label";
+  hoursLabel.textContent = "Timmar";
+  hours.appendChild(hoursLabel);
+  for (const [value, text] of [[false, "24 h"], [true, "12 h"]]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = text;
+    b.setAttribute("aria-pressed", T.twelveHour === value);
+    b.onclick = () => {
+      if (T.twelveHour === value) return;
+      T.setTwelveHour(value);
+      const url = new URL(location.href);
+      url.searchParams.delete("h");
+      location.href = url.toString();
+    };
+    hours.appendChild(b);
+  }
+  group.after(hours);
 })();

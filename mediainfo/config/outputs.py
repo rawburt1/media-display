@@ -167,6 +167,10 @@ class WebConfig(_OutputFilterMixin):
     # "particles", "word_cloud", "three_d", "poetic", "day_line", "calendar",
     # "circadian", "pixel" or "chalkboard" - see config.example.yaml for their pages.
     idle_clock_style: str = "words"
+    # Read the afternoon the classic way too ("fem i halv tre" at 14:25)
+    # instead of digitally ("fjorton tjugofem") on the idle clock. The
+    # clock pages themselves have a 12 h / 24 h toggle in their panel.
+    idle_clock_12h: bool = False
 
 
 @pydantic.dataclasses.dataclass(config=pydantic.ConfigDict(extra="forbid"))

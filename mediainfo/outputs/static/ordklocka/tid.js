@@ -2,7 +2,8 @@
 // så att båda alltid säger samma sak.
 //
 // 00:00–12:59 läses som vanligt ("fem i halv ett") med 12-timmarsnamn.
-// Från 13:00 läses tiden digitalt: timme + minuter ("arton tjugofem").
+// Från 13:00 läses tiden digitalt: timme + minuter ("arton tjugofem"),
+// utom i 12-timmarsläge där hela dygnet läses som vanligt ("fem i halv tre").
 // Upplösningen är 5 minuter; `extra` är minuterna däröver (0–4).
 (function (global) {
   // Timord 0–23. Timme 0 läses "tolv" (kvart över tolv).
@@ -41,12 +42,26 @@
     }
   }
 
+  // 12-timmarsläge. ?h=12 eller ?h=24 i adressen (idle-klockan, styrd av
+  // outputs.web.idle_clock_12h) går före valet i klockpanelen (meny.js).
+  const HOURS_KEY = "ordklocka-timmar";
+  function loadTwelveHour() {
+    const q = new URLSearchParams(location.search).get("h");
+    if (q === "12" || q === "24") return q === "12";
+    try { return localStorage.getItem(HOURS_KEY) === "12"; } catch { return false; }
+  }
+  let twelveHour = loadTwelveHour();
+  function setTwelveHour(on) {
+    twelveHour = !!on;
+    try { localStorage.setItem(HOURS_KEY, twelveHour ? "12" : "24"); } catch {}
+  }
+
   // Digital:  {digital: true,  hourWords: ["TJUGO","TRE"], minutes: [["FYRTIO","FEM"]], extra}
   // Vanlig:   {digital: false, hourWords: ["ETT"], minuteWords: ["FEM","I","HALV"], extra}
   function spokenTime(hour, min, style) {
     const m5 = min - (min % 5);
     const extra = min % 5;
-    if (hour >= 13) {
+    if (hour >= 13 && !twelveHour) {
       return { digital: true, hourWords: HOUR_WORDS[hour], minutes: DIGITAL_MINUTES[m5], extra };
     }
     const [minuteWords, bump] = classicPhrase(m5, style);
@@ -68,5 +83,8 @@
     return ["Klockan är", ...spokenWords(t).map(w => w.toLowerCase())].join(" ") + extra;
   }
 
-  global.OrdklockaTid = { spokenTime, spokenWords, spokenSentence };
+  global.OrdklockaTid = {
+    spokenTime, spokenWords, spokenSentence, setTwelveHour,
+    get twelveHour() { return twelveHour; },
+  };
 })(window);

@@ -859,6 +859,23 @@ def test_idle_clock_style_split_flap_embeds_tavla():
     assert out._summarize({}) == {"mode": "clock", "text": "Ordklocka (tavla)"}
 
 
+def test_idle_clock_12h_is_passed_to_the_embedded_clock():
+    assert WebConfig().idle_clock_12h is False
+    body = _client(_output(_config(idle_clock=True))).get("/").data.decode()
+    assert '"?embedded=1" + "\\u0026h=24"' in body
+    body = _client(_output(_config(idle_clock=True, idle_clock_12h=True))).get("/").data.decode()
+    assert '"?embedded=1" + "\\u0026h=12"' in body
+
+
+def test_clock_pages_share_the_twelve_hour_toggle():
+    client = _client(_output())
+    tid = client.get("/ordklocka/tid.js").data.decode()
+    assert "hour >= 13 && !twelveHour" in tid
+    assert 'get("h")' in tid
+    menu = client.get("/ordklocka/meny.js").data.decode()
+    assert "setTwelveHour" in menu
+
+
 def test_unknown_idle_clock_style_falls_back_to_word_clock(caplog):
     out = _output(_config(idle_clock=True, idle_clock_style="digital"))
     assert out._idle_clock_url == "/ordklocka"

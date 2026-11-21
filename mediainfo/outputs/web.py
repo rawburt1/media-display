@@ -575,6 +575,7 @@ class WebOutput(Output):
                 rotation_interval_seconds=self.rotation_interval_seconds,
                 idle_clock=self.config.idle_clock,
                 idle_clock_url=self._idle_clock_url,
+                idle_clock_hours="&h=12" if self.config.idle_clock_12h else "&h=24",
             )
 
         @bp.get("/ordklocka")

@@ -780,6 +780,10 @@ outputs:
     # "pixel" (classic 8-bit style with big pixel letters that bounce into place, /ordklocka/pixel) or
     # "chalkboard" (written in chalk on a blackboard, wiped and rewritten when the time changes, /ordklocka/griffeltavla).
     idle_clock_style: words
+    # 12-hour idle clock: the afternoon reads the classic way too ("fem i
+    # halv tre" at 14:25) instead of digitally ("fjorton tjugofem"). The
+    # clock pages also have a 12 h / 24 h toggle in their panel.
+    idle_clock_12h: false
 
   # Multiple web outputs — e.g. one per room. Only the first can mount at
   # "/"; every instance past the first needs a unique `label` and is

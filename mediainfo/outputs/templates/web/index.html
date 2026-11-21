@@ -130,7 +130,8 @@
       frame.classList.toggle("visible", show);
       // embedded=1: the clock page skips its own presence connection -
       // this page is already listed on /clients.
-      frame.src = show ? {{ idle_clock_url|tojson }} + "?embedded=1" : "about:blank";
+      // h=12/24: outputs.web.idle_clock_12h, ahead of the page's own toggle.
+      frame.src = show ? {{ idle_clock_url|tojson }} + "?embedded=1" + {{ idle_clock_hours|tojson }} : "about:blank";
     }
 
     // Payloads only arrive on item changes and rotation ticks, so the bar
