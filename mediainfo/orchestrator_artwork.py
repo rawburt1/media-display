@@ -197,7 +197,9 @@ class _ArtworkPipeline:
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(images))
         try:
             futures = [
-                pool.submit(self._safe_call, lambda artwork=artwork: self.cache.get_path(artwork, tier=tier))
+                pool.submit(
+                    self._safe_call, lambda artwork=artwork: self.cache.get_path(artwork, tier=tier)
+                )
                 for artwork in images
             ]
             _done, not_done = concurrent.futures.wait(

@@ -89,87 +89,21 @@ _IDLE_CLOCK_URLS = {
     "led_matrix": "/ordklocka/ledmatris",
     "waves": "/ordklocka/vagor",
     "word_cloud": "/ordklocka/ordmoln",
-    "three_d": "/ordklocka/3d",
     "poetic": "/ordklocka/poetisk",
     "day_line": "/ordklocka/dagslinje",
     "calendar": "/ordklocka/kalender",
     "circadian": "/ordklocka/dygnsrytm",
     "pixel": "/ordklocka/pixel",
     "chalkboard": "/ordklocka/griffeltavla",
-    "fiber_optic": "/ordklocka/fiberoptik",
-    "stained_glass": "/ordklocka/glasmosaik",
     "sand": "/ordklocka/sand",
-    "gears": "/ordklocka/kugghjul",
     "roller_bands": "/ordklocka/rullband",
-    "glitch": "/ordklocka/glitch",
-    "tessellation": "/ordklocka/tessellation",
-    "fractal": "/ordklocka/fraktal",
-    "voronoi": "/ordklocka/voronoi",
-    "melting": "/ordklocka/smalt",
-    "weather": "/ordklocka/vader",
-    "word_search": "/ordklocka/ordletare",
-    "flocking": "/ordklocka/flock",
-    "manuscript": "/ordklocka/manuskript",
     "newspaper": "/ordklocka/tidning",
     "screensaver": "/ordklocka/skarmslackare",
-    "ascii": "/ordklocka/ascii",
     "perspective": "/ordklocka/perspektiv",
-    "kaleidoscope": "/ordklocka/kalejdoskop",
-    "tangram": "/ordklocka/tangram",
     "calligraphy": "/ordklocka/kalligrafi",
     "variable_font": "/ordklocka/variabel",
     "cut_outs": "/ordklocka/urklipp",
-    "hourglass": "/ordklocka/timglas",
-    "aurora": "/ordklocka/norrsken",
-    "concrete": "/ordklocka/betong",
-    "binary": "/ordklocka/binar",
-    "cinema": "/ordklocka/biograf",
-    "bioluminescence": "/ordklocka/bioluminiscens",
-    "bookshelf": "/ordklocka/bokhylla",
-    "cylinder": "/ordklocka/cylinder",
-    "dna": "/ordklocka/dna",
-    "dos": "/ordklocka/dos",
-    "fireflies": "/ordklocka/eldflugor",
-    "kinetic_facade": "/ordklocka/fasad",
-    "pinball": "/ordklocka/flipper",
-    "frost": "/ordklocka/frost",
-    "gravity": "/ordklocka/gravitation",
-    "punch_card": "/ordklocka/halkort",
-    "contour_lines": "/ordklocka/hojdkurvor",
-    "hologram": "/ordklocka/hologram",
-    "hud": "/ordklocka/hud",
-    "ceramic_tiles": "/ordklocka/kakel",
-    "calendar_words": "/ordklocka/kalenderord",
-    "ceramic": "/ordklocka/keramik",
-    "crossword": "/ordklocka/korsord",
-    "crystal": "/ordklocka/kristall",
-    "watercolour": "/ordklocka/akvarell",
-    "maze": "/ordklocka/labyrint",
-    "lava": "/ordklocka/lava",
-    "sound_wave": "/ordklocka/ljudvag",
-    "light_painting": "/ordklocka/ljusmalning",
-    "leaves": "/ordklocka/lov",
-    "moon_phase": "/ordklocka/manfas",
-    "marbling": "/ordklocka/marmorering",
     "mechanical_flip": "/ordklocka/mekanisk",
-    "clouds": "/ordklocka/moln",
-    "moss": "/ordklocka/mossa",
-    "optical_illusion": "/ordklocka/optisk",
-    "dictionary": "/ordklocka/ordbok",
-    "origami": "/ordklocka/origami",
-    "translation": "/ordklocka/oversattning",
-    "planets": "/ordklocka/planeter",
-    "pointillism": "/ordklocka/pointillism",
-    "embossed_metal": "/ordklocka/praglad",
-    "rice_paper": "/ordklocka/rispapper",
-    "roman_inscription": "/ordklocka/romersk",
-    "shadows": "/ordklocka/skuggor",
-    "city_builder": "/ordklocka/stad",
-    "station_clock": "/ordklocka/station",
-    "wood_carving": "/ordklocka/trasnideri",
-    "world_clock": "/ordklocka/varld",
-    "water_mirror": "/ordklocka/vatten",
-    "victorian": "/ordklocka/viktoriansk",
 }
 # Clock page path -> its label on /clients. Each page has a presence
 # WebSocket at <path>/ws (/ordklocka/ws for the word clock).
@@ -198,87 +132,21 @@ _CLOCK_LABELS = {
     "/ordklocka/ledmatris": "Ordklocka (LED-matris)",
     "/ordklocka/vagor": "Ordklocka (vågor)",
     "/ordklocka/ordmoln": "Ordklocka (ordmoln)",
-    "/ordklocka/3d": "Ordklocka (3D)",
     "/ordklocka/poetisk": "Ordklocka (poetisk)",
     "/ordklocka/dagslinje": "Ordklocka (dagslinjen)",
     "/ordklocka/kalender": "Ordklocka (kalender)",
     "/ordklocka/dygnsrytm": "Ordklocka (dygnsrytm)",
     "/ordklocka/pixel": "Ordklocka (pixel)",
     "/ordklocka/griffeltavla": "Ordklocka (griffeltavla)",
-    "/ordklocka/fiberoptik": "Ordklocka (fiberoptik)",
-    "/ordklocka/glasmosaik": "Ordklocka (glasmosaik)",
     "/ordklocka/sand": "Ordklocka (sand)",
-    "/ordklocka/kugghjul": "Ordklocka (kugghjul)",
     "/ordklocka/rullband": "Ordklocka (rullband)",
-    "/ordklocka/glitch": "Ordklocka (glitch)",
-    "/ordklocka/tessellation": "Ordklocka (tessellation)",
-    "/ordklocka/fraktal": "Ordklocka (fraktal)",
-    "/ordklocka/voronoi": "Ordklocka (voronoi)",
-    "/ordklocka/smalt": "Ordklocka (smältande)",
-    "/ordklocka/vader": "Ordklocka (väder)",
-    "/ordklocka/ordletare": "Ordklocka (ordletare)",
-    "/ordklocka/flock": "Ordklocka (flock)",
-    "/ordklocka/manuskript": "Ordklocka (manuskript)",
     "/ordklocka/tidning": "Ordklocka (tidning)",
     "/ordklocka/skarmslackare": "Ordklocka (skärmsläckare)",
-    "/ordklocka/ascii": "Ordklocka (ASCII)",
     "/ordklocka/perspektiv": "Ordklocka (perspektiv)",
-    "/ordklocka/kalejdoskop": "Ordklocka (kalejdoskop)",
-    "/ordklocka/tangram": "Ordklocka (tangram)",
     "/ordklocka/kalligrafi": "Ordklocka (kalligrafi)",
     "/ordklocka/variabel": "Ordklocka (variabelt typsnitt)",
     "/ordklocka/urklipp": "Ordklocka (urklipp)",
-    "/ordklocka/timglas": "Ordklocka (timglas)",
-    "/ordklocka/norrsken": "Ordklocka (norrsken)",
-    "/ordklocka/betong": "Ordklocka (betong)",
-    "/ordklocka/binar": "Ordklocka (binär)",
-    "/ordklocka/biograf": "Ordklocka (biograf)",
-    "/ordklocka/bioluminiscens": "Ordklocka (bioluminiscens)",
-    "/ordklocka/bokhylla": "Ordklocka (bokhylla)",
-    "/ordklocka/cylinder": "Ordklocka (cylinder)",
-    "/ordklocka/dna": "Ordklocka (DNA)",
-    "/ordklocka/dos": "Ordklocka (DOS)",
-    "/ordklocka/eldflugor": "Ordklocka (eldflugor)",
-    "/ordklocka/fasad": "Ordklocka (kinetisk fasad)",
-    "/ordklocka/flipper": "Ordklocka (flipperspel)",
-    "/ordklocka/frost": "Ordklocka (frost)",
-    "/ordklocka/gravitation": "Ordklocka (gravitation)",
-    "/ordklocka/halkort": "Ordklocka (hålkort)",
-    "/ordklocka/hojdkurvor": "Ordklocka (höjdkurvor)",
-    "/ordklocka/hologram": "Ordklocka (hologram)",
-    "/ordklocka/hud": "Ordklocka (HUD)",
-    "/ordklocka/kakel": "Ordklocka (kakelplattor)",
-    "/ordklocka/kalenderord": "Ordklocka (kalenderord)",
-    "/ordklocka/keramik": "Ordklocka (keramik)",
-    "/ordklocka/korsord": "Ordklocka (korsord)",
-    "/ordklocka/kristall": "Ordklocka (kristall)",
-    "/ordklocka/akvarell": "Ordklocka (akvarell)",
-    "/ordklocka/labyrint": "Ordklocka (labyrint)",
-    "/ordklocka/lava": "Ordklocka (lava)",
-    "/ordklocka/ljudvag": "Ordklocka (ljudvåg)",
-    "/ordklocka/ljusmalning": "Ordklocka (ljusmålning)",
-    "/ordklocka/lov": "Ordklocka (löv)",
-    "/ordklocka/manfas": "Ordklocka (månfas)",
-    "/ordklocka/marmorering": "Ordklocka (marmorering)",
     "/ordklocka/mekanisk": "Ordklocka (mekanisk blädderklocka)",
-    "/ordklocka/moln": "Ordklocka (moln)",
-    "/ordklocka/mossa": "Ordklocka (mossa)",
-    "/ordklocka/optisk": "Ordklocka (optisk illusion)",
-    "/ordklocka/ordbok": "Ordklocka (ordbok)",
-    "/ordklocka/origami": "Ordklocka (origami)",
-    "/ordklocka/oversattning": "Ordklocka (översättning)",
-    "/ordklocka/planeter": "Ordklocka (planeter)",
-    "/ordklocka/pointillism": "Ordklocka (pointillism)",
-    "/ordklocka/praglad": "Ordklocka (präglad metall)",
-    "/ordklocka/rispapper": "Ordklocka (rispapper)",
-    "/ordklocka/romersk": "Ordklocka (romersk inskription)",
-    "/ordklocka/skuggor": "Ordklocka (skuggor)",
-    "/ordklocka/stad": "Ordklocka (stadsbyggare)",
-    "/ordklocka/station": "Ordklocka (stationsklocka)",
-    "/ordklocka/trasnideri": "Ordklocka (träsnideri)",
-    "/ordklocka/varld": "Ordklocka (världsklocka)",
-    "/ordklocka/vatten": "Ordklocka (vattenspegel)",
-    "/ordklocka/viktoriansk": "Ordklocka (viktoriansk)",
 }
 # Clock pages other than /ordklocka itself: path -> file in _ORDKLOCKA_DIR.
 _CLOCK_PAGE_FILES = {
@@ -298,28 +166,13 @@ _ORDKLOCKA_SCRIPTS = (
     "rutnat.js",
     "dygn.js",
     "textmask.js",
-    "galleri-render.js",
-    "ordmaterial-4.js",
-    "special-eldflugor.js",
-    "special-fasad.js",
-    "special-kristall.js",
-    "special-skuggor.js",
-    "material-frost.js",
-    "material-akvarell.js",
-    "material-mossa.js",
-    "material-lava.js",
-    "material-origami.js",
     "verkstad-bas.js",
     "verkstad-mekanisk.js",
 )
-# Stylesheets shared by the clock pages: galleri-stil.css (the simpler
-# gallery clocks drawn by galleri-render.js).
+# Stylesheets shared by the clock pages.
 _ORDKLOCKA_STYLES = (
-    "galleri-stil.css",
     "tillganglighet.css",
-    "atelier.css",
     "verkstad.css",
-    "material-klockor.css",
 )
 # The only font files /ordklocka/fonts/<name> will serve.
 _ORDKLOCKA_FONTS = frozenset(
@@ -428,7 +281,6 @@ class WebOutput(Output):
 
         self._health_fn = None
         self._history = None
-        self._weather: Optional[Callable[[str], Optional[dict]]] = None
         threading.Thread(target=self._rotate_clients_loop, daemon=True).start()
 
     def set_health_provider(self, fn) -> None:
@@ -443,17 +295,6 @@ class WebOutput(Output):
     def attach(self, services: AppServices) -> None:
         self.set_health_provider(services.health_provider)
         self.set_history(services.history)
-        self._weather = services.weather
-
-    def _weather_payload(self) -> Dict[str, Any]:
-        """/ordklocka/vader.json: the weather clock's current weather."""
-        if self._weather is None or not self.config.weather_entity:
-            return {"available": False}
-        try:
-            weather = self._weather(self.config.weather_entity)
-        except Exception:  # the provider shouldn't raise, but never 500 here
-            weather = None
-        return {"available": True, **weather} if weather else {"available": False}
 
     def update(self, now_playing: NowPlaying, artwork: Artwork, image_path: Path) -> None:
         with self._lock:
@@ -761,10 +602,6 @@ class WebOutput(Output):
                 endpoint="ordklocka_" + sheet.replace(".", "_").replace("-", "_"),
                 view_func=functools.partial(_send_ordklocka_file, sheet, "text/css"),
             )
-
-        @bp.get("/ordklocka/vader.json")
-        def ordklocka_weather():
-            return jsonify(self._weather_payload())
 
         @bp.get("/ordklocka/fonts/<name>")
         def ordklocka_font(name: str):

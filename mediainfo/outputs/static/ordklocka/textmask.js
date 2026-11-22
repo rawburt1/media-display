@@ -1,5 +1,5 @@
 // Text som mask: raderna ritas centrerat på en dold canvas och kan sedan
-// läsas punkt för punkt (fiberoptik, mosaik, voronoi, norrsken m.fl.).
+// läsas punkt för punkt (sandklockan).
 //   OrdklockaMask.mask(lines, w, h, opts) -> {w, h, size, at(x, y) 0..1, canvas}
 //   OrdklockaMask.points(mask, step)      -> [[x, y], ...] inne i texten
 // opts: family, weight, lineHeight (1.05), pad (andel av kanten, 0.06),

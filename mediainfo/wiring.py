@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 from mediainfo import registries
-from mediainfo.weather import make_weather_provider
 from mediainfo.app_services import AppServices, OrchestratorCommands, PageLink
 from mediainfo.stores.artwork_overrides import ArtworkOverrideStore
 from mediainfo.cache import ImageCache
@@ -385,7 +384,6 @@ def build_app_services(
             request_rotation_now=orch.request_rotation_now,
         ),
         page_links=_collect_page_links(outputs),
-        weather=make_weather_provider(config.sources),
     )
 
 

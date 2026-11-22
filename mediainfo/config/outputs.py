@@ -161,31 +161,18 @@ class WebConfig(_OutputFilterMixin):
     # (/ordklocka/brickor), "embroidery", "counter_drums", "balloons",
     # "constellations", "typographic", "terminal", "e_paper", "art",
     # "narrative", "swiss", "zen", "brutalist", "nixie", "led_matrix",
-    # "waves", "word_cloud", "three_d", "poetic", "day_line", "calendar",
-    # "circadian", "pixel", "chalkboard", "fiber_optic", "stained_glass",
-    # "sand", "gears", "roller_bands", "glitch", "tessellation", "fractal",
-    # "voronoi", "melting", "weather", "word_search", "flocking", "manuscript",
-    # "newspaper", "screensaver", "ascii", "perspective", "kaleidoscope",
-    # "tangram", "calligraphy", "variable_font", "cut_outs", "hourglass",
-    # "aurora", "concrete", "binary", "cinema", "bioluminescence",
-    # "bookshelf", "cylinder", "dna", "dos", "fireflies", "kinetic_facade",
-    # "pinball", "frost", "gravity", "punch_card", "contour_lines",
-    # "hologram", "hud", "ceramic_tiles", "calendar_words", "ceramic",
-    # "crossword", "crystal", "watercolour", "maze", "lava", "sound_wave",
-    # "light_painting",
-    # "leaves", "moon_phase", "marbling", "mechanical_flip", "clouds", "moss",
-    # "optical_illusion", "dictionary", "origami", "translation", "planets",
-    # "pointillism", "embossed_metal", "rice_paper", "roman_inscription",
-    # "shadows", "city_builder", "station_clock", "wood_carving",
-    # "world_clock", "water_mirror" or "victorian" - see config.example.yaml for their pages.
+    # "waves", "word_cloud", "poetic", "day_line", "calendar", "circadian",
+    # "pixel", "chalkboard", "sand", "roller_bands", "newspaper",
+    # "screensaver", "perspective", "calligraphy", "variable_font",
+    # "cut_outs" or "mechanical_flip" - see config.example.yaml for their
+    # pages.
     idle_clock_style: str = "words"
     # Read the afternoon the classic way too ("fem i halv tre" at 14:25)
     # instead of digitally ("fjorton tjugofem") on the idle clock. The
     # clock pages themselves have a 12 h / 24 h toggle in their panel.
     idle_clock_12h: bool = False
-    # Home Assistant weather entity for the weather word clock
-    # (/ordklocka/vader), e.g. "weather.smhi_home". Uses the Home
-    # Assistant source's host and token. Blank: the clock shows no weather.
+    # No longer used (the weather word clock was removed). Still accepted
+    # so existing configs that set it keep loading; it is ignored.
     weather_entity: str = ""
 
 
