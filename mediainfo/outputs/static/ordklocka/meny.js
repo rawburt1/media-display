@@ -38,6 +38,7 @@
     ["/ordklocka/griffeltavla", "Griffeltavla"],
     ["/ordklocka/fiberoptik", "Fiberoptik"],
     ["/ordklocka/glasmosaik", "Glasmosaik"],
+    ["/ordklocka/akvarell", "Akvarell"],
     ["/ordklocka/sand", "Sandträdgård"],
     ["/ordklocka/kugghjul", "Kugghjul"],
     ["/ordklocka/rullband", "Rullband"],

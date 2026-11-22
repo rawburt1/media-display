@@ -1,0 +1,7 @@
+
+/* Gemensam tillgänglighet och mobilanpassning */
+.panel{max-height:min(55vh,420px);overflow-y:auto;overscroll-behavior:contain}
+.panel button,.panel select{min-height:32px}
+.panel :is(button,select):focus-visible{outline:2px solid currentColor;outline-offset:3px}
+@media(max-width:600px){.panel{bottom:8px!important;padding:9px 10px!important;width:calc(100vw - 16px)!important}.panel .controls{gap:7px 10px!important}.panel .group{flex-wrap:wrap}.panel .label{font-size:12px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}

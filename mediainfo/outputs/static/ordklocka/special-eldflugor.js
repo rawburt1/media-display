@@ -1,0 +1,15 @@
+(()=>{'use strict';
+const C=document.getElementById('art'),x=C.getContext('2d'),phrase=document.getElementById('phrase'),sub=document.getElementById('sub'),dots=document.getElementById('dots');
+const SLUG='eldflugor';const T=OrdklockaTid,S=OrdklockaSida,reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W=0,H=0,D=1,words='',change=0,mode='dag',pts=[],prev=0;const TAU=Math.PI*2;
+function resize(){W=innerWidth;H=innerHeight;D=Math.min(devicePixelRatio||1,2);C.width=Math.round(W*D);C.height=Math.round(H*D);x.setTransform(D,0,0,D,0,0);onResize();}
+function textPoints(str,step=5){const o=document.createElement('canvas');o.width=Math.max(1,Math.floor(W/2));o.height=Math.max(1,Math.floor(H/2));const c=o.getContext('2d',{willReadFrequently:true});c.font=`700 ${Math.min(o.width/Math.max(str.length*.54,6),o.height*.32,80)}px system-ui`;c.textAlign='center';c.textBaseline='middle';c.fillStyle='white';c.fillText(str.toUpperCase(),o.width/2,o.height/2,o.width*.9);const a=c.getImageData(0,0,o.width,o.height).data,r=[];for(let j=0;j<o.height;j+=step)for(let i=0;i<o.width;i+=step)if(a[(j*o.width+i)*4+3]>130)r.push({x:i*2,y:j*2});return r;}
+function update(t,info){const next=T.spokenWords(t).join(' ').toLowerCase();dots.textContent=t.extra?'•'.repeat(t.extra):'';const part=window.OrdklockaDygn?.part(info.now.getHours());sub.textContent=(part?.phrase||'')+' · '+info.now.toLocaleDateString('sv-SE',{day:'numeric',month:'long'});if(next!==words){const old=words;words=next;change=performance.now();onWords(old,next,info.first);} }
+let bugs=[],targets=[];const glow=document.createElement('canvas');glow.width=glow.height=24;{const g=glow.getContext('2d'),r=g.createRadialGradient(12,12,0,12,12,12);r.addColorStop(0,'#f4ffc8');r.addColorStop(.18,'#dfff89');r.addColorStop(.45,'rgba(170,255,70,.35)');r.addColorStop(1,'rgba(170,255,70,0)');g.fillStyle=r;g.fillRect(0,0,24,24);}
+function onResize(){bugs=Array.from({length:1400},(_,i)=>({x:Math.random()*W,y:Math.random()*H,vx:0,vy:0,p:i*2.399}));if(words)onWords();}
+function onWords(){phrase.textContent='';targets=textPoints(words,2);}
+function draw(t,q){x.fillStyle=mode==='natt'?'#010905':'#04170e';x.fillRect(0,0,W,H);x.save();x.globalCompositeOperation='screen';for(let i=0;i<bugs.length;i++){const b=bugs[i],goal=targets.length?targets[(i*29)%targets.length]:null;if(goal){const pull=reduce?1:.004;b.vx=(b.vx+(goal.x-b.x)*pull)*.89;b.vy=(b.vy+(goal.y-b.y)*pull)*.89;if(reduce){b.x=goal.x;b.y=goal.y;}}else{b.vx+=Math.sin(t+b.p)*.015;b.vy+=Math.cos(t+b.p)*.015;}if(!reduce){b.x+=b.vx;b.y+=b.vy;}const r=7+2.5*Math.sin(t*3+b.p);x.globalAlpha=.65+.28*Math.sin(t*2+b.p);x.drawImage(glow,b.x-r,b.y-r,r*2,r*2);}x.restore();}
+const clock=S.clock(update);S.choice('style','ordklocka-style','tjugo',v=>clock.setStyle(v));S.choice('mode','ordklocka-'+SLUG+'-ljus','dag',v=>{mode=v;document.documentElement.dataset.mode=v;});S.setup('/ordklocka/'+SLUG+'/ws');
+function frame(ms){requestAnimationFrame(frame);if(document.hidden)return;const t=reduce?0:ms/1000; x.clearRect(0,0,W,H);draw(t,Math.min(1,(ms-change)/1800));}
+addEventListener('resize',resize);resize();requestAnimationFrame(frame);
+})();

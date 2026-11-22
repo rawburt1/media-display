@@ -70,6 +70,9 @@
     document.head.prepend(css);
 
     const fsBtn = document.getElementById("fs");
+    // The readout stays available to screen readers even when the visual stage is hidden.
+    const readoutEl = document.getElementById("readout");
+    if (readoutEl) { readoutEl.setAttribute("role", "status"); readoutEl.setAttribute("aria-atomic", "true"); }
     function toggleFullscreen() {
       if (document.fullscreenElement) document.exitFullscreen?.();
       else document.documentElement.requestFullscreen?.().catch(() => {});
@@ -79,7 +82,9 @@
       if (!e.target.closest(".panel")) toggleFullscreen();
     });
     document.addEventListener("keydown", e => {
-      if (e.key === "f" || e.key === "F") toggleFullscreen();
+      if ((e.key === "f" || e.key === "F") &&
+          !e.altKey && !e.ctrlKey && !e.metaKey &&
+          !e.target.closest?.("input, textarea, select, [contenteditable]")) toggleFullscreen();
     });
     document.addEventListener("fullscreenchange", () =>
       fsBtn?.setAttribute("aria-pressed", !!document.fullscreenElement));
@@ -129,6 +134,7 @@
     }
     setInterval(() => tick(false), 1000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(false); });
+    window.addEventListener("focus", () => tick(false));
     return {
       setStyle(v) { style = v; last = ""; tick(true); },
       refresh() { last = ""; tick(true); },

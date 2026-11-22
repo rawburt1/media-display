@@ -143,6 +143,7 @@ _IDLE_CLOCK_URLS = {
     "ceramic": "/ordklocka/keramik",
     "crossword": "/ordklocka/korsord",
     "crystal": "/ordklocka/kristall",
+    "watercolour": "/ordklocka/akvarell",
     "maze": "/ordklocka/labyrint",
     "lava": "/ordklocka/lava",
     "sound_wave": "/ordklocka/ljudvag",
@@ -251,6 +252,7 @@ _CLOCK_LABELS = {
     "/ordklocka/keramik": "Ordklocka (keramik)",
     "/ordklocka/korsord": "Ordklocka (korsord)",
     "/ordklocka/kristall": "Ordklocka (kristall)",
+    "/ordklocka/akvarell": "Ordklocka (akvarell)",
     "/ordklocka/labyrint": "Ordklocka (labyrint)",
     "/ordklocka/lava": "Ordklocka (lava)",
     "/ordklocka/ljudvag": "Ordklocka (ljudvåg)",
@@ -297,10 +299,28 @@ _ORDKLOCKA_SCRIPTS = (
     "dygn.js",
     "textmask.js",
     "galleri-render.js",
+    "ordmaterial-4.js",
+    "special-eldflugor.js",
+    "special-fasad.js",
+    "special-kristall.js",
+    "special-skuggor.js",
+    "material-frost.js",
+    "material-akvarell.js",
+    "material-mossa.js",
+    "material-lava.js",
+    "material-origami.js",
+    "verkstad-bas.js",
+    "verkstad-mekanisk.js",
 )
 # Stylesheets shared by the clock pages: galleri-stil.css (the simpler
 # gallery clocks drawn by galleri-render.js).
-_ORDKLOCKA_STYLES = ("galleri-stil.css",)
+_ORDKLOCKA_STYLES = (
+    "galleri-stil.css",
+    "tillganglighet.css",
+    "atelier.css",
+    "verkstad.css",
+    "material-klockor.css",
+)
 # The only font files /ordklocka/fonts/<name> will serve.
 _ORDKLOCKA_FONTS = frozenset(
     {"josefin-sans-latin-600.woff2", "unifraktur-maguntia.woff2", "roboto-flex.woff2"}

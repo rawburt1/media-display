@@ -4,7 +4,7 @@ const stage=document.getElementById('scene'), phrase=document.getElementById('ph
 const ctx=canvas.getContext('2d',{alpha:true});let W=0,H=0,dpr=1,words='',part='',extra=0,particles=[],last=0;
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);}
-addEventListener('resize',resize);resize();
+addEventListener('resize',()=>{resize();populate();});resize();
 const rand=(a,b)=>a+Math.random()*(b-a);
 function populate(){particles=Array.from({length:130},(_,i)=>({x:rand(0,W),y:rand(0,H),vx:rand(-.5,.5),vy:rand(-.5,.5),r:rand(.8,2.6),phase:rand(0,6.28)}));}
 populate();
@@ -22,9 +22,30 @@ function render(t,info){const newWords=T.spokenWords(t).join(' ').toLowerCase();
  if(cfg.mode==='dictionary')document.getElementById('sub').textContent='tid · substantiv · '+part;
  },delay);
 }
-function buildGrid(value,mode){const g=document.getElementById('grid');g.innerHTML='';const letters=value.toUpperCase().replace(/[^A-ZÅÄÖ]/g,'');const n=Math.max(12,Math.ceil(Math.sqrt(letters.length*2)));const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ';let k=0;
- for(let i=0;i<n*n;i++){const e=document.createElement('span');let lit=false; if(mode==='binary'){e.textContent=(i%7===0||i%11===0)?'1':'0';lit=i%7===0;}else if(mode==='ascii'){e.textContent=i%4===0?'#':i%3===0?'+':'.';lit=i%4===0;}else if(mode==='punch'){e.textContent=(i%5===0||i%11===0)?'●':'·';lit=i%5===0;}else{lit=i%n<Math.min(n,letters.length)&&Math.floor(i/n)<Math.ceil(letters.length/n);e.textContent=lit?letters[k++]||chars[(i*13)%chars.length]:chars[(i*17+7)%chars.length];}if(lit)e.className='lit';g.append(e);}
- g.style.gridTemplateColumns=`repeat(${n},1fr)`;
+function buildGrid(value,mode){
+ const g=document.getElementById('grid');if(!g)return;g.replaceChildren();
+ const terms=value.toUpperCase().split(/\s+/).filter(Boolean);
+ const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ';
+ const n=Math.max(12,...terms.map(w=>w.length+2));
+ const rows=Math.max(12,terms.length*3+2);
+ const matrix=Array.from({length:rows},(_,r)=>Array.from({length:n},(_,c)=>chars[(r*19+c*13+7)%chars.length]));
+ const lit=new Set();
+ if(['wordsearch','crossword','maze'].includes(mode)){
+  terms.forEach((word,i)=>{const row=2+i*3,start=Math.floor((n-word.length)/2);
+   for(let k=0;k<word.length;k++){matrix[row][start+k]=word[k];lit.add(row*n+start+k);}
+  });
+ }
+ const fragment=document.createDocumentFragment();
+ for(let r=0;r<rows;r++)for(let c=0;c<n;c++){
+  const e=document.createElement('span'),index=r*n+c;
+  if(mode==='binary'){e.textContent=(index%7===0||index%11===0)?'1':'0';if(index%7===0)lit.add(index);}
+  else if(mode==='ascii'){e.textContent=index%4===0?'#':index%3===0?'+':'.';if(index%4===0)lit.add(index);}
+  else if(mode==='punch'){e.textContent=index%5===0?'●':'·';if(index%5===0)lit.add(index);}
+  else e.textContent=matrix[r][c];
+  if(lit.has(index))e.className='lit';fragment.append(e);
+ }
+ g.append(fragment);g.style.gridTemplateColumns=`repeat(${n},minmax(0,1fr))`;
+ g.style.gridTemplateRows=`repeat(${rows},minmax(0,1fr))`;
 }
 function showWorld(now){const sub=document.getElementById('sub');const cities=['Stockholm','London','New York','Tokyo'];sub.textContent=cities.map((c,i)=>c+' '+new Intl.DateTimeFormat('sv-SE',{hour:'2-digit',minute:'2-digit',timeZone:['Europe/Stockholm','Europe/London','America/New_York','Asia/Tokyo'][i]}).format(now)).join(' · ');}
 const clock=S.clock(render);

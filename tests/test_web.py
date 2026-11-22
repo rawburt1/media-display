@@ -1016,6 +1016,7 @@ _NEW_CLOCKS = [
     ("keramik", "ceramic", "Ordklocka (keramik)"),
     ("korsord", "crossword", "Ordklocka (korsord)"),
     ("kristall", "crystal", "Ordklocka (kristall)"),
+    ("akvarell", "watercolour", "Ordklocka (akvarell)"),
     ("labyrint", "maze", "Ordklocka (labyrint)"),
     ("lava", "lava", "Ordklocka (lava)"),
     ("ljudvag", "sound_wave", "Ordklocka (ljudvåg)"),
@@ -1055,7 +1056,19 @@ def test_new_clock_pages_are_served(page, style, label):
     assert '<script src="/ordklocka/sida.js">' in body
     # Gallery clocks: galleri-render.js calls S.setup("/ordklocka/<slug>/ws")
     gallery = '<script src="/ordklocka/galleri-render.js">' in body and f'"slug": "{page}"' in body
-    assert f'S.setup("/ordklocka/{page}/ws")' in body or gallery
+    # Clocks with their own renderer file: the renderer calls S.setup itself
+    renderers = re.findall(
+        r'<script src="/ordklocka/((?:special|material|verkstad|ordmaterial)-[\w-]+\.js)">', body
+    )
+    assert f'S.setup("/ordklocka/{page}/ws")' in body or gallery or renderers
+    if renderers:
+        client = _client(_output())
+        assert any(
+            re.search(
+                r"\b(S|OrdklockaSida)\.setup\(", client.get(f"/ordklocka/{name}").data.decode()
+            )
+            for name in renderers
+        )
 
 
 @pytest.mark.parametrize(("page", "style", "label"), _NEW_CLOCKS)
@@ -1189,8 +1202,37 @@ def test_gallery_clocks_share_their_renderer_and_stylesheet():
     assert css.status_code == 200
     assert css.mimetype == "text/css"
     assert "CLOCK_DESIGN" in client.get("/ordklocka/galleri-render.js").data.decode()
-    for page in ("lava", "hud", "korsord", "manfas", "viktoriansk"):
+    for page in ("binar", "hud", "korsord", "manfas", "viktoriansk"):
         body = client.get(f"/ordklocka/{page}").data.decode()
         assert '<link rel="stylesheet" href="/ordklocka/galleri-stil.css">' in body, page
         assert '<script src="/ordklocka/galleri-render.js">' in body, page
         assert f'"slug": "{page}"' in body, page
+
+
+def test_every_clock_page_links_the_shared_accessibility_stylesheet():
+    from mediainfo.outputs import web  # noqa: PLC0415
+
+    client = _client(_output())
+    css = client.get("/ordklocka/tillganglighet.css")
+    assert css.status_code == 200
+    assert css.mimetype == "text/css"
+    for page in web._CLOCK_LABELS:
+        if not page.startswith("/ordklocka/") or page == "/ordklocka":
+            continue
+        body = client.get(page).data.decode()
+        assert '<link rel="stylesheet" href="/ordklocka/tillganglighet.css">' in body, page
+
+
+def test_clock_renderer_assets_are_served():
+    from mediainfo.outputs import web  # noqa: PLC0415
+
+    client = _client(_output())
+    for name in web._ORDKLOCKA_SCRIPTS:
+        resp = client.get(f"/ordklocka/{name}")
+        assert resp.status_code == 200, name
+        assert "javascript" in resp.mimetype, name
+    for name in web._ORDKLOCKA_STYLES:
+        resp = client.get(f"/ordklocka/{name}")
+        assert resp.status_code == 200, name
+        assert resp.mimetype == "text/css", name
+    assert client.get("/ordklocka/atelier.js").status_code == 404

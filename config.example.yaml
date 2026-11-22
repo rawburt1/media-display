@@ -812,6 +812,7 @@ outputs:
     # "ceramic" (glazed ceramic lettering, /ordklocka/keramik),
     # "crossword" (the words in a crossword grid, /ordklocka/korsord),
     # "crystal" (crystal lettering among sparkles, /ordklocka/kristall),
+    # "watercolour" (pigment blots forming the words on paper, /ordklocka/akvarell),
     # "maze" (the words in a maze of letters, /ordklocka/labyrint),
     # "lava" (glowing lava colours, /ordklocka/lava),
     # "sound_wave" (the words over moving sound waves, /ordklocka/ljudvag),

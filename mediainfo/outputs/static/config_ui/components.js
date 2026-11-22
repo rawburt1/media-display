@@ -216,6 +216,7 @@ function clientPageLabel(page) {
   if (page === '/ordklocka/keramik') return 'Word clock, ceramic (standalone)';
   if (page === '/ordklocka/korsord') return 'Word clock, crossword (standalone)';
   if (page === '/ordklocka/kristall') return 'Word clock, crystal (standalone)';
+  if (page === '/ordklocka/akvarell') return 'Word clock, watercolour (standalone)';
   if (page === '/ordklocka/labyrint') return 'Word clock, maze (standalone)';
   if (page === '/ordklocka/lava') return 'Word clock, lava (standalone)';
   if (page === '/ordklocka/ljudvag') return 'Word clock, sound wave (standalone)';
